@@ -13,16 +13,93 @@ import (
 	openai "github.com/sashabaranov/go-openai"
 )
 
-// OpenAIProvider implements the LLMProvider interface for OpenAI's API.
+// OpenAIProvider implements the agent.LLMProvider interface for OpenAI's GPT models.
+// It provides streaming completions, tool/function calling, vision support, and
+// automatic retry logic for production use.
+//
+// The provider handles several key responsibilities:
+//   - Converting between internal message formats and OpenAI's API format
+//   - Managing streaming responses with real-time token delivery
+//   - Implementing retry logic with backoff for transient failures
+//   - Handling multi-turn tool (function) calling conversations
+//   - Supporting vision-capable models with image attachments
+//
+// Key Differences from Anthropic Provider:
+//   - System messages are included in the messages array (not separate)
+//   - Tool calls stream incrementally and must be accumulated
+//   - Vision support uses multi-content message format
+//   - Tool results require separate messages (one per tool call)
+//
+// Thread Safety:
+// OpenAIProvider is safe for concurrent use across multiple goroutines.
+// Each Complete() call creates an independent stream and goroutine.
+//
+// Example:
+//
+//	provider := NewOpenAIProvider(os.Getenv("OPENAI_API_KEY"))
+//
+//	req := &agent.CompletionRequest{
+//	    Model:    "gpt-4o",
+//	    System:   "You are a helpful assistant.",
+//	    Messages: []agent.CompletionMessage{{Role: "user", Content: "Hello!"}},
+//	}
+//
+//	chunks, err := provider.Complete(ctx, req)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//
+//	for chunk := range chunks {
+//	    if chunk.Error != nil {
+//	        log.Printf("Error: %v", chunk.Error)
+//	        break
+//	    }
+//	    fmt.Print(chunk.Text)
+//	}
 type OpenAIProvider struct {
-	client     *openai.Client
-	apiKey     string
+	// client is the underlying OpenAI SDK client used for API calls.
+	client *openai.Client
+
+	// apiKey stores the OpenAI API key for authentication.
+	// Format: sk-...
+	apiKey string
+
+	// maxRetries defines the maximum number of retry attempts for failed requests.
+	// Applies to retryable errors like rate limits (429), server errors (5xx).
+	// Default: 3
 	maxRetries int
+
+	// retryDelay is the base delay between retry attempts.
+	// Actual delay is: retryDelay * attempt (linear backoff).
+	// Default: 1 second
 	retryDelay time.Duration
 }
 
-// NewOpenAIProvider creates a new OpenAI provider.
+// NewOpenAIProvider creates a new OpenAI provider instance.
+//
+// If an empty API key is provided, the provider will be created but Complete()
+// will return an error when called. This allows for delayed configuration.
+//
+// Configuration Defaults:
+//   - MaxRetries: 3 (hardcoded)
+//   - RetryDelay: 1 second (hardcoded)
+//
+// Parameters:
+//   - apiKey: OpenAI API key (can be empty for delayed configuration)
+//
+// Returns:
+//   - *OpenAIProvider: Provider instance (never nil)
+//
+// Example:
+//
+//	// Standard usage
+//	provider := NewOpenAIProvider(os.Getenv("OPENAI_API_KEY"))
+//
+//	// Delayed configuration
+//	provider := NewOpenAIProvider("")
+//	// Later: will error on Complete() calls until configured
 func NewOpenAIProvider(apiKey string) *OpenAIProvider {
+	// Allow empty API key for delayed configuration
 	if apiKey == "" {
 		return &OpenAIProvider{
 			apiKey:     "",
@@ -39,12 +116,46 @@ func NewOpenAIProvider(apiKey string) *OpenAIProvider {
 	}
 }
 
-// Name returns the provider name.
+// Name returns the provider identifier used for routing and logging.
+//
+// This identifier should be stable and lowercase. It's used by the agent runtime
+// to select the appropriate provider and in metrics/logging.
+//
+// Returns:
+//   - string: Always returns "openai"
 func (p *OpenAIProvider) Name() string {
 	return "openai"
 }
 
-// Models returns available OpenAI models.
+// Models returns the list of available GPT models with their capabilities.
+//
+// This method returns metadata about supported OpenAI models including:
+//   - Model ID (used in API requests)
+//   - Human-readable name
+//   - Context window size in tokens
+//   - Vision support capability
+//
+// Note: OpenAI frequently updates models and deprecates old ones. This list
+// may not reflect the absolute latest models. Check OpenAI's documentation
+// for the most current model availability.
+//
+// Returns:
+//   - []agent.Model: Slice of model definitions with capabilities
+//
+// Example:
+//
+//	models := provider.Models()
+//	for _, model := range models {
+//	    if model.SupportsVision {
+//	        fmt.Printf("Vision model: %s (%d tokens)\n", model.Name, model.ContextSize)
+//	    }
+//	}
+//
+// Current Models:
+//   - GPT-4o: Latest multimodal model (128K context, vision)
+//   - GPT-4 Turbo: Fast GPT-4 variant (128K context, vision)
+//   - GPT-3.5 Turbo: Cost-effective for simple tasks (16K context, no vision)
+//   - GPT-4: Original GPT-4 (8K context, no vision)
 func (p *OpenAIProvider) Models() []agent.Model {
 	return []agent.Model{
 		{
@@ -74,45 +185,164 @@ func (p *OpenAIProvider) Models() []agent.Model {
 	}
 }
 
-// SupportsTools returns whether OpenAI supports tool use.
+// SupportsTools indicates whether this provider supports tool/function calling.
+//
+// OpenAI's GPT models support function calling, allowing the model to request
+// execution of defined functions during conversations. This enables agentic
+// workflows where the model can interact with external systems.
+//
+// Function Calling Workflow:
+//  1. Define functions with name, description, and parameters schema
+//  2. Include functions in CompletionRequest.Tools
+//  3. Model may return ToolCall chunks (streamed incrementally)
+//  4. Execute functions and send results in subsequent messages
+//  5. Model uses results to formulate final response
+//
+// OpenAI-Specific Behavior:
+//   - Tool calls stream incrementally (ID, name, arguments come in chunks)
+//   - Must accumulate chunks to build complete tool call
+//   - FinishReason "tool_calls" signals all tool calls are complete
+//
+// Returns:
+//   - bool: Always returns true for OpenAI provider
+//
+// See Also:
+//   - convertToOpenAITools() for tool format conversion
+//   - processStream() for handling incremental tool call chunks
 func (p *OpenAIProvider) SupportsTools() bool {
 	return true
 }
 
-// Complete sends a completion request and returns a streaming response.
+// Complete sends a completion request to GPT and returns a streaming response channel.
+//
+// This is the primary interface for interacting with OpenAI models. It handles:
+//   - Request validation and API key checks
+//   - Message format conversion (including system prompt injection)
+//   - Vision support with multi-content messages
+//   - Streaming response processing
+//   - Automatic retries with linear backoff
+//   - Tool call accumulation across chunks
+//   - Context cancellation
+//
+// The method returns immediately with a channel that will receive completion chunks
+// as they arrive from OpenAI's streaming API.
+//
+// OpenAI Streaming Specifics:
+//   - Tool calls arrive incrementally (ID, name, args streamed separately)
+//   - Must accumulate tool arguments across multiple delta chunks
+//   - Tool calls complete when FinishReason is "tool_calls"
+//   - Multiple tool calls can be in progress simultaneously (tracked by index)
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//   - req: Completion request with messages, model, tools, etc.
+//
+// Returns:
+//   - <-chan *agent.CompletionChunk: Read-only channel of response chunks
+//   - error: Returns error only for immediate failures (not streaming errors)
+//
+// Errors:
+// Immediate errors (returned):
+//   - "OpenAI API key not configured": Client is nil (empty API key)
+//   - "failed to convert messages": Message format conversion failed
+//   - "non-retryable error": Authentication or validation error
+//   - "max retries exceeded": All retry attempts exhausted
+//
+// Streaming errors (sent via chunk.Error):
+//   - io.EOF: Stream completed normally (triggers Done chunk)
+//   - context.Canceled: Context was cancelled
+//   - Network errors: Connection issues during streaming
+//
+// Example - Basic Text Generation:
+//
+//	req := &agent.CompletionRequest{
+//	    Model:     "gpt-4o",
+//	    System:    "You are a helpful assistant.",
+//	    Messages:  []agent.CompletionMessage{{Role: "user", Content: "Hello!"}},
+//	    MaxTokens: 500,
+//	}
+//
+//	chunks, err := provider.Complete(ctx, req)
+//	if err != nil {
+//	    log.Fatalf("Failed to start completion: %v", err)
+//	}
+//
+//	for chunk := range chunks {
+//	    if chunk.Error != nil {
+//	        log.Printf("Stream error: %v", chunk.Error)
+//	        break
+//	    }
+//	    fmt.Print(chunk.Text)
+//	}
+//
+// Example - With Vision:
+//
+//	req := &agent.CompletionRequest{
+//	    Model: "gpt-4o",
+//	    Messages: []agent.CompletionMessage{{
+//	        Role:    "user",
+//	        Content: "What's in this image?",
+//	        Attachments: []models.Attachment{{
+//	            Type: "image",
+//	            URL:  "https://example.com/photo.jpg",
+//	        }},
+//	    }},
+//	}
+//
+//	chunks, err := provider.Complete(ctx, req)
+//	// Process response...
+//
+// Example - With Function Calling:
+//
+//	chunks, err := provider.Complete(ctx, &agent.CompletionRequest{
+//	    Model:    "gpt-4o",
+//	    Messages: []agent.CompletionMessage{{Role: "user", Content: "What's 15 * 7?"}},
+//	    Tools:    []agent.Tool{calculatorTool},
+//	})
+//
+//	for chunk := range chunks {
+//	    if chunk.ToolCall != nil {
+//	        // Tool call is complete, execute it
+//	        result := executeFunction(chunk.ToolCall.Name, chunk.ToolCall.Input)
+//	        // Continue conversation with result...
+//	    }
+//	}
 func (p *OpenAIProvider) Complete(ctx context.Context, req *agent.CompletionRequest) (<-chan *agent.CompletionChunk, error) {
+	// Validate API key is configured
 	if p.client == nil {
 		return nil, errors.New("OpenAI API key not configured")
 	}
 
-	// Convert messages to OpenAI format
+	// Convert internal messages to OpenAI format (includes system prompt)
 	messages, err := p.convertToOpenAIMessages(req.Messages, req.System)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert messages: %w", err)
 	}
 
-	// Build the request
+	// Build OpenAI API request
 	chatReq := openai.ChatCompletionRequest{
 		Model:    req.Model,
 		Messages: messages,
-		Stream:   true,
+		Stream:   true, // Always use streaming for real-time responses
 	}
 
 	if req.MaxTokens > 0 {
 		chatReq.MaxTokens = req.MaxTokens
 	}
 
-	// Add tools if provided
+	// Add tool/function definitions if provided
 	if len(req.Tools) > 0 {
 		chatReq.Tools = p.convertToOpenAITools(req.Tools)
 	}
 
-	// Create streaming request with retries
+	// Create streaming request with retry logic
 	var stream *openai.ChatCompletionStream
 	var lastErr error
 
+	// Linear backoff retry loop (delay increases linearly: 0s, 1s, 2s, 3s)
 	for attempt := 0; attempt < p.maxRetries; attempt++ {
 		if attempt > 0 {
+			// Wait with linear backoff before retry
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
@@ -125,7 +355,7 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req *agent.CompletionRequ
 			break
 		}
 
-		// Check if error is retryable
+		// Check if error is retryable (rate limits, server errors)
 		if !p.isRetryableError(lastErr) {
 			return nil, fmt.Errorf("non-retryable error: %w", lastErr)
 		}
@@ -135,22 +365,53 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req *agent.CompletionRequ
 		return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
 	}
 
-	// Process stream in goroutine
+	// Spawn goroutine to process stream and send chunks
 	chunks := make(chan *agent.CompletionChunk)
 	go p.processStream(ctx, stream, chunks)
 
 	return chunks, nil
 }
 
-// processStream processes the OpenAI stream and converts to internal format.
+// processStream processes OpenAI's streaming response and converts to internal format.
+//
+// This method consumes the OpenAI stream, handles incremental updates, and manages
+// the complex state required for tool call accumulation.
+//
+// Key Responsibilities:
+//   - Reading streaming response chunks with stream.Recv()
+//   - Extracting text deltas and emitting them immediately
+//   - Accumulating tool call fragments across multiple chunks
+//   - Detecting tool call completion via FinishReason
+//   - Handling EOF and error conditions
+//   - Context cancellation support
+//
+// Tool Call Accumulation:
+// OpenAI streams tool calls incrementally across multiple chunks:
+//  1. First chunk contains ID and function name
+//  2. Subsequent chunks contain argument fragments (streamed JSON)
+//  3. FinishReason "tool_calls" signals all tool calls are complete
+//  4. Multiple tool calls can be in progress (tracked by index in map)
+//
+// Parameters:
+//   - ctx: Context for cancellation
+//   - stream: OpenAI streaming response
+//   - chunks: Channel to send converted chunks to (closed by this method)
+//
+// Chunk Emissions:
+//   - Text chunks: Emitted immediately for each delta.Content
+//   - Tool call chunks: Emitted when FinishReason is "tool_calls"
+//   - Done chunk: Emitted on io.EOF
+//   - Error chunk: Emitted on streaming errors
 func (p *OpenAIProvider) processStream(ctx context.Context, stream *openai.ChatCompletionStream, chunks chan<- *agent.CompletionChunk) {
 	defer close(chunks)
 	defer stream.Close()
 
-	// Track tool calls being built across chunks
+	// Track tool calls being accumulated across multiple chunks
+	// Map key is the tool call index (OpenAI can return multiple tool calls)
 	toolCalls := make(map[int]*models.ToolCall)
 
 	for {
+		// Check for context cancellation
 		select {
 		case <-ctx.Done():
 			chunks <- &agent.CompletionChunk{Error: ctx.Err(), Done: true}
@@ -158,10 +419,11 @@ func (p *OpenAIProvider) processStream(ctx context.Context, stream *openai.ChatC
 		default:
 		}
 
+		// Receive next chunk from stream
 		response, err := stream.Recv()
 		if err != nil {
 			if err == io.EOF {
-				// Send any completed tool calls
+				// Stream completed normally - emit any pending tool calls
 				for _, tc := range toolCalls {
 					if tc.ID != "" && tc.Name != "" {
 						chunks <- &agent.CompletionChunk{
@@ -172,37 +434,40 @@ func (p *OpenAIProvider) processStream(ctx context.Context, stream *openai.ChatC
 				chunks <- &agent.CompletionChunk{Done: true}
 				return
 			}
+			// Stream error
 			chunks <- &agent.CompletionChunk{Error: err, Done: true}
 			return
 		}
 
+		// Skip empty responses
 		if len(response.Choices) == 0 {
 			continue
 		}
 
 		delta := response.Choices[0].Delta
 
-		// Handle text content
+		// Handle text content - emit immediately for real-time streaming
 		if delta.Content != "" {
 			chunks <- &agent.CompletionChunk{
 				Text: delta.Content,
 			}
 		}
 
-		// Handle tool calls
+		// Handle tool call deltas - accumulate across chunks
 		if len(delta.ToolCalls) > 0 {
 			for _, tc := range delta.ToolCalls {
+				// Get tool call index (OpenAI uses index to track multiple parallel calls)
 				index := 0
 				if tc.Index != nil {
 					index = *tc.Index
 				}
 
-				// Initialize tool call if not exists
+				// Initialize tool call if this is the first chunk for this index
 				if toolCalls[index] == nil {
 					toolCalls[index] = &models.ToolCall{}
 				}
 
-				// Update tool call
+				// Update tool call fields (each field comes in first chunk it appears)
 				if tc.ID != "" {
 					toolCalls[index].ID = tc.ID
 				}
@@ -210,7 +475,7 @@ func (p *OpenAIProvider) processStream(ctx context.Context, stream *openai.ChatC
 					toolCalls[index].Name = tc.Function.Name
 				}
 				if tc.Function.Arguments != "" {
-					// Append arguments (they come in chunks)
+					// Append argument fragments (streamed as JSON chunks)
 					var currentArgs string
 					if toolCalls[index].Input != nil {
 						currentArgs = string(toolCalls[index].Input)
@@ -221,7 +486,7 @@ func (p *OpenAIProvider) processStream(ctx context.Context, stream *openai.ChatC
 			}
 		}
 
-		// Check if we have finish reason indicating tool calls are complete
+		// Check finish reason - "tool_calls" means all tool calls are complete
 		if response.Choices[0].FinishReason == "tool_calls" {
 			for _, tc := range toolCalls {
 				if tc.ID != "" && tc.Name != "" {
@@ -230,16 +495,48 @@ func (p *OpenAIProvider) processStream(ctx context.Context, stream *openai.ChatC
 					}
 				}
 			}
-			toolCalls = make(map[int]*models.ToolCall) // Reset for potential next iteration
+			// Reset for potential next iteration (though typically stream ends here)
+			toolCalls = make(map[int]*models.ToolCall)
 		}
 	}
 }
 
-// convertToOpenAIMessages converts internal messages to OpenAI format.
+// convertToOpenAIMessages converts internal message format to OpenAI API format.
+//
+// This method handles the translation between our unified message format and
+// OpenAI's specific requirements:
+//   - System prompts are injected as first message with role "system"
+//   - User/assistant messages are converted with their content
+//   - Tool calls are included in assistant messages
+//   - Tool results are converted to separate "tool" role messages
+//   - Vision attachments use multi-content format
+//
+// OpenAI Format Specifics:
+//   - System message is part of messages array (unlike Anthropic)
+//   - Tool results each become a separate message with role "tool"
+//   - Vision uses MultiContent field instead of Content string
+//
+// Parameters:
+//   - messages: Internal message format from CompletionRequest
+//   - system: System prompt to inject as first message (optional)
+//
+// Returns:
+//   - []openai.ChatCompletionMessage: OpenAI-formatted messages
+//   - error: Currently never returns error (reserved for future use)
+//
+// Example Conversion:
+//
+//	Internal:
+//	  System: "You are helpful"
+//	  Messages: [{Role: "user", Content: "Hi"}]
+//
+//	Converts to:
+//	  [{Role: "system", Content: "You are helpful"},
+//	   {Role: "user", Content: "Hi"}]
 func (p *OpenAIProvider) convertToOpenAIMessages(messages []agent.CompletionMessage, system string) ([]openai.ChatCompletionMessage, error) {
 	result := make([]openai.ChatCompletionMessage, 0, len(messages)+1)
 
-	// Add system message if provided
+	// Inject system message as first message (OpenAI-specific)
 	if system != "" {
 		result = append(result, openai.ChatCompletionMessage{
 			Role:    openai.ChatMessageRoleSystem,
@@ -247,13 +544,13 @@ func (p *OpenAIProvider) convertToOpenAIMessages(messages []agent.CompletionMess
 		})
 	}
 
-	// Convert each message
+	// Convert each internal message to OpenAI format
 	for _, msg := range messages {
 		oaiMsg := openai.ChatCompletionMessage{
 			Role: msg.Role,
 		}
 
-		// Handle different message types
+		// Handle message based on role and content type
 		switch msg.Role {
 		case "user", "system":
 			// Check if message has image attachments (vision support)
@@ -267,7 +564,7 @@ func (p *OpenAIProvider) convertToOpenAIMessages(messages []agent.CompletionMess
 				}
 
 				if hasImages {
-					// Use multi-content format for vision
+					// Use multi-content format for vision (GPT-4o, GPT-4 Turbo)
 					contentParts := make([]openai.ChatMessagePart, 0)
 
 					// Add text content first if present
@@ -278,14 +575,14 @@ func (p *OpenAIProvider) convertToOpenAIMessages(messages []agent.CompletionMess
 						})
 					}
 
-					// Add image attachments
+					// Add image attachments as URLs
 					for _, att := range msg.Attachments {
 						if att.Type == "image" {
 							contentParts = append(contentParts, openai.ChatMessagePart{
 								Type: openai.ChatMessagePartTypeImageURL,
 								ImageURL: &openai.ChatMessageImageURL{
 									URL:    att.URL,
-									Detail: openai.ImageURLDetailAuto,
+									Detail: openai.ImageURLDetailAuto, // Auto-select detail level
 								},
 							})
 						}
@@ -293,15 +590,18 @@ func (p *OpenAIProvider) convertToOpenAIMessages(messages []agent.CompletionMess
 
 					oaiMsg.MultiContent = contentParts
 				} else {
+					// No images, use simple string content
 					oaiMsg.Content = msg.Content
 				}
 			} else {
+				// No attachments, use simple string content
 				oaiMsg.Content = msg.Content
 			}
 
 		case "assistant":
 			oaiMsg.Content = msg.Content
-			// Handle tool calls from assistant
+
+			// Handle tool calls from assistant (function calling requests)
 			if len(msg.ToolCalls) > 0 {
 				oaiMsg.ToolCalls = make([]openai.ToolCall, len(msg.ToolCalls))
 				for i, tc := range msg.ToolCalls {
@@ -310,21 +610,20 @@ func (p *OpenAIProvider) convertToOpenAIMessages(messages []agent.CompletionMess
 						Type: openai.ToolTypeFunction,
 						Function: openai.FunctionCall{
 							Name:      tc.Name,
-							Arguments: string(tc.Input),
+							Arguments: string(tc.Input), // JSON arguments as string
 						},
 					}
 				}
 			}
 
 		case "tool":
-			// Handle tool results
+			// Handle tool results - OpenAI requires separate message per result
 			if len(msg.ToolResults) > 0 {
-				// OpenAI expects one message per tool result
 				for _, tr := range msg.ToolResults {
 					result = append(result, openai.ChatCompletionMessage{
 						Role:       openai.ChatMessageRoleTool,
 						Content:    tr.Content,
-						ToolCallID: tr.ToolCallID,
+						ToolCallID: tr.ToolCallID, // Links result to tool call
 					})
 				}
 				continue // Skip the append below
@@ -337,7 +636,32 @@ func (p *OpenAIProvider) convertToOpenAIMessages(messages []agent.CompletionMess
 	return result, nil
 }
 
-// convertToOpenAITools converts internal tools to OpenAI format.
+// convertToOpenAITools converts internal tool definitions to OpenAI function format.
+//
+// This method translates tool definitions from our internal format to OpenAI's
+// function calling schema. Each tool becomes a function definition with:
+//   - Name: Function identifier
+//   - Description: Natural language description
+//   - Parameters: JSON Schema for function parameters
+//
+// Parameters:
+//   - tools: Internal tool definitions implementing agent.Tool interface
+//
+// Returns:
+//   - []openai.Tool: OpenAI-formatted function definitions
+//
+// Error Handling:
+// If a tool's schema is invalid JSON, it's replaced with an empty object schema.
+// This prevents one bad tool from breaking all function calling.
+//
+// Example:
+//
+//	Internal tool:
+//	  Name: "get_weather"
+//	  Description: "Get current weather"
+//	  Schema: {"type":"object","properties":{"city":{"type":"string"}}}
+//
+//	Converts to OpenAI function with same fields in FunctionDefinition.
 func (p *OpenAIProvider) convertToOpenAITools(tools []agent.Tool) []openai.Tool {
 	result := make([]openai.Tool, len(tools))
 

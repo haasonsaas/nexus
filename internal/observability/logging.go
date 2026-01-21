@@ -83,8 +83,8 @@ var DefaultRedactPatterns = []string{
 	// Anthropic API keys
 	`sk-ant-[a-zA-Z0-9_-]{95,}`,
 
-	// OpenAI API keys
-	`sk-[a-zA-Z0-9]{48}`,
+	// OpenAI API keys (48 chars after sk-)
+	`sk-[a-zA-Z0-9]{48,}`,
 
 	// JWT tokens
 	`eyJ[a-zA-Z0-9_-]*\.eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*`,

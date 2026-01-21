@@ -939,15 +939,15 @@ func (p *AnthropicProvider) CountTokens(req *agent.CompletionRequest) int {
 	// Simple character-based estimation: ~4 chars per token
 	total := 0
 
-	// Count system prompt
+	// Count system prompt tokens
 	total += len(req.System) / 4
 
-	// Count messages
+	// Count message content and metadata
 	for _, msg := range req.Messages {
 		total += len(msg.Content) / 4
 		total += len(msg.Role) / 4
 
-		// Count tool calls
+		// Count tool calls (name + JSON arguments)
 		for _, tc := range msg.ToolCalls {
 			total += len(tc.Name) / 4
 			total += len(tc.Input) / 4
@@ -959,7 +959,7 @@ func (p *AnthropicProvider) CountTokens(req *agent.CompletionRequest) int {
 		}
 	}
 
-	// Count tools (schemas)
+	// Count tool definitions (name + description + JSON schema)
 	for _, tool := range req.Tools {
 		total += len(tool.Name()) / 4
 		total += len(tool.Description()) / 4
@@ -969,7 +969,52 @@ func (p *AnthropicProvider) CountTokens(req *agent.CompletionRequest) int {
 	return total
 }
 
-// ParseSSEStream is a helper to parse Server-Sent Events manually if needed.
+// ParseSSEStream is a utility function for manually parsing Server-Sent Events.
+//
+// This function provides a low-level SSE parser for cases where you need to handle
+// SSE streams directly without using the Anthropic SDK. It's useful for:
+//   - Custom streaming implementations
+//   - Debugging SSE issues
+//   - Proxying or transforming SSE streams
+//
+// SSE Format:
+// SSE uses text-based format with events separated by blank lines:
+//
+//	event: message_start
+//	data: {"type":"message_start","message":{...}}
+//
+//	event: content_block_delta
+//	data: {"type":"content_block_delta","delta":{...}}
+//
+// The parser calls the handler function for each complete event with:
+//   - eventType: Value from "event:" line (or empty for default events)
+//   - data: Combined value from all "data:" lines (joined with \n)
+//
+// Parameters:
+//   - reader: io.Reader containing SSE stream
+//   - handler: Callback function to process each event
+//
+// Returns:
+//   - error: Returns error if handler returns error or scanner fails
+//
+// Example:
+//
+//	err := ParseSSEStream(response.Body, func(eventType, data string) error {
+//	    switch eventType {
+//	    case "message_start":
+//	        fmt.Println("Stream starting")
+//	    case "content_block_delta":
+//	        var delta ContentDelta
+//	        json.Unmarshal([]byte(data), &delta)
+//	        fmt.Print(delta.Text)
+//	    case "message_stop":
+//	        fmt.Println("\nStream complete")
+//	    }
+//	    return nil
+//	})
+//
+// Note: Most users should use the Anthropic SDK's built-in streaming rather
+// than this low-level parser. This is exported for advanced use cases only.
 func ParseSSEStream(reader io.Reader, handler func(eventType, data string) error) error {
 	scanner := bufio.NewScanner(reader)
 	var eventType string
@@ -978,25 +1023,30 @@ func ParseSSEStream(reader io.Reader, handler func(eventType, data string) error
 	for scanner.Scan() {
 		line := scanner.Text()
 
+		// Empty line signals end of event - process accumulated data
 		if line == "" {
-			// Empty line signals end of event
 			if eventType != "" || len(dataLines) > 0 {
+				// Join multi-line data with newlines
 				data := strings.Join(dataLines, "\n")
 				if err := handler(eventType, data); err != nil {
 					return err
 				}
+				// Reset for next event
 				eventType = ""
 				dataLines = nil
 			}
 			continue
 		}
 
+		// Parse event type line
 		if strings.HasPrefix(line, "event:") {
 			eventType = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
 		} else if strings.HasPrefix(line, "data:") {
+			// Parse data line (may be multiple per event)
 			data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
 			dataLines = append(dataLines, data)
 		}
+		// Ignore other line types (comments starting with :, id:, retry:)
 	}
 
 	return scanner.Err()

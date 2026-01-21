@@ -5,7 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -19,27 +19,77 @@ import (
 
 // Config holds the configuration for the Slack adapter.
 type Config struct {
-	BotToken string // xoxb- token for API calls
-	AppToken string // xapp- token for Socket Mode
+	// BotToken is the xoxb- token for API calls (required)
+	BotToken string
+
+	// AppToken is the xapp- token for Socket Mode (required)
+	AppToken string
+
+	// RateLimit configures rate limiting for API calls (operations per second)
+	// Slack's tier 1 rate limit is 1 request per second
+	RateLimit float64
+
+	// RateBurst configures the burst capacity for rate limiting
+	RateBurst int
+
+	// Logger is an optional slog.Logger instance
+	Logger *slog.Logger
+}
+
+// Validate checks if the configuration is valid and applies defaults.
+func (c *Config) Validate() error {
+	if c.BotToken == "" {
+		return channels.ErrConfig("bot_token is required", nil)
+	}
+
+	if c.AppToken == "" {
+		return channels.ErrConfig("app_token is required", nil)
+	}
+
+	if c.RateLimit == 0 {
+		c.RateLimit = 1 // Slack's default rate limit
+	}
+
+	if c.RateBurst == 0 {
+		c.RateBurst = 5
+	}
+
+	if c.Logger == nil {
+		c.Logger = slog.Default()
+	}
+
+	return nil
 }
 
 // Adapter implements the channels.Adapter interface for Slack.
+// It provides production-ready Slack integration using Socket Mode with
+// structured logging, metrics collection, rate limiting, and graceful degradation.
 type Adapter struct {
-	cfg            Config
-	client         *slack.Client
-	socketClient   *socketmode.Client
-	messages       chan *models.Message
-	status         channels.Status
-	statusMu       sync.RWMutex
-	ctx            context.Context
-	cancel         context.CancelFunc
-	wg             sync.WaitGroup
-	botUserID      string
-	botUserIDMu    sync.RWMutex
+	cfg           Config
+	client        *slack.Client
+	socketClient  *socketmode.Client
+	messages      chan *models.Message
+	status        channels.Status
+	statusMu      sync.RWMutex
+	ctx           context.Context
+	cancel        context.CancelFunc
+	wg            sync.WaitGroup
+	botUserID     string
+	botUserIDMu   sync.RWMutex
+	rateLimiter   *channels.RateLimiter
+	metrics       *channels.Metrics
+	logger        *slog.Logger
+	degraded      bool
+	degradedMu    sync.RWMutex
 }
 
-// NewAdapter creates a new Slack adapter.
-func NewAdapter(cfg Config) *Adapter {
+// NewAdapter creates a new Slack adapter with the given configuration.
+// It validates the configuration and initializes all internal components.
+func NewAdapter(cfg Config) (*Adapter, error) {
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
 	client := slack.New(
 		cfg.BotToken,
 		slack.OptionAppLevelToken(cfg.AppToken),
@@ -58,23 +108,33 @@ func NewAdapter(cfg Config) *Adapter {
 		status: channels.Status{
 			Connected: false,
 		},
-	}
+		rateLimiter: channels.NewRateLimiter(cfg.RateLimit, cfg.RateBurst),
+		metrics:     channels.NewMetrics(models.ChannelSlack),
+		logger:      cfg.Logger.With("adapter", "slack"),
+	}, nil
 }
 
 // Start begins listening for messages from Slack via Socket Mode.
+// It authenticates with Slack, retrieves bot information, and starts event processing.
 func (a *Adapter) Start(ctx context.Context) error {
 	a.ctx, a.cancel = context.WithCancel(ctx)
+
+	a.logger.Info("starting slack adapter", "rate_limit", a.cfg.RateLimit)
 
 	// Get bot user ID for mention detection
 	authResp, err := a.client.AuthTest()
 	if err != nil {
-		return fmt.Errorf("failed to authenticate with Slack: %w", err)
+		a.metrics.RecordError(channels.ErrCodeAuthentication)
+		return channels.ErrAuthentication("failed to authenticate with Slack", err)
 	}
+
 	a.botUserIDMu.Lock()
 	a.botUserID = authResp.UserID
 	a.botUserIDMu.Unlock()
 
-	log.Printf("Slack adapter started for bot user ID: %s", authResp.UserID)
+	a.logger.Info("slack adapter authenticated",
+		"bot_user_id", authResp.UserID,
+		"team", authResp.Team)
 
 	// Start event handler goroutine
 	a.wg.Add(1)
@@ -86,16 +146,24 @@ func (a *Adapter) Start(ctx context.Context) error {
 		defer a.wg.Done()
 		if err := a.socketClient.Run(); err != nil {
 			a.updateStatus(false, fmt.Sprintf("Socket mode error: %v", err))
-			log.Printf("Socket mode error: %v", err)
+			a.logger.Error("socket mode error", "error", err)
+			a.metrics.RecordError(channels.ErrCodeConnection)
 		}
 	}()
 
 	a.updateStatus(true, "")
+	a.metrics.RecordConnectionOpened()
+
+	a.logger.Info("slack adapter started successfully")
+
 	return nil
 }
 
 // Stop gracefully shuts down the adapter.
+// It closes connections and waits for pending operations to complete.
 func (a *Adapter) Stop(ctx context.Context) error {
+	a.logger.Info("stopping slack adapter")
+
 	if a.cancel != nil {
 		a.cancel()
 	}
@@ -113,20 +181,39 @@ func (a *Adapter) Stop(ctx context.Context) error {
 	select {
 	case <-done:
 		a.updateStatus(false, "")
+		a.metrics.RecordConnectionClosed()
+		a.logger.Info("slack adapter stopped gracefully")
 		return nil
 	case <-ctx.Done():
 		a.updateStatus(false, "shutdown timeout")
-		return ctx.Err()
+		a.logger.Warn("slack adapter stop timeout")
+		a.metrics.RecordError(channels.ErrCodeTimeout)
+		return channels.ErrTimeout("shutdown timeout", ctx.Err())
 	}
 }
 
-// Send delivers a message to Slack.
+// Send delivers a message to Slack with rate limiting and error handling.
 func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
+	startTime := time.Now()
+
+	// Apply rate limiting
+	if err := a.rateLimiter.Wait(ctx); err != nil {
+		a.logger.Warn("rate limit wait cancelled", "error", err)
+		a.metrics.RecordError(channels.ErrCodeTimeout)
+		return channels.ErrTimeout("rate limit wait cancelled", err)
+	}
+
 	// Extract channel and thread timestamp from message metadata
 	channelID, ok := msg.Metadata["slack_channel"].(string)
 	if !ok {
-		return fmt.Errorf("missing slack_channel in message metadata")
+		a.metrics.RecordMessageFailed()
+		a.metrics.RecordError(channels.ErrCodeInvalidInput)
+		return channels.ErrInvalidInput("missing slack_channel in message metadata", nil)
 	}
+
+	a.logger.Debug("sending message",
+		"channel_id", channelID,
+		"content_length", len(msg.Content))
 
 	options := buildBlockKitMessage(msg)
 
@@ -138,17 +225,38 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	// Send the message
 	channel, timestamp, err := a.client.PostMessageContext(ctx, channelID, options...)
 	if err != nil {
-		return fmt.Errorf("failed to send Slack message: %w", err)
+		a.metrics.RecordMessageFailed()
+		a.logger.Error("failed to send message",
+			"error", err,
+			"channel_id", channelID)
+
+		// Classify the error
+		if isRateLimitError(err) {
+			a.metrics.RecordError(channels.ErrCodeRateLimit)
+			return channels.ErrRateLimit("slack rate limit exceeded", err)
+		}
+
+		a.metrics.RecordError(channels.ErrCodeInternal)
+		return channels.ErrInternal("failed to send Slack message", err)
 	}
 
-	log.Printf("Sent message to Slack channel %s: %s", channel, timestamp)
+	// Record success metrics
+	a.metrics.RecordMessageSent()
+	a.metrics.RecordSendLatency(time.Since(startTime))
+
+	a.logger.Debug("message sent successfully",
+		"channel", channel,
+		"timestamp", timestamp,
+		"latency_ms", time.Since(startTime).Milliseconds())
 
 	// Handle attachments (file uploads)
 	if len(msg.Attachments) > 0 {
 		for _, att := range msg.Attachments {
-			// For now, we just log that we would upload files
-			// In a real implementation, you'd need the file data, not just URLs
-			log.Printf("Would upload file: %s (%s)", att.Filename, att.URL)
+			// For file uploads, we would need the actual file data
+			// This is a placeholder for the file upload logic
+			a.logger.Debug("would upload file",
+				"filename", att.Filename,
+				"url", att.URL)
 		}
 	}
 
@@ -159,7 +267,9 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 			Timestamp: timestamp,
 		}
 		if err := a.client.AddReactionContext(ctx, reaction, msgRef); err != nil {
-			log.Printf("Failed to add reaction: %v", err)
+			a.logger.Warn("failed to add reaction",
+				"error", err,
+				"reaction", reaction)
 		}
 	}
 
@@ -183,6 +293,49 @@ func (a *Adapter) Status() channels.Status {
 	return a.status
 }
 
+// HealthCheck performs a connectivity check with Slack's API.
+// It calls the auth.test endpoint to verify authentication and connectivity.
+func (a *Adapter) HealthCheck(ctx context.Context) channels.HealthStatus {
+	startTime := time.Now()
+
+	health := channels.HealthStatus{
+		LastCheck: startTime,
+		Healthy:   false,
+	}
+
+	// Call auth.test to verify connectivity
+	_, err := a.client.AuthTestContext(ctx)
+	health.Latency = time.Since(startTime)
+
+	if err != nil {
+		health.Message = fmt.Sprintf("health check failed: %v", err)
+		a.logger.Warn("health check failed",
+			"error", err,
+			"latency_ms", health.Latency.Milliseconds())
+		return health
+	}
+
+	health.Healthy = true
+	health.Degraded = a.isDegraded()
+
+	if health.Degraded {
+		health.Message = "operating in degraded mode"
+	} else {
+		health.Message = "healthy"
+	}
+
+	a.logger.Debug("health check succeeded",
+		"latency_ms", health.Latency.Milliseconds(),
+		"degraded", health.Degraded)
+
+	return health
+}
+
+// Metrics returns the current metrics snapshot.
+func (a *Adapter) Metrics() channels.MetricsSnapshot {
+	return a.metrics.Snapshot()
+}
+
 // handleEvents processes incoming Socket Mode events.
 func (a *Adapter) handleEvents() {
 	defer a.wg.Done()
@@ -190,9 +343,11 @@ func (a *Adapter) handleEvents() {
 	for {
 		select {
 		case <-a.ctx.Done():
+			a.logger.Info("event handler stopped")
 			return
 		case event, ok := <-a.socketClient.Events:
 			if !ok {
+				a.logger.Info("socket client events channel closed")
 				return
 			}
 
@@ -203,26 +358,31 @@ func (a *Adapter) handleEvents() {
 
 			switch event.Type {
 			case socketmode.EventTypeConnecting:
-				log.Println("Slack: Connecting to Socket Mode...")
+				a.logger.Info("connecting to socket mode")
 
 			case socketmode.EventTypeConnectionError:
-				log.Printf("Slack: Connection error: %v", event.Data)
+				a.logger.Error("socket mode connection error", "data", event.Data)
 				a.updateStatus(false, "connection error")
+				a.metrics.RecordError(channels.ErrCodeConnection)
+				a.setDegraded(true)
 
 			case socketmode.EventTypeConnected:
-				log.Println("Slack: Connected to Socket Mode")
+				a.logger.Info("connected to socket mode")
 				a.updateStatus(true, "")
+				a.setDegraded(false)
 
 			case socketmode.EventTypeEventsAPI:
 				a.handleEventsAPI(event)
 
 			case socketmode.EventTypeSlashCommand:
-				// Acknowledge slash commands (implement if needed)
+				// Acknowledge slash commands (can be implemented if needed)
 				a.socketClient.Ack(*event.Request)
+				a.logger.Debug("received slash command")
 
 			case socketmode.EventTypeInteractive:
-				// Acknowledge interactive events (implement if needed)
+				// Acknowledge interactive events (can be implemented if needed)
 				a.socketClient.Ack(*event.Request)
+				a.logger.Debug("received interactive event")
 			}
 		}
 	}
@@ -232,7 +392,7 @@ func (a *Adapter) handleEvents() {
 func (a *Adapter) handleEventsAPI(event socketmode.Event) {
 	eventsAPIEvent, ok := event.Data.(slackevents.EventsAPIEvent)
 	if !ok {
-		log.Printf("Slack: Could not type cast event to EventsAPIEvent: %v", event.Data)
+		a.logger.Warn("could not type cast event to EventsAPIEvent")
 		a.socketClient.Ack(*event.Request)
 		return
 	}
@@ -263,6 +423,11 @@ func (a *Adapter) handleEventsAPI(event socketmode.Event) {
 
 // handleAppMention processes app mention events (@bot mentions).
 func (a *Adapter) handleAppMention(event *slackevents.AppMentionEvent) {
+	a.logger.Debug("received app mention",
+		"user", event.User,
+		"channel", event.Channel,
+		"text_length", len(event.Text))
+
 	// Convert to MessageEvent for unified handling
 	msgEvent := &slackevents.MessageEvent{
 		Type:            "message",
@@ -278,6 +443,8 @@ func (a *Adapter) handleAppMention(event *slackevents.AppMentionEvent) {
 
 // handleMessage processes incoming messages.
 func (a *Adapter) handleMessage(event *slackevents.MessageEvent) {
+	startTime := time.Now()
+
 	// Check if this is a DM or if bot is mentioned
 	a.botUserIDMu.RLock()
 	botUserID := a.botUserID
@@ -291,19 +458,31 @@ func (a *Adapter) handleMessage(event *slackevents.MessageEvent) {
 		return
 	}
 
+	a.logger.Debug("processing message",
+		"user", event.User,
+		"channel", event.Channel,
+		"is_dm", isDM,
+		"is_mention", isMention)
+
 	// Convert Slack message to unified format
 	msg := convertSlackMessage(event, a.cfg.BotToken)
+
+	// Record metrics
+	a.metrics.RecordMessageReceived()
+	a.metrics.RecordReceiveLatency(time.Since(startTime))
 
 	// Send to messages channel
 	select {
 	case a.messages <- msg:
 	case <-a.ctx.Done():
 	default:
-		log.Printf("Slack: Messages channel full, dropping message")
+		a.logger.Warn("messages channel full, dropping message",
+			"channel", event.Channel)
+		a.metrics.RecordMessageFailed()
 	}
 }
 
-// updateStatus updates the connection status.
+// updateStatus updates the connection status thread-safely.
 func (a *Adapter) updateStatus(connected bool, errMsg string) {
 	a.statusMu.Lock()
 	defer a.statusMu.Unlock()
@@ -312,6 +491,31 @@ func (a *Adapter) updateStatus(connected bool, errMsg string) {
 	if connected {
 		a.status.LastPing = time.Now().Unix()
 	}
+}
+
+// setDegraded sets the degraded mode flag.
+func (a *Adapter) setDegraded(degraded bool) {
+	a.degradedMu.Lock()
+	defer a.degradedMu.Unlock()
+	a.degraded = degraded
+}
+
+// isDegraded returns the current degraded mode status.
+func (a *Adapter) isDegraded() bool {
+	a.degradedMu.RLock()
+	defer a.degradedMu.RUnlock()
+	return a.degraded
+}
+
+// isRateLimitError checks if an error is a rate limit error.
+func isRateLimitError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "rate_limit") ||
+		strings.Contains(errStr, "rate limited") ||
+		strings.Contains(errStr, "429")
 }
 
 // convertSlackMessage converts a Slack message event to the unified message format.
@@ -403,7 +607,7 @@ func buildBlockKitMessage(msg *models.Message) []slack.MsgOption {
 				options = append(options, slack.MsgOptionBlocks(imageBlock))
 			} else {
 				// For other files, add as context
-				contextText := fmt.Sprintf("📎 %s (%s)", att.Filename, att.MimeType)
+				contextText := fmt.Sprintf("Attachment: %s (%s)", att.Filename, att.MimeType)
 				contextBlock := slack.NewContextBlock("",
 					slack.NewTextBlockObject("mrkdwn", contextText, false, false),
 				)

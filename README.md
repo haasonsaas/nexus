@@ -247,6 +247,9 @@ Preview the system prompt (with memory + heartbeat):
 nexus prompt --config nexus.yaml --session-id session-123 --channel slack --message "heartbeat"
 ```
 
+External plugin example:
+- See `examples/plugins/echo` for a minimal `plugin.so` build and config wiring.
+
 ### Testing
 
 Standard test run:

@@ -76,3 +76,4 @@
 - 2026-01-21: Added channel plugin registry with lazy loading and split channel adapter interfaces into focused contracts.
 - 2026-01-21: Added plugin manifest discovery + schema validation and published a minimal plugin SDK surface.
 - 2026-01-21: Added runtime plugin hooks (.so loading), plus doctor/prompt CLI UX for memory/heartbeat.
+- 2026-01-21: Added sample external plugin (`examples/plugins/echo`) with manifest + build instructions.

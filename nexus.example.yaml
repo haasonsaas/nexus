@@ -126,6 +126,11 @@ plugins:
   #     path: ./plugins/voice-call # directory containing nexus.plugin.json + plugin.so (or <id>.so)
   #     config:
   #       token: ${VOICE_CALL_TOKEN}
+  #   sample-echo:
+  #     enabled: true
+  #     path: ./examples/plugins/echo
+  #     config:
+  #       prefix: "[echo] "
   sandbox:
     enabled: true
     # Number of pre-warmed VMs/containers

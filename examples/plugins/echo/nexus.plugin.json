@@ -1,0 +1,13 @@
+{
+  "id": "sample-echo",
+  "name": "Sample Echo",
+  "description": "Example external plugin that adds a simple echo tool",
+  "version": "0.1.0",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "prefix": { "type": "string" }
+    }
+  }
+}

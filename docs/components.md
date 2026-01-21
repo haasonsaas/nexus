@@ -99,6 +99,9 @@ func (r *Router) Route(ctx context.Context, msg *Message) (*Session, error) {
 
 Each channel adapter implements capability-based interfaces (inbound, outbound, lifecycle, health) and is registered through the channel plugin registry for lazy loading. External plugins can ship a `nexus.plugin.json` (or `clawdbot.plugin.json`) manifest with a strict JSON schema for config validation; runtime plugins can additionally expose a `NexusPlugin` symbol in a `.so` for in-process loading.
 
+Example plugin:
+- `examples/plugins/echo` shows a minimal runtime plugin (manifest + `plugin.so` build).
+
 ### Telegram Adapter
 
 ```

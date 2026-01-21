@@ -318,8 +318,8 @@ func (m *mockTelegramMessage) GetText() string {
 	return m.text
 }
 
-func (m *mockTelegramMessage) GetFrom() mockUser {
-	return mockUser{
+func (m *mockTelegramMessage) GetFrom() userInterface {
+	return &mockUser{
 		id:        m.fromID,
 		firstName: m.fromFirst,
 		lastName:  m.fromLast,
@@ -328,6 +328,38 @@ func (m *mockTelegramMessage) GetFrom() mockUser {
 
 func (m *mockTelegramMessage) GetDate() int64 {
 	return m.date
+}
+
+func (m *mockTelegramMessage) HasPhoto() bool {
+	return m.hasPhoto
+}
+
+func (m *mockTelegramMessage) GetPhotoID() string {
+	return m.photoID
+}
+
+func (m *mockTelegramMessage) HasDocument() bool {
+	return m.hasDoc
+}
+
+func (m *mockTelegramMessage) GetDocumentID() string {
+	return m.docID
+}
+
+func (m *mockTelegramMessage) GetDocumentName() string {
+	return m.docName
+}
+
+func (m *mockTelegramMessage) GetDocumentMimeType() string {
+	return m.docMime
+}
+
+func (m *mockTelegramMessage) HasAudio() bool {
+	return m.hasAudio
+}
+
+func (m *mockTelegramMessage) GetAudioID() string {
+	return m.audioID
 }
 
 type mockUser struct {

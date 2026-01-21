@@ -3,7 +3,9 @@ package providers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/haasonsaas/nexus/pkg/models"
@@ -66,6 +68,26 @@ func TestConvertToOpenAIMessages(t *testing.T) {
 			wantLen: 1,
 			wantErr: false,
 		},
+		{
+			name: "message with image attachment (vision)",
+			messages: []agent.CompletionMessage{
+				{
+					Role:    "user",
+					Content: "What's in this image?",
+					Attachments: []models.Attachment{
+						{
+							ID:       "img_1",
+							Type:     "image",
+							URL:      "https://example.com/image.jpg",
+							MimeType: "image/jpeg",
+						},
+					},
+				},
+			},
+			system:  "",
+			wantLen: 1,
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -84,7 +106,7 @@ func TestConvertToOpenAIMessages(t *testing.T) {
 }
 
 func TestConvertToOpenAITools(t *testing.T) {
-	mockTool := &mockTool{
+	mockTool := &openaiMockTool{
 		name:        "test_tool",
 		description: "A test tool",
 		schema:      json.RawMessage(`{"type":"object","properties":{"arg":{"type":"string"}}}`),
@@ -190,7 +212,7 @@ func TestProviderModels(t *testing.T) {
 	}
 }
 
-func TestErrorHandling(t *testing.T) {
+func TestOpenAIErrorHandling(t *testing.T) {
 	tests := []struct {
 		name    string
 		setup   func() *OpenAIProvider
@@ -223,30 +245,143 @@ func TestErrorHandling(t *testing.T) {
 	}
 }
 
-// Mock tool for testing
-type mockTool struct {
+// Mock tool for testing OpenAI provider
+type openaiMockTool struct {
 	name        string
 	description string
 	schema      json.RawMessage
 }
 
-func (m *mockTool) Name() string {
+func (m *openaiMockTool) Name() string {
 	return m.name
 }
 
-func (m *mockTool) Description() string {
+func (m *openaiMockTool) Description() string {
 	return m.description
 }
 
-func (m *mockTool) Schema() json.RawMessage {
+func (m *openaiMockTool) Schema() json.RawMessage {
 	return m.schema
 }
 
-func (m *mockTool) Execute(ctx context.Context, params json.RawMessage) (*agent.ToolResult, error) {
+func (m *openaiMockTool) Execute(ctx context.Context, params json.RawMessage) (*agent.ToolResult, error) {
 	return &agent.ToolResult{Content: "mock result"}, nil
 }
 
 // Helper function
 func intPtr(i int) *int {
 	return &i
+}
+
+func TestVisionSupport(t *testing.T) {
+	provider := &OpenAIProvider{}
+	models := provider.Models()
+
+	visionModels := 0
+	for _, m := range models {
+		if m.SupportsVision {
+			visionModels++
+		}
+	}
+
+	if visionModels == 0 {
+		t.Error("No models with vision support found")
+	}
+
+	// Verify specific models support vision
+	for _, m := range models {
+		if m.ID == "gpt-4o" || m.ID == "gpt-4-turbo" {
+			if !m.SupportsVision {
+				t.Errorf("Model %s should support vision", m.ID)
+			}
+		}
+	}
+}
+
+func TestConvertMessagesWithMultipleImages(t *testing.T) {
+	provider := &OpenAIProvider{}
+	messages := []agent.CompletionMessage{
+		{
+			Role:    "user",
+			Content: "Compare these images",
+			Attachments: []models.Attachment{
+				{
+					ID:   "img_1",
+					Type: "image",
+					URL:  "https://example.com/image1.jpg",
+				},
+				{
+					ID:   "img_2",
+					Type: "image",
+					URL:  "https://example.com/image2.jpg",
+				},
+			},
+		},
+	}
+
+	got, err := provider.convertToOpenAIMessages(messages, "")
+	if err != nil {
+		t.Fatalf("convertToOpenAIMessages() error = %v", err)
+	}
+
+	if len(got) != 1 {
+		t.Errorf("Expected 1 message, got %d", len(got))
+	}
+
+	if len(got[0].MultiContent) != 3 { // text + 2 images
+		t.Errorf("Expected 3 content parts, got %d", len(got[0].MultiContent))
+	}
+}
+
+func TestRetryLogic(t *testing.T) {
+	provider := &OpenAIProvider{
+		maxRetries: 3,
+		retryDelay: time.Millisecond * 10,
+	}
+
+	tests := []struct {
+		name         string
+		err          error
+		wantRetry    bool
+	}{
+		{"rate limit error", fmt.Errorf("rate limit exceeded"), true},
+		{"429 status", fmt.Errorf("HTTP 429"), true},
+		{"500 server error", fmt.Errorf("HTTP 500"), true},
+		{"timeout", fmt.Errorf("timeout exceeded"), true},
+		{"invalid API key", fmt.Errorf("invalid API key"), false},
+		{"no error", nil, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := provider.isRetryableError(tt.err)
+			if got != tt.wantRetry {
+				t.Errorf("isRetryableError() = %v, want %v", got, tt.wantRetry)
+			}
+		})
+	}
+}
+
+func TestTokenCounting(t *testing.T) {
+	// Test that models have appropriate context sizes
+	provider := &OpenAIProvider{}
+	models := provider.Models()
+
+	for _, m := range models {
+		if m.ContextSize <= 0 {
+			t.Errorf("Model %s has invalid context size: %d", m.ID, m.ContextSize)
+		}
+
+		// Verify expected context sizes
+		switch m.ID {
+		case "gpt-4o", "gpt-4-turbo":
+			if m.ContextSize != 128000 {
+				t.Errorf("Model %s has wrong context size: %d, want 128000", m.ID, m.ContextSize)
+			}
+		case "gpt-3.5-turbo":
+			if m.ContextSize != 16385 {
+				t.Errorf("Model %s has wrong context size: %d, want 16385", m.ID, m.ContextSize)
+			}
+		}
+	}
 }

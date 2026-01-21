@@ -38,6 +38,7 @@ type CompletionMessage struct {
 	Content     string              `json:"content,omitempty"`
 	ToolCalls   []models.ToolCall   `json:"tool_calls,omitempty"`
 	ToolResults []models.ToolResult `json:"tool_results,omitempty"`
+	Attachments []models.Attachment `json:"attachments,omitempty"`
 }
 
 // CompletionChunk is a streaming response chunk.

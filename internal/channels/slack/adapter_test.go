@@ -223,20 +223,22 @@ func TestConvertSlackMessage_WithFiles(t *testing.T) {
 		Text:      "Here's a file",
 		Channel:   "C123456",
 		TimeStamp: "1234567890.123456",
-		Files: []slackevents.File{
-			{
-				ID:       "F123456",
-				Name:     "test.txt",
-				Mimetype: "text/plain",
-				URLPrivate: "https://files.slack.com/files/test.txt",
-				Size:     1024,
-			},
-			{
-				ID:       "F789012",
-				Name:     "image.png",
-				Mimetype: "image/png",
-				URLPrivate: "https://files.slack.com/files/image.png",
-				Size:     2048,
+		Message: &slack.Msg{
+			Files: []slack.File{
+				{
+					ID:                 "F123456",
+					Name:               "test.txt",
+					Mimetype:           "text/plain",
+					URLPrivateDownload: "https://files.slack.com/files/test.txt",
+					Size:               1024,
+				},
+				{
+					ID:                 "F789012",
+					Name:               "image.png",
+					Mimetype:           "image/png",
+					URLPrivateDownload: "https://files.slack.com/files/image.png",
+					Size:               2048,
+				},
 			},
 		},
 	}

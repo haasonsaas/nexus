@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
@@ -15,7 +14,6 @@ type mockDiscordSession struct {
 	openCalled           bool
 	closeCalled          bool
 	channelMessageSendFn func(channelID string, content string, options ...discordgo.RequestOption) (*discordgo.Message, error)
-	channelFileSendFn    func(channelID, name string, r interface{}, options ...discordgo.RequestOption) (*discordgo.Message, error)
 	messageReactionAddFn func(channelID, messageID, emoji string) error
 	threadStartFn        func(channelID, name string, archiveDuration int) (*discordgo.Channel, error)
 }
@@ -50,21 +48,15 @@ func (m *mockDiscordSession) ChannelMessageSendComplex(channelID string, data *d
 	}, nil
 }
 
-func (m *mockDiscordSession) ChannelFileSend(channelID, name string, r interface{}, options ...discordgo.RequestOption) (*discordgo.Message, error) {
-	if m.channelFileSendFn != nil {
-		return m.channelFileSendFn(channelID, name, r, options...)
-	}
-	return &discordgo.Message{ID: "test-msg-id"}, nil
-}
 
-func (m *mockDiscordSession) MessageReactionAdd(channelID, messageID, emoji string) error {
+func (m *mockDiscordSession) MessageReactionAdd(channelID, messageID, emoji string, options ...discordgo.RequestOption) error {
 	if m.messageReactionAddFn != nil {
 		return m.messageReactionAddFn(channelID, messageID, emoji)
 	}
 	return nil
 }
 
-func (m *mockDiscordSession) ThreadStart(channelID, name string, archiveDuration int) (*discordgo.Channel, error) {
+func (m *mockDiscordSession) ThreadStart(channelID, name string, typ discordgo.ChannelType, archiveDuration int, options ...discordgo.RequestOption) (*discordgo.Channel, error) {
 	if m.threadStartFn != nil {
 		return m.threadStartFn(channelID, name, archiveDuration)
 	}
@@ -164,7 +156,7 @@ func TestConvertDiscordMessage(t *testing.T) {
 					ID:       "user-789",
 					Username: "testuser",
 				},
-				Timestamp: discordgo.Timestamp("2024-01-20T12:00:00Z"),
+				Timestamp: time.Date(2024, 1, 20, 12, 0, 0, 0, time.UTC),
 			},
 			expected: &models.Message{
 				Channel:    models.ChannelDiscord,
@@ -189,7 +181,7 @@ func TestConvertDiscordMessage(t *testing.T) {
 					ID:       "user-789",
 					Username: "testuser",
 				},
-				Timestamp: discordgo.Timestamp("2024-01-20T12:00:00Z"),
+				Timestamp: time.Date(2024, 1, 20, 12, 0, 0, 0, time.UTC),
 				Attachments: []*discordgo.MessageAttachment{
 					{
 						ID:          "attach-001",
@@ -233,7 +225,7 @@ func TestConvertDiscordMessage(t *testing.T) {
 					ID:       "user-789",
 					Username: "testuser",
 				},
-				Timestamp: discordgo.Timestamp("2024-01-20T12:00:00Z"),
+				Timestamp: time.Date(2024, 1, 20, 12, 0, 0, 0, time.UTC),
 				Thread: &discordgo.Channel{
 					ID:       "thread-789",
 					ParentID: "channel-456",

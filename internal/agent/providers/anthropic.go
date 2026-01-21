@@ -13,16 +13,17 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
+	"github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
 // AnthropicProvider implements the agent.LLMProvider interface for Anthropic's Claude API.
 type AnthropicProvider struct {
-	client      *anthropic.Client
-	apiKey      string
-	maxRetries  int
-	retryDelay  time.Duration
+	client       anthropic.Client
+	apiKey       string
+	maxRetries   int
+	retryDelay   time.Duration
 	defaultModel string
 }
 
@@ -125,7 +126,7 @@ func (p *AnthropicProvider) Complete(ctx context.Context, req *agent.CompletionR
 		defer close(chunks)
 
 		// Convert request to Anthropic format with retries
-		var stream *anthropic.MessageStreamEvent
+		var stream *ssestream.Stream[anthropic.MessageStreamEventUnion]
 		var err error
 
 		for attempt := 0; attempt <= p.maxRetries; attempt++ {
@@ -166,7 +167,7 @@ func (p *AnthropicProvider) Complete(ctx context.Context, req *agent.CompletionR
 }
 
 // createStream creates an Anthropic streaming request.
-func (p *AnthropicProvider) createStream(ctx context.Context, req *agent.CompletionRequest) (*anthropic.MessageStreamEvent, error) {
+func (p *AnthropicProvider) createStream(ctx context.Context, req *agent.CompletionRequest) (*ssestream.Stream[anthropic.MessageStreamEventUnion], error) {
 	// Convert messages
 	messages, err := p.convertMessages(req.Messages)
 	if err != nil {
@@ -175,16 +176,19 @@ func (p *AnthropicProvider) createStream(ctx context.Context, req *agent.Complet
 
 	// Build parameters
 	params := anthropic.MessageNewParams{
-		Model:     anthropic.F(p.getModel(req.Model)),
-		Messages:  anthropic.F(messages),
-		MaxTokens: anthropic.F(int64(p.getMaxTokens(req.MaxTokens))),
+		Model:     anthropic.Model(p.getModel(req.Model)),
+		Messages:  messages,
+		MaxTokens: int64(p.getMaxTokens(req.MaxTokens)),
 	}
 
 	// Add system prompt if provided
 	if req.System != "" {
-		params.System = anthropic.F([]anthropic.TextBlockParam{
-			anthropic.NewTextBlock(req.System),
-		})
+		params.System = []anthropic.TextBlockParam{
+			{
+				Type: "text",
+				Text: req.System,
+			},
+		}
 	}
 
 	// Add tools if provided
@@ -193,17 +197,17 @@ func (p *AnthropicProvider) createStream(ctx context.Context, req *agent.Complet
 		if err != nil {
 			return nil, fmt.Errorf("anthropic: failed to convert tools: %w", err)
 		}
-		params.Tools = anthropic.F(tools)
+		params.Tools = tools
 	}
 
 	// Create streaming request
 	stream := p.client.Messages.NewStreaming(ctx, params)
 
-	return &stream, nil
+	return stream, nil
 }
 
 // processStream processes the streaming events and sends chunks.
-func (p *AnthropicProvider) processStream(stream *anthropic.MessageStreamEvent, chunks chan<- *agent.CompletionChunk) {
+func (p *AnthropicProvider) processStream(stream *ssestream.Stream[anthropic.MessageStreamEventUnion], chunks chan<- *agent.CompletionChunk) {
 	var currentToolCall *models.ToolCall
 	var currentToolInput strings.Builder
 
@@ -211,35 +215,35 @@ func (p *AnthropicProvider) processStream(stream *anthropic.MessageStreamEvent, 
 		event := stream.Current()
 
 		switch event.Type {
-		case anthropic.MessageStreamEventTypeContentBlockStart:
-			if data, ok := event.ContentBlockStart(); ok {
-				if toolUse, ok := data.ContentBlock.AsUnion().(anthropic.ToolUseBlock); ok {
-					currentToolCall = &models.ToolCall{
-						ID:   toolUse.ID,
-						Name: toolUse.Name,
-					}
-					currentToolInput.Reset()
+		case "content_block_start":
+			contentBlockStart := event.AsContentBlockStart()
+			contentBlock := contentBlockStart.ContentBlock.AsAny()
+
+			if toolUse, ok := contentBlock.(anthropic.ToolUseBlock); ok {
+				currentToolCall = &models.ToolCall{
+					ID:   toolUse.ID,
+					Name: toolUse.Name,
+				}
+				currentToolInput.Reset()
+			}
+
+		case "content_block_delta":
+			contentBlockDelta := event.AsContentBlockDelta()
+			delta := contentBlockDelta.Delta.AsAny()
+
+			// Handle text delta
+			if textDelta, ok := delta.(anthropic.TextDelta); ok {
+				chunks <- &agent.CompletionChunk{
+					Text: textDelta.Text,
 				}
 			}
 
-		case anthropic.MessageStreamEventTypeContentBlockDelta:
-			if data, ok := event.ContentBlockDelta(); ok {
-				delta := data.Delta
-
-				// Handle text delta
-				if textDelta, ok := delta.AsUnion().(anthropic.TextDelta); ok {
-					chunks <- &agent.CompletionChunk{
-						Text: textDelta.Text,
-					}
-				}
-
-				// Handle tool input delta
-				if inputDelta, ok := delta.AsUnion().(anthropic.InputJSONDelta); ok {
-					currentToolInput.WriteString(inputDelta.PartialJSON)
-				}
+			// Handle tool input delta
+			if inputDelta, ok := delta.(anthropic.InputJSONDelta); ok {
+				currentToolInput.WriteString(inputDelta.PartialJSON)
 			}
 
-		case anthropic.MessageStreamEventTypeContentBlockStop:
+		case "content_block_stop":
 			// Finalize tool call if we were building one
 			if currentToolCall != nil {
 				currentToolCall.Input = json.RawMessage(currentToolInput.String())
@@ -249,16 +253,14 @@ func (p *AnthropicProvider) processStream(stream *anthropic.MessageStreamEvent, 
 				currentToolCall = nil
 			}
 
-		case anthropic.MessageStreamEventTypeMessageStop:
+		case "message_stop":
 			chunks <- &agent.CompletionChunk{
 				Done: true,
 			}
 
-		case anthropic.MessageStreamEventTypeError:
-			if data, ok := event.Error(); ok {
-				chunks <- &agent.CompletionChunk{
-					Error: fmt.Errorf("anthropic stream error: %s", data.Error.Message),
-				}
+		case "error":
+			chunks <- &agent.CompletionChunk{
+				Error: fmt.Errorf("anthropic stream error"),
 			}
 		}
 	}
@@ -307,42 +309,44 @@ func (p *AnthropicProvider) convertMessages(messages []agent.CompletionMessage) 
 
 			content = append(content, anthropic.NewToolUseBlock(
 				toolCall.ID,
-				toolCall.Name,
 				input,
+				toolCall.Name,
 			))
 		}
 
-		// Map role
-		role := anthropic.MessageParamRole(msg.Role)
-		if msg.Role == "tool" {
-			role = anthropic.MessageParamRoleUser
+		// Create message based on role
+		var message anthropic.MessageParam
+		if msg.Role == "assistant" {
+			message = anthropic.NewAssistantMessage(content...)
+		} else {
+			// User or tool role
+			message = anthropic.NewUserMessage(content...)
 		}
 
-		result = append(result, anthropic.MessageParam{
-			Role:    anthropic.F(role),
-			Content: anthropic.F(content),
-		})
+		result = append(result, message)
 	}
 
 	return result, nil
 }
 
 // convertTools converts internal tools to Anthropic format.
-func (p *AnthropicProvider) convertTools(tools []agent.Tool) ([]anthropic.ToolParam, error) {
-	var result []anthropic.ToolParam
+func (p *AnthropicProvider) convertTools(tools []agent.Tool) ([]anthropic.ToolUnionParam, error) {
+	var result []anthropic.ToolUnionParam
 
 	for _, tool := range tools {
 		// Parse schema
-		var schema map[string]interface{}
+		var schema anthropic.ToolInputSchemaParam
 		if err := json.Unmarshal(tool.Schema(), &schema); err != nil {
 			return nil, fmt.Errorf("invalid tool schema for %s: %w", tool.Name(), err)
 		}
 
-		result = append(result, anthropic.ToolParam{
-			Name:        anthropic.F(tool.Name()),
-			Description: anthropic.F(tool.Description()),
-			InputSchema: anthropic.F(schema),
-		})
+		toolParam := anthropic.ToolUnionParamOfTool(schema, tool.Name())
+		// Set description if we can access the underlying ToolParam
+		if toolParam.OfTool != nil {
+			toolParam.OfTool.Description = anthropic.String(tool.Description())
+		}
+
+		result = append(result, toolParam)
 	}
 
 	return result, nil

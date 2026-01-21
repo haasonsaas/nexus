@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -251,6 +252,8 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config: expected single document")
 	}
 
+	applyEnvOverrides(&cfg)
+
 	// Apply defaults
 	applyDefaults(&cfg)
 
@@ -444,6 +447,47 @@ func applyLoggingDefaults(cfg *LoggingConfig) {
 	}
 	if cfg.Format == "" {
 		cfg.Format = "json"
+	}
+}
+
+func applyEnvOverrides(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+
+	if value := strings.TrimSpace(os.Getenv("NEXUS_HOST")); value != "" {
+		cfg.Server.Host = value
+	}
+	if value := strings.TrimSpace(os.Getenv("NEXUS_GRPC_PORT")); value != "" {
+		if parsed, err := strconv.Atoi(value); err == nil {
+			cfg.Server.GRPCPort = parsed
+		}
+	}
+	if value := strings.TrimSpace(os.Getenv("NEXUS_HTTP_PORT")); value != "" {
+		if parsed, err := strconv.Atoi(value); err == nil {
+			cfg.Server.HTTPPort = parsed
+		}
+	}
+	if value := strings.TrimSpace(os.Getenv("NEXUS_METRICS_PORT")); value != "" {
+		if parsed, err := strconv.Atoi(value); err == nil {
+			cfg.Server.MetricsPort = parsed
+		}
+	}
+
+	if value := strings.TrimSpace(os.Getenv("DATABASE_URL")); value != "" {
+		cfg.Database.URL = value
+	}
+
+	if value := strings.TrimSpace(os.Getenv("JWT_SECRET")); value != "" {
+		cfg.Auth.JWTSecret = value
+	}
+	if value := strings.TrimSpace(os.Getenv("NEXUS_JWT_SECRET")); value != "" {
+		cfg.Auth.JWTSecret = value
+	}
+	if value := strings.TrimSpace(os.Getenv("NEXUS_TOKEN_EXPIRY")); value != "" {
+		if parsed, err := time.ParseDuration(value); err == nil {
+			cfg.Auth.TokenExpiry = parsed
+		}
 	}
 }
 

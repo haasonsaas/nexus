@@ -33,8 +33,10 @@ type APIKeyConfig struct {
 
 // Service validates JWTs and API keys.
 type Service struct {
-	jwt     *JWTService
-	apiKeys map[string]*models.User
+	jwt       *JWTService
+	apiKeys   map[string]*models.User
+	users     UserStore
+	providers map[string]OAuthProvider
 }
 
 // NewService constructs an auth service from static configuration.
@@ -44,6 +46,7 @@ func NewService(cfg Config) *Service {
 		service.jwt = NewJWTService(cfg.JWTSecret, cfg.TokenExpiry)
 	}
 	service.apiKeys = buildAPIKeyMap(cfg.APIKeys)
+	service.providers = map[string]OAuthProvider{}
 	return service
 }
 

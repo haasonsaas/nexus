@@ -245,6 +245,38 @@ llm:
 	}
 }
 
+func TestLoadAppliesEnvOverrides(t *testing.T) {
+	t.Setenv("NEXUS_HOST", "127.0.0.1")
+	t.Setenv("NEXUS_GRPC_PORT", "55051")
+	t.Setenv("DATABASE_URL", "postgres://override@localhost:26257/nexus?sslmode=disable")
+
+	path := writeConfig(t, `
+server:
+  host: 0.0.0.0
+  grpc_port: 50051
+database:
+  url: postgres://default@localhost:26257/nexus?sslmode=disable
+llm:
+  default_provider: anthropic
+  providers:
+    anthropic: {}
+`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Server.Host != "127.0.0.1" {
+		t.Fatalf("expected host override, got %q", cfg.Server.Host)
+	}
+	if cfg.Server.GRPCPort != 55051 {
+		t.Fatalf("expected grpc port override, got %d", cfg.Server.GRPCPort)
+	}
+	if cfg.Database.URL != "postgres://override@localhost:26257/nexus?sslmode=disable" {
+		t.Fatalf("expected database url override, got %q", cfg.Database.URL)
+	}
+}
+
 func TestLoadValidatesWorkspaceMaxChars(t *testing.T) {
 	path := writeConfig(t, `
 workspace:

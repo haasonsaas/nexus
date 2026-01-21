@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/haasonsaas/nexus/internal/plugins"
+	"github.com/haasonsaas/nexus/pkg/pluginsdk"
 	"gopkg.in/yaml.v3"
 )
 
@@ -18,6 +20,7 @@ type Config struct {
 	Session  SessionConfig  `yaml:"session"`
 	Identity IdentityConfig `yaml:"identity"`
 	User     UserConfig     `yaml:"user"`
+	Plugins  PluginsConfig  `yaml:"plugins"`
 	Channels ChannelsConfig `yaml:"channels"`
 	LLM      LLMConfig      `yaml:"llm"`
 	Tools    ToolsConfig    `yaml:"tools"`
@@ -55,11 +58,14 @@ type MemoryConfig struct {
 	Enabled   bool   `yaml:"enabled"`
 	Directory string `yaml:"directory"`
 	MaxLines  int    `yaml:"max_lines"`
+	Days      int    `yaml:"days"`
+	Scope     string `yaml:"scope"`
 }
 
 type HeartbeatConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	File    string `yaml:"file"`
+	Mode    string `yaml:"mode"`
 }
 
 type IdentityConfig struct {
@@ -75,6 +81,21 @@ type UserConfig struct {
 	Pronouns         string `yaml:"pronouns"`
 	Timezone         string `yaml:"timezone"`
 	Notes            string `yaml:"notes"`
+}
+
+type PluginsConfig struct {
+	Load    PluginLoadConfig             `yaml:"load"`
+	Entries map[string]PluginEntryConfig `yaml:"entries"`
+}
+
+type PluginLoadConfig struct {
+	Paths []string `yaml:"paths"`
+}
+
+type PluginEntryConfig struct {
+	Enabled bool           `yaml:"enabled"`
+	Path    string         `yaml:"path"`
+	Config  map[string]any `yaml:"config"`
 }
 
 type OAuthConfig struct {
@@ -247,8 +268,17 @@ func applySessionDefaults(cfg *SessionConfig) {
 	if cfg.Memory.MaxLines == 0 {
 		cfg.Memory.MaxLines = 20
 	}
+	if cfg.Memory.Days == 0 {
+		cfg.Memory.Days = 2
+	}
+	if cfg.Memory.Scope == "" {
+		cfg.Memory.Scope = "session"
+	}
 	if cfg.Heartbeat.File == "" {
 		cfg.Heartbeat.File = "HEARTBEAT.md"
+	}
+	if cfg.Heartbeat.Mode == "" {
+		cfg.Heartbeat.Mode = "always"
 	}
 }
 
@@ -291,8 +321,17 @@ func validateConfig(cfg *Config) error {
 	if cfg.Session.Memory.MaxLines < 0 {
 		issues = append(issues, "session.memory.max_lines must be >= 0")
 	}
+	if cfg.Session.Memory.Days < 0 {
+		issues = append(issues, "session.memory.days must be >= 0")
+	}
+	if cfg.Session.Memory.Scope != "" && !validMemoryScope(cfg.Session.Memory.Scope) {
+		issues = append(issues, "session.memory.scope must be \"session\", \"channel\", or \"global\"")
+	}
 	if cfg.Session.Heartbeat.Enabled && strings.TrimSpace(cfg.Session.Heartbeat.File) == "" {
 		issues = append(issues, "session.heartbeat.file is required when heartbeat is enabled")
+	}
+	if cfg.Session.Heartbeat.Mode != "" && !validHeartbeatMode(cfg.Session.Heartbeat.Mode) {
+		issues = append(issues, "session.heartbeat.mode must be \"always\" or \"on_demand\"")
 	}
 
 	defaultProvider := strings.ToLower(strings.TrimSpace(cfg.LLM.DefaultProvider))
@@ -315,6 +354,10 @@ func validateConfig(cfg *Config) error {
 	if len(issues) > 0 {
 		return &ConfigValidationError{Issues: issues}
 	}
+
+	if err := validatePlugins(cfg); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -325,4 +368,89 @@ func validScope(scope string) bool {
 	default:
 		return false
 	}
+}
+
+func validMemoryScope(scope string) bool {
+	switch strings.ToLower(strings.TrimSpace(scope)) {
+	case "session", "channel", "global":
+		return true
+	default:
+		return false
+	}
+}
+
+func validHeartbeatMode(mode string) bool {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "always", "on_demand":
+		return true
+	default:
+		return false
+	}
+}
+
+func validatePlugins(cfg *Config) error {
+	if cfg == nil || len(cfg.Plugins.Entries) == 0 {
+		return nil
+	}
+
+	paths := append([]string{}, cfg.Plugins.Load.Paths...)
+	for _, entry := range cfg.Plugins.Entries {
+		if entry.Path != "" {
+			paths = append(paths, entry.Path)
+		}
+	}
+
+	manifestIndex, err := plugins.DiscoverManifests(paths)
+	if err != nil {
+		return fmt.Errorf("plugin manifest discovery failed: %w", err)
+	}
+
+	var issues []string
+	for id, entry := range cfg.Plugins.Entries {
+		var info plugins.ManifestInfo
+		var ok bool
+
+		if entry.Path != "" {
+			info, err = plugins.LoadManifestForPath(entry.Path)
+			if err != nil {
+				issues = append(issues, fmt.Sprintf("plugins.entries.%s manifest error: %v", id, err))
+				continue
+			}
+			if strings.TrimSpace(info.Manifest.ID) != "" && info.Manifest.ID != id {
+				issues = append(issues, fmt.Sprintf("plugins.entries.%s manifest id mismatch: %q", id, info.Manifest.ID))
+				continue
+			}
+		} else {
+			info, ok = manifestIndex[id]
+			if !ok {
+				issues = append(issues, fmt.Sprintf("plugins.entries.%s missing manifest", id))
+				continue
+			}
+		}
+
+		if err := validateManifest(info.Manifest); err != nil {
+			issues = append(issues, fmt.Sprintf("plugins.entries.%s invalid manifest: %v", id, err))
+			continue
+		}
+
+		config := entry.Config
+		if config == nil {
+			config = map[string]any{}
+		}
+		if err := info.Manifest.ValidateConfig(config); err != nil {
+			issues = append(issues, fmt.Sprintf("plugins.entries.%s config invalid: %v", id, err))
+		}
+	}
+
+	if len(issues) > 0 {
+		return &ConfigValidationError{Issues: issues}
+	}
+	return nil
+}
+
+func validateManifest(manifest *pluginsdk.Manifest) error {
+	if manifest == nil {
+		return fmt.Errorf("manifest is nil")
+	}
+	return manifest.Validate()
 }

@@ -15,11 +15,21 @@ func (s *Server) systemPromptForMessage(session *models.Session, msg *models.Mes
 
 	opts := SystemPromptOptions{
 		ToolNotes: s.loadToolNotes(),
-		Heartbeat: s.loadHeartbeat(),
+		Heartbeat: s.loadHeartbeat(msg),
 	}
 
 	if s.config.Session.Memory.Enabled && s.memoryLogger != nil {
-		lines, err := s.memoryLogger.ReadRecentAt(time.Now(), msg.Channel, session.ID, 2, s.config.Session.Memory.MaxLines)
+		channelID := msg.Channel
+		sessionID := session.ID
+		switch strings.ToLower(strings.TrimSpace(s.config.Session.Memory.Scope)) {
+		case "channel":
+			sessionID = ""
+		case "global":
+			channelID = ""
+			sessionID = ""
+		}
+		days := s.config.Session.Memory.Days
+		lines, err := s.memoryLogger.ReadRecentAt(time.Now(), channelID, sessionID, days, s.config.Session.Memory.MaxLines)
 		if err != nil {
 			s.logger.Error("failed to read memory log", "error", err)
 		} else {
@@ -55,8 +65,11 @@ func (s *Server) loadToolNotes() string {
 	return inline + "\n" + content
 }
 
-func (s *Server) loadHeartbeat() string {
+func (s *Server) loadHeartbeat(msg *models.Message) string {
 	if s.config == nil || !s.config.Session.Heartbeat.Enabled {
+		return ""
+	}
+	if strings.EqualFold(s.config.Session.Heartbeat.Mode, "on_demand") && !isHeartbeatMessage(msg) {
 		return ""
 	}
 	path := strings.TrimSpace(s.config.Session.Heartbeat.File)
@@ -69,6 +82,22 @@ func (s *Server) loadHeartbeat() string {
 		return ""
 	}
 	return content
+}
+
+func isHeartbeatMessage(msg *models.Message) bool {
+	if msg == nil {
+		return false
+	}
+	if msg.Metadata != nil {
+		if flag, ok := msg.Metadata["heartbeat"].(bool); ok && flag {
+			return true
+		}
+	}
+	content := strings.TrimSpace(strings.ToLower(msg.Content))
+	if content == "heartbeat" {
+		return true
+	}
+	return strings.HasPrefix(content, "heartbeat ")
 }
 
 func readPromptFile(path string) (string, error) {

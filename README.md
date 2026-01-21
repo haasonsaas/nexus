@@ -165,9 +165,12 @@ session:
     enabled: false
     directory: memory
     max_lines: 20
+    days: 2
+    scope: session
   heartbeat:
     enabled: false
     file: HEARTBEAT.md
+    mode: always
 
 identity:
   name: ""
@@ -208,6 +211,11 @@ channels:
 tools:
   notes: ""
   notes_file: ""
+
+plugins:
+  load:
+    paths: []
+  entries: {}
   sandbox:
     enabled: true
     pool_size: 5
@@ -227,6 +235,7 @@ logging:
 
 Notes:
 - Config parsing is strict; unknown keys will fail validation.
+- Plugin entries require a manifest file (`nexus.plugin.json` or `clawdbot.plugin.json`) with a JSON schema.
 
 ### Testing
 

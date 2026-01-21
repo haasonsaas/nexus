@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/haasonsaas/nexus/internal/config"
+	"github.com/haasonsaas/nexus/pkg/models"
 )
 
 func TestReadPromptFileMissing(t *testing.T) {
@@ -54,5 +55,34 @@ func TestLoadToolNotesCombinesInlineAndFile(t *testing.T) {
 	notes := server.loadToolNotes()
 	if !strings.Contains(notes, "inline notes") || !strings.Contains(notes, "file notes") {
 		t.Fatalf("expected merged notes, got %q", notes)
+	}
+}
+
+func TestLoadHeartbeatOnDemand(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "heartbeat.md")
+	if err := os.WriteFile(path, []byte("check status"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	cfg := &config.Config{
+		Session: config.SessionConfig{
+			Heartbeat: config.HeartbeatConfig{
+				Enabled: true,
+				File:    path,
+				Mode:    "on_demand",
+			},
+		},
+	}
+	server := &Server{config: cfg, logger: slog.Default()}
+
+	msg := &models.Message{Content: "hello"}
+	if heartbeat := server.loadHeartbeat(msg); heartbeat != "" {
+		t.Fatalf("expected heartbeat to be empty, got %q", heartbeat)
+	}
+
+	msg = &models.Message{Content: "heartbeat"}
+	if heartbeat := server.loadHeartbeat(msg); !strings.Contains(heartbeat, "check status") {
+		t.Fatalf("expected heartbeat content, got %q", heartbeat)
 	}
 }

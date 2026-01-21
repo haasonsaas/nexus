@@ -41,10 +41,13 @@ session:
     enabled: false
     directory: memory
     max_lines: 20
+    days: 2
+    scope: session # session, channel, or global
   # Optional heartbeat checklist file for heartbeat-style runs
   heartbeat:
     enabled: false
     file: HEARTBEAT.md
+    mode: always # always or on_demand
 
 identity:
   # Optional agent identity
@@ -111,6 +114,18 @@ tools:
   notes: ""
   # Optional file path with tool notes (merged with inline notes)
   notes_file: ""
+
+plugins:
+  # Optional plugin manifest search paths
+  load:
+    paths: []
+  # Example plugin entry
+  # entries:
+  #   voice-call:
+  #     enabled: true
+  #     path: ./plugins/voice-call
+  #     config:
+  #       token: ${VOICE_CALL_TOKEN}
   sandbox:
     enabled: true
     # Number of pre-warmed VMs/containers

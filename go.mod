@@ -8,9 +8,11 @@ require (
 	github.com/anthropics/anthropic-sdk-go v1.19.0
 	github.com/bwmarrin/discordgo v0.29.0
 	github.com/go-telegram/bot v1.17.0
+	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/lib/pq v1.10.9
 	github.com/playwright-community/playwright-go v0.5200.1
 	github.com/prometheus/client_golang v1.23.2
+	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/sashabaranov/go-openai v1.41.2
 	github.com/slack-go/slack v0.17.3
 	github.com/spf13/cobra v1.10.2
@@ -33,7 +35,6 @@ require (
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-stack/stack v1.8.1 // indirect
-	github.com/golang-jwt/jwt/v5 v5.3.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.3 // indirect

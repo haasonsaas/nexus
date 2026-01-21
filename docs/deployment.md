@@ -168,6 +168,11 @@ data:
           client_secret: ${GITHUB_CLIENT_SECRET}
           redirect_url: https://nexus.example.com/auth/github/callback
 
+    session:
+      default_agent_id: main
+      slack_scope: thread
+      discord_scope: thread
+
     channels:
       telegram:
         enabled: true

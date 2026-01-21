@@ -153,6 +153,10 @@ type AnthropicConfig struct {
 	// Format: sk-ant-api03-...
 	APIKey string
 
+	// BaseURL overrides the default Anthropic API base URL.
+	// Example: "https://api.anthropic.com/"
+	BaseURL string
+
 	// MaxRetries sets the maximum retry attempts for transient failures (optional).
 	// Set to 0 to disable retries. Default: 3
 	// Higher values increase reliability but may increase latency.
@@ -218,9 +222,11 @@ func NewAnthropicProvider(config AnthropicConfig) (*AnthropicProvider, error) {
 	}
 
 	// Initialize the Anthropic SDK client with API key
-	client := anthropic.NewClient(
-		option.WithAPIKey(config.APIKey),
-	)
+	options := []option.RequestOption{option.WithAPIKey(config.APIKey)}
+	if strings.TrimSpace(config.BaseURL) != "" {
+		options = append(options, option.WithBaseURL(config.BaseURL))
+	}
+	client := anthropic.NewClient(options...)
 
 	return &AnthropicProvider{
 		client:       client,

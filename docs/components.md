@@ -815,6 +815,11 @@ auth:
       client_id: ${GITHUB_CLIENT_ID}
       client_secret: ${GITHUB_CLIENT_SECRET}
 
+session:
+  default_agent_id: main
+  slack_scope: thread
+  discord_scope: thread
+
 channels:
   telegram:
     enabled: true

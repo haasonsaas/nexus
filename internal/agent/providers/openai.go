@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/agent"
@@ -76,6 +77,14 @@ type OpenAIProvider struct {
 	retryDelay time.Duration
 }
 
+// OpenAIConfig holds optional configuration for the OpenAI provider.
+type OpenAIConfig struct {
+	APIKey     string
+	BaseURL    string
+	MaxRetries int
+	RetryDelay time.Duration
+}
+
 // NewOpenAIProvider creates a new OpenAI provider instance.
 //
 // If an empty API key is provided, the provider will be created but Complete()
@@ -100,20 +109,39 @@ type OpenAIProvider struct {
 //	provider := NewOpenAIProvider("")
 //	// Later: will error on Complete() calls until configured
 func NewOpenAIProvider(apiKey string) *OpenAIProvider {
+	return NewOpenAIProviderWithConfig(OpenAIConfig{APIKey: apiKey})
+}
+
+// NewOpenAIProviderWithConfig creates a new OpenAI provider instance with optional overrides.
+func NewOpenAIProviderWithConfig(cfg OpenAIConfig) *OpenAIProvider {
+	maxRetries := cfg.MaxRetries
+	if maxRetries <= 0 {
+		maxRetries = 3
+	}
+	retryDelay := cfg.RetryDelay
+	if retryDelay <= 0 {
+		retryDelay = time.Second
+	}
+
 	// Allow empty API key for delayed configuration
-	if apiKey == "" {
+	if cfg.APIKey == "" {
 		return &OpenAIProvider{
 			apiKey:     "",
-			maxRetries: 3,
-			retryDelay: time.Second,
+			maxRetries: maxRetries,
+			retryDelay: retryDelay,
 		}
 	}
 
+	clientConfig := openai.DefaultConfig(cfg.APIKey)
+	if strings.TrimSpace(cfg.BaseURL) != "" {
+		clientConfig.BaseURL = cfg.BaseURL
+	}
+
 	return &OpenAIProvider{
-		client:     openai.NewClient(apiKey),
-		apiKey:     apiKey,
-		maxRetries: 3,
-		retryDelay: time.Second,
+		client:     openai.NewClientWithConfig(clientConfig),
+		apiKey:     cfg.APIKey,
+		maxRetries: maxRetries,
+		retryDelay: retryDelay,
 	}
 }
 

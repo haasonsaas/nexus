@@ -208,6 +208,9 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 	}
 
 	agentID := defaultAgentID
+	if s.config != nil && s.config.Session.DefaultAgentID != "" {
+		agentID = s.config.Session.DefaultAgentID
+	}
 	key := sessions.SessionKey(agentID, msg.Channel, channelID)
 	session, err := s.sessions.GetOrCreate(ctx, key, agentID, msg.Channel, channelID)
 	if err != nil {
@@ -387,6 +390,7 @@ func (s *Server) newProvider() (agent.LLMProvider, string, error) {
 		provider, err := providers.NewAnthropicProvider(providers.AnthropicConfig{
 			APIKey:       providerCfg.APIKey,
 			DefaultModel: providerCfg.DefaultModel,
+			BaseURL:      providerCfg.BaseURL,
 		})
 		if err != nil {
 			return nil, "", err
@@ -396,7 +400,10 @@ func (s *Server) newProvider() (agent.LLMProvider, string, error) {
 		if providerCfg.APIKey == "" {
 			return nil, "", errors.New("openai api key is required")
 		}
-		provider := providers.NewOpenAIProvider(providerCfg.APIKey)
+		provider := providers.NewOpenAIProviderWithConfig(providers.OpenAIConfig{
+			APIKey:  providerCfg.APIKey,
+			BaseURL: providerCfg.BaseURL,
+		})
 		return provider, providerCfg.DefaultModel, nil
 	default:
 		return nil, "", fmt.Errorf("unsupported provider %q", providerID)
@@ -536,6 +543,9 @@ func (s *Server) resolveConversationID(msg *models.Message) (string, error) {
 		if channelID == "" {
 			return "", errors.New("slack channel id missing")
 		}
+		if !scopeUsesThread(s.config.Session.SlackScope) {
+			return channelID, nil
+		}
 		threadTS := ""
 		if msg.Metadata != nil {
 			threadTS, _ = msg.Metadata["slack_thread_ts"].(string)
@@ -553,10 +563,12 @@ func (s *Server) resolveConversationID(msg *models.Message) (string, error) {
 		return fmt.Sprintf("%s:%s", channelID, threadTS), nil
 	case models.ChannelDiscord:
 		if msg.Metadata != nil {
-			if threadID, ok := msg.Metadata["discord_thread_id"].(string); ok && threadID != "" {
-				return threadID, nil
-			}
 			if channelID, ok := msg.Metadata["discord_channel_id"].(string); ok && channelID != "" {
+				if scopeUsesThread(s.config.Session.DiscordScope) {
+					if threadID, ok := msg.Metadata["discord_thread_id"].(string); ok && threadID != "" {
+						return threadID, nil
+					}
+				}
 				return channelID, nil
 			}
 		}
@@ -605,6 +617,15 @@ func (s *Server) buildReplyMetadata(msg *models.Message) map[string]any {
 	}
 
 	return metadata
+}
+
+func scopeUsesThread(scope string) bool {
+	switch strings.ToLower(strings.TrimSpace(scope)) {
+	case "channel":
+		return false
+	default:
+		return true
+	}
 }
 
 func authUnaryInterceptor(secret string, logger *slog.Logger) grpc.UnaryServerInterceptor {

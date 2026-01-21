@@ -13,6 +13,7 @@ type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 	Database DatabaseConfig `yaml:"database"`
 	Auth     AuthConfig     `yaml:"auth"`
+	Session  SessionConfig  `yaml:"session"`
 	Channels ChannelsConfig `yaml:"channels"`
 	LLM      LLMConfig      `yaml:"llm"`
 	Tools    ToolsConfig    `yaml:"tools"`
@@ -36,6 +37,12 @@ type AuthConfig struct {
 	JWTSecret   string        `yaml:"jwt_secret"`
 	TokenExpiry time.Duration `yaml:"token_expiry"`
 	OAuth       OAuthConfig   `yaml:"oauth"`
+}
+
+type SessionConfig struct {
+	DefaultAgentID string `yaml:"default_agent_id"`
+	SlackScope     string `yaml:"slack_scope"`
+	DiscordScope   string `yaml:"discord_scope"`
 }
 
 type OAuthConfig struct {
@@ -68,14 +75,14 @@ type DiscordConfig struct {
 }
 
 type SlackConfig struct {
-	Enabled      bool   `yaml:"enabled"`
-	BotToken     string `yaml:"bot_token"`
-	AppToken     string `yaml:"app_token"`
+	Enabled       bool   `yaml:"enabled"`
+	BotToken      string `yaml:"bot_token"`
+	AppToken      string `yaml:"app_token"`
 	SigningSecret string `yaml:"signing_secret"`
 }
 
 type LLMConfig struct {
-	DefaultProvider string                      `yaml:"default_provider"`
+	DefaultProvider string                       `yaml:"default_provider"`
 	Providers       map[string]LLMProviderConfig `yaml:"providers"`
 }
 
@@ -92,9 +99,9 @@ type ToolsConfig struct {
 }
 
 type SandboxConfig struct {
-	Enabled  bool          `yaml:"enabled"`
-	PoolSize int           `yaml:"pool_size"`
-	Timeout  time.Duration `yaml:"timeout"`
+	Enabled  bool           `yaml:"enabled"`
+	PoolSize int            `yaml:"pool_size"`
+	Timeout  time.Duration  `yaml:"timeout"`
 	Limits   ResourceLimits `yaml:"limits"`
 }
 
@@ -162,6 +169,15 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Auth.TokenExpiry == 0 {
 		cfg.Auth.TokenExpiry = 24 * time.Hour
+	}
+	if cfg.Session.DefaultAgentID == "" {
+		cfg.Session.DefaultAgentID = "main"
+	}
+	if cfg.Session.SlackScope == "" {
+		cfg.Session.SlackScope = "thread"
+	}
+	if cfg.Session.DiscordScope == "" {
+		cfg.Session.DiscordScope = "thread"
 	}
 	if cfg.LLM.DefaultProvider == "" {
 		cfg.LLM.DefaultProvider = "anthropic"

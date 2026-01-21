@@ -37,8 +37,8 @@
    - [x] Add unit test for gateway shutdown waiting on handlers.
    - [x] Add unit tests for provider error wrapping.
    - [x] Add gateway tests for auth interceptors + message flow wiring.
-   - [ ] Add gateway integration tests for message flow.
-   - [ ] Add context-cancellation tests for nested goroutines.
+   - [x] Add gateway integration tests for message flow.
+   - [x] Add context-cancellation tests for nested goroutines.
 
 6) Validation
    - [ ] `go test ./...`
@@ -57,3 +57,4 @@
 - 2026-01-21: Integrated ProviderError into Anthropic/OpenAI providers with unit tests; fixed websearch schema marshal handling.
 - 2026-01-21: Reworked channel latency histogram into a true ring buffer with tests.
 - 2026-01-21: Implemented gateway message flow, auth interceptors, session store wiring, tool/adapter registration, and default-model propagation with unit tests.
+- 2026-01-21: Added session scoping config, base URL wiring for providers, gateway processing integration tests, and context-cancellation coverage.

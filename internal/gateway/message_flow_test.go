@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -111,7 +112,11 @@ func (fixedProvider) SupportsTools() bool { return false }
 
 func TestHandleMessagePersistsAndResponds(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	cfg := &config.Config{}
+	cfg := &config.Config{
+		Session: config.SessionConfig{
+			DefaultAgentID: "agent-test",
+		},
+	}
 	server, err := NewServer(cfg, logger)
 	if err != nil {
 		t.Fatalf("NewServer() error = %v", err)
@@ -144,6 +149,9 @@ func TestHandleMessagePersistsAndResponds(t *testing.T) {
 
 	if store.lastKey == "" {
 		t.Fatal("expected session key to be set")
+	}
+	if !strings.HasPrefix(store.lastKey, "agent-test:") {
+		t.Fatalf("expected session key to use agent-test, got %q", store.lastKey)
 	}
 
 	if len(store.messages) != 2 {

@@ -137,14 +137,14 @@ This document tracks planned improvements, technical debt, and architectural enh
   ```
 
 ### Testing Improvements
-- [ ] **Add integration tests for gateway**
+- [x] **Add integration tests for gateway** ✅ Done
   - Currently no tests for message handling flow
   - Need mock adapters, mock providers
 
 - [x] **Add gateway auth + message flow tests** ✅ Done
   - Validate JWT interceptors and message persistence + reply routing
 
-- [ ] **Add context cancellation tests**
+- [x] **Add context cancellation tests** ✅ Done
   - Test cleanup in nested goroutines
   - Verify no leaks on context cancel
 

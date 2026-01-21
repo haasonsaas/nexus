@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/haasonsaas/nexus/internal/sessions"
@@ -39,6 +40,27 @@ func (p *recordingProvider) Name() string { return "recording" }
 func (p *recordingProvider) Models() []Model { return nil }
 
 func (p *recordingProvider) SupportsTools() bool { return false }
+
+type cancelProvider struct {
+	started chan struct{}
+}
+
+func (p *cancelProvider) Complete(ctx context.Context, req *CompletionRequest) (<-chan *CompletionChunk, error) {
+	ch := make(chan *CompletionChunk, 1)
+	close(p.started)
+	go func() {
+		<-ctx.Done()
+		ch <- &CompletionChunk{Error: ctx.Err()}
+		close(ch)
+	}()
+	return ch, nil
+}
+
+func (p *cancelProvider) Name() string { return "cancel" }
+
+func (p *cancelProvider) Models() []Model { return nil }
+
+func (p *cancelProvider) SupportsTools() bool { return false }
 
 type stubStore struct{}
 
@@ -103,5 +125,35 @@ func TestProcessUsesDefaultModel(t *testing.T) {
 
 	if provider.lastModel != "gpt-4o" {
 		t.Fatalf("expected default model gpt-4o, got %q", provider.lastModel)
+	}
+}
+
+func TestProcessPropagatesContextCancel(t *testing.T) {
+	provider := &cancelProvider{started: make(chan struct{})}
+	runtime := NewRuntime(provider, stubStore{})
+	session := &models.Session{ID: "session-1", Channel: models.ChannelTelegram}
+	msg := &models.Message{Role: models.RoleUser, Content: "hi"}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	ch, err := runtime.Process(ctx, session, msg)
+	if err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+
+	<-provider.started
+	cancel()
+
+	var gotErr error
+	for chunk := range ch {
+		if chunk.Error != nil {
+			gotErr = chunk.Error
+		}
+	}
+
+	if gotErr == nil {
+		t.Fatal("expected context cancellation error")
+	}
+	if !errors.Is(gotErr, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", gotErr)
 	}
 }

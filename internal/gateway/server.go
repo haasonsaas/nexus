@@ -303,6 +303,16 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 			s.logger.Error("failed to write memory log", "error", err)
 		}
 	}
+
+	if session.Metadata != nil {
+		if pending, ok := session.Metadata["memory_flush_pending"].(bool); ok && pending {
+			session.Metadata["memory_flush_pending"] = false
+			session.Metadata["memory_flush_confirmed_at"] = time.Now().Format(time.RFC3339)
+			if err := s.sessions.Update(ctx, session); err != nil {
+				s.logger.Error("failed to update memory flush confirmation", "error", err)
+			}
+		}
+	}
 }
 
 func (s *Server) waitForProcessing(ctx context.Context) error {
@@ -500,6 +510,7 @@ func (s *Server) registerTools(runtime *agent.Runtime) error {
 			WorkspacePath: s.config.Workspace.Path,
 			MaxResults:    s.config.Tools.MemorySearch.MaxResults,
 			MaxSnippetLen: s.config.Tools.MemorySearch.MaxSnippetLen,
+			Mode:          s.config.Tools.MemorySearch.Mode,
 		}
 		runtime.RegisterTool(memorysearch.NewMemorySearchTool(searchConfig))
 	}

@@ -33,6 +33,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -46,7 +47,9 @@ import (
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/doctor"
 	"github.com/haasonsaas/nexus/internal/gateway"
+	"github.com/haasonsaas/nexus/internal/onboard"
 	"github.com/haasonsaas/nexus/internal/plugins"
+	"github.com/haasonsaas/nexus/internal/service"
 	"github.com/haasonsaas/nexus/internal/workspace"
 	"github.com/haasonsaas/nexus/pkg/models"
 	"github.com/spf13/cobra"
@@ -110,9 +113,107 @@ Documentation: https://github.com/haasonsaas/nexus`,
 		buildDoctorCmd(),
 		buildPromptCmd(),
 		buildSetupCmd(),
+		buildOnboardCmd(),
+		buildAuthCmd(),
+		buildServiceCmd(),
 	)
 
 	return rootCmd
+}
+
+// buildServiceCmd creates the "service" command group.
+func buildServiceCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "service",
+		Short: "Manage service installation files",
+	}
+	cmd.AddCommand(buildServiceInstallCmd(), buildServiceRepairCmd(), buildServiceStatusCmd())
+	return cmd
+}
+
+func buildServiceInstallCmd() *cobra.Command {
+	var configPath string
+	cmd := &cobra.Command{
+		Use:   "install",
+		Short: "Install a user-level service file",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			result, err := service.InstallUserService(configPath, false)
+			if err != nil {
+				return err
+			}
+			out := cmd.OutOrStdout()
+			fmt.Fprintf(out, "Service file written: %s\n", result.Path)
+			if len(result.Instructions) > 0 {
+				fmt.Fprintln(out, "Next steps:")
+				for _, step := range result.Instructions {
+					fmt.Fprintf(out, "  - %s\n", step)
+				}
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", "nexus.yaml", "Path to YAML configuration file")
+	return cmd
+}
+
+func buildServiceRepairCmd() *cobra.Command {
+	var configPath string
+	cmd := &cobra.Command{
+		Use:   "repair",
+		Short: "Rewrite the user-level service file",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			result, err := service.InstallUserService(configPath, true)
+			if err != nil {
+				return err
+			}
+			out := cmd.OutOrStdout()
+			fmt.Fprintf(out, "Service file updated: %s\n", result.Path)
+			if len(result.Instructions) > 0 {
+				fmt.Fprintln(out, "Next steps:")
+				for _, step := range result.Instructions {
+					fmt.Fprintf(out, "  - %s\n", step)
+				}
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", "nexus.yaml", "Path to YAML configuration file")
+	return cmd
+}
+
+func buildServiceStatusCmd() *cobra.Command {
+	var configPath string
+	cmd := &cobra.Command{
+		Use:   "status",
+		Short: "Show service audit details",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, _ := config.Load(configPath)
+			report := doctor.AuditServices(cfg)
+			out := cmd.OutOrStdout()
+			fmt.Fprintln(out, "Service audit:")
+			printAuditList(out, "systemd user", report.SystemdUser)
+			printAuditList(out, "systemd system", report.SystemdSystem)
+			printAuditList(out, "launchd user", report.LaunchdUser)
+			printAuditList(out, "launchd system", report.LaunchdSystem)
+			if len(report.Ports) > 0 {
+				fmt.Fprintln(out, "Port checks:")
+				for _, port := range report.Ports {
+					status := "available"
+					if port.InUse {
+						status = "in use"
+					}
+					if port.Error != "" {
+						fmt.Fprintf(out, "  - %d: %s (%s)\n", port.Port, status, port.Error)
+					} else {
+						fmt.Fprintf(out, "  - %d: %s\n", port.Port, status)
+					}
+				}
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", "nexus.yaml", "Path to YAML configuration file")
+	return cmd
 }
 
 // buildSetupCmd creates the "setup" command for initializing a workspace.
@@ -177,6 +278,172 @@ func buildSetupCmd() *cobra.Command {
 		"Overwrite existing bootstrap files")
 
 	return cmd
+}
+
+// buildOnboardCmd creates the "onboard" command for guided config creation.
+func buildOnboardCmd() *cobra.Command {
+	var opts onboard.Options
+	var nonInteractive bool
+	var setupWorkspace bool
+
+	cmd := &cobra.Command{
+		Use:   "onboard",
+		Short: "Create a Nexus config file with guided prompts",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if !nonInteractive {
+				reader := bufio.NewReader(os.Stdin)
+				if strings.TrimSpace(opts.DatabaseURL) == "" {
+					opts.DatabaseURL = promptString(reader, "Database URL", "postgres://root@localhost:26257/nexus?sslmode=disable")
+				}
+				if strings.TrimSpace(opts.Provider) == "" {
+					opts.Provider = promptString(reader, "LLM provider (anthropic/openai/google/openrouter)", "anthropic")
+				}
+				if strings.TrimSpace(opts.ProviderKey) == "" {
+					opts.ProviderKey = promptString(reader, "Provider API key", "")
+				}
+				if strings.TrimSpace(opts.WorkspacePath) == "" {
+					opts.WorkspacePath = promptString(reader, "Workspace path (optional)", "")
+				}
+				opts.EnableTelegram = promptBool(reader, "Enable Telegram?", opts.EnableTelegram)
+				if opts.EnableTelegram && strings.TrimSpace(opts.TelegramToken) == "" {
+					opts.TelegramToken = promptString(reader, "Telegram bot token", "")
+				}
+				opts.EnableDiscord = promptBool(reader, "Enable Discord?", opts.EnableDiscord)
+				if opts.EnableDiscord {
+					if strings.TrimSpace(opts.DiscordToken) == "" {
+						opts.DiscordToken = promptString(reader, "Discord bot token", "")
+					}
+					if strings.TrimSpace(opts.DiscordAppID) == "" {
+						opts.DiscordAppID = promptString(reader, "Discord app ID", "")
+					}
+				}
+				opts.EnableSlack = promptBool(reader, "Enable Slack?", opts.EnableSlack)
+				if opts.EnableSlack {
+					if strings.TrimSpace(opts.SlackBotToken) == "" {
+						opts.SlackBotToken = promptString(reader, "Slack bot token", "")
+					}
+					if strings.TrimSpace(opts.SlackAppToken) == "" {
+						opts.SlackAppToken = promptString(reader, "Slack app token", "")
+					}
+					if strings.TrimSpace(opts.SlackSecret) == "" {
+						opts.SlackSecret = promptString(reader, "Slack signing secret", "")
+					}
+				}
+			}
+
+			if strings.TrimSpace(opts.ConfigPath) == "" {
+				opts.ConfigPath = "nexus.yaml"
+			}
+
+			raw := onboard.BuildConfig(opts)
+			if err := onboard.WriteConfig(opts.ConfigPath, raw); err != nil {
+				return err
+			}
+
+			if setupWorkspace && strings.TrimSpace(opts.WorkspacePath) != "" {
+				files := workspace.BootstrapFilesForConfig(&config.Config{Workspace: config.WorkspaceConfig{Enabled: true, Path: opts.WorkspacePath}})
+				if _, err := workspace.EnsureWorkspaceFiles(opts.WorkspacePath, files, false); err != nil {
+					return err
+				}
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Config written: %s\n", opts.ConfigPath)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVarP(&opts.ConfigPath, "config", "c", "nexus.yaml", "Path to write the config file")
+	cmd.Flags().StringVar(&opts.DatabaseURL, "database-url", "", "Database URL")
+	cmd.Flags().StringVar(&opts.JWTSecret, "jwt-secret", "", "JWT secret (generated if empty)")
+	cmd.Flags().StringVar(&opts.Provider, "provider", "anthropic", "Default LLM provider")
+	cmd.Flags().StringVar(&opts.ProviderKey, "provider-key", "", "Provider API key")
+	cmd.Flags().BoolVar(&opts.EnableTelegram, "enable-telegram", false, "Enable Telegram channel")
+	cmd.Flags().StringVar(&opts.TelegramToken, "telegram-token", "", "Telegram bot token")
+	cmd.Flags().BoolVar(&opts.EnableDiscord, "enable-discord", false, "Enable Discord channel")
+	cmd.Flags().StringVar(&opts.DiscordToken, "discord-token", "", "Discord bot token")
+	cmd.Flags().StringVar(&opts.DiscordAppID, "discord-app-id", "", "Discord app ID")
+	cmd.Flags().BoolVar(&opts.EnableSlack, "enable-slack", false, "Enable Slack channel")
+	cmd.Flags().StringVar(&opts.SlackBotToken, "slack-bot-token", "", "Slack bot token")
+	cmd.Flags().StringVar(&opts.SlackAppToken, "slack-app-token", "", "Slack app token")
+	cmd.Flags().StringVar(&opts.SlackSecret, "slack-signing-secret", "", "Slack signing secret")
+	cmd.Flags().StringVar(&opts.WorkspacePath, "workspace", "", "Workspace path to set in config")
+	cmd.Flags().BoolVar(&setupWorkspace, "setup-workspace", false, "Create workspace bootstrap files")
+	cmd.Flags().BoolVar(&nonInteractive, "non-interactive", false, "Disable prompts and use flags only")
+
+	return cmd
+}
+
+// buildAuthCmd creates the "auth" command group.
+func buildAuthCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "auth",
+		Short: "Manage provider credentials",
+	}
+	cmd.AddCommand(buildAuthSetCmd())
+	return cmd
+}
+
+func buildAuthSetCmd() *cobra.Command {
+	var (
+		configPath string
+		provider   string
+		apiKey     string
+		setDefault bool
+	)
+
+	cmd := &cobra.Command{
+		Use:   "set",
+		Short: "Set provider credentials in the config file",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			raw := map[string]any{}
+			if configPath != "" {
+				existing, err := doctor.LoadRawConfig(configPath)
+				if err == nil {
+					raw = existing
+				}
+			}
+			onboard.ApplyAuthConfig(raw, provider, apiKey, setDefault)
+			if err := onboard.WriteConfig(configPath, raw); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Updated auth for %s in %s\n", provider, configPath)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVarP(&configPath, "config", "c", "nexus.yaml", "Path to YAML configuration file")
+	cmd.Flags().StringVar(&provider, "provider", "anthropic", "Provider to update")
+	cmd.Flags().StringVar(&apiKey, "api-key", "", "Provider API key")
+	cmd.Flags().BoolVar(&setDefault, "default", false, "Set as default provider")
+
+	return cmd
+}
+
+func promptString(reader *bufio.Reader, label string, defaultValue string) string {
+	if defaultValue != "" {
+		fmt.Printf("%s [%s]: ", label, defaultValue)
+	} else {
+		fmt.Printf("%s: ", label)
+	}
+	text, _ := reader.ReadString('\n')
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return defaultValue
+	}
+	return text
+}
+
+func promptBool(reader *bufio.Reader, label string, defaultValue bool) bool {
+	defaultLabel := "n"
+	if defaultValue {
+		defaultLabel = "y"
+	}
+	answer := promptString(reader, label+" (y/n)", defaultLabel)
+	answer = strings.ToLower(strings.TrimSpace(answer))
+	if answer == "" {
+		return defaultValue
+	}
+	return answer == "y" || answer == "yes"
 }
 
 // buildServeCmd creates the "serve" command that starts the gateway server.
@@ -820,6 +1087,13 @@ func buildDoctorCmd() *cobra.Command {
 			}
 			if err := plugins.ValidateConfig(cfg); err != nil {
 				return fmt.Errorf("plugin validation failed: %w", err)
+			}
+
+			if warnings := doctor.CheckChannelPolicies(cfg); len(warnings) > 0 {
+				fmt.Fprintln(out, "Channel policy warnings:")
+				for _, warning := range warnings {
+					fmt.Fprintf(out, "  - %s\n", warning)
+				}
 			}
 
 			if repair {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -20,6 +21,7 @@ type Config struct {
 	WorkspacePath string
 	MaxResults    int
 	MaxSnippetLen int
+	Mode          string
 }
 
 // MemorySearchTool implements agent.Tool for searching memory files.
@@ -38,6 +40,9 @@ func NewMemorySearchTool(cfg *Config) *MemorySearchTool {
 	}
 	if config.MaxSnippetLen == 0 {
 		config.MaxSnippetLen = 200
+	}
+	if strings.TrimSpace(config.Mode) == "" {
+		config.Mode = "hybrid"
 	}
 	return &MemorySearchTool{config: config}
 }
@@ -87,7 +92,7 @@ func (t *MemorySearchTool) Execute(ctx context.Context, params json.RawMessage) 
 	}
 
 	files := t.resolveFiles()
-	results := searchFiles(files, query, maxResults, t.config.MaxSnippetLen)
+	results := searchFiles(files, query, maxResults, t.config.MaxSnippetLen, t.config.Mode)
 
 	payload, err := json.MarshalIndent(struct {
 		Query   string         `json:"query"`
@@ -136,37 +141,29 @@ func resolvePath(base, path string) string {
 }
 
 type SearchResult struct {
-	File    string `json:"file"`
-	Snippet string `json:"snippet"`
-	Matches int    `json:"matches"`
+	File    string  `json:"file"`
+	Snippet string  `json:"snippet"`
+	Matches int     `json:"matches"`
+	Score   float64 `json:"score"`
 }
 
-func searchFiles(files []string, query string, maxResults int, maxSnippetLen int) []SearchResult {
-	var results []SearchResult
-	needle := strings.ToLower(query)
-	for _, path := range files {
-		content, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		matches, snippet := findMatches(string(content), needle, maxSnippetLen)
-		if matches == 0 {
-			continue
-		}
-		results = append(results, SearchResult{File: path, Snippet: snippet, Matches: matches})
+func searchFiles(files []string, query string, maxResults int, maxSnippetLen int, mode string) []SearchResult {
+	chunks := loadChunks(files)
+	if len(chunks) == 0 {
+		return nil
 	}
-
-	sort.Slice(results, func(i, j int) bool {
-		if results[i].Matches == results[j].Matches {
-			return results[i].File < results[j].File
-		}
-		return results[i].Matches > results[j].Matches
-	})
-
-	if len(results) > maxResults {
-		results = results[:maxResults]
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	if mode == "" {
+		mode = "hybrid"
 	}
-	return results
+	switch mode {
+	case "vector":
+		return rankVector(chunks, query, maxResults, maxSnippetLen)
+	case "lexical":
+		return rankLexical(chunks, query, maxResults, maxSnippetLen)
+	default:
+		return rankHybrid(chunks, query, maxResults, maxSnippetLen)
+	}
 }
 
 func findMatches(content string, needle string, maxSnippetLen int) (int, string) {
@@ -198,6 +195,214 @@ func findMatches(content string, needle string, maxSnippetLen int) (int, string)
 		snippet = string([]rune(snippet)[:maxSnippetLen]) + "..."
 	}
 	return count, snippet
+}
+
+type chunk struct {
+	file   string
+	text   string
+	tokens []string
+}
+
+func loadChunks(files []string) []chunk {
+	var chunks []chunk
+	for _, path := range files {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		for _, part := range splitChunks(string(content)) {
+			tokens := tokenize(part)
+			if len(tokens) == 0 {
+				continue
+			}
+			chunks = append(chunks, chunk{file: path, text: part, tokens: tokens})
+		}
+	}
+	return chunks
+}
+
+func splitChunks(content string) []string {
+	parts := strings.Split(content, "\n\n")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		out = append(out, part)
+	}
+	return out
+}
+
+func tokenize(content string) []string {
+	content = strings.ToLower(content)
+	fields := strings.FieldsFunc(content, func(r rune) bool {
+		return !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9')
+	})
+	tokens := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if len(field) < 2 {
+			continue
+		}
+		tokens = append(tokens, field)
+	}
+	return tokens
+}
+
+func rankLexical(chunks []chunk, query string, maxResults int, maxSnippetLen int) []SearchResult {
+	needle := strings.ToLower(query)
+	var results []SearchResult
+	for _, chunk := range chunks {
+		matches, snippet := findMatches(chunk.text, needle, maxSnippetLen)
+		if matches == 0 {
+			continue
+		}
+		results = append(results, SearchResult{File: chunk.file, Snippet: snippet, Matches: matches, Score: float64(matches)})
+	}
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].Score == results[j].Score {
+			return results[i].File < results[j].File
+		}
+		return results[i].Score > results[j].Score
+	})
+	if len(results) > maxResults {
+		results = results[:maxResults]
+	}
+	return results
+}
+
+func rankVector(chunks []chunk, query string, maxResults int, maxSnippetLen int) []SearchResult {
+	tfidf := buildTFIDF(chunks)
+	queryVec := tfidf.Vectorize(tokenize(query))
+	var results []SearchResult
+	for _, chunk := range chunks {
+		score := cosine(queryVec, tfidf.Vectorize(chunk.tokens))
+		if score <= 0 {
+			continue
+		}
+		snippet := clampSnippet(chunk.text, maxSnippetLen)
+		results = append(results, SearchResult{File: chunk.file, Snippet: snippet, Matches: 0, Score: score})
+	}
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].Score == results[j].Score {
+			return results[i].File < results[j].File
+		}
+		return results[i].Score > results[j].Score
+	})
+	if len(results) > maxResults {
+		results = results[:maxResults]
+	}
+	return results
+}
+
+func rankHybrid(chunks []chunk, query string, maxResults int, maxSnippetLen int) []SearchResult {
+	lexical := rankLexical(chunks, query, len(chunks), maxSnippetLen)
+	vector := rankVector(chunks, query, len(chunks), maxSnippetLen)
+	score := map[string]float64{}
+	snippet := map[string]string{}
+	for _, entry := range lexical {
+		key := entry.File + "::" + entry.Snippet
+		score[key] += entry.Score
+		snippet[key] = entry.Snippet
+	}
+	for _, entry := range vector {
+		key := entry.File + "::" + entry.Snippet
+		score[key] += entry.Score
+		if _, ok := snippet[key]; !ok {
+			snippet[key] = entry.Snippet
+		}
+	}
+	results := make([]SearchResult, 0, len(score))
+	for key, value := range score {
+		parts := strings.SplitN(key, "::", 2)
+		file := parts[0]
+		text := ""
+		if len(parts) > 1 {
+			text = parts[1]
+		}
+		results = append(results, SearchResult{File: file, Snippet: text, Score: value})
+	}
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].Score == results[j].Score {
+			return results[i].File < results[j].File
+		}
+		return results[i].Score > results[j].Score
+	})
+	if len(results) > maxResults {
+		results = results[:maxResults]
+	}
+	return results
+}
+
+type tfidfIndex struct {
+	df    map[string]int
+	total int
+}
+
+func buildTFIDF(chunks []chunk) *tfidfIndex {
+	df := map[string]int{}
+	for _, chunk := range chunks {
+		seen := map[string]struct{}{}
+		for _, token := range chunk.tokens {
+			if _, ok := seen[token]; ok {
+				continue
+			}
+			seen[token] = struct{}{}
+			df[token]++
+		}
+	}
+	return &tfidfIndex{df: df, total: len(chunks)}
+}
+
+func (t *tfidfIndex) Vectorize(tokens []string) map[string]float64 {
+	tf := map[string]int{}
+	for _, token := range tokens {
+		tf[token]++
+	}
+	vec := map[string]float64{}
+	for token, count := range tf {
+		df := t.df[token]
+		if df == 0 || t.total == 0 {
+			continue
+		}
+		idf := 1.0 + math.Log(float64(t.total)/float64(df))
+		vec[token] = float64(count) * idf
+	}
+	return vec
+}
+
+func cosine(a map[string]float64, b map[string]float64) float64 {
+	if len(a) == 0 || len(b) == 0 {
+		return 0
+	}
+	var dot float64
+	var normA float64
+	var normB float64
+	for k, v := range a {
+		normA += v * v
+		if bv, ok := b[k]; ok {
+			dot += v * bv
+		}
+	}
+	for _, v := range b {
+		normB += v * v
+	}
+	if normA == 0 || normB == 0 {
+		return 0
+	}
+	return dot / (math.Sqrt(normA) * math.Sqrt(normB))
+}
+
+func clampSnippet(text string, maxSnippetLen int) string {
+	text = strings.TrimSpace(text)
+	if maxSnippetLen <= 0 {
+		return text
+	}
+	runes := []rune(text)
+	if len(runes) <= maxSnippetLen {
+		return text
+	}
+	return string(runes[:maxSnippetLen]) + "..."
 }
 
 func dedupe(values []string) []string {

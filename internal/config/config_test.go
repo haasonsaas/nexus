@@ -160,6 +160,27 @@ llm:
 	}
 }
 
+func TestLoadValidatesMemorySearchMode(t *testing.T) {
+	path := writeConfig(t, `
+tools:
+  memory_search:
+    enabled: true
+    mode: nope
+llm:
+  default_provider: anthropic
+  providers:
+    anthropic: {}
+`)
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatalf("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "memory_search.mode") {
+		t.Fatalf("expected memory_search.mode error, got %v", err)
+	}
+}
+
 func TestLoadValidatesWorkspaceMaxChars(t *testing.T) {
 	path := writeConfig(t, `
 workspace:

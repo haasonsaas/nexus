@@ -105,6 +105,7 @@ func (s *Server) memoryFlushPrompt(ctx context.Context, session *models.Session)
 		session.Metadata = map[string]any{}
 	}
 	session.Metadata["memory_flush_date"] = today
+	session.Metadata["memory_flush_pending"] = true
 	if err := s.sessions.Update(ctx, session); err != nil {
 		s.logger.Error("failed to update session metadata", "error", err)
 	}

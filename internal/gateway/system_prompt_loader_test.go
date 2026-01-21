@@ -176,6 +176,9 @@ func TestMemoryFlushPromptTriggers(t *testing.T) {
 	if session.Metadata == nil || session.Metadata["memory_flush_date"] == "" {
 		t.Fatalf("expected memory_flush_date to be set")
 	}
+	if pending, ok := session.Metadata["memory_flush_pending"].(bool); !ok || !pending {
+		t.Fatalf("expected memory_flush_pending to be true")
+	}
 }
 
 func TestReadPromptFileLimited(t *testing.T) {

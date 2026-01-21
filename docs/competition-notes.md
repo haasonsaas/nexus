@@ -34,3 +34,11 @@
 - Topics: ai, assistant, clawd, crustacean, own-your-data, personal
 - Default branch: main · License: MIT
 - Recent commit themes: tighten exec allowlist gating, heartbeat active hours, cache TTL/pruning, channel-specific session policies, and port listener hardening.
+- Latest release: v2026.1.20 (published 2026-01-21).
+
+## Issue themes (open)
+- Heartbeat UX (silent acknowledgments, schedule control, session scoping).
+- Memory search reliability (embedding rate limits, extra paths).
+- Session overflow/compaction edge cases (context limits, failover behavior).
+- Tool call safety (loop detection, exec gating, secret scanning).
+- Platform packaging (macOS build stability, universal binaries).

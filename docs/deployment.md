@@ -238,6 +238,7 @@ data:
         memory_file: MEMORY.md
         max_results: 5
         max_snippet_len: 200
+        mode: hybrid
       sandbox:
         enabled: true
         pool_size: 10
@@ -291,6 +292,23 @@ nexus doctor --audit -c nexus.yaml
 Initialize a workspace:
 ```bash
 nexus setup --workspace ./clawd
+```
+
+Guided onboarding:
+```bash
+nexus onboard --config nexus.yaml --setup-workspace --workspace ./clawd
+```
+
+Set provider auth:
+```bash
+nexus auth set --provider anthropic --api-key $ANTHROPIC_API_KEY --config nexus.yaml --default
+```
+
+Service install/repair:
+```bash
+nexus service install --config nexus.yaml
+nexus service repair --config nexus.yaml
+nexus service status --config nexus.yaml
 ```
 
 ### Deployment

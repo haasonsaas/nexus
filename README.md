@@ -246,6 +246,7 @@ tools:
     memory_file: MEMORY.md
     max_results: 5
     max_snippet_len: 200
+    mode: hybrid
 
 plugins:
   load:
@@ -284,6 +285,16 @@ nexus doctor --audit -c nexus.yaml
 Initialize a workspace (bootstrap AGENTS/SOUL/USER/IDENTITY/TOOLS/HEARTBEAT/MEMORY):
 ```bash
 nexus setup --workspace ./clawd
+```
+
+Guided onboarding (writes config + optional workspace):
+```bash
+nexus onboard --config nexus.yaml --setup-workspace --workspace ./clawd
+```
+
+Set provider auth:
+```bash
+nexus auth set --provider anthropic --api-key $ANTHROPIC_API_KEY --config nexus.yaml --default
 ```
 
 Preview the system prompt (with memory + heartbeat):
@@ -331,6 +342,11 @@ nexus setup --config nexus.yaml
 nexus doctor --repair --config nexus.yaml
 nexus doctor --probe --config nexus.yaml
 nexus doctor --audit --config nexus.yaml
+
+# Service install/repair
+nexus service install --config nexus.yaml
+nexus service repair --config nexus.yaml
+nexus service status --config nexus.yaml
 
 # Database
 nexus migrate up         # Run pending migrations

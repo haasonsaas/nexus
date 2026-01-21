@@ -48,6 +48,10 @@
    - [x] Add workspace bootstrap CLI (`nexus setup`) to seed AGENTS/SOUL/USER/IDENTITY/TOOLS/HEARTBEAT/MEMORY.
    - [x] Add `doctor --repair` with config migrations + workspace repairs.
    - [x] Add doctor channel health probes (opt-in) for enabled adapters.
+   - [x] Add service install/repair workflows (systemd/launchd templates + audit).
+   - [x] Add onboarding + auth CLI flows.
+   - [x] Add channel policy checks in doctor.
+   - [x] Add memory search tool (lexical/vector/hybrid) and memory flush confirmations.
 
 5) Testing improvements
    - [x] Add unit test for buffered runtime response channel.
@@ -86,3 +90,4 @@
 - 2026-01-21: Added workspace bootstrap file loading, fallback tool notes from workspace, and documentation fixes for strict config.
 - 2026-01-21: Added `nexus setup`, doctor repairs/migrations, and channel health probes.
 - 2026-01-21: Added memory search tool, memory flush reminders, service/daemon audits, and startup migration checks.
+- 2026-01-21: Added service install/repair CLI, onboarding/auth flows, channel policy checks, vector/hybrid memory search, and memory flush confirmations.

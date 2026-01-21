@@ -876,6 +876,7 @@ tools:
     memory_file: MEMORY.md
     max_results: 5
     max_snippet_len: 200
+    mode: hybrid
 
 logging:
   level: info

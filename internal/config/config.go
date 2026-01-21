@@ -202,6 +202,7 @@ type MemorySearchConfig struct {
 	MemoryFile    string `yaml:"memory_file"`
 	MaxResults    int    `yaml:"max_results"`
 	MaxSnippetLen int    `yaml:"max_snippet_len"`
+	Mode          string `yaml:"mode"`
 }
 type LoggingConfig struct {
 	Level  string `yaml:"level"`
@@ -353,6 +354,9 @@ func applyToolsDefaults(cfg *Config) {
 	if cfg.Tools.MemorySearch.MaxSnippetLen == 0 {
 		cfg.Tools.MemorySearch.MaxSnippetLen = 200
 	}
+	if cfg.Tools.MemorySearch.Mode == "" {
+		cfg.Tools.MemorySearch.Mode = "hybrid"
+	}
 	if cfg.Tools.MemorySearch.Directory == "" {
 		cfg.Tools.MemorySearch.Directory = cfg.Session.Memory.Directory
 	}
@@ -447,6 +451,13 @@ func validateConfig(cfg *Config) error {
 	}
 	if cfg.Tools.MemorySearch.MaxSnippetLen < 0 {
 		issues = append(issues, "tools.memory_search.max_snippet_len must be >= 0")
+	}
+	if mode := strings.ToLower(strings.TrimSpace(cfg.Tools.MemorySearch.Mode)); mode != "" {
+		switch mode {
+		case "lexical", "vector", "hybrid":
+		default:
+			issues = append(issues, "tools.memory_search.mode must be \"lexical\", \"vector\", or \"hybrid\"")
+		}
 	}
 
 	if len(issues) > 0 {

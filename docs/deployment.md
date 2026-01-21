@@ -175,6 +175,10 @@ data:
       memory:
         enabled: false
         directory: memory
+        max_lines: 20
+      heartbeat:
+        enabled: false
+        file: HEARTBEAT.md
 
     identity:
       name: ""
@@ -209,6 +213,7 @@ data:
 
     tools:
       notes: ""
+      notes_file: ""
       sandbox:
         enabled: true
         pool_size: 10

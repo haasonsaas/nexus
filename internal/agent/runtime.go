@@ -70,11 +70,35 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"sync"
 
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
+
+type systemPromptKey struct{}
+
+// WithSystemPrompt stores a request-scoped system prompt override in the context.
+func WithSystemPrompt(ctx context.Context, prompt string) context.Context {
+	prompt = strings.TrimSpace(prompt)
+	if prompt == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, systemPromptKey{}, prompt)
+}
+
+func systemPromptFromContext(ctx context.Context) (string, bool) {
+	value, ok := ctx.Value(systemPromptKey{}).(string)
+	if !ok {
+		return "", false
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", false
+	}
+	return value, true
+}
 
 // LLMProvider defines the interface for Large Language Model backends.
 //
@@ -453,7 +477,9 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 		if req.Model == "" && r.defaultModel != "" {
 			req.Model = r.defaultModel
 		}
-		if req.System == "" && r.defaultSystem != "" {
+		if system, ok := systemPromptFromContext(ctx); ok {
+			req.System = system
+		} else if req.System == "" && r.defaultSystem != "" {
 			req.System = r.defaultSystem
 		}
 

@@ -150,6 +150,27 @@ func TestProcessUsesDefaultSystemPrompt(t *testing.T) {
 	}
 }
 
+func TestProcessUsesContextSystemPromptOverride(t *testing.T) {
+	provider := &recordingProvider{}
+	runtime := NewRuntime(provider, stubStore{})
+	runtime.SetSystemPrompt("default prompt")
+	session := &models.Session{ID: "session-1", Channel: models.ChannelTelegram}
+	msg := &models.Message{Role: models.RoleUser, Content: "hi"}
+
+	ctx := WithSystemPrompt(context.Background(), "override prompt")
+	ch, err := runtime.Process(ctx, session, msg)
+	if err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+
+	for range ch {
+	}
+
+	if provider.lastSystem != "override prompt" {
+		t.Fatalf("expected override prompt, got %q", provider.lastSystem)
+	}
+}
+
 func TestProcessPropagatesContextCancel(t *testing.T) {
 	provider := &cancelProvider{started: make(chan struct{})}
 	runtime := NewRuntime(provider, stubStore{})

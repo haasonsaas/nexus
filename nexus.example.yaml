@@ -40,6 +40,11 @@ session:
   memory:
     enabled: false
     directory: memory
+    max_lines: 20
+  # Optional heartbeat checklist file for heartbeat-style runs
+  heartbeat:
+    enabled: false
+    file: HEARTBEAT.md
 
 identity:
   # Optional agent identity
@@ -104,6 +109,8 @@ llm:
 tools:
   # Optional notes to include in the system prompt for tool conventions
   notes: ""
+  # Optional file path with tool notes (merged with inline notes)
+  notes_file: ""
   sandbox:
     enabled: true
     # Number of pre-warmed VMs/containers

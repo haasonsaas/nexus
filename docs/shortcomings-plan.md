@@ -33,9 +33,9 @@
    - [x] Add tool-notes injection into system prompt.
    - [x] Add safety defaults to the system prompt (no secrets, no destructive actions, no partials).
    - [x] Add bootstrap guidance when identity/user details are missing.
-   - [ ] Add memory recall (read today/yesterday logs into the prompt when enabled).
-   - [ ] Add optional heartbeat checklist integration.
-   - [ ] Add tool notes file support (path-based, not just inline config).
+   - [x] Add memory recall (read today/yesterday logs into the prompt when enabled).
+   - [x] Add optional heartbeat checklist integration.
+   - [x] Add tool notes file support (path-based, not just inline config).
    - [ ] Split the monolithic channel adapter interface into focused contracts.
    - [ ] Add a plugin registry with lazy loading.
    - [ ] Add schema-driven config validation + explicit defaults pipeline.
@@ -68,3 +68,4 @@
 - 2026-01-21: Added session scoping config, base URL wiring for providers, gateway processing integration tests, and context-cancellation coverage.
 - 2026-01-21: Added identity + user config, system prompt assembly, memory logger, tool notes prompt injection, and safety/bootstrap guidance.
 - 2026-01-21: Claude CLI timeout traced to shell command timeout; resolved by running with longer timeout and shorter prompts.
+- 2026-01-21: Added per-request system prompt overrides with memory recall, heartbeat checklist injection, and tool-notes file support.

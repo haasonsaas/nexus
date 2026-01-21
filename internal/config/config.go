@@ -42,15 +42,22 @@ type AuthConfig struct {
 }
 
 type SessionConfig struct {
-	DefaultAgentID string       `yaml:"default_agent_id"`
-	SlackScope     string       `yaml:"slack_scope"`
-	DiscordScope   string       `yaml:"discord_scope"`
-	Memory         MemoryConfig `yaml:"memory"`
+	DefaultAgentID string          `yaml:"default_agent_id"`
+	SlackScope     string          `yaml:"slack_scope"`
+	DiscordScope   string          `yaml:"discord_scope"`
+	Memory         MemoryConfig    `yaml:"memory"`
+	Heartbeat      HeartbeatConfig `yaml:"heartbeat"`
 }
 
 type MemoryConfig struct {
 	Enabled   bool   `yaml:"enabled"`
 	Directory string `yaml:"directory"`
+	MaxLines  int    `yaml:"max_lines"`
+}
+
+type HeartbeatConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	File    string `yaml:"file"`
 }
 
 type IdentityConfig struct {
@@ -120,6 +127,7 @@ type ToolsConfig struct {
 	Browser   BrowserConfig   `yaml:"browser"`
 	WebSearch WebSearchConfig `yaml:"websearch"`
 	Notes     string          `yaml:"notes"`
+	NotesFile string          `yaml:"notes_file"`
 }
 
 type SandboxConfig struct {
@@ -205,6 +213,12 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Session.Memory.Directory == "" {
 		cfg.Session.Memory.Directory = "memory"
+	}
+	if cfg.Session.Memory.MaxLines == 0 {
+		cfg.Session.Memory.MaxLines = 20
+	}
+	if cfg.Session.Heartbeat.File == "" {
+		cfg.Session.Heartbeat.File = "HEARTBEAT.md"
 	}
 	if cfg.LLM.DefaultProvider == "" {
 		cfg.LLM.DefaultProvider = "anthropic"

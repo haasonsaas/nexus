@@ -44,3 +44,58 @@ func TestMemoryLoggerAppend(t *testing.T) {
 		t.Fatalf("expected flattened content, got %q", text)
 	}
 }
+
+func TestMemoryLoggerReadRecentAtFiltersSession(t *testing.T) {
+	dir := t.TempDir()
+	logger := NewMemoryLogger(dir)
+
+	base := time.Date(2026, 1, 21, 12, 0, 0, 0, time.UTC)
+	msgs := []*models.Message{
+		{
+			SessionID: "session-1",
+			Channel:   models.ChannelSlack,
+			Role:      models.RoleUser,
+			Content:   "yesterday note",
+			CreatedAt: base.AddDate(0, 0, -1),
+		},
+		{
+			SessionID: "session-2",
+			Channel:   models.ChannelSlack,
+			Role:      models.RoleUser,
+			Content:   "other session",
+			CreatedAt: base.AddDate(0, 0, -1),
+		},
+		{
+			SessionID: "session-1",
+			Channel:   models.ChannelSlack,
+			Role:      models.RoleAssistant,
+			Content:   "today update",
+			CreatedAt: base,
+		},
+	}
+
+	for _, msg := range msgs {
+		if err := logger.Append(msg); err != nil {
+			t.Fatalf("Append() error = %v", err)
+		}
+	}
+
+	lines, err := logger.ReadRecentAt(base, models.ChannelSlack, "session-1", 2, 10)
+	if err != nil {
+		t.Fatalf("ReadRecentAt() error = %v", err)
+	}
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 lines, got %d", len(lines))
+	}
+	if strings.Contains(lines[0], "session-2") || strings.Contains(lines[1], "session-2") {
+		t.Fatalf("expected filtered session lines, got %q", lines)
+	}
+
+	lines, err = logger.ReadRecentAt(base, models.ChannelSlack, "session-1", 2, 1)
+	if err != nil {
+		t.Fatalf("ReadRecentAt() error = %v", err)
+	}
+	if len(lines) != 1 || !strings.Contains(lines[0], "today update") {
+		t.Fatalf("expected most recent line, got %q", lines)
+	}
+}

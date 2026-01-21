@@ -1,0 +1,509 @@
+syntax = "proto3";
+
+package nexus.v1;
+
+option go_package = "github.com/haasonsaas/nexus/pkg/proto;proto";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+
+// =============================================================================
+// Services
+// =============================================================================
+
+// NexusGateway provides real-time bidirectional communication between clients
+// and the Nexus AI gateway system.
+service NexusGateway {
+  // Stream establishes a bidirectional streaming connection for real-time
+  // message exchange between client and server.
+  rpc Stream(stream ClientMessage) returns (stream ServerMessage);
+}
+
+// SessionService manages conversation sessions.
+service SessionService {
+  // CreateSession creates a new conversation session.
+  rpc CreateSession(CreateSessionRequest) returns (CreateSessionResponse);
+
+  // GetSession retrieves a session by ID.
+  rpc GetSession(GetSessionRequest) returns (GetSessionResponse);
+
+  // ListSessions lists sessions with optional filtering.
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+
+  // DeleteSession deletes a session and its messages.
+  rpc DeleteSession(DeleteSessionRequest) returns (DeleteSessionResponse);
+
+  // UpdateSession updates session metadata.
+  rpc UpdateSession(UpdateSessionRequest) returns (UpdateSessionResponse);
+}
+
+// AgentService manages AI agents.
+service AgentService {
+  // CreateAgent creates a new agent configuration.
+  rpc CreateAgent(CreateAgentRequest) returns (CreateAgentResponse);
+
+  // GetAgent retrieves an agent by ID.
+  rpc GetAgent(GetAgentRequest) returns (GetAgentResponse);
+
+  // ListAgents lists agents for a user.
+  rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
+
+  // UpdateAgent updates an agent configuration.
+  rpc UpdateAgent(UpdateAgentRequest) returns (UpdateAgentResponse);
+
+  // DeleteAgent deletes an agent.
+  rpc DeleteAgent(DeleteAgentRequest) returns (DeleteAgentResponse);
+}
+
+// ChannelService manages channel connections.
+service ChannelService {
+  // ConnectChannel establishes a connection to a messaging platform.
+  rpc ConnectChannel(ConnectChannelRequest) returns (ConnectChannelResponse);
+
+  // DisconnectChannel disconnects from a messaging platform.
+  rpc DisconnectChannel(DisconnectChannelRequest) returns (DisconnectChannelResponse);
+
+  // GetChannelStatus retrieves the status of a channel connection.
+  rpc GetChannelStatus(GetChannelStatusRequest) returns (GetChannelStatusResponse);
+
+  // ListChannels lists all configured channels.
+  rpc ListChannels(ListChannelsRequest) returns (ListChannelsResponse);
+}
+
+// HealthService provides health check functionality.
+service HealthService {
+  // Check performs a health check.
+  rpc Check(HealthCheckRequest) returns (HealthCheckResponse);
+
+  // Watch performs a streaming health check.
+  rpc Watch(HealthCheckRequest) returns (stream HealthCheckResponse);
+}
+
+// =============================================================================
+// Streaming Messages
+// =============================================================================
+
+// ClientMessage represents messages sent from client to server.
+message ClientMessage {
+  oneof message {
+    SendMessageRequest send_message = 1;
+    SessionEvent session_event = 2;
+    SubscribeRequest subscribe = 3;
+    UnsubscribeRequest unsubscribe = 4;
+    PingRequest ping = 5;
+  }
+}
+
+// ServerMessage represents messages sent from server to client.
+message ServerMessage {
+  oneof message {
+    MessageChunk message_chunk = 1;
+    MessageComplete message_complete = 2;
+    ToolCallRequest tool_call_request = 3;
+    SessionEventNotification session_event_notification = 4;
+    ErrorNotification error_notification = 5;
+    PongResponse pong = 6;
+  }
+}
+
+// SendMessageRequest sends a message to a session.
+message SendMessageRequest {
+  string session_id = 1;
+  string content = 2;
+  repeated Attachment attachments = 3;
+  map<string, string> metadata = 4;
+}
+
+// MessageChunk represents a streaming chunk of an AI response.
+message MessageChunk {
+  string message_id = 1;
+  string session_id = 2;
+  string content = 3;
+  int32 sequence = 4;
+  ChunkType type = 5;
+}
+
+enum ChunkType {
+  CHUNK_TYPE_UNSPECIFIED = 0;
+  CHUNK_TYPE_TEXT = 1;
+  CHUNK_TYPE_TOOL_CALL = 2;
+  CHUNK_TYPE_METADATA = 3;
+}
+
+// MessageComplete indicates a message has finished streaming.
+message MessageComplete {
+  string message_id = 1;
+  string session_id = 2;
+  Message message = 3;
+}
+
+// ToolCallRequest requests the client to execute a tool.
+message ToolCallRequest {
+  string message_id = 1;
+  string session_id = 2;
+  repeated ToolCall tool_calls = 3;
+}
+
+// SessionEvent represents client-side events like typing indicators.
+message SessionEvent {
+  string session_id = 1;
+  EventType event_type = 2;
+  google.protobuf.Struct data = 3;
+}
+
+enum EventType {
+  EVENT_TYPE_UNSPECIFIED = 0;
+  EVENT_TYPE_TYPING_START = 1;
+  EVENT_TYPE_TYPING_STOP = 2;
+  EVENT_TYPE_READ = 3;
+  EVENT_TYPE_PRESENCE = 4;
+}
+
+// SessionEventNotification broadcasts session events to subscribers.
+message SessionEventNotification {
+  string session_id = 1;
+  EventType event_type = 2;
+  google.protobuf.Struct data = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+// SubscribeRequest subscribes to updates for specific sessions.
+message SubscribeRequest {
+  repeated string session_ids = 1;
+}
+
+// UnsubscribeRequest unsubscribes from session updates.
+message UnsubscribeRequest {
+  repeated string session_ids = 1;
+}
+
+// PingRequest sends a ping to keep the connection alive.
+message PingRequest {
+  google.protobuf.Timestamp timestamp = 1;
+}
+
+// PongResponse responds to a ping.
+message PongResponse {
+  google.protobuf.Timestamp timestamp = 1;
+}
+
+// ErrorNotification notifies the client of an error.
+message ErrorNotification {
+  string code = 1;
+  string message = 2;
+  google.protobuf.Struct details = 3;
+}
+
+// =============================================================================
+// Core Domain Messages
+// =============================================================================
+
+// Message represents a single message in a conversation.
+message Message {
+  string id = 1;
+  string session_id = 2;
+  ChannelType channel = 3;
+  string channel_id = 4;
+  Direction direction = 5;
+  Role role = 6;
+  string content = 7;
+  repeated Attachment attachments = 8;
+  repeated ToolCall tool_calls = 9;
+  repeated ToolResult tool_results = 10;
+  map<string, string> metadata = 11;
+  google.protobuf.Timestamp created_at = 12;
+}
+
+enum ChannelType {
+  CHANNEL_TYPE_UNSPECIFIED = 0;
+  CHANNEL_TYPE_TELEGRAM = 1;
+  CHANNEL_TYPE_DISCORD = 2;
+  CHANNEL_TYPE_SLACK = 3;
+  CHANNEL_TYPE_API = 4;
+}
+
+enum Direction {
+  DIRECTION_UNSPECIFIED = 0;
+  DIRECTION_INBOUND = 1;
+  DIRECTION_OUTBOUND = 2;
+}
+
+enum Role {
+  ROLE_UNSPECIFIED = 0;
+  ROLE_USER = 1;
+  ROLE_ASSISTANT = 2;
+  ROLE_SYSTEM = 3;
+  ROLE_TOOL = 4;
+}
+
+// Attachment represents a file or media attachment.
+message Attachment {
+  string id = 1;
+  string type = 2; // image, audio, video, document
+  string url = 3;
+  string filename = 4;
+  string mime_type = 5;
+  int64 size = 6;
+}
+
+// ToolCall represents an LLM's request to execute a tool.
+message ToolCall {
+  string id = 1;
+  string name = 2;
+  string input = 3; // JSON-encoded input
+}
+
+// ToolResult represents the output of a tool execution.
+message ToolResult {
+  string tool_call_id = 1;
+  string content = 2;
+  bool is_error = 3;
+}
+
+// Session represents a conversation thread.
+message Session {
+  string id = 1;
+  string agent_id = 2;
+  ChannelType channel = 3;
+  string channel_id = 4;
+  string key = 5;
+  string title = 6;
+  map<string, string> metadata = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+// Agent represents a configured AI agent.
+message Agent {
+  string id = 1;
+  string user_id = 2;
+  string name = 3;
+  string system_prompt = 4;
+  string model = 5;
+  string provider = 6;
+  repeated string tools = 7;
+  map<string, string> config = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+// User represents an authenticated user.
+message User {
+  string id = 1;
+  string email = 2;
+  string name = 3;
+  string avatar_url = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+}
+
+// APIKey represents an API key for programmatic access.
+message APIKey {
+  string id = 1;
+  string user_id = 2;
+  string name = 3;
+  string prefix = 4;
+  repeated string scopes = 5;
+  google.protobuf.Timestamp last_used_at = 6;
+  google.protobuf.Timestamp expires_at = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+
+// =============================================================================
+// Session Service Messages
+// =============================================================================
+
+message CreateSessionRequest {
+  string agent_id = 1;
+  ChannelType channel = 2;
+  string channel_id = 3;
+  string key = 4;
+  string title = 5;
+  map<string, string> metadata = 6;
+}
+
+message CreateSessionResponse {
+  Session session = 1;
+}
+
+message GetSessionRequest {
+  string id = 1;
+}
+
+message GetSessionResponse {
+  Session session = 1;
+}
+
+message ListSessionsRequest {
+  string agent_id = 1;
+  ChannelType channel = 2;
+  int32 page_size = 3;
+  string page_token = 4;
+}
+
+message ListSessionsResponse {
+  repeated Session sessions = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+message DeleteSessionRequest {
+  string id = 1;
+}
+
+message DeleteSessionResponse {
+  bool success = 1;
+}
+
+message UpdateSessionRequest {
+  string id = 1;
+  string title = 2;
+  map<string, string> metadata = 3;
+}
+
+message UpdateSessionResponse {
+  Session session = 1;
+}
+
+// =============================================================================
+// Agent Service Messages
+// =============================================================================
+
+message CreateAgentRequest {
+  string user_id = 1;
+  string name = 2;
+  string system_prompt = 3;
+  string model = 4;
+  string provider = 5;
+  repeated string tools = 6;
+  map<string, string> config = 7;
+}
+
+message CreateAgentResponse {
+  Agent agent = 1;
+}
+
+message GetAgentRequest {
+  string id = 1;
+}
+
+message GetAgentResponse {
+  Agent agent = 1;
+}
+
+message ListAgentsRequest {
+  string user_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListAgentsResponse {
+  repeated Agent agents = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+message UpdateAgentRequest {
+  string id = 1;
+  string name = 2;
+  string system_prompt = 3;
+  string model = 4;
+  string provider = 5;
+  repeated string tools = 6;
+  map<string, string> config = 7;
+}
+
+message UpdateAgentResponse {
+  Agent agent = 1;
+}
+
+message DeleteAgentRequest {
+  string id = 1;
+}
+
+message DeleteAgentResponse {
+  bool success = 1;
+}
+
+// =============================================================================
+// Channel Service Messages
+// =============================================================================
+
+message ConnectChannelRequest {
+  ChannelType channel_type = 1;
+  string channel_id = 2;
+  map<string, string> credentials = 3;
+  map<string, string> config = 4;
+}
+
+message ConnectChannelResponse {
+  ChannelConnection connection = 1;
+}
+
+message DisconnectChannelRequest {
+  string connection_id = 1;
+}
+
+message DisconnectChannelResponse {
+  bool success = 1;
+}
+
+message GetChannelStatusRequest {
+  string connection_id = 1;
+}
+
+message GetChannelStatusResponse {
+  ChannelConnection connection = 1;
+}
+
+message ListChannelsRequest {
+  string user_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListChannelsResponse {
+  repeated ChannelConnection connections = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+message ChannelConnection {
+  string id = 1;
+  string user_id = 2;
+  ChannelType channel_type = 3;
+  string channel_id = 4;
+  ConnectionStatus status = 5;
+  map<string, string> config = 6;
+  google.protobuf.Timestamp connected_at = 7;
+  google.protobuf.Timestamp last_activity_at = 8;
+}
+
+enum ConnectionStatus {
+  CONNECTION_STATUS_UNSPECIFIED = 0;
+  CONNECTION_STATUS_CONNECTED = 1;
+  CONNECTION_STATUS_DISCONNECTED = 2;
+  CONNECTION_STATUS_ERROR = 3;
+  CONNECTION_STATUS_CONNECTING = 4;
+}
+
+// =============================================================================
+// Health Service Messages
+// =============================================================================
+
+message HealthCheckRequest {
+  string service = 1;
+}
+
+message HealthCheckResponse {
+  ServingStatus status = 1;
+  map<string, string> metadata = 2;
+  google.protobuf.Timestamp timestamp = 3;
+}
+
+enum ServingStatus {
+  SERVING_STATUS_UNKNOWN = 0;
+  SERVING_STATUS_SERVING = 1;
+  SERVING_STATUS_NOT_SERVING = 2;
+  SERVING_STATUS_SERVICE_UNKNOWN = 3;
+}

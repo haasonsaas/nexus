@@ -1,0 +1,129 @@
+version: '3.8'
+
+services:
+  nexus:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: nexus:latest
+    container_name: nexus
+    restart: unless-stopped
+    ports:
+      - "50051:50051"  # gRPC
+      - "8080:8080"    # HTTP
+      - "9090:9090"    # Metrics
+    environment:
+      - DATABASE_URL=postgres://root@cockroachdb:26257/nexus?sslmode=disable
+      - JWT_SECRET=${JWT_SECRET}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - DISCORD_APP_ID=${DISCORD_APP_ID}
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
+      - SLACK_APP_TOKEN=${SLACK_APP_TOKEN}
+      - SEARXNG_URL=http://searxng:8080
+    volumes:
+      - ./nexus.yaml:/etc/nexus/nexus.yaml:ro
+      - nexus-data:/var/lib/nexus
+    depends_on:
+      cockroachdb:
+        condition: service_healthy
+    networks:
+      - nexus-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  cockroachdb:
+    image: cockroachdb/cockroach:v23.2.0
+    container_name: cockroachdb
+    restart: unless-stopped
+    command: start-single-node --insecure --advertise-addr=cockroachdb
+    ports:
+      - "26257:26257"
+      - "8081:8080"
+    volumes:
+      - cockroach-data:/cockroach/cockroach-data
+    networks:
+      - nexus-network
+    healthcheck:
+      test: ["CMD", "cockroach", "sql", "--insecure", "-e", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  searxng:
+    image: searxng/searxng:latest
+    container_name: searxng
+    restart: unless-stopped
+    ports:
+      - "8888:8080"
+    volumes:
+      - ./searxng:/etc/searxng:ro
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8888
+    networks:
+      - nexus-network
+
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.42.0-jammy
+    container_name: playwright
+    restart: unless-stopped
+    command: npx playwright run-server --port 3000 --host 0.0.0.0
+    ports:
+      - "3000:3000"
+    networks:
+      - nexus-network
+    shm_size: 2gb
+
+  # Optional: Prometheus for metrics
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    networks:
+      - nexus-network
+    profiles:
+      - monitoring
+
+  # Optional: Grafana for dashboards
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - nexus-network
+    profiles:
+      - monitoring
+
+networks:
+  nexus-network:
+    driver: bridge
+
+volumes:
+  cockroach-data:
+  nexus-data:
+  prometheus-data:
+  grafana-data:

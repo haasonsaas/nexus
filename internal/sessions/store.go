@@ -3,7 +3,7 @@ package sessions
 import (
 	"context"
 
-	"github.com/yourorg/nexus/pkg/models"
+	"github.com/haasonsaas/nexus/pkg/models"
 )
 
 // Store is the interface for session persistence.

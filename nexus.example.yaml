@@ -1,0 +1,124 @@
+# Nexus Configuration Example
+# Copy this file to nexus.yaml and fill in your credentials
+
+server:
+  host: 0.0.0.0
+  grpc_port: 50051
+  http_port: 8080
+  metrics_port: 9090
+
+database:
+  # CockroachDB connection string
+  # For local dev: postgres://root@localhost:26257/nexus?sslmode=disable
+  # For production: postgres://user:password@host:26257/nexus?sslmode=verify-full
+  url: ${DATABASE_URL:-postgres://root@localhost:26257/nexus?sslmode=disable}
+  max_connections: 25
+  conn_max_lifetime: 5m
+
+auth:
+  # Generate with: openssl rand -base64 32
+  jwt_secret: ${JWT_SECRET}
+  token_expiry: 24h
+
+  oauth:
+    google:
+      client_id: ${GOOGLE_CLIENT_ID}
+      client_secret: ${GOOGLE_CLIENT_SECRET}
+      redirect_url: http://localhost:8080/auth/google/callback
+    github:
+      client_id: ${GITHUB_CLIENT_ID}
+      client_secret: ${GITHUB_CLIENT_SECRET}
+      redirect_url: http://localhost:8080/auth/github/callback
+
+channels:
+  telegram:
+    enabled: true
+    # Get from @BotFather on Telegram
+    bot_token: ${TELEGRAM_BOT_TOKEN}
+    # Optional: webhook URL for production
+    # webhook: https://your-domain.com/webhook/telegram
+
+  discord:
+    enabled: true
+    # Get from Discord Developer Portal
+    bot_token: ${DISCORD_BOT_TOKEN}
+    app_id: ${DISCORD_APP_ID}
+
+  slack:
+    enabled: true
+    # Get from Slack App settings
+    bot_token: ${SLACK_BOT_TOKEN}      # xoxb-...
+    app_token: ${SLACK_APP_TOKEN}      # xapp-... (for Socket Mode)
+    signing_secret: ${SLACK_SIGNING_SECRET}
+
+llm:
+  default_provider: anthropic
+
+  providers:
+    anthropic:
+      api_key: ${ANTHROPIC_API_KEY}
+      default_model: claude-sonnet-4-20250514
+      # Optional: for high-volume usage
+      # base_url: https://api.anthropic.com
+
+    openai:
+      api_key: ${OPENAI_API_KEY}
+      default_model: gpt-4o
+      # Optional: for Azure OpenAI
+      # base_url: https://your-resource.openai.azure.com
+
+    google:
+      api_key: ${GOOGLE_AI_API_KEY}
+      default_model: gemini-pro
+
+    openrouter:
+      api_key: ${OPENROUTER_API_KEY}
+      default_model: anthropic/claude-3.5-sonnet
+
+tools:
+  sandbox:
+    enabled: true
+    # Number of pre-warmed VMs/containers
+    pool_size: 5
+    # Maximum execution time per request
+    timeout: 30s
+    limits:
+      max_cpu: 1
+      max_memory: 512MB
+    # Fallback to Docker if Firecracker not available
+    fallback_to_docker: true
+
+  browser:
+    enabled: true
+    headless: true
+    # Optional: connect to remote Playwright server
+    # url: http://playwright:3000
+    timeout: 60s
+    viewport:
+      width: 1280
+      height: 720
+
+  websearch:
+    enabled: true
+    provider: searxng
+    # SearXNG instance URL
+    url: ${SEARXNG_URL:-http://localhost:8888}
+    # Number of results per search
+    max_results: 10
+    # Cache TTL for search results
+    cache_ttl: 5m
+
+logging:
+  level: info  # debug, info, warn, error
+  format: json # json, text
+  # Optional: output to file
+  # file: /var/log/nexus/nexus.log
+
+# Optional: metrics and tracing
+observability:
+  metrics:
+    enabled: true
+    path: /metrics
+  tracing:
+    enabled: false
+    # jaeger_endpoint: http://localhost:14268/api/traces

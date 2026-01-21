@@ -3,7 +3,7 @@ package channels
 import (
 	"context"
 
-	"github.com/yourorg/nexus/pkg/models"
+	"github.com/haasonsaas/nexus/pkg/models"
 )
 
 // Adapter is the interface that all channel adapters must implement.

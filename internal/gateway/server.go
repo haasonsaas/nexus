@@ -11,11 +11,11 @@ import (
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 
-	"github.com/yourorg/nexus/internal/agent"
-	"github.com/yourorg/nexus/internal/channels"
-	"github.com/yourorg/nexus/internal/config"
-	"github.com/yourorg/nexus/internal/sessions"
-	"github.com/yourorg/nexus/pkg/models"
+	"github.com/haasonsaas/nexus/internal/agent"
+	"github.com/haasonsaas/nexus/internal/channels"
+	"github.com/haasonsaas/nexus/internal/config"
+	"github.com/haasonsaas/nexus/internal/sessions"
+	"github.com/haasonsaas/nexus/pkg/models"
 )
 
 // Server is the main Nexus gateway server.

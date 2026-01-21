@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/yourorg/nexus/internal/sessions"
-	"github.com/yourorg/nexus/pkg/models"
+	"github.com/haasonsaas/nexus/internal/sessions"
+	"github.com/haasonsaas/nexus/pkg/models"
 )
 
 // LLMProvider is the interface for LLM backends.

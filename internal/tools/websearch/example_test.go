@@ -80,7 +80,7 @@ func Example_withContentExtraction() {
 	}
 
 	var response websearch.SearchResponse
-	json.Unmarshal([]byte(result.Content), &response)
+	_ = json.Unmarshal([]byte(result.Content), &response)
 
 	for _, result := range response.Results {
 		fmt.Printf("Title: %s\n", result.Title)
@@ -147,7 +147,7 @@ func Example_imageSearch() {
 	}
 
 	var response websearch.SearchResponse
-	json.Unmarshal([]byte(result.Content), &response)
+	_ = json.Unmarshal([]byte(result.Content), &response)
 
 	for i, result := range response.Results {
 		fmt.Printf("%d. %s\n", i+1, result.Title)
@@ -176,7 +176,7 @@ func Example_newsSearch() {
 	}
 
 	var response websearch.SearchResponse
-	json.Unmarshal([]byte(result.Content), &response)
+	_ = json.Unmarshal([]byte(result.Content), &response)
 
 	for i, result := range response.Results {
 		fmt.Printf("%d. %s\n", i+1, result.Title)
@@ -208,7 +208,7 @@ func Example_searxngBackend() {
 	}
 
 	var response websearch.SearchResponse
-	json.Unmarshal([]byte(result.Content), &response)
+	_ = json.Unmarshal([]byte(result.Content), &response)
 
 	fmt.Printf("Using backend: %s\n", response.Backend)
 	fmt.Printf("Found %d results\n", response.ResultCount)
@@ -235,7 +235,7 @@ func Example_braveBackend() {
 	}
 
 	var response websearch.SearchResponse
-	json.Unmarshal([]byte(result.Content), &response)
+	_ = json.Unmarshal([]byte(result.Content), &response)
 
 	for _, result := range response.Results {
 		fmt.Printf("Title: %s\n", result.Title)

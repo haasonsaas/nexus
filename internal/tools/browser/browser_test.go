@@ -58,7 +58,7 @@ func TestBrowserTool_Navigate(t *testing.T) {
 	// Create test server
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(`
+		_, _ = w.Write([]byte(`
 			<!DOCTYPE html>
 			<html>
 			<head><title>Test Page</title></head>
@@ -109,7 +109,7 @@ func TestBrowserTool_Click(t *testing.T) {
 	// Create test server with clickable button
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(`
+		_, _ = w.Write([]byte(`
 			<!DOCTYPE html>
 			<html>
 			<body>
@@ -164,7 +164,7 @@ func TestBrowserTool_Click(t *testing.T) {
 func TestBrowserTool_Type(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(`
+		_, _ = w.Write([]byte(`
 			<!DOCTYPE html>
 			<html>
 			<body>
@@ -221,7 +221,7 @@ func TestBrowserTool_Type(t *testing.T) {
 func TestBrowserTool_Screenshot(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(`
+		_, _ = w.Write([]byte(`
 			<!DOCTYPE html>
 			<html>
 			<body><h1>Screenshot Test</h1></body>
@@ -278,7 +278,7 @@ func TestBrowserTool_Screenshot(t *testing.T) {
 func TestBrowserTool_ExtractText(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(`
+		_, _ = w.Write([]byte(`
 			<!DOCTYPE html>
 			<html>
 			<body>
@@ -338,7 +338,7 @@ func TestBrowserTool_ExtractText(t *testing.T) {
 func TestBrowserTool_ExtractHTML(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(`
+		_, _ = w.Write([]byte(`
 			<!DOCTYPE html>
 			<html>
 			<body>
@@ -397,7 +397,7 @@ func TestBrowserTool_ExtractHTML(t *testing.T) {
 func TestBrowserTool_ExecuteJS(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(`
+		_, _ = w.Write([]byte(`
 			<!DOCTYPE html>
 			<html>
 			<body>
@@ -452,7 +452,7 @@ func TestBrowserTool_ExecuteJS(t *testing.T) {
 func TestBrowserTool_WaitForElement(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(`
+		_, _ = w.Write([]byte(`
 			<!DOCTYPE html>
 			<html>
 			<body>

@@ -179,7 +179,7 @@ func (b *BrowserTool) handleClick(ctx context.Context, instance *BrowserInstance
 		}, nil
 	}
 
-	if err := instance.Page.Click(p.Selector); err != nil {
+	if err := instance.Page.Locator(p.Selector).Click(); err != nil {
 		return &agent.ToolResult{
 			Content: fmt.Sprintf("click failed: %v", err),
 			IsError: true,
@@ -213,7 +213,7 @@ func (b *BrowserTool) handleType(ctx context.Context, instance *BrowserInstance,
 		}, nil
 	}
 
-	if err := instance.Page.Fill(p.Selector, p.Text); err != nil {
+	if err := instance.Page.Locator(p.Selector).Fill(p.Text); err != nil {
 		return &agent.ToolResult{
 			Content: fmt.Sprintf("type failed: %v", err),
 			IsError: true,
@@ -272,23 +272,13 @@ func (b *BrowserTool) handleExtractText(ctx context.Context, instance *BrowserIn
 		}, nil
 	}
 
-	var text string
-	if p.Selector == "" {
+	selector := p.Selector
+	if selector == "" {
 		// Extract all text from body
-		text, err := instance.Page.TextContent("body")
-		if err != nil {
-			return &agent.ToolResult{
-				Content: fmt.Sprintf("text extraction failed: %v", err),
-				IsError: true,
-			}, nil
-		}
-		return &agent.ToolResult{
-			Content: text,
-			IsError: false,
-		}, nil
+		selector = "body"
 	}
 
-	text, err := instance.Page.TextContent(p.Selector)
+	text, err := instance.Page.Locator(selector).TextContent()
 	if err != nil {
 		return &agent.ToolResult{
 			Content: fmt.Sprintf("text extraction failed: %v", err),
@@ -372,7 +362,7 @@ func (b *BrowserTool) handleWaitForElement(ctx context.Context, instance *Browse
 		timeout = 30000 // Default 30 seconds
 	}
 
-	_, err := instance.Page.WaitForSelector(p.Selector, playwright.PageWaitForSelectorOptions{
+	err := instance.Page.Locator(p.Selector).WaitFor(playwright.LocatorWaitForOptions{
 		Timeout: playwright.Float(timeout),
 	})
 	if err != nil {

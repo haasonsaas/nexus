@@ -11,10 +11,8 @@ import (
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 
-	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/config"
-	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
@@ -23,8 +21,6 @@ type Server struct {
 	config   *config.Config
 	grpc     *grpc.Server
 	channels *channels.Registry
-	sessions sessions.Store
-	agent    *agent.Runtime
 	logger   *slog.Logger
 }
 

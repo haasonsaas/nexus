@@ -37,7 +37,7 @@ func TestContentExtractor_Extract_Success(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(htmlContent))
+		_, _ = w.Write([]byte(htmlContent))
 	}))
 	defer server.Close()
 
@@ -81,7 +81,7 @@ func TestContentExtractor_Extract_Success(t *testing.T) {
 func TestContentExtractor_Extract_NonHTML(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"key": "value"}`))
+		_, _ = w.Write([]byte(`{"key": "value"}`))
 	}))
 	defer server.Close()
 
@@ -127,7 +127,7 @@ func TestContentExtractor_Extract_InvalidURL(t *testing.T) {
 func TestContentExtractor_Extract_Timeout(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(20 * time.Second) // Longer than client timeout
-		w.Write([]byte("<html><body>Too slow</body></html>"))
+		_, _ = w.Write([]byte("<html><body>Too slow</body></html>"))
 	}))
 	defer server.Close()
 
@@ -403,13 +403,13 @@ func TestContentExtractor_ExtractBatch(t *testing.T) {
 	// Create multiple test servers
 	server1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(`<html><head><title>Page 1</title></head><body><main><p>Content from page 1</p></main></body></html>`))
+		_, _ = w.Write([]byte(`<html><head><title>Page 1</title></head><body><main><p>Content from page 1</p></main></body></html>`))
 	}))
 	defer server1.Close()
 
 	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(`<html><head><title>Page 2</title></head><body><main><p>Content from page 2</p></main></body></html>`))
+		_, _ = w.Write([]byte(`<html><head><title>Page 2</title></head><body><main><p>Content from page 2</p></main></body></html>`))
 	}))
 	defer server2.Close()
 
@@ -457,7 +457,7 @@ func TestContentExtractor_LengthLimit(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(htmlContent))
+		_, _ = w.Write([]byte(htmlContent))
 	}))
 	defer server.Close()
 
@@ -547,7 +547,7 @@ func TestContentExtractor_RealWorldHTML(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(htmlContent))
+		_, _ = w.Write([]byte(htmlContent))
 	}))
 	defer server.Close()
 

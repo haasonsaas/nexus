@@ -77,10 +77,10 @@ func (m *mockDiscordSession) ApplicationCommandBulkOverwrite(appID, guildID stri
 
 func TestNewAdapter(t *testing.T) {
 	token := "test-token"
-	adapter := NewAdapter(token)
+	adapter := NewAdapterSimple(token)
 
 	if adapter == nil {
-		t.Fatal("NewAdapter returned nil")
+		t.Fatal("NewAdapterSimple returned nil")
 	}
 
 	if adapter.Type() != models.ChannelDiscord {
@@ -94,7 +94,7 @@ func TestNewAdapter(t *testing.T) {
 }
 
 func TestAdapter_StartStop(t *testing.T) {
-	adapter := NewAdapter("test-token")
+	adapter := NewAdapterSimple("test-token")
 	mock := &mockDiscordSession{}
 	adapter.session = mock
 
@@ -132,7 +132,7 @@ func TestAdapter_StartStop(t *testing.T) {
 }
 
 func TestAdapter_Messages(t *testing.T) {
-	adapter := NewAdapter("test-token")
+	adapter := NewAdapterSimple("test-token")
 
 	msgChan := adapter.Messages()
 	if msgChan == nil {
@@ -358,7 +358,7 @@ func TestAdapter_Send(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			adapter := NewAdapter("test-token")
+			adapter := NewAdapterSimple("test-token")
 			mock := &mockDiscordSession{}
 			adapter.session = mock
 			adapter.status.Connected = true
@@ -374,7 +374,7 @@ func TestAdapter_Send(t *testing.T) {
 }
 
 func TestAdapter_SlashCommandHandling(t *testing.T) {
-	adapter := NewAdapter("test-token")
+	adapter := NewAdapterSimple("test-token")
 	mock := &mockDiscordSession{}
 	adapter.session = mock
 

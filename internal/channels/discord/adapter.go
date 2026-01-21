@@ -116,14 +116,17 @@ func NewAdapter(config Config) (*Adapter, error) {
 }
 
 // NewAdapterSimple creates a new Discord adapter with just a token (for backward compatibility).
+// It panics if the config is invalid (which only happens if token is empty).
 func NewAdapterSimple(token string) *Adapter {
 	config := Config{
 		Token:  token,
 		Logger: slog.Default(),
 	}
-	config.Validate()
 
-	adapter, _ := NewAdapter(config)
+	adapter, err := NewAdapter(config)
+	if err != nil {
+		panic(fmt.Sprintf("NewAdapterSimple: invalid config: %v", err))
+	}
 	return adapter
 }
 

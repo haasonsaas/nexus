@@ -214,8 +214,7 @@ func (a *Adapter) runWithReconnection(ctx context.Context) {
 			continue
 		}
 
-		// Successful run, reset attempts and exit degraded mode
-		attempts = 0
+		// Successful run, exit degraded mode
 		a.setDegraded(false)
 		a.updateStatus(false, "")
 		return
@@ -262,11 +261,6 @@ func (a *Adapter) runWebhook(ctx context.Context) error {
 	a.bot.RegisterHandler(bot.HandlerTypeMessageText, "", bot.MatchTypePrefix, a.handleMessage)
 
 	// Start webhook server
-	listenAddr := a.config.ListenAddr
-	if listenAddr == "" {
-		listenAddr = ":8443"
-	}
-
 	go a.bot.StartWebhook(ctx)
 
 	// Wait for context cancellation
@@ -683,11 +677,11 @@ func (t *telegramMessageAdapter) GetDate() int64 {
 }
 
 func (t *telegramMessageAdapter) HasPhoto() bool {
-	return t.Photo != nil && len(t.Photo) > 0
+	return len(t.Photo) > 0
 }
 
 func (t *telegramMessageAdapter) GetPhotoID() string {
-	if t.Photo != nil && len(t.Photo) > 0 {
+	if len(t.Photo) > 0 {
 		return t.Photo[0].FileID
 	}
 	return ""

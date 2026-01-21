@@ -19,7 +19,10 @@ func Example() {
 	}
 
 	// Create the adapter
-	adapter := slack.NewAdapter(cfg)
+	adapter, err := slack.NewAdapter(cfg)
+	if err != nil {
+		log.Fatalf("Failed to create Slack adapter: %v", err)
+	}
 
 	// Create a context for lifecycle management
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -69,7 +72,10 @@ func ExampleAdapter_Send() {
 		AppToken: "xapp-your-app-level-token",
 	}
 
-	adapter := slack.NewAdapter(cfg)
+	adapter, err := slack.NewAdapter(cfg)
+	if err != nil {
+		log.Fatalf("Failed to create Slack adapter: %v", err)
+	}
 	ctx := context.Background()
 
 	// Simple text message
@@ -79,7 +85,7 @@ func ExampleAdapter_Send() {
 			"slack_channel": "C123456789", // Channel ID
 		},
 	}
-	adapter.Send(ctx, simpleMsg)
+	_ = adapter.Send(ctx, simpleMsg)
 
 	// Message with attachments (images will be displayed inline)
 	msgWithImage := &models.Message{
@@ -95,7 +101,7 @@ func ExampleAdapter_Send() {
 			"slack_channel": "C123456789",
 		},
 	}
-	adapter.Send(ctx, msgWithImage)
+	_ = adapter.Send(ctx, msgWithImage)
 
 	// Thread reply
 	threadReply := &models.Message{
@@ -105,7 +111,7 @@ func ExampleAdapter_Send() {
 			"slack_thread_ts": "1234567890.123456", // Original message timestamp
 		},
 	}
-	adapter.Send(ctx, threadReply)
+	_ = adapter.Send(ctx, threadReply)
 
 	// Message with reaction
 	msgWithReaction := &models.Message{
@@ -115,5 +121,5 @@ func ExampleAdapter_Send() {
 			"slack_reaction": "thumbsup", // Adds :thumbsup: reaction
 		},
 	}
-	adapter.Send(ctx, msgWithReaction)
+	_ = adapter.Send(ctx, msgWithReaction)
 }

@@ -10,9 +10,8 @@ import (
 
 func TestAdapter_Type(t *testing.T) {
 	cfg := Config{
-		Token:    "test-token",
-		Mode:     ModeLongPolling,
-		LogLevel: LogLevelError,
+		Token: "test-token",
+		Mode:  ModeLongPolling,
 	}
 
 	adapter, err := NewAdapter(cfg)
@@ -27,9 +26,8 @@ func TestAdapter_Type(t *testing.T) {
 
 func TestAdapter_Status(t *testing.T) {
 	cfg := Config{
-		Token:    "test-token",
-		Mode:     ModeLongPolling,
-		LogLevel: LogLevelError,
+		Token: "test-token",
+		Mode:  ModeLongPolling,
 	}
 
 	adapter, err := NewAdapter(cfg)
@@ -46,9 +44,8 @@ func TestAdapter_Status(t *testing.T) {
 
 func TestAdapter_Messages(t *testing.T) {
 	cfg := Config{
-		Token:    "test-token",
-		Mode:     ModeLongPolling,
-		LogLevel: LogLevelError,
+		Token: "test-token",
+		Mode:  ModeLongPolling,
 	}
 
 	adapter, err := NewAdapter(cfg)
@@ -190,9 +187,8 @@ func TestConvertTelegramMessage_WithAttachments(t *testing.T) {
 
 func TestAdapter_Lifecycle(t *testing.T) {
 	cfg := Config{
-		Token:    "test-token",
-		Mode:     ModeLongPolling,
-		LogLevel: LogLevelError,
+		Token: "test-token",
+		Mode:  ModeLongPolling,
 	}
 
 	adapter, err := NewAdapter(cfg)
@@ -238,9 +234,8 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "valid long polling config",
 			cfg: Config{
-				Token:    "valid-token",
-				Mode:     ModeLongPolling,
-				LogLevel: LogLevelInfo,
+				Token: "valid-token",
+				Mode:  ModeLongPolling,
 			},
 			wantErr: false,
 		},
@@ -250,24 +245,21 @@ func TestConfig_Validate(t *testing.T) {
 				Token:      "valid-token",
 				Mode:       ModeWebhook,
 				WebhookURL: "https://example.com/webhook",
-				LogLevel:   LogLevelInfo,
 			},
 			wantErr: false,
 		},
 		{
 			name: "missing token",
 			cfg: Config{
-				Mode:     ModeLongPolling,
-				LogLevel: LogLevelInfo,
+				Mode: ModeLongPolling,
 			},
 			wantErr: true,
 		},
 		{
 			name: "webhook without URL",
 			cfg: Config{
-				Token:    "valid-token",
-				Mode:     ModeWebhook,
-				LogLevel: LogLevelInfo,
+				Token: "valid-token",
+				Mode:  ModeWebhook,
 			},
 			wantErr: true,
 		},

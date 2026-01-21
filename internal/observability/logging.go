@@ -3,7 +3,6 @@ package observability
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -470,15 +469,4 @@ func (l *Logger) Sync() error {
 	// slog doesn't require explicit syncing, but this is here for interface compatibility
 	// with other logging libraries that might need it
 	return nil
-}
-
-// formatError formats an error with additional context for logging.
-func formatError(err error, context string) string {
-	if err == nil {
-		return ""
-	}
-	if context != "" {
-		return fmt.Sprintf("%s: %v", context, err)
-	}
-	return err.Error()
 }

@@ -43,7 +43,7 @@ func TestNewTracer(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tracer, shutdown := NewTracer(tt.config)
-			defer shutdown(context.Background())
+			defer func() { _ = shutdown(context.Background()) }()
 
 			if tracer == nil {
 				t.Fatal("NewTracer() returned nil")
@@ -59,10 +59,10 @@ func TestTracerStart(t *testing.T) {
 	tracer, shutdown := NewTracer(TraceConfig{
 		ServiceName: "test-service",
 	})
-	defer shutdown(context.Background())
+	defer func() { _ = shutdown(context.Background()) }()
 
 	ctx := context.Background()
-	ctx, span := tracer.Start(ctx, "test-operation")
+	_, span := tracer.Start(ctx, "test-operation")
 	defer span.End()
 
 	if span == nil {
@@ -80,7 +80,7 @@ func TestStartSpan(t *testing.T) {
 	tracer, shutdown := NewTracer(TraceConfig{
 		ServiceName: "test-service",
 	})
-	defer shutdown(context.Background())
+	defer func() { _ = shutdown(context.Background()) }()
 
 	ctx := context.Background()
 	span := tracer.StartSpan(ctx, "test-operation")
@@ -95,10 +95,10 @@ func TestSpanWithAttributes(t *testing.T) {
 	tracer, shutdown := NewTracer(TraceConfig{
 		ServiceName: "test-service",
 	})
-	defer shutdown(context.Background())
+	defer func() { _ = shutdown(context.Background()) }()
 
 	ctx := context.Background()
-	ctx, span := tracer.Start(ctx, "test-operation", SpanOptions{
+	_, span := tracer.Start(ctx, "test-operation", SpanOptions{
 		Kind: trace.SpanKindServer,
 		Attributes: []attribute.KeyValue{
 			attribute.String("key1", "value1"),
@@ -116,10 +116,10 @@ func TestTracerRecordError(t *testing.T) {
 	tracer, shutdown := NewTracer(TraceConfig{
 		ServiceName: "test-service",
 	})
-	defer shutdown(context.Background())
+	defer func() { _ = shutdown(context.Background()) }()
 
 	ctx := context.Background()
-	ctx, span := tracer.Start(ctx, "test-operation")
+	_, span := tracer.Start(ctx, "test-operation")
 
 	testErr := errors.New("test error")
 	tracer.RecordError(span, testErr)
@@ -133,10 +133,10 @@ func TestTracerRecordErrorWithNil(t *testing.T) {
 	tracer, shutdown := NewTracer(TraceConfig{
 		ServiceName: "test-service",
 	})
-	defer shutdown(context.Background())
+	defer func() { _ = shutdown(context.Background()) }()
 
 	ctx := context.Background()
-	ctx, span := tracer.Start(ctx, "test-operation")
+	_, span := tracer.Start(ctx, "test-operation")
 	defer span.End()
 
 	// Recording nil error should not panic
@@ -147,10 +147,10 @@ func TestSetAttributes(t *testing.T) {
 	tracer, shutdown := NewTracer(TraceConfig{
 		ServiceName: "test-service",
 	})
-	defer shutdown(context.Background())
+	defer func() { _ = shutdown(context.Background()) }()
 
 	ctx := context.Background()
-	ctx, span := tracer.Start(ctx, "test-operation")
+	_, span := tracer.Start(ctx, "test-operation")
 	defer span.End()
 
 	// Test various attribute types
@@ -169,10 +169,10 @@ func TestSetAttributesWithInvalidKeyvals(t *testing.T) {
 	tracer, shutdown := NewTracer(TraceConfig{
 		ServiceName: "test-service",
 	})
-	defer shutdown(context.Background())
+	defer func() { _ = shutdown(context.Background()) }()
 
 	ctx := context.Background()
-	ctx, span := tracer.Start(ctx, "test-operation")
+	_, span := tracer.Start(ctx, "test-operation")
 	defer span.End()
 
 	// Test with odd number of arguments (should handle gracefully)
@@ -188,10 +188,10 @@ func TestAddEvent(t *testing.T) {
 	tracer, shutdown := NewTracer(TraceConfig{
 		ServiceName: "test-service",
 	})
-	defer shutdown(context.Background())
+	defer func() { _ = shutdown(context.Background()) }()
 
 	ctx := context.Background()
-	ctx, span := tracer.Start(ctx, "test-operation")
+	_, span := tracer.Start(ctx, "test-operation")
 	defer span.End()
 
 	tracer.AddEvent(span, "test-event",
@@ -206,10 +206,10 @@ func TestTraceMessageProcessing(t *testing.T) {
 	tracer, shutdown := NewTracer(TraceConfig{
 		ServiceName: "test-service",
 	})
-	defer shutdown(context.Background())
+	defer func() { _ = shutdown(context.Background()) }()
 
 	ctx := context.Background()
-	ctx, span := tracer.TraceMessageProcessing(ctx, "telegram", "inbound", "sess-123")
+	_, span := tracer.TraceMessageProcessing(ctx, "telegram", "inbound", "sess-123")
 	defer span.End()
 
 	if span == nil {
@@ -221,10 +221,10 @@ func TestTraceLLMRequest(t *testing.T) {
 	tracer, shutdown := NewTracer(TraceConfig{
 		ServiceName: "test-service",
 	})
-	defer shutdown(context.Background())
+	defer func() { _ = shutdown(context.Background()) }()
 
 	ctx := context.Background()
-	ctx, span := tracer.TraceLLMRequest(ctx, "anthropic", "claude-3-opus")
+	_, span := tracer.TraceLLMRequest(ctx, "anthropic", "claude-3-opus")
 	defer span.End()
 
 	if span == nil {
@@ -236,10 +236,10 @@ func TestTraceToolExecution(t *testing.T) {
 	tracer, shutdown := NewTracer(TraceConfig{
 		ServiceName: "test-service",
 	})
-	defer shutdown(context.Background())
+	defer func() { _ = shutdown(context.Background()) }()
 
 	ctx := context.Background()
-	ctx, span := tracer.TraceToolExecution(ctx, "web_search")
+	_, span := tracer.TraceToolExecution(ctx, "web_search")
 	defer span.End()
 
 	if span == nil {
@@ -251,10 +251,10 @@ func TestTraceDatabaseQuery(t *testing.T) {
 	tracer, shutdown := NewTracer(TraceConfig{
 		ServiceName: "test-service",
 	})
-	defer shutdown(context.Background())
+	defer func() { _ = shutdown(context.Background()) }()
 
 	ctx := context.Background()
-	ctx, span := tracer.TraceDatabaseQuery(ctx, "select", "sessions")
+	_, span := tracer.TraceDatabaseQuery(ctx, "select", "sessions")
 	defer span.End()
 
 	if span == nil {
@@ -266,10 +266,10 @@ func TestTraceHTTPRequest(t *testing.T) {
 	tracer, shutdown := NewTracer(TraceConfig{
 		ServiceName: "test-service",
 	})
-	defer shutdown(context.Background())
+	defer func() { _ = shutdown(context.Background()) }()
 
 	ctx := context.Background()
-	ctx, span := tracer.TraceHTTPRequest(ctx, "GET", "/api/sessions")
+	_, span := tracer.TraceHTTPRequest(ctx, "GET", "/api/sessions")
 	defer span.End()
 
 	if span == nil {
@@ -281,7 +281,7 @@ func TestInjectExtractContext(t *testing.T) {
 	tracer, shutdown := NewTracer(TraceConfig{
 		ServiceName: "test-service",
 	})
-	defer shutdown(context.Background())
+	defer func() { _ = shutdown(context.Background()) }()
 
 	ctx := context.Background()
 	ctx, span := tracer.Start(ctx, "test-operation")
@@ -306,7 +306,7 @@ func TestSpanFromContext(t *testing.T) {
 	tracer, shutdown := NewTracer(TraceConfig{
 		ServiceName: "test-service",
 	})
-	defer shutdown(context.Background())
+	defer func() { _ = shutdown(context.Background()) }()
 
 	ctx := context.Background()
 	ctx, span := tracer.Start(ctx, "test-operation")
@@ -329,7 +329,7 @@ func TestContextWithSpan(t *testing.T) {
 	tracer, shutdown := NewTracer(TraceConfig{
 		ServiceName: "test-service",
 	})
-	defer shutdown(context.Background())
+	defer func() { _ = shutdown(context.Background()) }()
 
 	ctx := context.Background()
 	_, span := tracer.Start(ctx, "test-operation")
@@ -352,7 +352,7 @@ func TestWithSpan(t *testing.T) {
 	tracer, shutdown := NewTracer(TraceConfig{
 		ServiceName: "test-service",
 	})
-	defer shutdown(context.Background())
+	defer func() { _ = shutdown(context.Background()) }()
 
 	ctx := context.Background()
 
@@ -383,7 +383,7 @@ func TestGetTraceID(t *testing.T) {
 	tracer, shutdown := NewTracer(TraceConfig{
 		ServiceName: "test-service",
 	})
-	defer shutdown(context.Background())
+	defer func() { _ = shutdown(context.Background()) }()
 
 	ctx := context.Background()
 	ctx, span := tracer.Start(ctx, "test-operation")
@@ -405,7 +405,7 @@ func TestGetSpanID(t *testing.T) {
 	tracer, shutdown := NewTracer(TraceConfig{
 		ServiceName: "test-service",
 	})
-	defer shutdown(context.Background())
+	defer func() { _ = shutdown(context.Background()) }()
 
 	ctx := context.Background()
 	ctx, span := tracer.Start(ctx, "test-operation")
@@ -483,7 +483,7 @@ func TestTracerWithEnvironment(t *testing.T) {
 		ServiceVersion: "1.0.0",
 		Environment:    "production",
 	})
-	defer shutdown(context.Background())
+	defer func() { _ = shutdown(context.Background()) }()
 
 	if tracer == nil {
 		t.Fatal("NewTracer() returned nil")
@@ -498,7 +498,7 @@ func TestTracerWithCustomAttributes(t *testing.T) {
 			"custom_attr2": "value2",
 		},
 	})
-	defer shutdown(context.Background())
+	defer func() { _ = shutdown(context.Background()) }()
 
 	if tracer == nil {
 		t.Fatal("NewTracer() returned nil")
@@ -522,7 +522,7 @@ func TestTracerSamplingRates(t *testing.T) {
 				ServiceName:  "test-service",
 				SamplingRate: tt.samplingRate,
 			})
-			defer shutdown(context.Background())
+			defer func() { _ = shutdown(context.Background()) }()
 
 			if tracer == nil {
 				t.Fatal("NewTracer() returned nil")
@@ -542,7 +542,7 @@ func TestNestedSpans(t *testing.T) {
 	tracer, shutdown := NewTracer(TraceConfig{
 		ServiceName: "test-service",
 	})
-	defer shutdown(context.Background())
+	defer func() { _ = shutdown(context.Background()) }()
 
 	ctx := context.Background()
 
@@ -574,10 +574,10 @@ func TestSpanWithError(t *testing.T) {
 	tracer, shutdown := NewTracer(TraceConfig{
 		ServiceName: "test-service",
 	})
-	defer shutdown(context.Background())
+	defer func() { _ = shutdown(context.Background()) }()
 
 	ctx := context.Background()
-	ctx, span := tracer.Start(ctx, "test-operation")
+	_, span := tracer.Start(ctx, "test-operation")
 
 	// Simulate error
 	testErr := errors.New("operation failed")
@@ -592,12 +592,12 @@ func TestMultipleTracersIndependent(t *testing.T) {
 	tracer1, shutdown1 := NewTracer(TraceConfig{
 		ServiceName: "service-1",
 	})
-	defer shutdown1(context.Background())
+	defer func() { _ = shutdown1(context.Background()) }()
 
 	tracer2, shutdown2 := NewTracer(TraceConfig{
 		ServiceName: "service-2",
 	})
-	defer shutdown2(context.Background())
+	defer func() { _ = shutdown2(context.Background()) }()
 
 	ctx := context.Background()
 

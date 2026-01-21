@@ -9,81 +9,7 @@ import (
 	"github.com/haasonsaas/nexus/pkg/models"
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
-	"github.com/slack-go/slack/socketmode"
 )
-
-// mockSocketModeClient implements the socket mode client interface for testing
-type mockSocketModeClient struct {
-	events     chan socketmode.Event
-	runCalled  bool
-	runErr     error
-	ackCalled  bool
-	postCalled bool
-	postErr    error
-}
-
-func newMockSocketModeClient() *mockSocketModeClient {
-	return &mockSocketModeClient{
-		events: make(chan socketmode.Event, 10),
-	}
-}
-
-func (m *mockSocketModeClient) Run() error {
-	m.runCalled = true
-	return m.runErr
-}
-
-func (m *mockSocketModeClient) Events() <-chan socketmode.Event {
-	return m.events
-}
-
-func (m *mockSocketModeClient) Ack(req socketmode.Request, payload ...interface{}) {
-	m.ackCalled = true
-}
-
-func (m *mockSocketModeClient) Post(msg interface{}) error {
-	m.postCalled = true
-	return m.postErr
-}
-
-// mockSlackClient implements the Slack API client interface for testing
-type mockSlackClient struct {
-	postMessageCalled bool
-	postMessageErr    error
-	getPermalinkErr   error
-	uploadFileCalled  bool
-	uploadFileErr     error
-	addReactionErr    error
-}
-
-func newMockSlackClient() *mockSlackClient {
-	return &mockSlackClient{}
-}
-
-func (m *mockSlackClient) PostMessage(channelID string, options ...slack.MsgOption) (string, string, error) {
-	m.postMessageCalled = true
-	return "C123456", "1234567890.123456", m.postMessageErr
-}
-
-func (m *mockSlackClient) GetPermalink(params *slack.PermalinkParameters) (string, error) {
-	return "https://example.slack.com/archives/C123456/p1234567890123456", m.getPermalinkErr
-}
-
-func (m *mockSlackClient) UploadFile(params slack.FileUploadParameters) (*slack.File, error) {
-	m.uploadFileCalled = true
-	if m.uploadFileErr != nil {
-		return nil, m.uploadFileErr
-	}
-	return &slack.File{
-		ID:   "F123456",
-		Name: params.Filename,
-		URL:  "https://files.slack.com/files/test.txt",
-	}, nil
-}
-
-func (m *mockSlackClient) AddReaction(name string, item slack.ItemRef) error {
-	return m.addReactionErr
-}
 
 func TestAdapter_Type(t *testing.T) {
 	cfg := Config{
@@ -91,7 +17,10 @@ func TestAdapter_Type(t *testing.T) {
 		AppToken: "xapp-test-token",
 	}
 
-	adapter := NewAdapter(cfg)
+	adapter, err := NewAdapter(cfg)
+	if err != nil {
+		t.Fatalf("NewAdapter() error = %v", err)
+	}
 	if adapter.Type() != models.ChannelSlack {
 		t.Errorf("Expected type %s, got %s", models.ChannelSlack, adapter.Type())
 	}
@@ -103,7 +32,10 @@ func TestAdapter_Status(t *testing.T) {
 		AppToken: "xapp-test-token",
 	}
 
-	adapter := NewAdapter(cfg)
+	adapter, err := NewAdapter(cfg)
+	if err != nil {
+		t.Fatalf("NewAdapter() error = %v", err)
+	}
 	status := adapter.Status()
 
 	if status.Connected {
@@ -117,7 +49,10 @@ func TestAdapter_Messages(t *testing.T) {
 		AppToken: "xapp-test-token",
 	}
 
-	adapter := NewAdapter(cfg)
+	adapter, err := NewAdapter(cfg)
+	if err != nil {
+		t.Fatalf("NewAdapter() error = %v", err)
+	}
 	msgChan := adapter.Messages()
 
 	if msgChan == nil {
@@ -131,13 +66,16 @@ func TestAdapter_Lifecycle(t *testing.T) {
 		AppToken: "xapp-test-token",
 	}
 
-	adapter := NewAdapter(cfg)
+	adapter, err := NewAdapter(cfg)
+	if err != nil {
+		t.Fatalf("NewAdapter() error = %v", err)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
 	// Test that Stop works even if never started
-	err := adapter.Stop(ctx)
+	err = adapter.Stop(ctx)
 	if err != nil {
 		t.Errorf("Stop() on unstarted adapter returned error: %v", err)
 	}

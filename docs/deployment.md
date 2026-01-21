@@ -263,6 +263,21 @@ Validate configuration:
 nexus doctor -c nexus.yaml
 ```
 
+Apply config migrations + workspace repairs:
+```bash
+nexus doctor --repair -c nexus.yaml
+```
+
+Run channel health probes:
+```bash
+nexus doctor --probe -c nexus.yaml
+```
+
+Initialize a workspace:
+```bash
+nexus setup --workspace ./clawd
+```
+
 ### Deployment
 
 ```yaml

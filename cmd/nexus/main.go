@@ -43,8 +43,10 @@ import (
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/config"
+	"github.com/haasonsaas/nexus/internal/doctor"
 	"github.com/haasonsaas/nexus/internal/gateway"
 	"github.com/haasonsaas/nexus/internal/plugins"
+	"github.com/haasonsaas/nexus/internal/workspace"
 	"github.com/haasonsaas/nexus/pkg/models"
 	"github.com/spf13/cobra"
 )
@@ -106,9 +108,74 @@ Documentation: https://github.com/haasonsaas/nexus`,
 		buildStatusCmd(),
 		buildDoctorCmd(),
 		buildPromptCmd(),
+		buildSetupCmd(),
 	)
 
 	return rootCmd
+}
+
+// buildSetupCmd creates the "setup" command for initializing a workspace.
+func buildSetupCmd() *cobra.Command {
+	var (
+		configPath   string
+		workspaceDir string
+		overwrite    bool
+	)
+
+	cmd := &cobra.Command{
+		Use:   "setup",
+		Short: "Initialize a workspace with bootstrap files",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg := &config.Config{
+				Workspace: config.DefaultWorkspaceConfig(),
+			}
+
+			if configPath != "" {
+				loaded, err := config.Load(configPath)
+				if err != nil {
+					slog.Warn("failed to load config, using defaults", "error", err)
+				} else {
+					cfg = loaded
+				}
+			}
+
+			if strings.TrimSpace(workspaceDir) != "" {
+				cfg.Workspace.Path = workspaceDir
+			}
+
+			files := workspace.BootstrapFilesForConfig(cfg)
+			result, err := workspace.EnsureWorkspaceFiles(cfg.Workspace.Path, files, overwrite)
+			if err != nil {
+				return err
+			}
+
+			out := cmd.OutOrStdout()
+			fmt.Fprintf(out, "Workspace ready: %s\n", cfg.Workspace.Path)
+			if len(result.Created) > 0 {
+				fmt.Fprintln(out, "Created:")
+				for _, path := range result.Created {
+					fmt.Fprintf(out, "  - %s\n", path)
+				}
+			}
+			if len(result.Skipped) > 0 {
+				fmt.Fprintln(out, "Skipped (already exists):")
+				for _, path := range result.Skipped {
+					fmt.Fprintf(out, "  - %s\n", path)
+				}
+			}
+
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVarP(&configPath, "config", "c", "nexus.yaml",
+		"Path to YAML configuration file (optional)")
+	cmd.Flags().StringVar(&workspaceDir, "workspace", "",
+		"Workspace directory to initialize (overrides config)")
+	cmd.Flags().BoolVar(&overwrite, "overwrite", false,
+		"Overwrite existing bootstrap files")
+
+	return cmd
 }
 
 // buildServeCmd creates the "serve" command that starts the gateway server.
@@ -701,25 +768,96 @@ Shows the status of all components including:
 // buildDoctorCmd creates the "doctor" command for config validation.
 func buildDoctorCmd() *cobra.Command {
 	var configPath string
+	var repair bool
+	var probe bool
 
 	cmd := &cobra.Command{
 		Use:   "doctor",
 		Short: "Validate configuration and plugin manifests",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			out := cmd.OutOrStdout()
+
+			raw, err := doctor.LoadRawConfig(configPath)
+			if err != nil {
+				return fmt.Errorf("failed to read config: %w", err)
+			}
+			migrations := doctor.ApplyConfigMigrations(raw)
+			if len(migrations.Applied) > 0 {
+				if repair {
+					if err := doctor.WriteRawConfig(configPath, raw); err != nil {
+						return fmt.Errorf("failed to write migrated config: %w", err)
+					}
+					fmt.Fprintln(out, "Applied config migrations:")
+					for _, note := range migrations.Applied {
+						fmt.Fprintf(out, "  - %s\n", note)
+					}
+				} else {
+					fmt.Fprintln(out, "Config migrations available (run `nexus doctor --repair` to apply):")
+					for _, note := range migrations.Applied {
+						fmt.Fprintf(out, "  - %s\n", note)
+					}
+				}
+			}
+
 			cfg, err := config.Load(configPath)
 			if err != nil {
+				if len(migrations.Applied) > 0 && !repair {
+					return fmt.Errorf("config validation failed (legacy keys detected). run `nexus doctor --repair`: %w", err)
+				}
 				return fmt.Errorf("config validation failed: %w", err)
 			}
 			if err := plugins.ValidateConfig(cfg); err != nil {
 				return fmt.Errorf("plugin validation failed: %w", err)
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Config OK (provider: %s)\n", cfg.LLM.DefaultProvider)
+
+			if repair {
+				if result, err := doctor.RepairWorkspace(cfg); err != nil {
+					return fmt.Errorf("workspace repair failed: %w", err)
+				} else if len(result.Created) > 0 {
+					fmt.Fprintln(out, "Workspace files created:")
+					for _, path := range result.Created {
+						fmt.Fprintf(out, "  - %s\n", path)
+					}
+				}
+				if path, created, err := doctor.RepairHeartbeat(cfg, configPath); err != nil {
+					return fmt.Errorf("heartbeat repair failed: %w", err)
+				} else if created {
+					fmt.Fprintf(out, "Heartbeat file created: %s\n", path)
+				}
+			}
+
+			if probe {
+				server, err := gateway.NewServer(cfg, slog.Default())
+				if err != nil {
+					return fmt.Errorf("failed to initialize gateway for probes: %w", err)
+				}
+				results := doctor.ProbeChannelHealth(cmd.Context(), server.Channels())
+				if len(results) == 0 {
+					fmt.Fprintln(out, "Channel probes: no health adapters registered")
+				} else {
+					fmt.Fprintln(out, "Channel probes:")
+					for _, result := range results {
+						status := "unhealthy"
+						if result.Status.Healthy {
+							status = "healthy"
+						}
+						if result.Status.Degraded {
+							status = "degraded"
+						}
+						fmt.Fprintf(out, "  - %s: %s (%s)\n", result.Channel, status, result.Status.Message)
+					}
+				}
+			}
+
+			fmt.Fprintf(out, "Config OK (provider: %s)\n", cfg.LLM.DefaultProvider)
 			return nil
 		},
 	}
 
 	cmd.Flags().StringVarP(&configPath, "config", "c", "nexus.yaml",
 		"Path to YAML configuration file")
+	cmd.Flags().BoolVar(&repair, "repair", false, "Apply migrations and common repairs")
+	cmd.Flags().BoolVar(&probe, "probe", false, "Run channel health probes")
 
 	return cmd
 }

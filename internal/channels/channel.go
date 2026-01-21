@@ -133,6 +133,15 @@ func (r *Registry) GetOutbound(channelType models.ChannelType) (OutboundAdapter,
 	return adapter, ok
 }
 
+// HealthAdapters returns a copy of registered health adapters.
+func (r *Registry) HealthAdapters() map[models.ChannelType]HealthAdapter {
+	out := make(map[models.ChannelType]HealthAdapter, len(r.health))
+	for channelType, adapter := range r.health {
+		out[channelType] = adapter
+	}
+	return out
+}
+
 // All returns all registered adapters.
 func (r *Registry) All() []Adapter {
 	adapters := make([]Adapter, 0, len(r.adapters))

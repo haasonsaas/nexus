@@ -321,6 +321,13 @@ func applyWorkspaceDefaults(cfg *WorkspaceConfig) {
 	}
 }
 
+// DefaultWorkspaceConfig returns a workspace config with defaults applied.
+func DefaultWorkspaceConfig() WorkspaceConfig {
+	cfg := WorkspaceConfig{}
+	applyWorkspaceDefaults(&cfg)
+	return cfg
+}
+
 func applyLLMDefaults(cfg *LLMConfig) {
 	if cfg.DefaultProvider == "" {
 		cfg.DefaultProvider = "anthropic"

@@ -20,10 +20,9 @@
 ## Nexus adoption status (high-level)
 - Implemented: strict config validation, doctor CLI, system prompt assembly, heartbeat + tool-notes injection, memory log recall, runtime plugin loader.
 - Implemented (this iteration): workspace bootstrap file loading into the system prompt; docs updated to match strict config.
-- Pending: doctor repair/migration pipeline, channel health probes, service/daemon audits, memory search + pre-compaction flush.
+- Implemented: doctor repair/migration pipeline (config migrations + workspace repairs) and channel health probes.
+- Pending: service/daemon audits, memory search + pre-compaction flush.
 
 ## Follow-up ideas (small/medium scope)
-1. Doctor repair mode: add `--fix/--repair` to apply config migrations and common file repairs.
-2. Health probes: add a `doctor --probe` that hits running gateway endpoints and reports channel status.
-3. Workspace bootstrap CLI: `nexus setup --workspace` to seed AGENTS/SOUL/USER/IDENTITY/TOOLS files.
-4. Memory file support: optional `MEMORY.md` ingestion + daily log retention policies.
+1. Service/daemon audits for install/runtime checks (launchd/systemd/service config).
+2. Memory search + pre-compaction flush.

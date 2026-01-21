@@ -100,6 +100,11 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	return server, nil
 }
 
+// Channels returns the channel registry.
+func (s *Server) Channels() *channels.Registry {
+	return s.channels
+}
+
 // Start begins serving requests.
 func (s *Server) Start(ctx context.Context) error {
 	// Start channel adapters

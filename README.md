@@ -172,6 +172,17 @@ session:
     file: HEARTBEAT.md
     mode: always
 
+workspace:
+  enabled: false
+  path: .
+  max_chars: 20000
+  agents_file: AGENTS.md
+  soul_file: SOUL.md
+  user_file: USER.md
+  identity_file: IDENTITY.md
+  tools_file: TOOLS.md
+  memory_file: MEMORY.md
+
 identity:
   name: ""
   creature: ""
@@ -211,15 +222,13 @@ channels:
 tools:
   notes: ""
   notes_file: ""
-
-plugins:
-  load:
-    paths: []
-  entries: {}
   sandbox:
     enabled: true
     pool_size: 5
     timeout: 30s
+    limits:
+      max_cpu: 1
+      max_memory: 512MB
   browser:
     enabled: true
     headless: true
@@ -227,6 +236,11 @@ plugins:
     enabled: true
     provider: searxng
     url: http://localhost:8888
+
+plugins:
+  load:
+    paths: []
+  entries: {}
 
 logging:
   level: info
@@ -240,6 +254,21 @@ Notes:
 Validate configuration:
 ```bash
 nexus doctor -c nexus.yaml
+```
+
+Apply migrations + repairs:
+```bash
+nexus doctor --repair -c nexus.yaml
+```
+
+Probe channel health:
+```bash
+nexus doctor --probe -c nexus.yaml
+```
+
+Initialize a workspace (bootstrap AGENTS/SOUL/USER/IDENTITY/TOOLS/HEARTBEAT/MEMORY):
+```bash
+nexus setup --workspace ./clawd
 ```
 
 Preview the system prompt (with memory + heartbeat):
@@ -278,6 +307,14 @@ ANTHROPIC_API_KEY=sk-ant-... TELEGRAM_BOT_TOKEN=... ./bin/nexus serve
 # Server
 nexus serve              # Start the gateway server
 nexus serve --config /path/to/config.yaml
+
+# Workspace bootstrap
+nexus setup --workspace ./clawd
+nexus setup --config nexus.yaml
+
+# Doctor
+nexus doctor --repair --config nexus.yaml
+nexus doctor --probe --config nexus.yaml
 
 # Database
 nexus migrate up         # Run pending migrations

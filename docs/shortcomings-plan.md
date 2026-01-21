@@ -45,6 +45,9 @@
    - [x] Add operator UX for memory/heartbeat prompt preview and config doctor.
    - [x] Load workspace bootstrap files (AGENTS/SOUL/USER/IDENTITY/MEMORY) into the system prompt.
    - [x] Align example config/docs with strict schema (tools vs plugins, remove unsupported keys).
+   - [x] Add workspace bootstrap CLI (`nexus setup`) to seed AGENTS/SOUL/USER/IDENTITY/TOOLS/HEARTBEAT/MEMORY.
+   - [x] Add `doctor --repair` with config migrations + workspace repairs.
+   - [x] Add doctor channel health probes (opt-in) for enabled adapters.
 
 5) Testing improvements
    - [x] Add unit test for buffered runtime response channel.
@@ -81,3 +84,4 @@
 - 2026-01-21: Added runtime plugin hooks (.so loading), plus doctor/prompt CLI UX for memory/heartbeat.
 - 2026-01-21: Added sample external plugin (`examples/plugins/echo`) with manifest + build instructions.
 - 2026-01-21: Added workspace bootstrap file loading, fallback tool notes from workspace, and documentation fixes for strict config.
+- 2026-01-21: Added `nexus setup`, doctor repairs/migrations, and channel health probes.

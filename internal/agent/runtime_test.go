@@ -24,11 +24,13 @@ func (stubProvider) Models() []Model { return nil }
 func (stubProvider) SupportsTools() bool { return false }
 
 type recordingProvider struct {
-	lastModel string
+	lastModel  string
+	lastSystem string
 }
 
 func (p *recordingProvider) Complete(ctx context.Context, req *CompletionRequest) (<-chan *CompletionChunk, error) {
 	p.lastModel = req.Model
+	p.lastSystem = req.System
 	ch := make(chan *CompletionChunk, 1)
 	ch <- &CompletionChunk{Text: "ok"}
 	close(ch)
@@ -125,6 +127,26 @@ func TestProcessUsesDefaultModel(t *testing.T) {
 
 	if provider.lastModel != "gpt-4o" {
 		t.Fatalf("expected default model gpt-4o, got %q", provider.lastModel)
+	}
+}
+
+func TestProcessUsesDefaultSystemPrompt(t *testing.T) {
+	provider := &recordingProvider{}
+	runtime := NewRuntime(provider, stubStore{})
+	runtime.SetSystemPrompt("system prompt")
+	session := &models.Session{ID: "session-1", Channel: models.ChannelTelegram}
+	msg := &models.Message{Role: models.RoleUser, Content: "hi"}
+
+	ch, err := runtime.Process(context.Background(), session, msg)
+	if err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+
+	for range ch {
+	}
+
+	if provider.lastSystem != "system prompt" {
+		t.Fatalf("expected system prompt to be applied, got %q", provider.lastSystem)
 	}
 }
 

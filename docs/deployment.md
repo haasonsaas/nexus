@@ -172,6 +172,22 @@ data:
       default_agent_id: main
       slack_scope: thread
       discord_scope: thread
+      memory:
+        enabled: false
+        directory: memory
+
+    identity:
+      name: ""
+      creature: ""
+      vibe: ""
+      emoji: ""
+
+    user:
+      name: ""
+      preferred_address: ""
+      pronouns: ""
+      timezone: ""
+      notes: ""
 
     channels:
       telegram:
@@ -192,6 +208,7 @@ data:
           default_model: gpt-4o
 
     tools:
+      notes: ""
       sandbox:
         enabled: true
         pool_size: 10

@@ -36,6 +36,25 @@ session:
   # Session scope for threaded channels: "thread" or "channel"
   slack_scope: thread
   discord_scope: thread
+  # Optional local memory log
+  memory:
+    enabled: false
+    directory: memory
+
+identity:
+  # Optional agent identity
+  name: ""
+  creature: ""
+  vibe: ""
+  emoji: ""
+
+user:
+  # Optional user profile
+  name: ""
+  preferred_address: ""
+  pronouns: ""
+  timezone: ""
+  notes: ""
 
 channels:
   telegram:
@@ -83,6 +102,8 @@ llm:
       default_model: anthropic/claude-3.5-sonnet
 
 tools:
+  # Optional notes to include in the system prompt for tool conventions
+  notes: ""
   sandbox:
     enabled: true
     # Number of pre-warmed VMs/containers

@@ -28,6 +28,14 @@
    - [x] Integrate `ProviderError` into OpenAI provider.
 
 4) Clawdbot-inspired architecture
+   - [x] Add identity/user-backed system prompt assembly.
+   - [x] Add local daily memory logging (optional).
+   - [x] Add tool-notes injection into system prompt.
+   - [x] Add safety defaults to the system prompt (no secrets, no destructive actions, no partials).
+   - [x] Add bootstrap guidance when identity/user details are missing.
+   - [ ] Add memory recall (read today/yesterday logs into the prompt when enabled).
+   - [ ] Add optional heartbeat checklist integration.
+   - [ ] Add tool notes file support (path-based, not just inline config).
    - [ ] Split the monolithic channel adapter interface into focused contracts.
    - [ ] Add a plugin registry with lazy loading.
    - [ ] Add schema-driven config validation + explicit defaults pipeline.
@@ -41,8 +49,8 @@
    - [x] Add context-cancellation tests for nested goroutines.
 
 6) Validation
-   - [ ] `go test ./...`
-   - [ ] `go build ./cmd/nexus`
+   - [x] `go test ./...`
+   - [x] `go build ./cmd/nexus`
 
 ## TDD Approach
 - For each change: add/extend tests first, confirm failure, then implement.
@@ -58,3 +66,5 @@
 - 2026-01-21: Reworked channel latency histogram into a true ring buffer with tests.
 - 2026-01-21: Implemented gateway message flow, auth interceptors, session store wiring, tool/adapter registration, and default-model propagation with unit tests.
 - 2026-01-21: Added session scoping config, base URL wiring for providers, gateway processing integration tests, and context-cancellation coverage.
+- 2026-01-21: Added identity + user config, system prompt assembly, memory logger, tool notes prompt injection, and safety/bootstrap guidance.
+- 2026-01-21: Claude CLI timeout traced to shell command timeout; resolved by running with longer timeout and shorter prompts.

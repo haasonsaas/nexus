@@ -161,6 +161,22 @@ session:
   default_agent_id: main
   slack_scope: thread
   discord_scope: thread
+  memory:
+    enabled: false
+    directory: memory
+
+identity:
+  name: ""
+  creature: ""
+  vibe: ""
+  emoji: ""
+
+user:
+  name: ""
+  preferred_address: ""
+  pronouns: ""
+  timezone: ""
+  notes: ""
 
 llm:
   default_provider: anthropic
@@ -186,6 +202,7 @@ channels:
     app_token: ${SLACK_APP_TOKEN}
 
 tools:
+  notes: ""
   sandbox:
     enabled: true
     pool_size: 5

@@ -14,6 +14,8 @@ type Config struct {
 	Database DatabaseConfig `yaml:"database"`
 	Auth     AuthConfig     `yaml:"auth"`
 	Session  SessionConfig  `yaml:"session"`
+	Identity IdentityConfig `yaml:"identity"`
+	User     UserConfig     `yaml:"user"`
 	Channels ChannelsConfig `yaml:"channels"`
 	LLM      LLMConfig      `yaml:"llm"`
 	Tools    ToolsConfig    `yaml:"tools"`
@@ -40,9 +42,30 @@ type AuthConfig struct {
 }
 
 type SessionConfig struct {
-	DefaultAgentID string `yaml:"default_agent_id"`
-	SlackScope     string `yaml:"slack_scope"`
-	DiscordScope   string `yaml:"discord_scope"`
+	DefaultAgentID string       `yaml:"default_agent_id"`
+	SlackScope     string       `yaml:"slack_scope"`
+	DiscordScope   string       `yaml:"discord_scope"`
+	Memory         MemoryConfig `yaml:"memory"`
+}
+
+type MemoryConfig struct {
+	Enabled   bool   `yaml:"enabled"`
+	Directory string `yaml:"directory"`
+}
+
+type IdentityConfig struct {
+	Name     string `yaml:"name"`
+	Creature string `yaml:"creature"`
+	Vibe     string `yaml:"vibe"`
+	Emoji    string `yaml:"emoji"`
+}
+
+type UserConfig struct {
+	Name             string `yaml:"name"`
+	PreferredAddress string `yaml:"preferred_address"`
+	Pronouns         string `yaml:"pronouns"`
+	Timezone         string `yaml:"timezone"`
+	Notes            string `yaml:"notes"`
 }
 
 type OAuthConfig struct {
@@ -96,6 +119,7 @@ type ToolsConfig struct {
 	Sandbox   SandboxConfig   `yaml:"sandbox"`
 	Browser   BrowserConfig   `yaml:"browser"`
 	WebSearch WebSearchConfig `yaml:"websearch"`
+	Notes     string          `yaml:"notes"`
 }
 
 type SandboxConfig struct {
@@ -178,6 +202,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Session.DiscordScope == "" {
 		cfg.Session.DiscordScope = "thread"
+	}
+	if cfg.Session.Memory.Directory == "" {
+		cfg.Session.Memory.Directory = "memory"
 	}
 	if cfg.LLM.DefaultProvider == "" {
 		cfg.LLM.DefaultProvider = "anthropic"

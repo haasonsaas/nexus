@@ -325,6 +325,9 @@ type Runtime struct {
 
 	// defaultModel is used when requests omit a model
 	defaultModel string
+
+	// defaultSystem is used when requests omit a system prompt
+	defaultSystem string
 }
 
 // NewRuntime creates a new agent runtime with the given provider and session store.
@@ -355,6 +358,11 @@ func NewRuntime(provider LLMProvider, sessions sessions.Store) *Runtime {
 // SetDefaultModel configures the fallback model used when requests omit a model.
 func (r *Runtime) SetDefaultModel(model string) {
 	r.defaultModel = model
+}
+
+// SetSystemPrompt configures the fallback system prompt used when requests omit one.
+func (r *Runtime) SetSystemPrompt(system string) {
+	r.defaultSystem = system
 }
 
 // RegisterTool adds a tool to the runtime, making it available for LLM function calling.
@@ -444,6 +452,9 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 		}
 		if req.Model == "" && r.defaultModel != "" {
 			req.Model = r.defaultModel
+		}
+		if req.System == "" && r.defaultSystem != "" {
+			req.System = r.defaultSystem
 		}
 
 		// 3. Call LLM

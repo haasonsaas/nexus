@@ -48,6 +48,11 @@ session:
     enabled: false
     file: HEARTBEAT.md
     mode: always # always or on_demand
+  # Optional memory flush reminder when sessions grow large
+  memory_flush:
+    enabled: false
+    threshold: 80
+    prompt: "Session nearing compaction. If there are durable facts, store them in memory/YYYY-MM-DD.md or MEMORY.md. Reply NO_REPLY if nothing needs attention."
 
 workspace:
   # Optional workspace bootstrap files (Clawdbot/Clawd-style)
@@ -126,6 +131,13 @@ tools:
   notes: ""
   # Optional file path with tool notes (merged with inline notes)
   notes_file: ""
+  # Optional memory search tool
+  memory_search:
+    enabled: false
+    directory: memory
+    memory_file: MEMORY.md
+    max_results: 5
+    max_snippet_len: 200
   sandbox:
     enabled: true
     # Number of pre-warmed sandboxes

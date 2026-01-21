@@ -46,11 +46,12 @@ type AuthConfig struct {
 }
 
 type SessionConfig struct {
-	DefaultAgentID string          `yaml:"default_agent_id"`
-	SlackScope     string          `yaml:"slack_scope"`
-	DiscordScope   string          `yaml:"discord_scope"`
-	Memory         MemoryConfig    `yaml:"memory"`
-	Heartbeat      HeartbeatConfig `yaml:"heartbeat"`
+	DefaultAgentID string            `yaml:"default_agent_id"`
+	SlackScope     string            `yaml:"slack_scope"`
+	DiscordScope   string            `yaml:"discord_scope"`
+	Memory         MemoryConfig      `yaml:"memory"`
+	Heartbeat      HeartbeatConfig   `yaml:"heartbeat"`
+	MemoryFlush    MemoryFlushConfig `yaml:"memory_flush"`
 }
 
 type MemoryConfig struct {
@@ -65,6 +66,12 @@ type HeartbeatConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	File    string `yaml:"file"`
 	Mode    string `yaml:"mode"`
+}
+
+type MemoryFlushConfig struct {
+	Enabled   bool   `yaml:"enabled"`
+	Threshold int    `yaml:"threshold"`
+	Prompt    string `yaml:"prompt"`
 }
 
 type WorkspaceConfig struct {
@@ -157,11 +164,12 @@ type LLMProviderConfig struct {
 }
 
 type ToolsConfig struct {
-	Sandbox   SandboxConfig   `yaml:"sandbox"`
-	Browser   BrowserConfig   `yaml:"browser"`
-	WebSearch WebSearchConfig `yaml:"websearch"`
-	Notes     string          `yaml:"notes"`
-	NotesFile string          `yaml:"notes_file"`
+	Sandbox      SandboxConfig      `yaml:"sandbox"`
+	Browser      BrowserConfig      `yaml:"browser"`
+	WebSearch    WebSearchConfig    `yaml:"websearch"`
+	MemorySearch MemorySearchConfig `yaml:"memory_search"`
+	Notes        string             `yaml:"notes"`
+	NotesFile    string             `yaml:"notes_file"`
 }
 
 type SandboxConfig struct {
@@ -188,6 +196,13 @@ type WebSearchConfig struct {
 	URL      string `yaml:"url"`
 }
 
+type MemorySearchConfig struct {
+	Enabled       bool   `yaml:"enabled"`
+	Directory     string `yaml:"directory"`
+	MemoryFile    string `yaml:"memory_file"`
+	MaxResults    int    `yaml:"max_results"`
+	MaxSnippetLen int    `yaml:"max_snippet_len"`
+}
 type LoggingConfig struct {
 	Level  string `yaml:"level"`
 	Format string `yaml:"format"`
@@ -230,6 +245,7 @@ func applyDefaults(cfg *Config) {
 	applyAuthDefaults(&cfg.Auth)
 	applySessionDefaults(&cfg.Session)
 	applyWorkspaceDefaults(&cfg.Workspace)
+	applyToolsDefaults(cfg)
 	applyLLMDefaults(&cfg.LLM)
 	applyLoggingDefaults(&cfg.Logging)
 }
@@ -292,6 +308,12 @@ func applySessionDefaults(cfg *SessionConfig) {
 	if cfg.Heartbeat.Mode == "" {
 		cfg.Heartbeat.Mode = "always"
 	}
+	if cfg.MemoryFlush.Threshold == 0 {
+		cfg.MemoryFlush.Threshold = 80
+	}
+	if cfg.MemoryFlush.Prompt == "" {
+		cfg.MemoryFlush.Prompt = "Session nearing compaction. If there are durable facts, store them in memory/YYYY-MM-DD.md or MEMORY.md. Reply NO_REPLY if nothing needs attention."
+	}
 }
 
 func applyWorkspaceDefaults(cfg *WorkspaceConfig) {
@@ -318,6 +340,24 @@ func applyWorkspaceDefaults(cfg *WorkspaceConfig) {
 	}
 	if cfg.MemoryFile == "" {
 		cfg.MemoryFile = "MEMORY.md"
+	}
+}
+
+func applyToolsDefaults(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+	if cfg.Tools.MemorySearch.MaxResults == 0 {
+		cfg.Tools.MemorySearch.MaxResults = 5
+	}
+	if cfg.Tools.MemorySearch.MaxSnippetLen == 0 {
+		cfg.Tools.MemorySearch.MaxSnippetLen = 200
+	}
+	if cfg.Tools.MemorySearch.Directory == "" {
+		cfg.Tools.MemorySearch.Directory = cfg.Session.Memory.Directory
+	}
+	if cfg.Tools.MemorySearch.MemoryFile == "" {
+		cfg.Tools.MemorySearch.MemoryFile = cfg.Workspace.MemoryFile
 	}
 }
 
@@ -379,6 +419,9 @@ func validateConfig(cfg *Config) error {
 	if cfg.Session.Heartbeat.Mode != "" && !validHeartbeatMode(cfg.Session.Heartbeat.Mode) {
 		issues = append(issues, "session.heartbeat.mode must be \"always\" or \"on_demand\"")
 	}
+	if cfg.Session.MemoryFlush.Threshold < 0 {
+		issues = append(issues, "session.memory_flush.threshold must be >= 0")
+	}
 	if cfg.Workspace.MaxChars < 0 {
 		issues = append(issues, "workspace.max_chars must be >= 0")
 	}
@@ -398,6 +441,12 @@ func validateConfig(cfg *Config) error {
 		default:
 			issues = append(issues, "tools.websearch.provider must be \"searxng\", \"brave\", or \"duckduckgo\"")
 		}
+	}
+	if cfg.Tools.MemorySearch.MaxResults < 0 {
+		issues = append(issues, "tools.memory_search.max_results must be >= 0")
+	}
+	if cfg.Tools.MemorySearch.MaxSnippetLen < 0 {
+		issues = append(issues, "tools.memory_search.max_snippet_len must be >= 0")
 	}
 
 	if len(issues) > 0 {

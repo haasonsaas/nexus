@@ -822,6 +822,10 @@ session:
   default_agent_id: main
   slack_scope: thread
   discord_scope: thread
+  memory_flush:
+    enabled: false
+    threshold: 80
+    prompt: "Session nearing compaction. If there are durable facts, store them in memory/YYYY-MM-DD.md or MEMORY.md. Reply NO_REPLY if nothing needs attention."
 workspace:
   enabled: false
   path: .
@@ -866,6 +870,12 @@ tools:
     enabled: true
     provider: searxng
     url: http://localhost:8888
+  memory_search:
+    enabled: false
+    directory: memory
+    memory_file: MEMORY.md
+    max_results: 5
+    max_snippet_len: 200
 
 logging:
   level: info

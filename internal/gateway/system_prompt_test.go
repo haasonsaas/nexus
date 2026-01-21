@@ -89,6 +89,20 @@ func TestBuildSystemPromptIncludesHeartbeat(t *testing.T) {
 	}
 }
 
+func TestBuildSystemPromptIncludesMemoryFlush(t *testing.T) {
+	cfg := &config.Config{}
+
+	prompt := buildSystemPrompt(cfg, SystemPromptOptions{
+		MemoryFlush: "Write durable notes to MEMORY.md",
+	})
+	if !strings.Contains(prompt, "Memory flush reminder") {
+		t.Fatalf("expected memory flush header, got %q", prompt)
+	}
+	if !strings.Contains(prompt, "durable notes") {
+		t.Fatalf("expected memory flush content, got %q", prompt)
+	}
+}
+
 func TestBuildSystemPromptIncludesWorkspaceSections(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("Follow the runbook"), 0o644); err != nil {

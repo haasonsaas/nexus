@@ -35,6 +35,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -238,6 +239,16 @@ func runServe(ctx context.Context, configPath string, debug bool) error {
 		"config", configPath,
 		"debug", debug,
 	)
+
+	if raw, err := doctor.LoadRawConfig(configPath); err == nil {
+		migrations := doctor.ApplyConfigMigrations(raw)
+		if len(migrations.Applied) > 0 {
+			slog.Warn("config migrations detected; run `nexus doctor --repair`",
+				"count", len(migrations.Applied))
+		}
+	} else {
+		slog.Warn("failed to inspect config for migrations", "error", err)
+	}
 
 	// Load and validate configuration.
 	cfg, err := config.Load(configPath)
@@ -770,6 +781,7 @@ func buildDoctorCmd() *cobra.Command {
 	var configPath string
 	var repair bool
 	var probe bool
+	var audit bool
 
 	cmd := &cobra.Command{
 		Use:   "doctor",
@@ -849,6 +861,29 @@ func buildDoctorCmd() *cobra.Command {
 				}
 			}
 
+			if audit {
+				report := doctor.AuditServices(cfg)
+				fmt.Fprintln(out, "Service audit:")
+				printAuditList(out, "systemd user", report.SystemdUser)
+				printAuditList(out, "systemd system", report.SystemdSystem)
+				printAuditList(out, "launchd user", report.LaunchdUser)
+				printAuditList(out, "launchd system", report.LaunchdSystem)
+				if len(report.Ports) > 0 {
+					fmt.Fprintln(out, "Port checks:")
+					for _, port := range report.Ports {
+						status := "available"
+						if port.InUse {
+							status = "in use"
+						}
+						if port.Error != "" {
+							fmt.Fprintf(out, "  - %d: %s (%s)\n", port.Port, status, port.Error)
+						} else {
+							fmt.Fprintf(out, "  - %d: %s\n", port.Port, status)
+						}
+					}
+				}
+			}
+
 			fmt.Fprintf(out, "Config OK (provider: %s)\n", cfg.LLM.DefaultProvider)
 			return nil
 		},
@@ -858,8 +893,20 @@ func buildDoctorCmd() *cobra.Command {
 		"Path to YAML configuration file")
 	cmd.Flags().BoolVar(&repair, "repair", false, "Apply migrations and common repairs")
 	cmd.Flags().BoolVar(&probe, "probe", false, "Run channel health probes")
+	cmd.Flags().BoolVar(&audit, "audit", false, "Audit service files and port availability")
 
 	return cmd
+}
+
+func printAuditList(out io.Writer, label string, items []string) {
+	if len(items) == 0 {
+		fmt.Fprintf(out, "%s: none found\n", label)
+		return
+	}
+	fmt.Fprintf(out, "%s:\n", label)
+	for _, item := range items {
+		fmt.Fprintf(out, "  - %s\n", item)
+	}
 }
 
 // buildPromptCmd creates the "prompt" command for previewing the system prompt.

@@ -3,6 +3,7 @@
 ## Sources reviewed
 - Clawd workspace templates (`AGENTS.md`, `SOUL.md`, `USER.md`, `IDENTITY.md`, `TOOLS.md`, `HEARTBEAT.md`).
 - Clawdbot docs: agent workspace + memory concepts, gateway doctor behavior.
+- GitHub API snapshot (2026-01-21): stars, issues, topics, recent updates.
 
 ## Clawd workspace patterns (what they do)
 - Workspace = agent home. Standard files seed behavior, persona, user profile, tool notes, and heartbeat checklist.
@@ -21,8 +22,15 @@
 - Implemented: strict config validation, doctor CLI, system prompt assembly, heartbeat + tool-notes injection, memory log recall, runtime plugin loader.
 - Implemented (this iteration): workspace bootstrap file loading into the system prompt; docs updated to match strict config.
 - Implemented: doctor repair/migration pipeline (config migrations + workspace repairs) and channel health probes.
-- Pending: service/daemon audits, memory search + pre-compaction flush.
+- Implemented: service/daemon audits, memory search tool, and memory flush reminders.
+- Pending: vector/semantic memory search, automated compaction + post-flush confirmation.
 
 ## Follow-up ideas (small/medium scope)
-1. Service/daemon audits for install/runtime checks (launchd/systemd/service config).
-2. Memory search + pre-compaction flush.
+1. Service install/repair workflows (launchd/systemd writers + restart hooks).
+2. Vector memory search + compaction triggers with automatic flush confirmations.
+
+## GitHub snapshot (2026-01-21)
+- Stars: 5,761 · Forks: 891 · Open issues: 151
+- Topics: ai, assistant, clawd, crustacean, own-your-data, personal
+- Default branch: main · License: MIT
+- Recent commit themes: tighten exec allowlist gating, heartbeat active hours, cache TTL/pruning, channel-specific session policies, and port listener hardening.

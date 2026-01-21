@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/haasonsaas/nexus/internal/config"
+	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
@@ -112,6 +114,67 @@ func TestLoadHeartbeatOnDemand(t *testing.T) {
 	msg = &models.Message{Content: "heartbeat"}
 	if heartbeat := server.loadHeartbeat(msg); !strings.Contains(heartbeat, "check status") {
 		t.Fatalf("expected heartbeat content, got %q", heartbeat)
+	}
+}
+
+type stubSessionStore struct {
+	history []*models.Message
+	updated bool
+}
+
+func (s *stubSessionStore) Create(ctx context.Context, session *models.Session) error { return nil }
+func (s *stubSessionStore) Get(ctx context.Context, id string) (*models.Session, error) {
+	return nil, nil
+}
+func (s *stubSessionStore) Update(ctx context.Context, session *models.Session) error {
+	s.updated = true
+	return nil
+}
+func (s *stubSessionStore) Delete(ctx context.Context, id string) error { return nil }
+func (s *stubSessionStore) GetByKey(ctx context.Context, key string) (*models.Session, error) {
+	return nil, nil
+}
+func (s *stubSessionStore) GetOrCreate(ctx context.Context, key string, agentID string, channel models.ChannelType, channelID string) (*models.Session, error) {
+	return nil, nil
+}
+func (s *stubSessionStore) List(ctx context.Context, agentID string, opts sessions.ListOptions) ([]*models.Session, error) {
+	return nil, nil
+}
+func (s *stubSessionStore) AppendMessage(ctx context.Context, sessionID string, msg *models.Message) error {
+	return nil
+}
+func (s *stubSessionStore) GetHistory(ctx context.Context, sessionID string, limit int) ([]*models.Message, error) {
+	if limit <= 0 || len(s.history) <= limit {
+		return s.history, nil
+	}
+	return s.history[:limit], nil
+}
+
+func TestMemoryFlushPromptTriggers(t *testing.T) {
+	cfg := &config.Config{
+		Session: config.SessionConfig{
+			MemoryFlush: config.MemoryFlushConfig{
+				Enabled:   true,
+				Threshold: 2,
+				Prompt:    "flush now",
+			},
+		},
+	}
+	store := &stubSessionStore{
+		history: []*models.Message{{Content: "a"}, {Content: "b"}},
+	}
+	server := &Server{config: cfg, logger: slog.Default(), sessions: store}
+
+	session := &models.Session{ID: "session-1"}
+	prompt := server.memoryFlushPrompt(context.Background(), session)
+	if prompt == "" {
+		t.Fatalf("expected memory flush prompt")
+	}
+	if !store.updated {
+		t.Fatalf("expected session metadata update")
+	}
+	if session.Metadata == nil || session.Metadata["memory_flush_date"] == "" {
+		t.Fatalf("expected memory_flush_date to be set")
 	}
 }
 

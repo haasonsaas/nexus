@@ -85,3 +85,4 @@
 - 2026-01-21: Added sample external plugin (`examples/plugins/echo`) with manifest + build instructions.
 - 2026-01-21: Added workspace bootstrap file loading, fallback tool notes from workspace, and documentation fixes for strict config.
 - 2026-01-21: Added `nexus setup`, doctor repairs/migrations, and channel health probes.
+- 2026-01-21: Added memory search tool, memory flush reminders, service/daemon audits, and startup migration checks.

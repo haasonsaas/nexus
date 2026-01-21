@@ -13,6 +13,7 @@ type SystemPromptOptions struct {
 	MemoryLines       []string
 	Heartbeat         string
 	WorkspaceSections []PromptSection
+	MemoryFlush       string
 }
 
 type PromptSection struct {
@@ -84,6 +85,10 @@ func buildSystemPrompt(cfg *config.Config, opts SystemPromptOptions) string {
 
 	if heartbeat := strings.TrimSpace(opts.Heartbeat); heartbeat != "" {
 		lines = append(lines, fmt.Sprintf("Heartbeat checklist (only report new/changed items; reply HEARTBEAT_OK if nothing needs attention):\n%s", heartbeat))
+	}
+
+	if flush := strings.TrimSpace(opts.MemoryFlush); flush != "" {
+		lines = append(lines, fmt.Sprintf("Memory flush reminder:\n%s", flush))
 	}
 
 	if memoryLines := normalizePromptLines(opts.MemoryLines); len(memoryLines) > 0 {

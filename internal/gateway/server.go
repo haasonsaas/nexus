@@ -27,6 +27,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/plugins"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/tools/browser"
+	"github.com/haasonsaas/nexus/internal/tools/memorysearch"
 	"github.com/haasonsaas/nexus/internal/tools/sandbox"
 	"github.com/haasonsaas/nexus/internal/tools/websearch"
 	"github.com/haasonsaas/nexus/pkg/models"
@@ -243,7 +244,7 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 	}
 
 	promptCtx := ctx
-	if systemPrompt := s.systemPromptForMessage(session, msg); systemPrompt != "" {
+	if systemPrompt := s.systemPromptForMessage(ctx, session, msg); systemPrompt != "" {
 		promptCtx = agent.WithSystemPrompt(promptCtx, systemPrompt)
 	}
 
@@ -490,6 +491,17 @@ func (s *Server) registerTools(runtime *agent.Runtime) error {
 			}
 		}
 		runtime.RegisterTool(websearch.NewWebSearchTool(searchConfig))
+	}
+
+	if s.config.Tools.MemorySearch.Enabled {
+		searchConfig := &memorysearch.Config{
+			Directory:     s.config.Tools.MemorySearch.Directory,
+			MemoryFile:    s.config.Tools.MemorySearch.MemoryFile,
+			WorkspacePath: s.config.Workspace.Path,
+			MaxResults:    s.config.Tools.MemorySearch.MaxResults,
+			MaxSnippetLen: s.config.Tools.MemorySearch.MaxSnippetLen,
+		}
+		runtime.RegisterTool(memorysearch.NewMemorySearchTool(searchConfig))
 	}
 
 	return nil

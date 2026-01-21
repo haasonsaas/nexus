@@ -118,6 +118,48 @@ llm:
 	}
 }
 
+func TestLoadValidatesMemoryFlushThreshold(t *testing.T) {
+	path := writeConfig(t, `
+session:
+  memory_flush:
+    enabled: true
+    threshold: -1
+llm:
+  default_provider: anthropic
+  providers:
+    anthropic: {}
+`)
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatalf("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "memory_flush.threshold") {
+		t.Fatalf("expected memory_flush.threshold error, got %v", err)
+	}
+}
+
+func TestLoadValidatesMemorySearchMaxResults(t *testing.T) {
+	path := writeConfig(t, `
+tools:
+  memory_search:
+    enabled: true
+    max_results: -5
+llm:
+  default_provider: anthropic
+  providers:
+    anthropic: {}
+`)
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatalf("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "memory_search.max_results") {
+		t.Fatalf("expected memory_search.max_results error, got %v", err)
+	}
+}
+
 func TestLoadValidatesWorkspaceMaxChars(t *testing.T) {
 	path := writeConfig(t, `
 workspace:

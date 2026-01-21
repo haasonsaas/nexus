@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +12,7 @@ import (
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
-func (s *Server) systemPromptForMessage(session *models.Session, msg *models.Message) string {
+func (s *Server) systemPromptForMessage(ctx context.Context, session *models.Session, msg *models.Message) string {
 	if s.config == nil {
 		return ""
 	}
@@ -20,6 +21,7 @@ func (s *Server) systemPromptForMessage(session *models.Session, msg *models.Mes
 		ToolNotes:         s.loadToolNotes(),
 		Heartbeat:         s.loadHeartbeat(msg),
 		WorkspaceSections: s.loadWorkspaceSections(),
+		MemoryFlush:       s.memoryFlushPrompt(ctx, session),
 	}
 
 	if s.config.Session.Memory.Enabled && s.memoryLogger != nil {
@@ -69,6 +71,45 @@ func (s *Server) loadHeartbeat(msg *models.Message) string {
 		return ""
 	}
 	return content
+}
+
+func (s *Server) memoryFlushPrompt(ctx context.Context, session *models.Session) string {
+	if s.config == nil || !s.config.Session.MemoryFlush.Enabled {
+		return ""
+	}
+	if session == nil || s.sessions == nil {
+		return ""
+	}
+	threshold := s.config.Session.MemoryFlush.Threshold
+	if threshold <= 0 {
+		return ""
+	}
+
+	today := time.Now().Format("2006-01-02")
+	if session.Metadata != nil {
+		if value, ok := session.Metadata["memory_flush_date"].(string); ok && value == today {
+			return ""
+		}
+	}
+
+	history, err := s.sessions.GetHistory(ctx, session.ID, threshold)
+	if err != nil {
+		s.logger.Error("failed to read session history", "error", err)
+		return ""
+	}
+	if len(history) < threshold {
+		return ""
+	}
+
+	if session.Metadata == nil {
+		session.Metadata = map[string]any{}
+	}
+	session.Metadata["memory_flush_date"] = today
+	if err := s.sessions.Update(ctx, session); err != nil {
+		s.logger.Error("failed to update session metadata", "error", err)
+	}
+
+	return s.config.Session.MemoryFlush.Prompt
 }
 
 // BuildSystemPrompt assembles the system prompt using the provided config, session, and message context.

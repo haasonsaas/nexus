@@ -14,9 +14,9 @@
 
 ## Workstreams & Status
 1) Critical gateway functionality
-   - [ ] Implement message handling in `internal/gateway/server.go`.
-   - [ ] Add gRPC auth interceptors (unary + stream).
-   - [ ] Wire session persistence into gateway flow.
+   - [x] Implement message handling in `internal/gateway/server.go`.
+   - [x] Add gRPC auth interceptors (unary + stream).
+   - [x] Wire session persistence into gateway flow.
 
 2) Reliability & shutdown safety
    - [x] Track gateway goroutines with WaitGroups + cancellation.
@@ -36,6 +36,7 @@
    - [x] Add unit test for buffered runtime response channel.
    - [x] Add unit test for gateway shutdown waiting on handlers.
    - [x] Add unit tests for provider error wrapping.
+   - [x] Add gateway tests for auth interceptors + message flow wiring.
    - [ ] Add gateway integration tests for message flow.
    - [ ] Add context-cancellation tests for nested goroutines.
 
@@ -55,3 +56,4 @@
 - 2026-01-21: Added gateway WaitGroup tracking + buffered runtime channel with tests (go test ./internal/agent, ./internal/gateway).
 - 2026-01-21: Integrated ProviderError into Anthropic/OpenAI providers with unit tests; fixed websearch schema marshal handling.
 - 2026-01-21: Reworked channel latency histogram into a true ring buffer with tests.
+- 2026-01-21: Implemented gateway message flow, auth interceptors, session store wiring, tool/adapter registration, and default-model propagation with unit tests.

@@ -322,6 +322,9 @@ type Runtime struct {
 
 	// sessions stores conversation history for continuity
 	sessions sessions.Store
+
+	// defaultModel is used when requests omit a model
+	defaultModel string
 }
 
 // NewRuntime creates a new agent runtime with the given provider and session store.
@@ -347,6 +350,11 @@ func NewRuntime(provider LLMProvider, sessions sessions.Store) *Runtime {
 		tools:    NewToolRegistry(),
 		sessions: sessions,
 	}
+}
+
+// SetDefaultModel configures the fallback model used when requests omit a model.
+func (r *Runtime) SetDefaultModel(model string) {
+	r.defaultModel = model
 }
 
 // RegisterTool adds a tool to the runtime, making it available for LLM function calling.
@@ -433,6 +441,9 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 			Messages:  messages,
 			Tools:     r.tools.AsLLMTools(),
 			MaxTokens: 4096,
+		}
+		if req.Model == "" && r.defaultModel != "" {
+			req.Model = r.defaultModel
 		}
 
 		// 3. Call LLM

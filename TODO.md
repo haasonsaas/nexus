@@ -7,18 +7,18 @@ This document tracks planned improvements, technical debt, and architectural enh
 ## Critical (Fix Immediately)
 
 ### Gateway Implementation
-- [ ] **Implement message handling in gateway** - `internal/gateway/server.go:114-117`
+- [x] **Implement message handling in gateway** - `internal/gateway/server.go:114-117` ✅ Done
   - Currently stubbed with TODO comments
   - Need to: Route to session → Run agent → Send response
   - Blocks: Core functionality is non-functional
 
-- [ ] **Add authentication interceptors** - `internal/gateway/server.go:33,37`
+- [x] **Add authentication interceptors** - `internal/gateway/server.go:33,37` ✅ Done
   - gRPC endpoints have no authentication
   - Add unary and stream auth interceptors
   - Consider: API key, JWT, or mTLS options
 
 ### Session Management
-- [ ] **Implement session persistence** - `internal/sessions/`
+- [x] **Implement session persistence** - `internal/sessions/` ✅ Done
   - Sessions stored in CockroachDB but gateway doesn't use them
   - No session lifecycle management
   - Tool results not persisted
@@ -140,6 +140,9 @@ This document tracks planned improvements, technical debt, and architectural enh
 - [ ] **Add integration tests for gateway**
   - Currently no tests for message handling flow
   - Need mock adapters, mock providers
+
+- [x] **Add gateway auth + message flow tests** ✅ Done
+  - Validate JWT interceptors and message persistence + reply routing
 
 - [ ] **Add context cancellation tests**
   - Test cleanup in nested goroutines

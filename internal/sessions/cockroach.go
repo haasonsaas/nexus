@@ -16,13 +16,13 @@ type CockroachStore struct {
 	db *sql.DB
 
 	// Prepared statements for performance
-	stmtCreateSession  *sql.Stmt
-	stmtGetSession     *sql.Stmt
-	stmtUpdateSession  *sql.Stmt
-	stmtDeleteSession  *sql.Stmt
-	stmtGetByKey       *sql.Stmt
-	stmtAppendMessage  *sql.Stmt
-	stmtGetHistory     *sql.Stmt
+	stmtCreateSession *sql.Stmt
+	stmtGetSession    *sql.Stmt
+	stmtUpdateSession *sql.Stmt
+	stmtDeleteSession *sql.Stmt
+	stmtGetByKey      *sql.Stmt
+	stmtAppendMessage *sql.Stmt
+	stmtGetHistory    *sql.Stmt
 }
 
 // CockroachConfig holds configuration for CockroachDB connection.
@@ -69,6 +69,22 @@ func NewCockroachStore(config *CockroachConfig) (*CockroachStore, error) {
 		config.Database, config.SSLMode, int(config.ConnectTimeout.Seconds()),
 	)
 
+	return newCockroachStoreWithDSN(dsn, config)
+}
+
+// NewCockroachStoreFromDSN creates a new CockroachDB store using a raw DSN/URL.
+func NewCockroachStoreFromDSN(dsn string, config *CockroachConfig) (*CockroachStore, error) {
+	if dsn == "" {
+		return nil, fmt.Errorf("dsn is required")
+	}
+	if config == nil {
+		config = DefaultCockroachConfig()
+	}
+
+	return newCockroachStoreWithDSN(dsn, config)
+}
+
+func newCockroachStoreWithDSN(dsn string, config *CockroachConfig) (*CockroachStore, error) {
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)

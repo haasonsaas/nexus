@@ -2,7 +2,9 @@ package config
 
 import (
 	"fmt"
+	"io"
 	"os"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -170,63 +172,157 @@ func Load(path string) (*Config, error) {
 	expanded := os.ExpandEnv(string(data))
 
 	var cfg Config
-	if err := yaml.Unmarshal([]byte(expanded), &cfg); err != nil {
+	decoder := yaml.NewDecoder(strings.NewReader(expanded))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return nil, fmt.Errorf("failed to parse config: expected single document")
 	}
 
 	// Apply defaults
 	applyDefaults(&cfg)
 
+	// Validate config
+	if err := validateConfig(&cfg); err != nil {
+		return nil, err
+	}
+
 	return &cfg, nil
 }
 
 func applyDefaults(cfg *Config) {
-	if cfg.Server.Host == "" {
-		cfg.Server.Host = "0.0.0.0"
+	applyServerDefaults(&cfg.Server)
+	applyDatabaseDefaults(&cfg.Database)
+	applyAuthDefaults(&cfg.Auth)
+	applySessionDefaults(&cfg.Session)
+	applyLLMDefaults(&cfg.LLM)
+	applyLoggingDefaults(&cfg.Logging)
+}
+
+func applyServerDefaults(cfg *ServerConfig) {
+	if cfg.Host == "" {
+		cfg.Host = "0.0.0.0"
 	}
-	if cfg.Server.GRPCPort == 0 {
-		cfg.Server.GRPCPort = 50051
+	if cfg.GRPCPort == 0 {
+		cfg.GRPCPort = 50051
 	}
-	if cfg.Server.HTTPPort == 0 {
-		cfg.Server.HTTPPort = 8080
+	if cfg.HTTPPort == 0 {
+		cfg.HTTPPort = 8080
 	}
-	if cfg.Server.MetricsPort == 0 {
-		cfg.Server.MetricsPort = 9090
+	if cfg.MetricsPort == 0 {
+		cfg.MetricsPort = 9090
 	}
-	if cfg.Database.MaxConnections == 0 {
-		cfg.Database.MaxConnections = 25
+}
+
+func applyDatabaseDefaults(cfg *DatabaseConfig) {
+	if cfg.MaxConnections == 0 {
+		cfg.MaxConnections = 25
 	}
-	if cfg.Database.ConnMaxLifetime == 0 {
-		cfg.Database.ConnMaxLifetime = 5 * time.Minute
+	if cfg.ConnMaxLifetime == 0 {
+		cfg.ConnMaxLifetime = 5 * time.Minute
 	}
-	if cfg.Auth.TokenExpiry == 0 {
-		cfg.Auth.TokenExpiry = 24 * time.Hour
+}
+
+func applyAuthDefaults(cfg *AuthConfig) {
+	if cfg.TokenExpiry == 0 {
+		cfg.TokenExpiry = 24 * time.Hour
 	}
-	if cfg.Session.DefaultAgentID == "" {
-		cfg.Session.DefaultAgentID = "main"
+}
+
+func applySessionDefaults(cfg *SessionConfig) {
+	if cfg.DefaultAgentID == "" {
+		cfg.DefaultAgentID = "main"
 	}
-	if cfg.Session.SlackScope == "" {
-		cfg.Session.SlackScope = "thread"
+	if cfg.SlackScope == "" {
+		cfg.SlackScope = "thread"
 	}
-	if cfg.Session.DiscordScope == "" {
-		cfg.Session.DiscordScope = "thread"
+	if cfg.DiscordScope == "" {
+		cfg.DiscordScope = "thread"
 	}
-	if cfg.Session.Memory.Directory == "" {
-		cfg.Session.Memory.Directory = "memory"
+	if cfg.Memory.Directory == "" {
+		cfg.Memory.Directory = "memory"
 	}
-	if cfg.Session.Memory.MaxLines == 0 {
-		cfg.Session.Memory.MaxLines = 20
+	if cfg.Memory.MaxLines == 0 {
+		cfg.Memory.MaxLines = 20
 	}
-	if cfg.Session.Heartbeat.File == "" {
-		cfg.Session.Heartbeat.File = "HEARTBEAT.md"
+	if cfg.Heartbeat.File == "" {
+		cfg.Heartbeat.File = "HEARTBEAT.md"
 	}
-	if cfg.LLM.DefaultProvider == "" {
-		cfg.LLM.DefaultProvider = "anthropic"
+}
+
+func applyLLMDefaults(cfg *LLMConfig) {
+	if cfg.DefaultProvider == "" {
+		cfg.DefaultProvider = "anthropic"
 	}
-	if cfg.Logging.Level == "" {
-		cfg.Logging.Level = "info"
+}
+
+func applyLoggingDefaults(cfg *LoggingConfig) {
+	if cfg.Level == "" {
+		cfg.Level = "info"
 	}
-	if cfg.Logging.Format == "" {
-		cfg.Logging.Format = "json"
+	if cfg.Format == "" {
+		cfg.Format = "json"
+	}
+}
+
+type ConfigValidationError struct {
+	Issues []string
+}
+
+func (e *ConfigValidationError) Error() string {
+	return "config validation failed:\n- " + strings.Join(e.Issues, "\n- ")
+}
+
+func validateConfig(cfg *Config) error {
+	if cfg == nil {
+		return nil
+	}
+
+	var issues []string
+
+	if !validScope(cfg.Session.SlackScope) {
+		issues = append(issues, "session.slack_scope must be \"thread\" or \"channel\"")
+	}
+	if !validScope(cfg.Session.DiscordScope) {
+		issues = append(issues, "session.discord_scope must be \"thread\" or \"channel\"")
+	}
+	if cfg.Session.Memory.MaxLines < 0 {
+		issues = append(issues, "session.memory.max_lines must be >= 0")
+	}
+	if cfg.Session.Heartbeat.Enabled && strings.TrimSpace(cfg.Session.Heartbeat.File) == "" {
+		issues = append(issues, "session.heartbeat.file is required when heartbeat is enabled")
+	}
+
+	defaultProvider := strings.ToLower(strings.TrimSpace(cfg.LLM.DefaultProvider))
+	if defaultProvider != "" {
+		if _, ok := cfg.LLM.Providers[defaultProvider]; !ok {
+			if _, ok := cfg.LLM.Providers[cfg.LLM.DefaultProvider]; !ok {
+				issues = append(issues, fmt.Sprintf("llm.providers missing entry for default_provider %q", cfg.LLM.DefaultProvider))
+			}
+		}
+	}
+
+	if provider := strings.ToLower(strings.TrimSpace(cfg.Tools.WebSearch.Provider)); provider != "" {
+		switch provider {
+		case "searxng", "brave", "duckduckgo":
+		default:
+			issues = append(issues, "tools.websearch.provider must be \"searxng\", \"brave\", or \"duckduckgo\"")
+		}
+	}
+
+	if len(issues) > 0 {
+		return &ConfigValidationError{Issues: issues}
+	}
+	return nil
+}
+
+func validScope(scope string) bool {
+	switch strings.ToLower(strings.TrimSpace(scope)) {
+	case "thread", "channel":
+		return true
+	default:
+		return false
 	}
 }

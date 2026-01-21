@@ -38,7 +38,7 @@
    - [x] Add tool notes file support (path-based, not just inline config).
    - [ ] Split the monolithic channel adapter interface into focused contracts.
    - [ ] Add a plugin registry with lazy loading.
-   - [ ] Add schema-driven config validation + explicit defaults pipeline.
+   - [x] Add schema-driven config validation + explicit defaults pipeline.
 
 5) Testing improvements
    - [x] Add unit test for buffered runtime response channel.
@@ -69,3 +69,4 @@
 - 2026-01-21: Added identity + user config, system prompt assembly, memory logger, tool notes prompt injection, and safety/bootstrap guidance.
 - 2026-01-21: Claude CLI timeout traced to shell command timeout; resolved by running with longer timeout and shorter prompts.
 - 2026-01-21: Added per-request system prompt overrides with memory recall, heartbeat checklist injection, and tool-notes file support.
+- 2026-01-21: Added strict config parsing (unknown keys fail), validation checks, and explicit defaults pipeline.

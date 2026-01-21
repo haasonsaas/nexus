@@ -225,6 +225,9 @@ logging:
   format: json
 ```
 
+Notes:
+- Config parsing is strict; unknown keys will fail validation.
+
 ### Testing
 
 Standard test run:

@@ -1,4 +1,4 @@
-package gateway
+package auth
 
 import (
 	"context"
@@ -7,15 +7,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+
+	"github.com/haasonsaas/nexus/pkg/models"
 )
 
-func TestAuthInterceptorAllowsWhenNoSecret(t *testing.T) {
-	interceptor := authUnaryInterceptor("", slog.New(slog.NewTextHandler(io.Discard, nil)))
+func TestUnaryInterceptorAllowsWhenDisabled(t *testing.T) {
+	service := NewService(Config{})
+	interceptor := UnaryInterceptor(service, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	handlerCalled := false
 
 	_, err := interceptor(context.Background(), nil, &grpc.UnaryServerInfo{}, func(ctx context.Context, req any) (any, error) {
@@ -31,8 +33,9 @@ func TestAuthInterceptorAllowsWhenNoSecret(t *testing.T) {
 	}
 }
 
-func TestAuthInterceptorRejectsMissingToken(t *testing.T) {
-	interceptor := authUnaryInterceptor("secret", slog.New(slog.NewTextHandler(io.Discard, nil)))
+func TestUnaryInterceptorRejectsMissingCredentials(t *testing.T) {
+	service := NewService(Config{JWTSecret: "secret"})
+	interceptor := UnaryInterceptor(service, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	_, err := interceptor(context.Background(), nil, &grpc.UnaryServerInfo{}, func(ctx context.Context, req any) (any, error) {
 		return "ok", nil
@@ -43,17 +46,18 @@ func TestAuthInterceptorRejectsMissingToken(t *testing.T) {
 	}
 }
 
-func TestAuthInterceptorAcceptsValidToken(t *testing.T) {
-	token, err := signJWT("secret")
+func TestUnaryInterceptorAcceptsValidToken(t *testing.T) {
+	service := NewService(Config{JWTSecret: "secret", TokenExpiry: time.Hour})
+	token, err := service.GenerateJWT(&models.User{ID: "user-1"})
 	if err != nil {
-		t.Fatalf("failed to sign token: %v", err)
+		t.Fatalf("GenerateJWT() error = %v", err)
 	}
 
 	md := metadata.New(map[string]string{
 		"authorization": "Bearer " + token,
 	})
 	ctx := metadata.NewIncomingContext(context.Background(), md)
-	interceptor := authUnaryInterceptor("secret", slog.New(slog.NewTextHandler(io.Discard, nil)))
+	interceptor := UnaryInterceptor(service, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	handlerCalled := false
 
 	_, err = interceptor(ctx, nil, &grpc.UnaryServerInfo{}, func(ctx context.Context, req any) (any, error) {
@@ -69,17 +73,39 @@ func TestAuthInterceptorAcceptsValidToken(t *testing.T) {
 	}
 }
 
-func TestStreamAuthInterceptorAcceptsValidToken(t *testing.T) {
-	token, err := signJWT("secret")
-	if err != nil {
-		t.Fatalf("failed to sign token: %v", err)
-	}
+func TestUnaryInterceptorAcceptsAPIKey(t *testing.T) {
+	service := NewService(Config{APIKeys: []APIKeyConfig{{Key: "k1", UserID: "user-1"}}})
+	md := metadata.New(map[string]string{
+		"x-api-key": "k1",
+	})
+	ctx := metadata.NewIncomingContext(context.Background(), md)
+	interceptor := UnaryInterceptor(service, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	handlerCalled := false
 
+	_, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, func(ctx context.Context, req any) (any, error) {
+		handlerCalled = true
+		return "ok", nil
+	})
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if !handlerCalled {
+		t.Fatal("expected handler to be called")
+	}
+}
+
+func TestStreamInterceptorAcceptsValidToken(t *testing.T) {
+	service := NewService(Config{JWTSecret: "secret", TokenExpiry: time.Hour})
+	token, err := service.GenerateJWT(&models.User{ID: "user-1"})
+	if err != nil {
+		t.Fatalf("GenerateJWT() error = %v", err)
+	}
 	md := metadata.New(map[string]string{
 		"authorization": "Bearer " + token,
 	})
 	ctx := metadata.NewIncomingContext(context.Background(), md)
-	interceptor := authStreamInterceptor("secret", slog.New(slog.NewTextHandler(io.Discard, nil)))
+	interceptor := StreamInterceptor(service, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	handlerCalled := false
 
 	err = interceptor(nil, &stubServerStream{ctx: ctx}, &grpc.StreamServerInfo{}, func(srv any, stream grpc.ServerStream) error {
@@ -102,13 +128,4 @@ type stubServerStream struct {
 
 func (s *stubServerStream) Context() context.Context {
 	return s.ctx
-}
-
-func signJWT(secret string) (string, error) {
-	claims := jwt.MapClaims{
-		"sub": "user-1",
-		"exp": time.Now().Add(1 * time.Hour).Unix(),
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(secret))
 }

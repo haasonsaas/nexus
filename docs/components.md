@@ -810,6 +810,11 @@ database:
 
 auth:
   jwt_secret: ${JWT_SECRET}
+  token_expiry: 24h
+  api_keys:
+    - key: ${NEXUS_API_KEY}
+      user_id: operator
+      name: "Operator key"
   oauth:
     google:
       client_id: ${GOOGLE_CLIENT_ID}

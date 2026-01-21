@@ -225,6 +225,26 @@ llm:
 	}
 }
 
+func TestLoadValidatesAuthAPIKeys(t *testing.T) {
+	path := writeConfig(t, `
+auth:
+  api_keys:
+    - key: ""
+llm:
+  default_provider: anthropic
+  providers:
+    anthropic: {}
+`)
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatalf("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "auth.api_keys[0].key") {
+		t.Fatalf("expected auth.api_keys[0].key error, got %v", err)
+	}
+}
+
 func TestLoadValidatesWorkspaceMaxChars(t *testing.T) {
 	path := writeConfig(t, `
 workspace:

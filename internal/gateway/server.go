@@ -11,17 +11,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
-	"google.golang.org/grpc/status"
 
 	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/haasonsaas/nexus/internal/agent/providers"
+	"github.com/haasonsaas/nexus/internal/auth"
 	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/plugins"
@@ -65,14 +62,28 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	}
 
 	// Create gRPC server with interceptors
+	apiKeys := make([]auth.APIKeyConfig, 0, len(cfg.Auth.APIKeys))
+	for _, entry := range cfg.Auth.APIKeys {
+		apiKeys = append(apiKeys, auth.APIKeyConfig{
+			Key:    entry.Key,
+			UserID: entry.UserID,
+			Email:  entry.Email,
+			Name:   entry.Name,
+		})
+	}
+	authService := auth.NewService(auth.Config{
+		JWTSecret:   cfg.Auth.JWTSecret,
+		TokenExpiry: cfg.Auth.TokenExpiry,
+		APIKeys:     apiKeys,
+	})
 	grpcServer := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
 			loggingInterceptor(logger),
-			authUnaryInterceptor(cfg.Auth.JWTSecret, logger),
+			auth.UnaryInterceptor(authService, logger),
 		),
 		grpc.ChainStreamInterceptor(
 			streamLoggingInterceptor(logger),
-			authStreamInterceptor(cfg.Auth.JWTSecret, logger),
+			auth.StreamInterceptor(authService, logger),
 		),
 	)
 
@@ -654,72 +665,4 @@ func scopeUsesThread(scope string) bool {
 	default:
 		return true
 	}
-}
-
-func authUnaryInterceptor(secret string, logger *slog.Logger) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		if secret == "" {
-			return handler(ctx, req)
-		}
-
-		token, err := extractBearerToken(ctx)
-		if err != nil {
-			return nil, status.Error(codes.Unauthenticated, "missing credentials")
-		}
-		if err := validateJWT(secret, token); err != nil {
-			logger.Warn("jwt validation failed", "error", err)
-			return nil, status.Error(codes.Unauthenticated, "invalid token")
-		}
-
-		return handler(ctx, req)
-	}
-}
-
-func authStreamInterceptor(secret string, logger *slog.Logger) grpc.StreamServerInterceptor {
-	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		if secret == "" {
-			return handler(srv, ss)
-		}
-
-		token, err := extractBearerToken(ss.Context())
-		if err != nil {
-			return status.Error(codes.Unauthenticated, "missing credentials")
-		}
-		if err := validateJWT(secret, token); err != nil {
-			logger.Warn("jwt validation failed", "error", err)
-			return status.Error(codes.Unauthenticated, "invalid token")
-		}
-
-		return handler(srv, ss)
-	}
-}
-
-func extractBearerToken(ctx context.Context) (string, error) {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return "", errors.New("metadata missing")
-	}
-	for _, value := range md.Get("authorization") {
-		lower := strings.ToLower(value)
-		if strings.HasPrefix(lower, "bearer ") {
-			return strings.TrimSpace(value[len("bearer "):]), nil
-		}
-	}
-	return "", errors.New("authorization token missing")
-}
-
-func validateJWT(secret, token string) error {
-	parsed, err := jwt.Parse(token, func(t *jwt.Token) (any, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method %v", t.Header["alg"])
-		}
-		return []byte(secret), nil
-	})
-	if err != nil {
-		return err
-	}
-	if !parsed.Valid {
-		return errors.New("token invalid")
-	}
-	return nil
 }

@@ -41,9 +41,17 @@ type DatabaseConfig struct {
 }
 
 type AuthConfig struct {
-	JWTSecret   string        `yaml:"jwt_secret"`
-	TokenExpiry time.Duration `yaml:"token_expiry"`
-	OAuth       OAuthConfig   `yaml:"oauth"`
+	JWTSecret   string         `yaml:"jwt_secret"`
+	TokenExpiry time.Duration  `yaml:"token_expiry"`
+	APIKeys     []APIKeyConfig `yaml:"api_keys"`
+	OAuth       OAuthConfig    `yaml:"oauth"`
+}
+
+type APIKeyConfig struct {
+	Key    string `yaml:"key"`
+	UserID string `yaml:"user_id"`
+	Email  string `yaml:"email"`
+	Name   string `yaml:"name"`
 }
 
 type SessionConfig struct {
@@ -486,6 +494,20 @@ func validateConfig(cfg *Config) error {
 			if _, ok := cfg.LLM.Providers[cfg.LLM.DefaultProvider]; !ok {
 				issues = append(issues, fmt.Sprintf("llm.providers missing entry for default_provider %q", cfg.LLM.DefaultProvider))
 			}
+		}
+	}
+
+	seenKeys := map[string]struct{}{}
+	for i, entry := range cfg.Auth.APIKeys {
+		key := strings.TrimSpace(entry.Key)
+		if key == "" {
+			issues = append(issues, fmt.Sprintf("auth.api_keys[%d].key must be set", i))
+			continue
+		}
+		if _, ok := seenKeys[key]; ok {
+			issues = append(issues, fmt.Sprintf("auth.api_keys[%d].key must be unique", i))
+		} else {
+			seenKeys[key] = struct{}{}
 		}
 	}
 

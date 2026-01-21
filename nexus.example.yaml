@@ -19,6 +19,11 @@ auth:
   # Generate with: openssl rand -base64 32
   jwt_secret: ${JWT_SECRET}
   token_expiry: 24h
+  # Optional API keys for gRPC access (used when no JWT is provided)
+  api_keys:
+    - key: ${NEXUS_API_KEY}
+      user_id: operator
+      name: "Operator key"
 
   oauth:
     google:

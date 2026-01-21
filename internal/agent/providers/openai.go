@@ -666,10 +666,11 @@ func (p *OpenAIProvider) convertToOpenAITools(tools []agent.Tool) []openai.Tool 
 	result := make([]openai.Tool, len(tools))
 
 	for i, tool := range tools {
-		// Parse the schema
+		// Parse JSON schema into map
 		var schemaMap map[string]any
 		if err := json.Unmarshal(tool.Schema(), &schemaMap); err != nil {
-			// Use empty schema if parsing fails
+			// Graceful degradation: use empty schema if parsing fails
+			// This allows other tools to work even if one has a bad schema
 			schemaMap = map[string]any{
 				"type":       "object",
 				"properties": map[string]any{},
@@ -681,7 +682,7 @@ func (p *OpenAIProvider) convertToOpenAITools(tools []agent.Tool) []openai.Tool 
 			Function: &openai.FunctionDefinition{
 				Name:        tool.Name(),
 				Description: tool.Description(),
-				Parameters:  schemaMap,
+				Parameters:  schemaMap, // JSON Schema for parameters
 			},
 		}
 	}
@@ -689,26 +690,45 @@ func (p *OpenAIProvider) convertToOpenAITools(tools []agent.Tool) []openai.Tool 
 	return result
 }
 
-// isRetryableError checks if an error should be retried.
+// isRetryableError determines if an error should trigger a retry attempt.
+//
+// This method classifies errors into retryable and non-retryable categories
+// based on error messages. Retryable errors are typically transient.
+//
+// Retryable Error Categories:
+//   - Rate limits: "rate limit", "429"
+//   - Server errors: "500", "502", "503", "504"
+//   - Timeouts: "timeout", "deadline exceeded"
+//
+// Non-Retryable Errors:
+//   - Authentication: API key issues
+//   - Validation: Malformed requests
+//   - Not found: Invalid endpoints or models
+//
+// Parameters:
+//   - err: Error to classify
+//
+// Returns:
+//   - bool: true if error should be retried, false otherwise
 func (p *OpenAIProvider) isRetryableError(err error) bool {
 	if err == nil {
 		return false
 	}
 
-	// Check for specific OpenAI API errors that are retryable
+	// Check error message for retryable indicators
 	errMsg := err.Error()
 
-	// Rate limit errors
+	// Rate limit errors - too many requests
 	if contains(errMsg, "rate limit") || contains(errMsg, "429") {
 		return true
 	}
 
-	// Server errors
+	// Server errors (5xx) - temporary OpenAI infrastructure issues
 	if contains(errMsg, "500") || contains(errMsg, "502") || contains(errMsg, "503") || contains(errMsg, "504") {
 		return true
 	}
 
-	// Timeout errors
+	// Timeout errors - request took too long
 	if contains(errMsg, "timeout") || contains(errMsg, "deadline exceeded") {
 		return true
 	}
@@ -716,13 +736,33 @@ func (p *OpenAIProvider) isRetryableError(err error) bool {
 	return false
 }
 
-// contains checks if a string contains a substring (case-insensitive).
+// contains checks if a string contains a substring.
+//
+// This is a simple helper function for error message inspection.
+// It performs exact string matching (case-sensitive).
+//
+// Parameters:
+//   - s: String to search in
+//   - substr: Substring to search for
+//
+// Returns:
+//   - bool: true if substr is found in s
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) &&
 		(s == substr || len(s) > len(substr) &&
 		(findSubstring(s, substr) >= 0))
 }
 
+// findSubstring finds the first occurrence of a substring.
+//
+// Internal helper for contains(). Uses simple linear search.
+//
+// Parameters:
+//   - s: String to search in
+//   - substr: Substring to find
+//
+// Returns:
+//   - int: Index of first occurrence, or -1 if not found
 func findSubstring(s, substr string) int {
 	for i := 0; i <= len(s)-len(substr); i++ {
 		if s[i:i+len(substr)] == substr {

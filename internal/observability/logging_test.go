@@ -241,11 +241,17 @@ func TestRedactOpenAIKeys(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	logger.Info(ctx, "API key: sk-1234567890abcdefghijklmnopqrstuvwxyzABCDEFGH")
+	// OpenAI keys are 51 chars total: sk- + 48 chars
+	openaiKey := "sk-1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKL"
+	logger.Info(ctx, "API key: "+openaiKey)
 
 	output := buf.String()
-	if strings.Contains(output, "sk-1234567890abcdefghijklmnopqrstuvwxyzABCDEFGH") {
+	if strings.Contains(output, openaiKey) {
 		t.Error("Expected OpenAI API key to be redacted")
+	}
+	// Verify something was redacted
+	if !strings.Contains(output, "[REDACTED]") {
+		t.Error("Expected [REDACTED] in output")
 	}
 }
 

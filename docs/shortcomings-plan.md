@@ -21,6 +21,7 @@
 2) Reliability & shutdown safety
    - [x] Track gateway goroutines with WaitGroups + cancellation.
    - [x] Buffer `Runtime.Process` channel to avoid producer hangs.
+   - [x] Fix LatencyHistogram ring buffer to avoid O(n) churn.
 
 3) Provider error integration
    - [x] Integrate `ProviderError` into Anthropic provider.
@@ -53,3 +54,4 @@
 - 2026-01-21: Plan created from `TODO.md` + Clawdbot reference + Claude CLI.
 - 2026-01-21: Added gateway WaitGroup tracking + buffered runtime channel with tests (go test ./internal/agent, ./internal/gateway).
 - 2026-01-21: Integrated ProviderError into Anthropic/OpenAI providers with unit tests; fixed websearch schema marshal handling.
+- 2026-01-21: Reworked channel latency histogram into a true ring buffer with tests.

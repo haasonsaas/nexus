@@ -22,8 +22,8 @@ type Metrics struct {
 	errorsMu     sync.RWMutex
 
 	// Latency tracking
-	sendLatency     *LatencyHistogram
-	receiveLatency  *LatencyHistogram
+	sendLatency    *LatencyHistogram
+	receiveLatency *LatencyHistogram
 
 	// Connection events
 	connectionsOpened atomic.Uint64
@@ -142,15 +142,18 @@ type MetricsSnapshot struct {
 type LatencyHistogram struct {
 	mu      sync.RWMutex
 	samples []time.Duration
+	head    int
+	count   int
 	max     int
 }
 
 // NewLatencyHistogram creates a new latency histogram.
 // It keeps the last 1000 samples for percentile calculation.
 func NewLatencyHistogram() *LatencyHistogram {
+	const defaultMaxSamples = 1000
 	return &LatencyHistogram{
-		samples: make([]time.Duration, 0, 1000),
-		max:     1000,
+		samples: make([]time.Duration, defaultMaxSamples),
+		max:     defaultMaxSamples,
 	}
 }
 
@@ -159,11 +162,15 @@ func (h *LatencyHistogram) Record(duration time.Duration) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if len(h.samples) >= h.max {
-		// Remove oldest sample (ring buffer behavior)
-		h.samples = h.samples[1:]
+	if h.max == 0 {
+		return
 	}
-	h.samples = append(h.samples, duration)
+
+	h.samples[h.head] = duration
+	h.head = (h.head + 1) % h.max
+	if h.count < h.max {
+		h.count++
+	}
 }
 
 // Snapshot returns a snapshot of latency statistics.
@@ -171,13 +178,20 @@ func (h *LatencyHistogram) Snapshot() LatencySnapshot {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	if len(h.samples) == 0 {
+	if h.count == 0 {
 		return LatencySnapshot{}
 	}
 
 	// Create a sorted copy for percentile calculation
-	sorted := make([]time.Duration, len(h.samples))
-	copy(sorted, h.samples)
+	sorted := make([]time.Duration, h.count)
+	if h.count < h.max {
+		copy(sorted, h.samples[:h.count])
+	} else {
+		for i := 0; i < h.count; i++ {
+			idx := (h.head + i) % h.max
+			sorted[i] = h.samples[idx]
+		}
+	}
 
 	// Simple insertion sort (good enough for 1000 samples)
 	for i := 1; i < len(sorted); i++ {
@@ -200,13 +214,13 @@ func (h *LatencyHistogram) Snapshot() LatencySnapshot {
 	}
 
 	return LatencySnapshot{
-		Count:  len(sorted),
-		Min:    min,
-		Max:    max,
-		Mean:   sum / time.Duration(len(sorted)),
-		P50:    sorted[len(sorted)*50/100],
-		P95:    sorted[len(sorted)*95/100],
-		P99:    sorted[len(sorted)*99/100],
+		Count: len(sorted),
+		Min:   min,
+		Max:   max,
+		Mean:  sum / time.Duration(len(sorted)),
+		P50:   sorted[len(sorted)*50/100],
+		P95:   sorted[len(sorted)*95/100],
+		P99:   sorted[len(sorted)*99/100],
 	}
 }
 

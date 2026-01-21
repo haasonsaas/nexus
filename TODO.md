@@ -124,7 +124,7 @@ This document tracks planned improvements, technical debt, and architectural enh
   - Applied post-parsing, pre-validation
 
 ### Performance Optimizations
-- [ ] **Fix LatencyHistogram ring buffer** - `internal/channels/metrics.go:157-167`
+- [x] **Fix LatencyHistogram ring buffer** - `internal/channels/metrics.go:157-167` ✅ Done
   - Current: O(n) array slicing per sample
   - Target: Use circular buffer for O(1) operations
   ```go

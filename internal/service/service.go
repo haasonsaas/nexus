@@ -1,8 +1,10 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -17,6 +19,15 @@ const (
 type InstallResult struct {
 	Path         string
 	Instructions []string
+}
+
+var commandRunner = func(ctx context.Context, name string, args ...string) error {
+	cmd := exec.CommandContext(ctx, name, args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s %s failed: %w: %s", name, strings.Join(args, " "), err, strings.TrimSpace(string(output)))
+	}
+	return nil
 }
 
 // InstallUserService writes a user-level service file for the current OS.
@@ -34,6 +45,49 @@ func InstallUserService(configPath string, overwrite bool) (InstallResult, error
 		return installLaunchdUser(execPath, configPath, overwrite)
 	default:
 		return InstallResult{}, fmt.Errorf("service install not supported on %s", runtime.GOOS)
+	}
+}
+
+// RestartUserService reloads and restarts the user-level service.
+func RestartUserService(ctx context.Context) ([]string, error) {
+	switch runtime.GOOS {
+	case "linux":
+		steps := []string{
+			"systemctl --user daemon-reload",
+			"systemctl --user restart nexus",
+		}
+		for _, step := range steps {
+			parts := strings.Fields(step)
+			if len(parts) == 0 {
+				continue
+			}
+			if err := commandRunner(ctx, parts[0], parts[1:]...); err != nil {
+				return steps, err
+			}
+		}
+		return steps, nil
+	case "darwin":
+		home, _ := os.UserHomeDir()
+		if strings.TrimSpace(home) == "" {
+			home = "."
+		}
+		plist := filepath.Join(home, "Library", "LaunchAgents", LaunchdLabel+".plist")
+		steps := []string{
+			"launchctl unload " + plist,
+			"launchctl load -w " + plist,
+		}
+		for _, step := range steps {
+			parts := strings.Fields(step)
+			if len(parts) == 0 {
+				continue
+			}
+			if err := commandRunner(ctx, parts[0], parts[1:]...); err != nil {
+				return steps, err
+			}
+		}
+		return steps, nil
+	default:
+		return nil, fmt.Errorf("service restart not supported on %s", runtime.GOOS)
 	}
 }
 

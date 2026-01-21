@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math"
 	"os"
 	"path/filepath"
@@ -22,11 +23,13 @@ type Config struct {
 	MaxResults    int
 	MaxSnippetLen int
 	Mode          string
+	Embeddings    EmbeddingsConfig
 }
 
 // MemorySearchTool implements agent.Tool for searching memory files.
 type MemorySearchTool struct {
-	config Config
+	config   Config
+	embedder embedder
 }
 
 // NewMemorySearchTool creates a new memory search tool.
@@ -44,7 +47,16 @@ func NewMemorySearchTool(cfg *Config) *MemorySearchTool {
 	if strings.TrimSpace(config.Mode) == "" {
 		config.Mode = "hybrid"
 	}
-	return &MemorySearchTool{config: config}
+	tool := &MemorySearchTool{config: config}
+	if config.Embeddings.enabled() {
+		emb, err := newRemoteEmbedder(config.Embeddings)
+		if err != nil {
+			slog.Warn("memory search embeddings disabled", "error", err)
+		} else {
+			tool.embedder = emb
+		}
+	}
+	return tool
 }
 
 // Name returns the tool name.
@@ -92,7 +104,7 @@ func (t *MemorySearchTool) Execute(ctx context.Context, params json.RawMessage) 
 	}
 
 	files := t.resolveFiles()
-	results := searchFiles(files, query, maxResults, t.config.MaxSnippetLen, t.config.Mode)
+	results := searchFiles(ctx, files, query, maxResults, t.config.MaxSnippetLen, t.config.Mode, t.embedder)
 
 	payload, err := json.MarshalIndent(struct {
 		Query   string         `json:"query"`
@@ -147,7 +159,7 @@ type SearchResult struct {
 	Score   float64 `json:"score"`
 }
 
-func searchFiles(files []string, query string, maxResults int, maxSnippetLen int, mode string) []SearchResult {
+func searchFiles(ctx context.Context, files []string, query string, maxResults int, maxSnippetLen int, mode string, embedder embedder) []SearchResult {
 	chunks := loadChunks(files)
 	if len(chunks) == 0 {
 		return nil
@@ -158,11 +170,11 @@ func searchFiles(files []string, query string, maxResults int, maxSnippetLen int
 	}
 	switch mode {
 	case "vector":
-		return rankVector(chunks, query, maxResults, maxSnippetLen)
+		return rankVector(ctx, chunks, query, maxResults, maxSnippetLen, embedder)
 	case "lexical":
 		return rankLexical(chunks, query, maxResults, maxSnippetLen)
 	default:
-		return rankHybrid(chunks, query, maxResults, maxSnippetLen)
+		return rankHybrid(ctx, chunks, query, maxResults, maxSnippetLen, embedder)
 	}
 }
 
@@ -271,7 +283,19 @@ func rankLexical(chunks []chunk, query string, maxResults int, maxSnippetLen int
 	return results
 }
 
-func rankVector(chunks []chunk, query string, maxResults int, maxSnippetLen int) []SearchResult {
+func rankVector(ctx context.Context, chunks []chunk, query string, maxResults int, maxSnippetLen int, embedder embedder) []SearchResult {
+	if embedder != nil {
+		results, err := rankVectorRemote(ctx, chunks, query, maxResults, maxSnippetLen, embedder)
+		if err != nil {
+			slog.Warn("memory search embeddings failed; falling back to local vectors", "error", err)
+		} else if len(results) > 0 {
+			return results
+		}
+	}
+	return rankVectorTFIDF(chunks, query, maxResults, maxSnippetLen)
+}
+
+func rankVectorTFIDF(chunks []chunk, query string, maxResults int, maxSnippetLen int) []SearchResult {
 	tfidf := buildTFIDF(chunks)
 	queryVec := tfidf.Vectorize(tokenize(query))
 	var results []SearchResult
@@ -295,9 +319,21 @@ func rankVector(chunks []chunk, query string, maxResults int, maxSnippetLen int)
 	return results
 }
 
-func rankHybrid(chunks []chunk, query string, maxResults int, maxSnippetLen int) []SearchResult {
+func rankHybrid(ctx context.Context, chunks []chunk, query string, maxResults int, maxSnippetLen int, embedder embedder) []SearchResult {
+	if embedder != nil {
+		results, err := rankHybridRemote(ctx, chunks, query, maxResults, maxSnippetLen, embedder)
+		if err != nil {
+			slog.Warn("memory search embeddings failed; falling back to local hybrid", "error", err)
+		} else if len(results) > 0 {
+			return results
+		}
+	}
+	return rankHybridTFIDF(chunks, query, maxResults, maxSnippetLen)
+}
+
+func rankHybridTFIDF(chunks []chunk, query string, maxResults int, maxSnippetLen int) []SearchResult {
 	lexical := rankLexical(chunks, query, len(chunks), maxSnippetLen)
-	vector := rankVector(chunks, query, len(chunks), maxSnippetLen)
+	vector := rankVectorTFIDF(chunks, query, len(chunks), maxSnippetLen)
 	score := map[string]float64{}
 	snippet := map[string]string{}
 	for _, entry := range lexical {
@@ -332,6 +368,113 @@ func rankHybrid(chunks []chunk, query string, maxResults int, maxSnippetLen int)
 		results = results[:maxResults]
 	}
 	return results
+}
+
+const (
+	hybridVectorWeight  = 0.7
+	hybridLexicalWeight = 0.3
+)
+
+func rankVectorRemote(ctx context.Context, chunks []chunk, query string, maxResults int, maxSnippetLen int, embedder embedder) ([]SearchResult, error) {
+	if embedder == nil || len(chunks) == 0 {
+		return nil, nil
+	}
+	inputs := make([]string, 0, len(chunks)+1)
+	inputs = append(inputs, query)
+	for _, chunk := range chunks {
+		inputs = append(inputs, chunk.text)
+	}
+	vectors, err := embedder.Embed(ctx, inputs)
+	if err != nil {
+		return nil, err
+	}
+	if len(vectors) != len(inputs) {
+		return nil, fmt.Errorf("embedding provider returned %d vectors for %d inputs", len(vectors), len(inputs))
+	}
+	queryVec := vectors[0]
+	results := make([]SearchResult, 0, len(chunks))
+	for i, chunk := range chunks {
+		score := cosineDense(queryVec, vectors[i+1])
+		if score <= 0 {
+			continue
+		}
+		snippet := clampSnippet(chunk.text, maxSnippetLen)
+		results = append(results, SearchResult{File: chunk.file, Snippet: snippet, Matches: 0, Score: score})
+	}
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].Score == results[j].Score {
+			return results[i].File < results[j].File
+		}
+		return results[i].Score > results[j].Score
+	})
+	if len(results) > maxResults {
+		results = results[:maxResults]
+	}
+	return results, nil
+}
+
+func rankHybridRemote(ctx context.Context, chunks []chunk, query string, maxResults int, maxSnippetLen int, embedder embedder) ([]SearchResult, error) {
+	if embedder == nil || len(chunks) == 0 {
+		return nil, nil
+	}
+	inputs := make([]string, 0, len(chunks)+1)
+	inputs = append(inputs, query)
+	for _, chunk := range chunks {
+		inputs = append(inputs, chunk.text)
+	}
+	vectors, err := embedder.Embed(ctx, inputs)
+	if err != nil {
+		return nil, err
+	}
+	if len(vectors) != len(inputs) {
+		return nil, fmt.Errorf("embedding provider returned %d vectors for %d inputs", len(vectors), len(inputs))
+	}
+	queryVec := vectors[0]
+	needle := strings.ToLower(query)
+	maxMatches := 0
+	matches := make([]int, len(chunks))
+	snippets := make([]string, len(chunks))
+	for i, chunk := range chunks {
+		count, snippet := findMatches(chunk.text, needle, maxSnippetLen)
+		matches[i] = count
+		if count > maxMatches {
+			maxMatches = count
+		}
+		if count > 0 {
+			snippets[i] = snippet
+		} else {
+			snippets[i] = clampSnippet(chunk.text, maxSnippetLen)
+		}
+	}
+
+	results := make([]SearchResult, 0, len(chunks))
+	for i, chunk := range chunks {
+		vectorScore := cosineDense(queryVec, vectors[i+1])
+		lexicalScore := 0.0
+		if maxMatches > 0 {
+			lexicalScore = float64(matches[i]) / float64(maxMatches)
+		}
+		score := hybridVectorWeight*vectorScore + hybridLexicalWeight*lexicalScore
+		if score <= 0 {
+			continue
+		}
+		results = append(results, SearchResult{
+			File:    chunk.file,
+			Snippet: snippets[i],
+			Matches: matches[i],
+			Score:   score,
+		})
+	}
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].Score == results[j].Score {
+			return results[i].File < results[j].File
+		}
+		return results[i].Score > results[j].Score
+	})
+	if len(results) > maxResults {
+		results = results[:maxResults]
+	}
+	return results, nil
 }
 
 type tfidfIndex struct {
@@ -383,6 +526,32 @@ func cosine(a map[string]float64, b map[string]float64) float64 {
 		if bv, ok := b[k]; ok {
 			dot += v * bv
 		}
+	}
+	for _, v := range b {
+		normB += v * v
+	}
+	if normA == 0 || normB == 0 {
+		return 0
+	}
+	return dot / (math.Sqrt(normA) * math.Sqrt(normB))
+}
+
+func cosineDense(a []float64, b []float64) float64 {
+	if len(a) == 0 || len(b) == 0 {
+		return 0
+	}
+	n := len(a)
+	if len(b) < n {
+		n = len(b)
+	}
+	var dot float64
+	var normA float64
+	var normB float64
+	for i := 0; i < n; i++ {
+		dot += a[i] * b[i]
+	}
+	for _, v := range a {
+		normA += v * v
 	}
 	for _, v := range b {
 		normB += v * v

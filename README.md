@@ -292,9 +292,29 @@ Guided onboarding (writes config + optional workspace):
 nexus onboard --config nexus.yaml --setup-workspace --workspace ./clawd
 ```
 
+Profiles (store multiple configs in `~/.nexus/profiles`):
+```bash
+nexus profile init dev --provider anthropic --use
+nexus profile list
+nexus profile use dev
+nexus --profile dev serve
+```
+You can also set `NEXUS_PROFILE=dev` to select a profile for all commands.
+
 Set provider auth:
 ```bash
 nexus auth set --provider anthropic --api-key $ANTHROPIC_API_KEY --config nexus.yaml --default
+```
+
+List/enable skills:
+```bash
+nexus skills list --config nexus.yaml
+nexus skills enable my-skill --config nexus.yaml
+```
+
+Validate channel credentials:
+```bash
+nexus channels login --config nexus.yaml
 ```
 
 Preview the system prompt (with memory + heartbeat):

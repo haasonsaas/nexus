@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -197,12 +198,23 @@ type WebSearchConfig struct {
 }
 
 type MemorySearchConfig struct {
-	Enabled       bool   `yaml:"enabled"`
-	Directory     string `yaml:"directory"`
-	MemoryFile    string `yaml:"memory_file"`
-	MaxResults    int    `yaml:"max_results"`
-	MaxSnippetLen int    `yaml:"max_snippet_len"`
-	Mode          string `yaml:"mode"`
+	Enabled       bool                         `yaml:"enabled"`
+	Directory     string                       `yaml:"directory"`
+	MemoryFile    string                       `yaml:"memory_file"`
+	MaxResults    int                          `yaml:"max_results"`
+	MaxSnippetLen int                          `yaml:"max_snippet_len"`
+	Mode          string                       `yaml:"mode"`
+	Embeddings    MemorySearchEmbeddingsConfig `yaml:"embeddings"`
+}
+
+type MemorySearchEmbeddingsConfig struct {
+	Provider string        `yaml:"provider"`
+	APIKey   string        `yaml:"api_key"`
+	BaseURL  string        `yaml:"base_url"`
+	Model    string        `yaml:"model"`
+	CacheDir string        `yaml:"cache_dir"`
+	CacheTTL time.Duration `yaml:"cache_ttl"`
+	Timeout  time.Duration `yaml:"timeout"`
 }
 type LoggingConfig struct {
 	Level  string `yaml:"level"`
@@ -363,6 +375,44 @@ func applyToolsDefaults(cfg *Config) {
 	if cfg.Tools.MemorySearch.MemoryFile == "" {
 		cfg.Tools.MemorySearch.MemoryFile = cfg.Workspace.MemoryFile
 	}
+	applyMemorySearchEmbeddingsDefaults(&cfg.Tools.MemorySearch.Embeddings)
+}
+
+func applyMemorySearchEmbeddingsDefaults(cfg *MemorySearchEmbeddingsConfig) {
+	if cfg == nil {
+		return
+	}
+	if cfg.CacheTTL == 0 {
+		cfg.CacheTTL = 24 * time.Hour
+	}
+	if cfg.Timeout == 0 {
+		cfg.Timeout = 15 * time.Second
+	}
+	if strings.TrimSpace(cfg.CacheDir) == "" {
+		home, _ := os.UserHomeDir()
+		if strings.TrimSpace(home) == "" {
+			home = "."
+		}
+		cfg.CacheDir = filepath.Join(home, ".nexus", "cache", "embeddings")
+	}
+	provider := strings.ToLower(strings.TrimSpace(cfg.Provider))
+	if provider == "" {
+		return
+	}
+	if cfg.BaseURL == "" {
+		switch provider {
+		case "openai":
+			cfg.BaseURL = "https://api.openai.com/v1"
+		case "openrouter":
+			cfg.BaseURL = "https://openrouter.ai/api/v1"
+		}
+	}
+	if cfg.Model == "" {
+		switch provider {
+		case "openai", "openrouter":
+			cfg.Model = "text-embedding-3-small"
+		}
+	}
 }
 
 // DefaultWorkspaceConfig returns a workspace config with defaults applied.
@@ -458,6 +508,12 @@ func validateConfig(cfg *Config) error {
 		default:
 			issues = append(issues, "tools.memory_search.mode must be \"lexical\", \"vector\", or \"hybrid\"")
 		}
+	}
+	if cfg.Tools.MemorySearch.Embeddings.CacheTTL < 0 {
+		issues = append(issues, "tools.memory_search.embeddings.cache_ttl must be >= 0")
+	}
+	if cfg.Tools.MemorySearch.Embeddings.Timeout < 0 {
+		issues = append(issues, "tools.memory_search.embeddings.timeout must be >= 0")
 	}
 
 	if len(issues) > 0 {

@@ -40,6 +40,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -49,6 +50,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/gateway"
 	"github.com/haasonsaas/nexus/internal/onboard"
 	"github.com/haasonsaas/nexus/internal/plugins"
+	"github.com/haasonsaas/nexus/internal/profile"
 	"github.com/haasonsaas/nexus/internal/service"
 	"github.com/haasonsaas/nexus/internal/workspace"
 	"github.com/haasonsaas/nexus/pkg/models"
@@ -61,9 +63,10 @@ import (
 //
 //	go build -ldflags "-X main.version=v1.0.0 -X main.commit=$(git rev-parse HEAD) -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 var (
-	version = "dev"     // Semantic version (e.g., "v1.0.0")
-	commit  = "none"    // Git commit SHA
-	date    = "unknown" // Build timestamp
+	version     = "dev"     // Semantic version (e.g., "v1.0.0")
+	commit      = "none"    // Git commit SHA
+	date        = "unknown" // Build timestamp
+	profileName string
 )
 
 // main is the entry point for the Nexus CLI.
@@ -102,6 +105,7 @@ Documentation: https://github.com/haasonsaas/nexus`,
 		// SilenceUsage prevents printing usage on every error.
 		SilenceUsage: true,
 	}
+	rootCmd.PersistentFlags().StringVar(&profileName, "profile", "", "Profile name (uses ~/.nexus/profiles/<name>.yaml; or set NEXUS_PROFILE)")
 
 	// Attach all subcommands.
 	rootCmd.AddCommand(
@@ -115,10 +119,26 @@ Documentation: https://github.com/haasonsaas/nexus`,
 		buildSetupCmd(),
 		buildOnboardCmd(),
 		buildAuthCmd(),
+		buildProfileCmd(),
+		buildSkillsCmd(),
 		buildServiceCmd(),
 	)
 
 	return rootCmd
+}
+
+func resolveConfigPath(path string) string {
+	activeProfile := strings.TrimSpace(profileName)
+	if activeProfile == "" {
+		activeProfile = strings.TrimSpace(os.Getenv("NEXUS_PROFILE"))
+	}
+	if activeProfile != "" {
+		return profile.ProfileConfigPath(activeProfile)
+	}
+	if strings.TrimSpace(path) == "" || path == profile.DefaultConfigName {
+		return profile.DefaultConfigPath()
+	}
+	return path
 }
 
 // buildServiceCmd creates the "service" command group.
@@ -133,18 +153,38 @@ func buildServiceCmd() *cobra.Command {
 
 func buildServiceInstallCmd() *cobra.Command {
 	var configPath string
+	var restart bool
 	cmd := &cobra.Command{
 		Use:   "install",
 		Short: "Install a user-level service file",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
 			result, err := service.InstallUserService(configPath, false)
 			if err != nil {
 				return err
 			}
 			out := cmd.OutOrStdout()
 			fmt.Fprintf(out, "Service file written: %s\n", result.Path)
+			if restart {
+				steps, err := service.RestartUserService(cmd.Context())
+				if err != nil {
+					fmt.Fprintf(out, "Service restart failed: %v\n", err)
+					if len(steps) > 0 {
+						fmt.Fprintln(out, "Manual restart steps:")
+						for _, step := range steps {
+							fmt.Fprintf(out, "  - %s\n", step)
+						}
+					}
+					return err
+				}
+				fmt.Fprintln(out, "Service restarted.")
+			}
 			if len(result.Instructions) > 0 {
-				fmt.Fprintln(out, "Next steps:")
+				label := "Next steps:"
+				if restart {
+					label = "Next steps (if needed):"
+				}
+				fmt.Fprintln(out, label)
 				for _, step := range result.Instructions {
 					fmt.Fprintf(out, "  - %s\n", step)
 				}
@@ -152,24 +192,45 @@ func buildServiceInstallCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVarP(&configPath, "config", "c", "nexus.yaml", "Path to YAML configuration file")
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	cmd.Flags().BoolVar(&restart, "restart", true, "Restart the service after writing the file")
 	return cmd
 }
 
 func buildServiceRepairCmd() *cobra.Command {
 	var configPath string
+	var restart bool
 	cmd := &cobra.Command{
 		Use:   "repair",
 		Short: "Rewrite the user-level service file",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
 			result, err := service.InstallUserService(configPath, true)
 			if err != nil {
 				return err
 			}
 			out := cmd.OutOrStdout()
 			fmt.Fprintf(out, "Service file updated: %s\n", result.Path)
+			if restart {
+				steps, err := service.RestartUserService(cmd.Context())
+				if err != nil {
+					fmt.Fprintf(out, "Service restart failed: %v\n", err)
+					if len(steps) > 0 {
+						fmt.Fprintln(out, "Manual restart steps:")
+						for _, step := range steps {
+							fmt.Fprintf(out, "  - %s\n", step)
+						}
+					}
+					return err
+				}
+				fmt.Fprintln(out, "Service restarted.")
+			}
 			if len(result.Instructions) > 0 {
-				fmt.Fprintln(out, "Next steps:")
+				label := "Next steps:"
+				if restart {
+					label = "Next steps (if needed):"
+				}
+				fmt.Fprintln(out, label)
 				for _, step := range result.Instructions {
 					fmt.Fprintf(out, "  - %s\n", step)
 				}
@@ -177,7 +238,8 @@ func buildServiceRepairCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVarP(&configPath, "config", "c", "nexus.yaml", "Path to YAML configuration file")
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	cmd.Flags().BoolVar(&restart, "restart", true, "Restart the service after writing the file")
 	return cmd
 }
 
@@ -187,6 +249,7 @@ func buildServiceStatusCmd() *cobra.Command {
 		Use:   "status",
 		Short: "Show service audit details",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
 			cfg, _ := config.Load(configPath)
 			report := doctor.AuditServices(cfg)
 			out := cmd.OutOrStdout()
@@ -212,7 +275,217 @@ func buildServiceStatusCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVarP(&configPath, "config", "c", "nexus.yaml", "Path to YAML configuration file")
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	return cmd
+}
+
+// buildProfileCmd creates the "profile" command group.
+func buildProfileCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "profile",
+		Short: "Manage configuration profiles",
+	}
+	cmd.AddCommand(buildProfileListCmd(), buildProfileUseCmd(), buildProfilePathCmd(), buildProfileInitCmd())
+	return cmd
+}
+
+func buildProfileListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "List available profiles",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			profiles, err := profile.ListProfiles()
+			if err != nil {
+				return err
+			}
+			active, _ := profile.ReadActiveProfile()
+			out := cmd.OutOrStdout()
+			if len(profiles) == 0 {
+				fmt.Fprintln(out, "No profiles found.")
+				return nil
+			}
+			fmt.Fprintln(out, "Profiles:")
+			for _, name := range profiles {
+				marker := ""
+				if name == active {
+					marker = " (active)"
+				}
+				fmt.Fprintf(out, "  - %s%s\n", name, marker)
+			}
+			return nil
+		},
+	}
+}
+
+func buildProfileUseCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "use [name]",
+		Short: "Set the active profile",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := strings.TrimSpace(args[0])
+			if name == "" {
+				return fmt.Errorf("profile name is required")
+			}
+			if err := profile.WriteActiveProfile(name); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Active profile set: %s\n", name)
+			return nil
+		},
+	}
+}
+
+func buildProfilePathCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "path [name]",
+		Short: "Print the config path for a profile",
+		Args:  cobra.RangeArgs(0, 1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := ""
+			if len(args) > 0 {
+				name = args[0]
+			}
+			path := profile.ProfileConfigPath(name)
+			fmt.Fprintln(cmd.OutOrStdout(), path)
+			return nil
+		},
+	}
+}
+
+func buildProfileInitCmd() *cobra.Command {
+	var provider string
+	var setActive bool
+	cmd := &cobra.Command{
+		Use:   "init [name]",
+		Short: "Initialize a new profile config",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := strings.TrimSpace(args[0])
+			if name == "" {
+				return fmt.Errorf("profile name is required")
+			}
+			path := profile.ProfileConfigPath(name)
+			opts := onboard.Options{Provider: provider}
+			raw := onboard.BuildConfig(opts)
+			if err := onboard.WriteConfig(path, raw); err != nil {
+				return err
+			}
+			if setActive {
+				if err := profile.WriteActiveProfile(name); err != nil {
+					return err
+				}
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Profile config written: %s\n", path)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&provider, "provider", "anthropic", "Default LLM provider")
+	cmd.Flags().BoolVar(&setActive, "use", false, "Set as active profile after creation")
+	return cmd
+}
+
+// buildSkillsCmd creates the "skills" command group.
+func buildSkillsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "skills",
+		Short: "Manage skill plugins",
+	}
+	cmd.AddCommand(buildSkillsListCmd(), buildSkillsEnableCmd(), buildSkillsDisableCmd())
+	return cmd
+}
+
+func buildSkillsListCmd() *cobra.Command {
+	var configPath string
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List available skills",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
+			cfg, err := config.Load(configPath)
+			if err != nil {
+				return err
+			}
+			paths := append([]string{}, cfg.Plugins.Load.Paths...)
+			for _, entry := range cfg.Plugins.Entries {
+				if entry.Path != "" {
+					paths = append(paths, entry.Path)
+				}
+			}
+			manifests, err := plugins.DiscoverManifests(paths)
+			if err != nil {
+				return err
+			}
+			out := cmd.OutOrStdout()
+			fmt.Fprintln(out, "Skills:")
+			count := 0
+			for id, info := range manifests {
+				kind := strings.ToLower(strings.TrimSpace(info.Manifest.Kind))
+				if kind != "skill" && kind != "skills" {
+					continue
+				}
+				count++
+				enabled := "disabled"
+				if entry, ok := cfg.Plugins.Entries[id]; ok && entry.Enabled {
+					enabled = "enabled"
+				}
+				fmt.Fprintf(out, "  - %s (%s)\n", id, enabled)
+			}
+			if count == 0 {
+				fmt.Fprintln(out, "  (none detected)")
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	return cmd
+}
+
+func buildSkillsEnableCmd() *cobra.Command {
+	var configPath string
+	cmd := &cobra.Command{
+		Use:   "enable [id]",
+		Short: "Enable a skill plugin",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
+			raw, err := doctor.LoadRawConfig(configPath)
+			if err != nil {
+				return err
+			}
+			setPluginEnabled(raw, args[0], true)
+			if err := doctor.WriteRawConfig(configPath, raw); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Enabled skill: %s\n", args[0])
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	return cmd
+}
+
+func buildSkillsDisableCmd() *cobra.Command {
+	var configPath string
+	cmd := &cobra.Command{
+		Use:   "disable [id]",
+		Short: "Disable a skill plugin",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
+			raw, err := doctor.LoadRawConfig(configPath)
+			if err != nil {
+				return err
+			}
+			setPluginEnabled(raw, args[0], false)
+			if err := doctor.WriteRawConfig(configPath, raw); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Disabled skill: %s\n", args[0])
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
 	return cmd
 }
 
@@ -228,6 +501,7 @@ func buildSetupCmd() *cobra.Command {
 		Use:   "setup",
 		Short: "Initialize a workspace with bootstrap files",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
 			cfg := &config.Config{
 				Workspace: config.DefaultWorkspaceConfig(),
 			}
@@ -270,7 +544,7 @@ func buildSetupCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&configPath, "config", "c", "nexus.yaml",
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(),
 		"Path to YAML configuration file (optional)")
 	cmd.Flags().StringVar(&workspaceDir, "workspace", "",
 		"Workspace directory to initialize (overrides config)")
@@ -290,6 +564,16 @@ func buildOnboardCmd() *cobra.Command {
 		Use:   "onboard",
 		Short: "Create a Nexus config file with guided prompts",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(profileName) != "" {
+				opts.ConfigPath = profile.ProfileConfigPath(profileName)
+				if strings.TrimSpace(opts.WorkspacePath) == "" {
+					home, _ := os.UserHomeDir()
+					if strings.TrimSpace(home) == "" {
+						home = "."
+					}
+					opts.WorkspacePath = filepath.Join(home, "nexus-"+profileName)
+				}
+			}
 			if !nonInteractive {
 				reader := bufio.NewReader(os.Stdin)
 				if strings.TrimSpace(opts.DatabaseURL) == "" {
@@ -332,7 +616,7 @@ func buildOnboardCmd() *cobra.Command {
 			}
 
 			if strings.TrimSpace(opts.ConfigPath) == "" {
-				opts.ConfigPath = "nexus.yaml"
+				opts.ConfigPath = resolveConfigPath(opts.ConfigPath)
 			}
 
 			raw := onboard.BuildConfig(opts)
@@ -352,7 +636,7 @@ func buildOnboardCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&opts.ConfigPath, "config", "c", "nexus.yaml", "Path to write the config file")
+	cmd.Flags().StringVarP(&opts.ConfigPath, "config", "c", profile.DefaultConfigPath(), "Path to write the config file")
 	cmd.Flags().StringVar(&opts.DatabaseURL, "database-url", "", "Database URL")
 	cmd.Flags().StringVar(&opts.JWTSecret, "jwt-secret", "", "JWT secret (generated if empty)")
 	cmd.Flags().StringVar(&opts.Provider, "provider", "anthropic", "Default LLM provider")
@@ -395,6 +679,7 @@ func buildAuthSetCmd() *cobra.Command {
 		Use:   "set",
 		Short: "Set provider credentials in the config file",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
 			raw := map[string]any{}
 			if configPath != "" {
 				existing, err := doctor.LoadRawConfig(configPath)
@@ -411,7 +696,7 @@ func buildAuthSetCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&configPath, "config", "c", "nexus.yaml", "Path to YAML configuration file")
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
 	cmd.Flags().StringVar(&provider, "provider", "anthropic", "Provider to update")
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "Provider API key")
 	cmd.Flags().BoolVar(&setDefault, "default", false, "Set as default provider")
@@ -446,6 +731,28 @@ func promptBool(reader *bufio.Reader, label string, defaultValue bool) bool {
 	return answer == "y" || answer == "yes"
 }
 
+func setPluginEnabled(raw map[string]any, id string, enabled bool) {
+	if raw == nil {
+		return
+	}
+	pluginsSection, ok := raw["plugins"].(map[string]any)
+	if !ok {
+		pluginsSection = map[string]any{}
+		raw["plugins"] = pluginsSection
+	}
+	entries, ok := pluginsSection["entries"].(map[string]any)
+	if !ok {
+		entries = map[string]any{}
+		pluginsSection["entries"] = entries
+	}
+	entry, ok := entries[id].(map[string]any)
+	if !ok {
+		entry = map[string]any{}
+		entries[id] = entry
+	}
+	entry["enabled"] = enabled
+}
+
 // buildServeCmd creates the "serve" command that starts the gateway server.
 // This is the primary command for running Nexus in production.
 func buildServeCmd() *cobra.Command {
@@ -477,12 +784,13 @@ Graceful shutdown is handled on SIGINT/SIGTERM signals.`,
   # Start with debug logging
   nexus serve --debug`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
 			return runServe(cmd.Context(), configPath, debug)
 		},
 	}
 
 	// Define flags with descriptive help text.
-	cmd.Flags().StringVarP(&configPath, "config", "c", "nexus.yaml",
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(),
 		"Path to YAML configuration file")
 	cmd.Flags().BoolVarP(&debug, "debug", "d", false,
 		"Enable debug logging (verbose output)")
@@ -613,6 +921,7 @@ based on their timestamp prefix.`,
   # Apply only the next 2 migrations
   nexus migrate up --steps 2`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
 			slog.Info("running database migrations",
 				"config", configPath,
 				"steps", steps,
@@ -636,7 +945,7 @@ based on their timestamp prefix.`,
 		},
 	}
 
-	cmd.Flags().StringVarP(&configPath, "config", "c", "nexus.yaml", "Path to config file")
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to config file")
 	cmd.Flags().IntVarP(&steps, "steps", "n", 0, "Number of migrations to apply (0 = all)")
 
 	return cmd
@@ -662,6 +971,7 @@ if the migration removed columns or tables.`,
   # Rollback the last 3 migrations
   nexus migrate down --steps 3`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
 			slog.Warn("rolling back migrations",
 				"config", configPath,
 				"steps", steps,
@@ -673,7 +983,7 @@ if the migration removed columns or tables.`,
 		},
 	}
 
-	cmd.Flags().StringVarP(&configPath, "config", "c", "nexus.yaml", "Path to config file")
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to config file")
 	cmd.Flags().IntVarP(&steps, "steps", "n", 1, "Number of migrations to rollback")
 
 	return cmd
@@ -690,6 +1000,7 @@ func buildMigrateStatusCmd() *cobra.Command {
 
 Shows which migrations have been applied and which are pending.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
 			fmt.Println("Migration Status")
 			fmt.Println("================")
 			fmt.Println()
@@ -707,7 +1018,7 @@ Shows which migrations have been applied and which are pending.`,
 		},
 	}
 
-	cmd.Flags().StringVarP(&configPath, "config", "c", "nexus.yaml", "Path to config file")
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to config file")
 
 	return cmd
 }
@@ -728,6 +1039,7 @@ Nexus supports multiple messaging platforms:
 	cmd.AddCommand(buildChannelsListCmd())
 	cmd.AddCommand(buildChannelsStatusCmd())
 	cmd.AddCommand(buildChannelsTestCmd())
+	cmd.AddCommand(buildChannelsLoginCmd())
 
 	return cmd
 }
@@ -736,11 +1048,12 @@ Nexus supports multiple messaging platforms:
 func buildChannelsListCmd() *cobra.Command {
 	var configPath string
 
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List configured channels",
 		Long:  "Display all messaging channels defined in the configuration.",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
 			cfg, err := config.Load(configPath)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
@@ -777,6 +1090,54 @@ func buildChannelsListCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to config file")
+	return cmd
+}
+
+func buildChannelsLoginCmd() *cobra.Command {
+	var configPath string
+	cmd := &cobra.Command{
+		Use:   "login",
+		Short: "Validate channel credentials",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
+			cfg, err := config.Load(configPath)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+			out := cmd.OutOrStdout()
+			fmt.Fprintln(out, "Channel login checks:")
+
+			if cfg.Channels.Telegram.Enabled {
+				if cfg.Channels.Telegram.BotToken == "" {
+					fmt.Fprintln(out, "  - Telegram: missing bot_token (use @BotFather)")
+				} else {
+					fmt.Fprintln(out, "  - Telegram: token set")
+				}
+			}
+
+			if cfg.Channels.Discord.Enabled {
+				if cfg.Channels.Discord.BotToken == "" || cfg.Channels.Discord.AppID == "" {
+					fmt.Fprintln(out, "  - Discord: missing bot_token/app_id (create app + bot token)")
+				} else {
+					fmt.Fprintln(out, "  - Discord: token + app id set")
+				}
+			}
+
+			if cfg.Channels.Slack.Enabled {
+				if cfg.Channels.Slack.BotToken == "" || cfg.Channels.Slack.AppToken == "" || cfg.Channels.Slack.SigningSecret == "" {
+					fmt.Fprintln(out, "  - Slack: missing bot_token/app_token/signing_secret")
+				} else {
+					fmt.Fprintln(out, "  - Slack: credentials set")
+				}
+			}
+
+			fmt.Fprintln(out, "Run `nexus channels test <channel>` to send a test message.")
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to config file")
+	return cmd
 }
 
 // buildChannelsStatusCmd creates the "channels status" command.
@@ -989,6 +1350,7 @@ Shows the status of all components including:
 - Tool executor status
 - Resource utilization`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
 			if json {
 				// TODO: Output JSON format for scripting.
 				fmt.Println(`{"status": "healthy", "version": "` + version + `"}`)
@@ -1037,7 +1399,7 @@ Shows the status of all components including:
 		},
 	}
 
-	cmd.Flags().StringVarP(&configPath, "config", "c", "nexus.yaml", "Path to config file")
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to config file")
 	cmd.Flags().BoolVar(&json, "json", false, "Output in JSON format")
 
 	return cmd
@@ -1054,6 +1416,7 @@ func buildDoctorCmd() *cobra.Command {
 		Use:   "doctor",
 		Short: "Validate configuration and plugin manifests",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
 			out := cmd.OutOrStdout()
 
 			raw, err := doctor.LoadRawConfig(configPath)
@@ -1163,7 +1526,7 @@ func buildDoctorCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&configPath, "config", "c", "nexus.yaml",
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(),
 		"Path to YAML configuration file")
 	cmd.Flags().BoolVar(&repair, "repair", false, "Apply migrations and common repairs")
 	cmd.Flags().BoolVar(&probe, "probe", false, "Run channel health probes")
@@ -1197,6 +1560,7 @@ func buildPromptCmd() *cobra.Command {
 		Use:   "prompt",
 		Short: "Render the system prompt for a session/message",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
 			cfg, err := config.Load(configPath)
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
@@ -1236,7 +1600,7 @@ func buildPromptCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&configPath, "config", "c", "nexus.yaml",
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(),
 		"Path to YAML configuration file")
 	cmd.Flags().StringVar(&sessionID, "session-id", "", "Session ID for memory scoping")
 	cmd.Flags().StringVar(&channel, "channel", "", "Channel type (telegram, discord, slack)")

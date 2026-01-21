@@ -181,6 +181,50 @@ llm:
 	}
 }
 
+func TestLoadValidatesMemorySearchEmbeddingsCacheTTL(t *testing.T) {
+	path := writeConfig(t, `
+tools:
+  memory_search:
+    enabled: true
+    embeddings:
+      cache_ttl: -5s
+llm:
+  default_provider: anthropic
+  providers:
+    anthropic: {}
+`)
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatalf("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "memory_search.embeddings.cache_ttl") {
+		t.Fatalf("expected memory_search.embeddings.cache_ttl error, got %v", err)
+	}
+}
+
+func TestLoadValidatesMemorySearchEmbeddingsTimeout(t *testing.T) {
+	path := writeConfig(t, `
+tools:
+  memory_search:
+    enabled: true
+    embeddings:
+      timeout: -5s
+llm:
+  default_provider: anthropic
+  providers:
+    anthropic: {}
+`)
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatalf("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "memory_search.embeddings.timeout") {
+		t.Fatalf("expected memory_search.embeddings.timeout error, got %v", err)
+	}
+}
+
 func TestLoadValidatesWorkspaceMaxChars(t *testing.T) {
 	path := writeConfig(t, `
 workspace:

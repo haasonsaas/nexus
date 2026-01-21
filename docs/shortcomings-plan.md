@@ -52,6 +52,10 @@
    - [x] Add onboarding + auth CLI flows.
    - [x] Add channel policy checks in doctor.
    - [x] Add memory search tool (lexical/vector/hybrid) and memory flush confirmations.
+   - [x] Add remote embeddings + cache for memory search (OpenAI-compatible).
+   - [x] Add profile-aware config selection + profile CLI.
+   - [x] Add skills CLI (list/enable/disable) and channel login checks.
+   - [x] Auto-restart services after install/repair.
 
 5) Testing improvements
    - [x] Add unit test for buffered runtime response channel.
@@ -91,3 +95,5 @@
 - 2026-01-21: Added `nexus setup`, doctor repairs/migrations, and channel health probes.
 - 2026-01-21: Added memory search tool, memory flush reminders, service/daemon audits, and startup migration checks.
 - 2026-01-21: Added service install/repair CLI, onboarding/auth flows, channel policy checks, vector/hybrid memory search, and memory flush confirmations.
+- 2026-01-21: Claude CLI blocked by updated Terms prompt when run non-interactively; requires interactive run to accept.
+- 2026-01-21: Added profiles + skills + channel login CLI, NEXUS_PROFILE support, memory search remote embeddings + cache, and service auto-restart hooks.

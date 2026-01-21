@@ -239,6 +239,14 @@ data:
         max_results: 5
         max_snippet_len: 200
         mode: hybrid
+        embeddings:
+          provider: openai
+          api_key: ${OPENAI_API_KEY}
+          base_url: https://api.openai.com/v1
+          model: text-embedding-3-small
+          cache_dir: ~/.nexus/cache/embeddings
+          cache_ttl: 24h
+          timeout: 15s
       sandbox:
         enabled: true
         pool_size: 10
@@ -306,8 +314,8 @@ nexus auth set --provider anthropic --api-key $ANTHROPIC_API_KEY --config nexus.
 
 Service install/repair:
 ```bash
-nexus service install --config nexus.yaml
-nexus service repair --config nexus.yaml
+nexus service install --config nexus.yaml --restart
+nexus service repair --config nexus.yaml --restart
 nexus service status --config nexus.yaml
 ```
 

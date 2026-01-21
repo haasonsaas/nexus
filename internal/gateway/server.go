@@ -511,6 +511,15 @@ func (s *Server) registerTools(runtime *agent.Runtime) error {
 			MaxResults:    s.config.Tools.MemorySearch.MaxResults,
 			MaxSnippetLen: s.config.Tools.MemorySearch.MaxSnippetLen,
 			Mode:          s.config.Tools.MemorySearch.Mode,
+			Embeddings: memorysearch.EmbeddingsConfig{
+				Provider: s.config.Tools.MemorySearch.Embeddings.Provider,
+				APIKey:   s.config.Tools.MemorySearch.Embeddings.APIKey,
+				BaseURL:  s.config.Tools.MemorySearch.Embeddings.BaseURL,
+				Model:    s.config.Tools.MemorySearch.Embeddings.Model,
+				CacheDir: s.config.Tools.MemorySearch.Embeddings.CacheDir,
+				CacheTTL: s.config.Tools.MemorySearch.Embeddings.CacheTTL,
+				Timeout:  s.config.Tools.MemorySearch.Embeddings.Timeout,
+			},
 		}
 		runtime.RegisterTool(memorysearch.NewMemorySearchTool(searchConfig))
 	}

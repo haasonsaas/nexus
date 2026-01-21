@@ -19,7 +19,9 @@ var dockerCheck struct {
 
 func requireDocker(t *testing.T) {
 	t.Helper()
-	if testing.Short() {
+	force := os.Getenv("NEXUS_DOCKER_TESTS") == "1"
+	allowPull := os.Getenv("NEXUS_DOCKER_PULL") == "1"
+	if testing.Short() && !force {
 		t.Skip("Skipping integration test in short mode")
 	}
 
@@ -29,7 +31,7 @@ func requireDocker(t *testing.T) {
 			return
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := exec.CommandContext(ctx, "docker", "info").Run(); err != nil {
 			dockerCheck.err = err
@@ -39,8 +41,17 @@ func requireDocker(t *testing.T) {
 		images := []string{"python:3.11-alpine", "node:20-alpine", "golang:1.22-alpine", "bash:5-alpine"}
 		for _, image := range images {
 			if err := exec.CommandContext(ctx, "docker", "image", "inspect", image).Run(); err != nil {
-				dockerCheck.err = err
-				return
+				if !allowPull {
+					dockerCheck.err = err
+					return
+				}
+				pullCtx, pullCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+				if pullErr := exec.CommandContext(pullCtx, "docker", "pull", image).Run(); pullErr != nil {
+					pullCancel()
+					dockerCheck.err = pullErr
+					return
+				}
+				pullCancel()
 			}
 		}
 
@@ -54,7 +65,13 @@ func requireDocker(t *testing.T) {
 
 	if dockerCheck.err != nil {
 		if errors.Is(dockerCheck.err, exec.ErrNotFound) {
+			if force {
+				t.Fatalf("Docker required but not installed")
+			}
 			t.Skip("Docker not installed")
+		}
+		if force {
+			t.Fatalf("Docker required but unavailable: %v", dockerCheck.err)
 		}
 		t.Skipf("Docker not available for tests: %v", dockerCheck.err)
 	}

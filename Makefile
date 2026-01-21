@@ -1,4 +1,4 @@
-.PHONY: all build test clean proto proto-lint proto-breaking install-tools help
+.PHONY: all build test test-integration clean proto proto-lint proto-breaking install-tools help
 
 # Default target
 all: build
@@ -12,6 +12,11 @@ build:
 test:
 	@echo "Running tests..."
 	@go test -v ./...
+
+# Run integration tests (Docker + Playwright required)
+test-integration:
+	@echo "Running integration tests..."
+	@NEXUS_DOCKER_TESTS=1 NEXUS_DOCKER_PULL=1 NEXUS_BROWSER_TESTS=1 go test -v ./...
 
 # Clean build artifacts
 clean:
@@ -70,6 +75,7 @@ help:
 	@echo "Nexus Makefile Commands:"
 	@echo "  make build          - Build the project"
 	@echo "  make test           - Run tests"
+	@echo "  make test-integration - Run integration tests (Docker + Playwright)"
 	@echo "  make clean          - Clean build artifacts"
 	@echo "  make proto          - Generate protobuf code"
 	@echo "  make proto-lint     - Lint protobuf files (requires buf)"

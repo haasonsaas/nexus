@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -18,7 +19,8 @@ var playwrightCheck struct {
 
 func requirePlaywright(t *testing.T) {
 	t.Helper()
-	if testing.Short() {
+	force := os.Getenv("NEXUS_BROWSER_TESTS") == "1"
+	if testing.Short() && !force {
 		t.Skip("Skipping browser integration tests in short mode")
 	}
 	playwrightCheck.once.Do(func() {
@@ -45,6 +47,9 @@ func requirePlaywright(t *testing.T) {
 	})
 
 	if playwrightCheck.err != nil {
+		if force {
+			t.Fatalf("Playwright required: %v", playwrightCheck.err)
+		}
 		t.Skipf("Playwright not available: %v", playwrightCheck.err)
 	}
 }

@@ -30,6 +30,13 @@ auth:
       client_secret: ${GITHUB_CLIENT_SECRET}
       redirect_url: http://localhost:8080/auth/github/callback
 
+session:
+  # Default agent ID used for session routing
+  default_agent_id: main
+  # Session scope for threaded channels: "thread" or "channel"
+  slack_scope: thread
+  discord_scope: thread
+
 channels:
   telegram:
     enabled: true

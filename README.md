@@ -157,6 +157,11 @@ database:
 auth:
   jwt_secret: ${JWT_SECRET}  # Generate with: openssl rand -base64 32
 
+session:
+  default_agent_id: main
+  slack_scope: thread
+  discord_scope: thread
+
 llm:
   default_provider: anthropic
   providers:
@@ -196,6 +201,18 @@ tools:
 logging:
   level: info
   format: json
+```
+
+### Testing
+
+Standard test run:
+```bash
+go test ./...
+```
+
+Integration tests (requires Docker + Playwright deps):
+```bash
+NEXUS_DOCKER_TESTS=1 NEXUS_DOCKER_PULL=1 NEXUS_BROWSER_TESTS=1 go test ./...
 ```
 
 ### Running

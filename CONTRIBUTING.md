@@ -11,8 +11,13 @@ Please be respectful and constructive in all interactions. We aim to maintain a 
 ### Prerequisites
 
 - Go 1.24 or later
-- Docker (for running CockroachDB and tests)
+- Docker (for running CockroachDB and sandbox tests)
 - Make (optional, but recommended)
+- Playwright system dependencies (for browser tool tests)
+
+Optional integration test requirements:
+- Docker images: `python:3.11-alpine`, `node:20-alpine`, `golang:1.22-alpine`, `bash:5-alpine`
+- Playwright browser dependencies (GTK/GStreamer/etc.)
 
 ### Development Setup
 
@@ -38,6 +43,18 @@ Please be respectful and constructive in all interactions. We aim to maintain a 
    ```bash
    make test
    ```
+
+### Integration Tests
+
+Some tests require Docker and Playwright browser dependencies. By default, those tests will **skip** if the environment is missing the prerequisites. To force them to run (and fail if missing), set:
+
+```bash
+NEXUS_DOCKER_TESTS=1 NEXUS_DOCKER_PULL=1 NEXUS_BROWSER_TESTS=1 go test ./...
+```
+
+- `NEXUS_DOCKER_TESTS=1` forces sandbox integration tests to run.
+- `NEXUS_DOCKER_PULL=1` allows tests to `docker pull` required images if missing.
+- `NEXUS_BROWSER_TESTS=1` forces browser integration tests to run.
 
 5. Build the binary:
    ```bash

@@ -9,12 +9,20 @@ import (
 
 // SystemPromptOptions holds dynamic prompt sections that vary per request.
 type SystemPromptOptions struct {
-	ToolNotes         string
-	MemoryLines       []string
-	Heartbeat         string
-	WorkspaceSections []PromptSection
-	MemoryFlush       string
-	SkillContent      []SkillSection
+	ToolNotes           string
+	MemoryLines         []string
+	VectorMemoryResults []VectorMemoryResult // Results from semantic memory search
+	Heartbeat           string
+	WorkspaceSections   []PromptSection
+	MemoryFlush         string
+	SkillContent        []SkillSection
+}
+
+// VectorMemoryResult represents a result from vector memory search.
+type VectorMemoryResult struct {
+	Content string
+	Score   float32
+	Source  string
 }
 
 // SkillSection represents skill content to inject into the prompt.
@@ -103,6 +111,15 @@ func buildSystemPrompt(cfg *config.Config, opts SystemPromptOptions) string {
 		lines = append(lines, fmt.Sprintf("Recent memory:\n%s", strings.Join(memoryLines, "\n")))
 	}
 
+	// Add vector memory results if available
+	if vectorResults := normalizeVectorResults(opts.VectorMemoryResults); len(vectorResults) > 0 {
+		var resultLines []string
+		for _, r := range vectorResults {
+			resultLines = append(resultLines, fmt.Sprintf("- [%.2f] %s", r.Score, truncateContent(r.Content, 200)))
+		}
+		lines = append(lines, fmt.Sprintf("Relevant context (from memory search):\n%s", strings.Join(resultLines, "\n")))
+	}
+
 	if notes := strings.TrimSpace(opts.ToolNotes); notes != "" {
 		lines = append(lines, fmt.Sprintf("Tool notes:\n%s", notes))
 	}
@@ -174,4 +191,30 @@ func normalizeSkillSections(sections []SkillSection) []SkillSection {
 		})
 	}
 	return out
+}
+
+func normalizeVectorResults(results []VectorMemoryResult) []VectorMemoryResult {
+	if len(results) == 0 {
+		return nil
+	}
+	out := make([]VectorMemoryResult, 0, len(results))
+	for _, r := range results {
+		content := strings.TrimSpace(r.Content)
+		if content == "" {
+			continue
+		}
+		out = append(out, VectorMemoryResult{
+			Content: content,
+			Score:   r.Score,
+			Source:  strings.TrimSpace(r.Source),
+		})
+	}
+	return out
+}
+
+func truncateContent(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-3] + "..."
 }

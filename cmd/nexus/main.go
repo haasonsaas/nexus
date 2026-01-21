@@ -48,6 +48,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/doctor"
 	"github.com/haasonsaas/nexus/internal/gateway"
+	"github.com/haasonsaas/nexus/internal/memory"
 	"github.com/haasonsaas/nexus/internal/onboard"
 	"github.com/haasonsaas/nexus/internal/plugins"
 	"github.com/haasonsaas/nexus/internal/profile"
@@ -123,6 +124,7 @@ Documentation: https://github.com/haasonsaas/nexus`,
 		buildProfileCmd(),
 		buildSkillsCmd(),
 		buildServiceCmd(),
+		buildMemoryCmd(),
 	)
 
 	return rootCmd
@@ -725,6 +727,258 @@ func setSkillEnabled(raw map[string]any, name string, enabled bool) {
 		entries[name] = entry
 	}
 	entry["enabled"] = enabled
+}
+
+// buildMemoryCmd creates the "memory" command group for vector memory.
+func buildMemoryCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "memory",
+		Short: "Manage vector memory for semantic search",
+		Long: `Manage the vector memory system for semantic search.
+
+Vector memory allows semantic search over conversation history
+and indexed documents using embedding models (OpenAI, Ollama).
+
+Storage backends: sqlite-vec (default), LanceDB, pgvector`,
+	}
+	cmd.AddCommand(
+		buildMemorySearchCmd(),
+		buildMemoryIndexCmd(),
+		buildMemoryStatsCmd(),
+		buildMemoryCompactCmd(),
+	)
+	return cmd
+}
+
+func buildMemorySearchCmd() *cobra.Command {
+	var (
+		configPath string
+		scope      string
+		scopeID    string
+		limit      int
+		threshold  float32
+	)
+	cmd := &cobra.Command{
+		Use:   "search [query]",
+		Short: "Search memory using semantic similarity",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
+			cfg, err := config.Load(configPath)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			mgr, err := memory.NewManager(&cfg.VectorMemory)
+			if err != nil {
+				return fmt.Errorf("failed to create memory manager: %w", err)
+			}
+			defer mgr.Close()
+
+			memScope := models.MemoryScope(scope)
+			resp, err := mgr.Search(cmd.Context(), &models.SearchRequest{
+				Query:     args[0],
+				Scope:     memScope,
+				ScopeID:   scopeID,
+				Limit:     limit,
+				Threshold: threshold,
+			})
+			if err != nil {
+				return fmt.Errorf("search failed: %w", err)
+			}
+
+			out := cmd.OutOrStdout()
+			if len(resp.Results) == 0 {
+				fmt.Fprintln(out, "No results found.")
+				return nil
+			}
+
+			fmt.Fprintf(out, "Found %d results (query time: %v):\n\n", len(resp.Results), resp.QueryTime)
+			for i, result := range resp.Results {
+				content := result.Entry.Content
+				if len(content) > 200 {
+					content = content[:197] + "..."
+				}
+				fmt.Fprintf(out, "%d. [Score: %.3f] %s\n", i+1, result.Score, content)
+				fmt.Fprintf(out, "   Source: %s | Created: %s\n\n",
+					result.Entry.Metadata.Source, result.Entry.CreatedAt.Format(time.RFC3339))
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	cmd.Flags().StringVar(&scope, "scope", "global", "Search scope (session, channel, agent, global)")
+	cmd.Flags().StringVar(&scopeID, "scope-id", "", "Scope ID for scoped searches")
+	cmd.Flags().IntVar(&limit, "limit", 10, "Maximum number of results")
+	cmd.Flags().Float32Var(&threshold, "threshold", 0.7, "Minimum similarity threshold (0-1)")
+	return cmd
+}
+
+func buildMemoryIndexCmd() *cobra.Command {
+	var (
+		configPath string
+		scope      string
+		scopeID    string
+		source     string
+	)
+	cmd := &cobra.Command{
+		Use:   "index [file-or-directory]",
+		Short: "Index files into memory",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
+			cfg, err := config.Load(configPath)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			mgr, err := memory.NewManager(&cfg.VectorMemory)
+			if err != nil {
+				return fmt.Errorf("failed to create memory manager: %w", err)
+			}
+			defer mgr.Close()
+
+			path := args[0]
+			info, err := os.Stat(path)
+			if err != nil {
+				return fmt.Errorf("failed to stat path: %w", err)
+			}
+
+			var entries []*models.MemoryEntry
+			if info.IsDir() {
+				err = filepath.Walk(path, func(p string, fi os.FileInfo, err error) error {
+					if err != nil || fi.IsDir() {
+						return err
+					}
+					entry, err := fileToEntry(p, scope, scopeID, source)
+					if err != nil {
+						slog.Warn("skipping file", "path", p, "error", err)
+						return nil
+					}
+					entries = append(entries, entry)
+					return nil
+				})
+				if err != nil {
+					return fmt.Errorf("failed to walk directory: %w", err)
+				}
+			} else {
+				entry, err := fileToEntry(path, scope, scopeID, source)
+				if err != nil {
+					return fmt.Errorf("failed to read file: %w", err)
+				}
+				entries = append(entries, entry)
+			}
+
+			if len(entries) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No files to index.")
+				return nil
+			}
+
+			if err := mgr.Index(cmd.Context(), entries); err != nil {
+				return fmt.Errorf("indexing failed: %w", err)
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Indexed %d entries.\n", len(entries))
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	cmd.Flags().StringVar(&scope, "scope", "global", "Memory scope (session, channel, agent, global)")
+	cmd.Flags().StringVar(&scopeID, "scope-id", "", "Scope ID")
+	cmd.Flags().StringVar(&source, "source", "document", "Source label for indexed content")
+	return cmd
+}
+
+func fileToEntry(path, scope, scopeID, source string) (*models.MemoryEntry, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	entry := &models.MemoryEntry{
+		Content: string(content),
+		Metadata: models.MemoryMetadata{
+			Source: source,
+			Extra:  map[string]any{"path": path},
+		},
+		CreatedAt: time.Now(),
+	}
+	switch models.MemoryScope(scope) {
+	case models.ScopeSession:
+		entry.SessionID = scopeID
+	case models.ScopeChannel:
+		entry.ChannelID = scopeID
+	case models.ScopeAgent:
+		entry.AgentID = scopeID
+	}
+	return entry, nil
+}
+
+func buildMemoryStatsCmd() *cobra.Command {
+	var configPath string
+	cmd := &cobra.Command{
+		Use:   "stats",
+		Short: "Show memory statistics",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
+			cfg, err := config.Load(configPath)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			mgr, err := memory.NewManager(&cfg.VectorMemory)
+			if err != nil {
+				return fmt.Errorf("failed to create memory manager: %w", err)
+			}
+			defer mgr.Close()
+
+			stats, err := mgr.Stats(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("failed to get stats: %w", err)
+			}
+
+			out := cmd.OutOrStdout()
+			fmt.Fprintln(out, "Memory Statistics")
+			fmt.Fprintln(out, "=================")
+			fmt.Fprintf(out, "Total Entries:      %d\n", stats.TotalEntries)
+			fmt.Fprintf(out, "Backend:            %s\n", stats.Backend)
+			fmt.Fprintf(out, "Embedding Provider: %s\n", stats.EmbeddingProvider)
+			fmt.Fprintf(out, "Embedding Model:    %s\n", stats.EmbeddingModel)
+			fmt.Fprintf(out, "Dimension:          %d\n", stats.Dimension)
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	return cmd
+}
+
+func buildMemoryCompactCmd() *cobra.Command {
+	var configPath string
+	cmd := &cobra.Command{
+		Use:   "compact",
+		Short: "Compact and optimize memory storage",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
+			cfg, err := config.Load(configPath)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			mgr, err := memory.NewManager(&cfg.VectorMemory)
+			if err != nil {
+				return fmt.Errorf("failed to create memory manager: %w", err)
+			}
+			defer mgr.Close()
+
+			if err := mgr.Compact(cmd.Context()); err != nil {
+				return fmt.Errorf("compact failed: %w", err)
+			}
+
+			fmt.Fprintln(cmd.OutOrStdout(), "Memory compacted successfully.")
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	return cmd
 }
 
 // buildSetupCmd creates the "setup" command for initializing a workspace.

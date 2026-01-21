@@ -45,7 +45,54 @@ func (s *Server) systemPromptForMessage(ctx context.Context, session *models.Ses
 		}
 	}
 
+	// Load vector memory context if enabled and message content is available
+	if s.vectorMemory != nil && msg != nil && msg.Content != "" {
+		opts.VectorMemoryResults = s.loadVectorMemoryContext(ctx, session, msg)
+	}
+
 	return buildSystemPrompt(s.config, opts)
+}
+
+// loadVectorMemoryContext searches vector memory for relevant context.
+func (s *Server) loadVectorMemoryContext(ctx context.Context, session *models.Session, msg *models.Message) []VectorMemoryResult {
+	if s.vectorMemory == nil || msg == nil || msg.Content == "" {
+		return nil
+	}
+
+	scope := models.MemoryScope(s.config.VectorMemory.Search.DefaultScope)
+	scopeID := ""
+	if session != nil {
+		switch scope {
+		case models.ScopeSession:
+			scopeID = session.ID
+		case models.ScopeChannel:
+			scopeID = string(msg.Channel)
+		case models.ScopeAgent:
+			scopeID = session.AgentID
+		}
+	}
+
+	resp, err := s.vectorMemory.Search(ctx, &models.SearchRequest{
+		Query:     msg.Content,
+		Scope:     scope,
+		ScopeID:   scopeID,
+		Limit:     5, // Keep context small
+		Threshold: s.config.VectorMemory.Search.DefaultThreshold,
+	})
+	if err != nil {
+		s.logger.Error("vector memory search failed", "error", err)
+		return nil
+	}
+
+	results := make([]VectorMemoryResult, 0, len(resp.Results))
+	for _, r := range resp.Results {
+		results = append(results, VectorMemoryResult{
+			Content: r.Entry.Content,
+			Score:   r.Score,
+			Source:  r.Entry.Metadata.Source,
+		})
+	}
+	return results
 }
 
 func (s *Server) loadToolNotes() string {

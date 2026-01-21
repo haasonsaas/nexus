@@ -21,6 +21,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/auth"
 	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/config"
+	"github.com/haasonsaas/nexus/internal/memory"
 	"github.com/haasonsaas/nexus/internal/plugins"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/skills"
@@ -49,6 +50,7 @@ type Server struct {
 	browserPool   *browser.Pool
 	memoryLogger  *sessions.MemoryLogger
 	skillsManager *skills.Manager
+	vectorMemory  *memory.Manager
 
 	channelPlugins *channelPluginRegistry
 	runtimePlugins *plugins.RuntimeRegistry
@@ -109,6 +111,12 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		}
 	}()
 
+	// Initialize vector memory manager (optional, returns nil if not enabled)
+	vectorMem, err := memory.NewManager(&cfg.VectorMemory)
+	if err != nil {
+		logger.Warn("vector memory not initialized", "error", err)
+	}
+
 	server := &Server{
 		config:         cfg,
 		grpc:           grpcServer,
@@ -117,6 +125,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		channelPlugins: newChannelPluginRegistry(),
 		runtimePlugins: plugins.DefaultRuntimeRegistry(),
 		skillsManager:  skillsMgr,
+		vectorMemory:   vectorMem,
 	}
 	registerBuiltinChannelPlugins(server.channelPlugins)
 
@@ -182,6 +191,12 @@ func (s *Server) Stop(ctx context.Context) error {
 	if closer, ok := s.sessions.(interface{ Close() error }); ok {
 		if err := closer.Close(); err != nil {
 			s.logger.Error("error closing session store", "error", err)
+		}
+	}
+
+	if s.vectorMemory != nil {
+		if err := s.vectorMemory.Close(); err != nil {
+			s.logger.Error("error closing vector memory", "error", err)
 		}
 	}
 

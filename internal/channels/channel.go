@@ -8,42 +8,42 @@ import (
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
-// Adapter is the interface that all channel adapters must implement.
-// It provides a unified interface for interacting with different messaging platforms
-// such as Telegram, Discord, and Slack.
+// Adapter is the minimal contract for a channel connector.
 type Adapter interface {
-	// Start begins listening for messages from the channel.
-	// It should establish connections, authenticate, and start receiving messages.
-	// Returns an error if the adapter fails to start.
-	Start(ctx context.Context) error
-
-	// Stop gracefully shuts down the adapter.
-	// It should close connections, flush pending messages, and clean up resources.
-	// Returns an error if shutdown fails or times out.
-	Stop(ctx context.Context) error
-
-	// Send delivers a message to the channel.
-	// The message should include appropriate metadata for the target platform.
-	// Returns an error if the message cannot be sent.
-	Send(ctx context.Context, msg *models.Message) error
-
-	// Messages returns a channel of inbound messages.
-	// The channel should be closed when the adapter stops.
-	Messages() <-chan *models.Message
-
 	// Type returns the channel type (telegram, discord, slack, etc.).
 	Type() models.ChannelType
+}
 
-	// Status returns the current connection status.
+// LifecycleAdapter represents adapters that can start and stop.
+type LifecycleAdapter interface {
+	Start(ctx context.Context) error
+	Stop(ctx context.Context) error
+}
+
+// OutboundAdapter represents adapters that can send messages.
+type OutboundAdapter interface {
+	Send(ctx context.Context, msg *models.Message) error
+}
+
+// InboundAdapter represents adapters that emit inbound messages.
+type InboundAdapter interface {
+	Messages() <-chan *models.Message
+}
+
+// HealthAdapter represents adapters that expose status and metrics.
+type HealthAdapter interface {
 	Status() Status
-
-	// HealthCheck performs a connectivity check and returns the health status.
-	// This should be a lightweight operation that verifies the adapter can
-	// communicate with the upstream service.
 	HealthCheck(ctx context.Context) HealthStatus
-
-	// Metrics returns the current metrics snapshot for this adapter.
 	Metrics() MetricsSnapshot
+}
+
+// FullAdapter aggregates all adapter capabilities for convenience.
+type FullAdapter interface {
+	Adapter
+	LifecycleAdapter
+	OutboundAdapter
+	InboundAdapter
+	HealthAdapter
 }
 
 // Status represents the connection status of a channel.
@@ -73,24 +73,63 @@ type HealthStatus struct {
 
 // Registry manages multiple channel adapters.
 type Registry struct {
-	adapters map[models.ChannelType]Adapter
+	adapters  map[models.ChannelType]Adapter
+	inbound   map[models.ChannelType]InboundAdapter
+	outbound  map[models.ChannelType]OutboundAdapter
+	lifecycle map[models.ChannelType]LifecycleAdapter
+	health    map[models.ChannelType]HealthAdapter
 }
 
 // NewRegistry creates a new channel registry.
 func NewRegistry() *Registry {
 	return &Registry{
-		adapters: make(map[models.ChannelType]Adapter),
+		adapters:  make(map[models.ChannelType]Adapter),
+		inbound:   make(map[models.ChannelType]InboundAdapter),
+		outbound:  make(map[models.ChannelType]OutboundAdapter),
+		lifecycle: make(map[models.ChannelType]LifecycleAdapter),
+		health:    make(map[models.ChannelType]HealthAdapter),
 	}
 }
 
 // Register adds an adapter to the registry.
 func (r *Registry) Register(adapter Adapter) {
-	r.adapters[adapter.Type()] = adapter
+	channelType := adapter.Type()
+	r.adapters[channelType] = adapter
+
+	if inbound, ok := adapter.(InboundAdapter); ok {
+		r.inbound[channelType] = inbound
+	} else {
+		delete(r.inbound, channelType)
+	}
+
+	if outbound, ok := adapter.(OutboundAdapter); ok {
+		r.outbound[channelType] = outbound
+	} else {
+		delete(r.outbound, channelType)
+	}
+
+	if lifecycle, ok := adapter.(LifecycleAdapter); ok {
+		r.lifecycle[channelType] = lifecycle
+	} else {
+		delete(r.lifecycle, channelType)
+	}
+
+	if health, ok := adapter.(HealthAdapter); ok {
+		r.health[channelType] = health
+	} else {
+		delete(r.health, channelType)
+	}
 }
 
 // Get returns an adapter by channel type.
 func (r *Registry) Get(channelType models.ChannelType) (Adapter, bool) {
 	adapter, ok := r.adapters[channelType]
+	return adapter, ok
+}
+
+// GetOutbound returns an adapter that can send messages for the channel.
+func (r *Registry) GetOutbound(channelType models.ChannelType) (OutboundAdapter, bool) {
+	adapter, ok := r.outbound[channelType]
 	return adapter, ok
 }
 
@@ -105,7 +144,7 @@ func (r *Registry) All() []Adapter {
 
 // StartAll starts all registered adapters.
 func (r *Registry) StartAll(ctx context.Context) error {
-	for _, adapter := range r.adapters {
+	for _, adapter := range r.lifecycle {
 		if err := adapter.Start(ctx); err != nil {
 			return err
 		}
@@ -116,7 +155,7 @@ func (r *Registry) StartAll(ctx context.Context) error {
 // StopAll stops all registered adapters.
 func (r *Registry) StopAll(ctx context.Context) error {
 	var lastErr error
-	for _, adapter := range r.adapters {
+	for _, adapter := range r.lifecycle {
 		if err := adapter.Stop(ctx); err != nil {
 			lastErr = err
 		}
@@ -130,9 +169,9 @@ func (r *Registry) AggregateMessages(ctx context.Context) <-chan *models.Message
 	out := make(chan *models.Message)
 	var wg sync.WaitGroup
 
-	for _, adapter := range r.adapters {
+	for _, adapter := range r.inbound {
 		wg.Add(1)
-		go func(a Adapter) {
+		go func(a InboundAdapter) {
 			defer wg.Done()
 			for {
 				select {

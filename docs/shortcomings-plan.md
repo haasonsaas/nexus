@@ -36,8 +36,8 @@
    - [x] Add memory recall (read today/yesterday logs into the prompt when enabled).
    - [x] Add optional heartbeat checklist integration.
    - [x] Add tool notes file support (path-based, not just inline config).
-   - [ ] Split the monolithic channel adapter interface into focused contracts.
-   - [ ] Add a plugin registry with lazy loading.
+   - [x] Split the monolithic channel adapter interface into focused contracts.
+   - [x] Add a plugin registry with lazy loading.
    - [x] Add schema-driven config validation + explicit defaults pipeline.
 
 5) Testing improvements
@@ -70,3 +70,4 @@
 - 2026-01-21: Claude CLI timeout traced to shell command timeout; resolved by running with longer timeout and shorter prompts.
 - 2026-01-21: Added per-request system prompt overrides with memory recall, heartbeat checklist injection, and tool-notes file support.
 - 2026-01-21: Added strict config parsing (unknown keys fail), validation checks, and explicit defaults pipeline.
+- 2026-01-21: Added channel plugin registry with lazy loading and split channel adapter interfaces into focused contracts.

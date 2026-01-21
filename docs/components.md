@@ -97,7 +97,7 @@ func (r *Router) Route(ctx context.Context, msg *Message) (*Session, error) {
 
 ## 2. Channel Adapters
 
-Each channel adapter implements the `ChannelAdapter` interface and handles platform-specific quirks.
+Each channel adapter implements capability-based interfaces (inbound, outbound, lifecycle, health) and is registered through the channel plugin registry for lazy loading.
 
 ### Telegram Adapter
 

@@ -4,7 +4,7 @@ Production-ready channel adapters for Telegram, Discord, and Slack messaging pla
 
 ## Overview
 
-This package provides a unified interface for interacting with multiple messaging platforms. Each adapter implements the `Adapter` interface with comprehensive production features:
+This package provides capability-based interfaces for interacting with multiple messaging platforms. Each adapter implements `Adapter` plus the relevant capability interfaces (`InboundAdapter`, `OutboundAdapter`, `LifecycleAdapter`, `HealthAdapter`), and the `FullAdapter` aggregate covers the full surface.
 
 - **Structured Logging**: Using `log/slog` with contextual fields for observability
 - **Error Handling**: Typed errors with error codes for different failure modes
@@ -17,7 +17,7 @@ This package provides a unified interface for interacting with multiple messagin
 
 ```
 channels/
-├── channel.go       # Base Adapter interface and Registry
+├── channel.go       # Adapter interfaces and Registry
 ├── errors.go        # Typed error codes and error handling
 ├── metrics.go       # Metrics collection infrastructure
 ├── ratelimit.go     # Rate limiting implementation
@@ -415,7 +415,7 @@ func TestAdapter(t *testing.T) {
 
 When adding new adapters:
 
-1. Implement the `Adapter` interface
+1. Implement `Adapter` plus the capability interfaces you support (`InboundAdapter`, `OutboundAdapter`, `LifecycleAdapter`, `HealthAdapter`), or use `FullAdapter` for the full surface
 2. Use structured logging with `log/slog`
 3. Apply rate limiting with `channels.RateLimiter`
 4. Record metrics with `channels.Metrics`

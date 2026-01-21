@@ -23,9 +23,6 @@ import (
 	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/haasonsaas/nexus/internal/agent/providers"
 	"github.com/haasonsaas/nexus/internal/channels"
-	"github.com/haasonsaas/nexus/internal/channels/discord"
-	"github.com/haasonsaas/nexus/internal/channels/slack"
-	"github.com/haasonsaas/nexus/internal/channels/telegram"
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/tools/browser"
@@ -51,6 +48,8 @@ type Server struct {
 
 	browserPool  *browser.Pool
 	memoryLogger *sessions.MemoryLogger
+
+	channelPlugins *channelPluginRegistry
 }
 
 // NewServer creates a new gateway server.
@@ -83,11 +82,13 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	reflection.Register(grpcServer)
 
 	server := &Server{
-		config:   cfg,
-		grpc:     grpcServer,
-		channels: channels.NewRegistry(),
-		logger:   logger,
+		config:         cfg,
+		grpc:           grpcServer,
+		channels:       channels.NewRegistry(),
+		logger:         logger,
+		channelPlugins: newChannelPluginRegistry(),
 	}
+	registerBuiltinChannelPlugins(server.channelPlugins)
 
 	if err := server.registerChannelsFromConfig(); err != nil {
 		return nil, err
@@ -263,7 +264,7 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		return
 	}
 
-	adapter, ok := s.channels.Get(msg.Channel)
+	adapter, ok := s.channels.GetOutbound(msg.Channel)
 	if !ok {
 		s.logger.Error("no adapter registered for channel", "channel", msg.Channel)
 		return
@@ -482,57 +483,11 @@ func (s *Server) registerTools(runtime *agent.Runtime) error {
 }
 
 func (s *Server) registerChannelsFromConfig() error {
-	if s.config.Channels.Telegram.Enabled {
-		if s.config.Channels.Telegram.BotToken == "" {
-			return errors.New("telegram bot token is required")
-		}
-		mode := telegram.ModeLongPolling
-		webhookURL := strings.TrimSpace(s.config.Channels.Telegram.Webhook)
-		if webhookURL != "" {
-			mode = telegram.ModeWebhook
-		}
-		adapter, err := telegram.NewAdapter(telegram.Config{
-			Token:      s.config.Channels.Telegram.BotToken,
-			Mode:       mode,
-			WebhookURL: webhookURL,
-			Logger:     s.logger,
-		})
-		if err != nil {
-			return err
-		}
-		s.channels.Register(adapter)
+	if s.channelPlugins == nil {
+		s.channelPlugins = newChannelPluginRegistry()
+		registerBuiltinChannelPlugins(s.channelPlugins)
 	}
-
-	if s.config.Channels.Discord.Enabled {
-		if s.config.Channels.Discord.BotToken == "" {
-			return errors.New("discord bot token is required")
-		}
-		adapter, err := discord.NewAdapter(discord.Config{
-			Token:  s.config.Channels.Discord.BotToken,
-			Logger: s.logger,
-		})
-		if err != nil {
-			return err
-		}
-		s.channels.Register(adapter)
-	}
-
-	if s.config.Channels.Slack.Enabled {
-		if s.config.Channels.Slack.BotToken == "" || s.config.Channels.Slack.AppToken == "" {
-			return errors.New("slack bot token and app token are required")
-		}
-		adapter, err := slack.NewAdapter(slack.Config{
-			BotToken: s.config.Channels.Slack.BotToken,
-			AppToken: s.config.Channels.Slack.AppToken,
-			Logger:   s.logger,
-		})
-		if err != nil {
-			return err
-		}
-		s.channels.Register(adapter)
-	}
-
-	return nil
+	return s.channelPlugins.LoadEnabled(s.config, s.channels, s.logger)
 }
 
 func (s *Server) resolveConversationID(msg *models.Message) (string, error) {

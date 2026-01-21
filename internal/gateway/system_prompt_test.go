@@ -1,10 +1,13 @@
 package gateway
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/haasonsaas/nexus/internal/config"
+	"github.com/haasonsaas/nexus/pkg/models"
 )
 
 func TestBuildSystemPrompt(t *testing.T) {
@@ -83,5 +86,36 @@ func TestBuildSystemPromptIncludesHeartbeat(t *testing.T) {
 	}
 	if !strings.Contains(prompt, "Review backlog") {
 		t.Fatalf("expected heartbeat content, got %q", prompt)
+	}
+}
+
+func TestBuildSystemPromptIncludesWorkspaceSections(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("Follow the runbook"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "SOUL.md"), []byte("Be concise"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	cfg := &config.Config{
+		Workspace: config.WorkspaceConfig{
+			Enabled:    true,
+			Path:       dir,
+			MaxChars:   200,
+			AgentsFile: "AGENTS.md",
+			SoulFile:   "SOUL.md",
+		},
+	}
+
+	prompt, err := BuildSystemPrompt(cfg, "session-1", &models.Message{})
+	if err != nil {
+		t.Fatalf("BuildSystemPrompt() error = %v", err)
+	}
+	if !strings.Contains(prompt, "Workspace instructions") || !strings.Contains(prompt, "Follow the runbook") {
+		t.Fatalf("expected workspace instructions, got %q", prompt)
+	}
+	if !strings.Contains(prompt, "Persona and boundaries") || !strings.Contains(prompt, "Be concise") {
+		t.Fatalf("expected workspace persona, got %q", prompt)
 	}
 }

@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -16,8 +17,9 @@ func (s *Server) systemPromptForMessage(session *models.Session, msg *models.Mes
 	}
 
 	opts := SystemPromptOptions{
-		ToolNotes: s.loadToolNotes(),
-		Heartbeat: s.loadHeartbeat(msg),
+		ToolNotes:         s.loadToolNotes(),
+		Heartbeat:         s.loadHeartbeat(msg),
+		WorkspaceSections: s.loadWorkspaceSections(),
 	}
 
 	if s.config.Session.Memory.Enabled && s.memoryLogger != nil {
@@ -51,6 +53,15 @@ func (s *Server) loadToolNotes() string {
 	return notes
 }
 
+func (s *Server) loadWorkspaceSections() []PromptSection {
+	sections, err := loadWorkspaceSectionsFromConfig(s.config)
+	if err != nil {
+		s.logger.Error("failed to read workspace files", "error", err)
+		return nil
+	}
+	return sections
+}
+
 func (s *Server) loadHeartbeat(msg *models.Message) string {
 	content, err := loadHeartbeatFromConfig(s.config, msg)
 	if err != nil {
@@ -75,6 +86,12 @@ func BuildSystemPrompt(cfg *config.Config, sessionID string, msg *models.Message
 		return "", err
 	}
 	opts.ToolNotes = notes
+
+	sections, err := loadWorkspaceSectionsFromConfig(cfg)
+	if err != nil {
+		return "", err
+	}
+	opts.WorkspaceSections = sections
 
 	heartbeat, err := loadHeartbeatFromConfig(cfg, msg)
 	if err != nil {
@@ -126,6 +143,20 @@ func loadToolNotesFromConfig(cfg *config.Config) (string, error) {
 	inline := strings.TrimSpace(cfg.Tools.Notes)
 	filePath := strings.TrimSpace(cfg.Tools.NotesFile)
 	if filePath == "" {
+		workspaceFile := resolveWorkspaceFile(cfg, strings.TrimSpace(cfg.Workspace.ToolsFile))
+		if cfg.Workspace.Enabled && workspaceFile != "" {
+			content, err := readPromptFileLimited(workspaceFile, cfg.Workspace.MaxChars)
+			if err != nil {
+				return inline, err
+			}
+			if content == "" {
+				return inline, nil
+			}
+			if inline == "" {
+				return content, nil
+			}
+			return inline + "\n" + content, nil
+		}
 		return inline, nil
 	}
 
@@ -161,6 +192,10 @@ func loadHeartbeatFromConfig(cfg *config.Config, msg *models.Message) (string, e
 }
 
 func readPromptFile(path string) (string, error) {
+	return readPromptFileLimited(path, 0)
+}
+
+func readPromptFileLimited(path string, maxChars int) (string, error) {
 	if strings.TrimSpace(path) == "" {
 		return "", nil
 	}
@@ -171,5 +206,76 @@ func readPromptFile(path string) (string, error) {
 		}
 		return "", err
 	}
-	return strings.TrimSpace(string(data)), nil
+	content := strings.TrimSpace(string(data))
+	if maxChars <= 0 {
+		return content, nil
+	}
+	runes := []rune(content)
+	if len(runes) <= maxChars {
+		return content, nil
+	}
+	truncated := strings.TrimSpace(string(runes[:maxChars]))
+	if truncated == "" {
+		return "", nil
+	}
+	return truncated + "\n...(truncated)", nil
+}
+
+func loadWorkspaceSectionsFromConfig(cfg *config.Config) ([]PromptSection, error) {
+	if cfg == nil || !cfg.Workspace.Enabled {
+		return nil, nil
+	}
+
+	sections := make([]PromptSection, 0, 5)
+	add := func(label, filename string) error {
+		path := resolveWorkspaceFile(cfg, filename)
+		if path == "" {
+			return nil
+		}
+		content, err := readPromptFileLimited(path, cfg.Workspace.MaxChars)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(content) == "" {
+			return nil
+		}
+		sections = append(sections, PromptSection{Label: label, Content: content})
+		return nil
+	}
+
+	if err := add("Workspace instructions", cfg.Workspace.AgentsFile); err != nil {
+		return nil, err
+	}
+	if err := add("Persona and boundaries", cfg.Workspace.SoulFile); err != nil {
+		return nil, err
+	}
+	if err := add("Workspace user profile", cfg.Workspace.UserFile); err != nil {
+		return nil, err
+	}
+	if err := add("Workspace identity", cfg.Workspace.IdentityFile); err != nil {
+		return nil, err
+	}
+	if err := add("Workspace memory", cfg.Workspace.MemoryFile); err != nil {
+		return nil, err
+	}
+
+	return sections, nil
+}
+
+func resolveWorkspaceFile(cfg *config.Config, filename string) string {
+	if cfg == nil {
+		return ""
+	}
+	name := strings.TrimSpace(filename)
+	if name == "" {
+		return ""
+	}
+	if filepath.IsAbs(name) {
+		return name
+	}
+	base := strings.TrimSpace(cfg.Workspace.Path)
+	if base == "" {
+		return name
+	}
+	return filepath.Join(base, name)
 }

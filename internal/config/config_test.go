@@ -118,6 +118,26 @@ llm:
 	}
 }
 
+func TestLoadValidatesWorkspaceMaxChars(t *testing.T) {
+	path := writeConfig(t, `
+workspace:
+  enabled: true
+  max_chars: -5
+llm:
+  default_provider: anthropic
+  providers:
+    anthropic: {}
+`)
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatalf("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "workspace.max_chars") {
+		t.Fatalf("expected workspace.max_chars error, got %v", err)
+	}
+}
+
 func writeConfig(t *testing.T, contents string) string {
 	t.Helper()
 	dir := t.TempDir()

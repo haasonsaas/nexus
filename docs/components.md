@@ -822,6 +822,16 @@ session:
   default_agent_id: main
   slack_scope: thread
   discord_scope: thread
+workspace:
+  enabled: false
+  path: .
+  max_chars: 20000
+  agents_file: AGENTS.md
+  soul_file: SOUL.md
+  user_file: USER.md
+  identity_file: IDENTITY.md
+  tools_file: TOOLS.md
+  memory_file: MEMORY.md
 
 channels:
   telegram:

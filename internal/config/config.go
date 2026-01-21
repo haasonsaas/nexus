@@ -12,17 +12,18 @@ import (
 
 // Config is the main configuration structure for Nexus.
 type Config struct {
-	Server   ServerConfig   `yaml:"server"`
-	Database DatabaseConfig `yaml:"database"`
-	Auth     AuthConfig     `yaml:"auth"`
-	Session  SessionConfig  `yaml:"session"`
-	Identity IdentityConfig `yaml:"identity"`
-	User     UserConfig     `yaml:"user"`
-	Plugins  PluginsConfig  `yaml:"plugins"`
-	Channels ChannelsConfig `yaml:"channels"`
-	LLM      LLMConfig      `yaml:"llm"`
-	Tools    ToolsConfig    `yaml:"tools"`
-	Logging  LoggingConfig  `yaml:"logging"`
+	Server    ServerConfig    `yaml:"server"`
+	Database  DatabaseConfig  `yaml:"database"`
+	Auth      AuthConfig      `yaml:"auth"`
+	Session   SessionConfig   `yaml:"session"`
+	Workspace WorkspaceConfig `yaml:"workspace"`
+	Identity  IdentityConfig  `yaml:"identity"`
+	User      UserConfig      `yaml:"user"`
+	Plugins   PluginsConfig   `yaml:"plugins"`
+	Channels  ChannelsConfig  `yaml:"channels"`
+	LLM       LLMConfig       `yaml:"llm"`
+	Tools     ToolsConfig     `yaml:"tools"`
+	Logging   LoggingConfig   `yaml:"logging"`
 }
 
 type ServerConfig struct {
@@ -64,6 +65,18 @@ type HeartbeatConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	File    string `yaml:"file"`
 	Mode    string `yaml:"mode"`
+}
+
+type WorkspaceConfig struct {
+	Enabled      bool   `yaml:"enabled"`
+	Path         string `yaml:"path"`
+	MaxChars     int    `yaml:"max_chars"`
+	AgentsFile   string `yaml:"agents_file"`
+	SoulFile     string `yaml:"soul_file"`
+	UserFile     string `yaml:"user_file"`
+	IdentityFile string `yaml:"identity_file"`
+	ToolsFile    string `yaml:"tools_file"`
+	MemoryFile   string `yaml:"memory_file"`
 }
 
 type IdentityConfig struct {
@@ -216,6 +229,7 @@ func applyDefaults(cfg *Config) {
 	applyDatabaseDefaults(&cfg.Database)
 	applyAuthDefaults(&cfg.Auth)
 	applySessionDefaults(&cfg.Session)
+	applyWorkspaceDefaults(&cfg.Workspace)
 	applyLLMDefaults(&cfg.LLM)
 	applyLoggingDefaults(&cfg.Logging)
 }
@@ -280,6 +294,33 @@ func applySessionDefaults(cfg *SessionConfig) {
 	}
 }
 
+func applyWorkspaceDefaults(cfg *WorkspaceConfig) {
+	if cfg.Path == "" {
+		cfg.Path = "."
+	}
+	if cfg.MaxChars == 0 {
+		cfg.MaxChars = 20000
+	}
+	if cfg.AgentsFile == "" {
+		cfg.AgentsFile = "AGENTS.md"
+	}
+	if cfg.SoulFile == "" {
+		cfg.SoulFile = "SOUL.md"
+	}
+	if cfg.UserFile == "" {
+		cfg.UserFile = "USER.md"
+	}
+	if cfg.IdentityFile == "" {
+		cfg.IdentityFile = "IDENTITY.md"
+	}
+	if cfg.ToolsFile == "" {
+		cfg.ToolsFile = "TOOLS.md"
+	}
+	if cfg.MemoryFile == "" {
+		cfg.MemoryFile = "MEMORY.md"
+	}
+}
+
 func applyLLMDefaults(cfg *LLMConfig) {
 	if cfg.DefaultProvider == "" {
 		cfg.DefaultProvider = "anthropic"
@@ -330,6 +371,9 @@ func validateConfig(cfg *Config) error {
 	}
 	if cfg.Session.Heartbeat.Mode != "" && !validHeartbeatMode(cfg.Session.Heartbeat.Mode) {
 		issues = append(issues, "session.heartbeat.mode must be \"always\" or \"on_demand\"")
+	}
+	if cfg.Workspace.MaxChars < 0 {
+		issues = append(issues, "workspace.max_chars must be >= 0")
 	}
 
 	defaultProvider := strings.ToLower(strings.TrimSpace(cfg.LLM.DefaultProvider))

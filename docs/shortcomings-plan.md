@@ -10,6 +10,7 @@
 ## Inputs
 - `TODO.md` (existing prioritized backlog).
 - Clawdbot reference repo (local clone) for inspiration.
+- Clawd workspace templates (`/home/developer/clawd`).
 - Claude CLI synthesis (2026-01-21).
 
 ## Workstreams & Status
@@ -42,6 +43,8 @@
    - [x] Add schema-driven config validation + explicit defaults pipeline.
    - [x] Add runtime plugin hooks (in-process register + optional .so loading).
    - [x] Add operator UX for memory/heartbeat prompt preview and config doctor.
+   - [x] Load workspace bootstrap files (AGENTS/SOUL/USER/IDENTITY/MEMORY) into the system prompt.
+   - [x] Align example config/docs with strict schema (tools vs plugins, remove unsupported keys).
 
 5) Testing improvements
    - [x] Add unit test for buffered runtime response channel.
@@ -77,3 +80,4 @@
 - 2026-01-21: Added plugin manifest discovery + schema validation and published a minimal plugin SDK surface.
 - 2026-01-21: Added runtime plugin hooks (.so loading), plus doctor/prompt CLI UX for memory/heartbeat.
 - 2026-01-21: Added sample external plugin (`examples/plugins/echo`) with manifest + build instructions.
+- 2026-01-21: Added workspace bootstrap file loading, fallback tool notes from workspace, and documentation fixes for strict config.

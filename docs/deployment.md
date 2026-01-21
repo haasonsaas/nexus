@@ -183,6 +183,17 @@ data:
         file: HEARTBEAT.md
         mode: always
 
+    workspace:
+      enabled: false
+      path: .
+      max_chars: 20000
+      agents_file: AGENTS.md
+      soul_file: SOUL.md
+      user_file: USER.md
+      identity_file: IDENTITY.md
+      tools_file: TOOLS.md
+      memory_file: MEMORY.md
+
     identity:
       name: ""
       creature: ""
@@ -217,15 +228,13 @@ data:
     tools:
       notes: ""
       notes_file: ""
-
-    plugins:
-      load:
-        paths: []
-      entries: {}
       sandbox:
         enabled: true
         pool_size: 10
         timeout: 60s
+        limits:
+          max_cpu: 1
+          max_memory: 512MB
       browser:
         enabled: true
         headless: true
@@ -234,6 +243,11 @@ data:
         enabled: true
         provider: searxng
         url: http://searxng:8080
+
+    plugins:
+      load:
+        paths: []
+      entries: {}
 
     logging:
       level: info

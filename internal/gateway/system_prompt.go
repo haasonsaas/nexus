@@ -9,9 +9,15 @@ import (
 
 // SystemPromptOptions holds dynamic prompt sections that vary per request.
 type SystemPromptOptions struct {
-	ToolNotes   string
-	MemoryLines []string
-	Heartbeat   string
+	ToolNotes         string
+	MemoryLines       []string
+	Heartbeat         string
+	WorkspaceSections []PromptSection
+}
+
+type PromptSection struct {
+	Label   string
+	Content string
 }
 
 func buildSystemPrompt(cfg *config.Config, opts SystemPromptOptions) string {
@@ -70,6 +76,12 @@ func buildSystemPrompt(cfg *config.Config, opts SystemPromptOptions) string {
 		lines = append(lines, "If identity or user profile details are missing, ask the user for them and offer a few suggestions.")
 	}
 
+	if sections := normalizePromptSections(opts.WorkspaceSections); len(sections) > 0 {
+		for _, section := range sections {
+			lines = append(lines, fmt.Sprintf("%s:\n%s", section.Label, section.Content))
+		}
+	}
+
 	if heartbeat := strings.TrimSpace(opts.Heartbeat); heartbeat != "" {
 		lines = append(lines, fmt.Sprintf("Heartbeat checklist (only report new/changed items; reply HEARTBEAT_OK if nothing needs attention):\n%s", heartbeat))
 	}
@@ -99,6 +111,22 @@ func normalizePromptLines(lines []string) []string {
 			continue
 		}
 		out = append(out, line)
+	}
+	return out
+}
+
+func normalizePromptSections(sections []PromptSection) []PromptSection {
+	if len(sections) == 0 {
+		return nil
+	}
+	out := make([]PromptSection, 0, len(sections))
+	for _, section := range sections {
+		label := strings.TrimSpace(section.Label)
+		content := strings.TrimSpace(section.Content)
+		if label == "" || content == "" {
+			continue
+		}
+		out = append(out, PromptSection{Label: label, Content: content})
 	}
 	return out
 }

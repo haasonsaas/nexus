@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/playwright-community/playwright-go"
@@ -432,7 +433,13 @@ func (b *BrowserTool) handleExecuteJS(ctx context.Context, instance *BrowserInst
 		}, nil
 	}
 
-	result, err := instance.Page.Evaluate(p.Script)
+	script := strings.TrimSpace(p.Script)
+	expression := script
+	if strings.Contains(script, "return ") || strings.Contains(script, ";") || strings.Contains(script, "\n") {
+		expression = fmt.Sprintf("(function(){ %s })()", script)
+	}
+
+	result, err := instance.Page.Evaluate(expression)
 	if err != nil {
 		return &agent.ToolResult{
 			Content: fmt.Sprintf("JavaScript execution failed: %v", err),

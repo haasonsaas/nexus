@@ -3,11 +3,62 @@ package sandbox
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
+	"os/exec"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
+
+var dockerCheck struct {
+	once sync.Once
+	err  error
+}
+
+func requireDocker(t *testing.T) {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	dockerCheck.once.Do(func() {
+		if _, err := exec.LookPath("docker"); err != nil {
+			dockerCheck.err = err
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := exec.CommandContext(ctx, "docker", "info").Run(); err != nil {
+			dockerCheck.err = err
+			return
+		}
+
+		images := []string{"python:3.11-alpine", "node:20-alpine", "golang:1.22-alpine", "bash:5-alpine"}
+		for _, image := range images {
+			if err := exec.CommandContext(ctx, "docker", "image", "inspect", image).Run(); err != nil {
+				dockerCheck.err = err
+				return
+			}
+		}
+
+		runCtx, runCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer runCancel()
+		if err := exec.CommandContext(runCtx, "docker", "run", "--rm", "--pull=never", "python:3.11-alpine", "true").Run(); err != nil {
+			dockerCheck.err = err
+			return
+		}
+	})
+
+	if dockerCheck.err != nil {
+		if errors.Is(dockerCheck.err, exec.ErrNotFound) {
+			t.Skip("Docker not installed")
+		}
+		t.Skipf("Docker not available for tests: %v", dockerCheck.err)
+	}
+}
 
 func TestExecutor_Name(t *testing.T) {
 	executor, err := NewExecutor()
@@ -67,9 +118,7 @@ func TestExecutor_Schema(t *testing.T) {
 }
 
 func TestExecutor_PythonExecution(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
+	requireDocker(t)
 
 	executor, err := NewExecutor()
 	if err != nil {
@@ -140,9 +189,7 @@ func TestExecutor_PythonExecution(t *testing.T) {
 }
 
 func TestExecutor_NodeJSExecution(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
+	requireDocker(t)
 
 	executor, err := NewExecutor()
 	if err != nil {
@@ -204,9 +251,7 @@ func TestExecutor_NodeJSExecution(t *testing.T) {
 }
 
 func TestExecutor_GoExecution(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
+	requireDocker(t)
 
 	executor, err := NewExecutor()
 	if err != nil {
@@ -270,9 +315,7 @@ func main() {
 }
 
 func TestExecutor_BashExecution(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
+	requireDocker(t)
 
 	executor, err := NewExecutor()
 	if err != nil {
@@ -334,9 +377,7 @@ func TestExecutor_BashExecution(t *testing.T) {
 }
 
 func TestExecutor_TimeoutHandling(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
+	requireDocker(t)
 
 	executor, err := NewExecutor()
 	if err != nil {
@@ -376,9 +417,7 @@ func TestExecutor_TimeoutHandling(t *testing.T) {
 }
 
 func TestExecutor_ResourceLimits(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
+	requireDocker(t)
 
 	executor, err := NewExecutor()
 	if err != nil {
@@ -415,9 +454,7 @@ except MemoryError:
 }
 
 func TestExecutor_StderrCapture(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
+	requireDocker(t)
 
 	executor, err := NewExecutor()
 	if err != nil {
@@ -500,9 +537,7 @@ func TestExecutor_InvalidJSON(t *testing.T) {
 }
 
 func TestExecutor_FileMounting(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
+	requireDocker(t)
 
 	executor, err := NewExecutor()
 	if err != nil {
@@ -541,13 +576,15 @@ print(f"Read: {content}")
 }
 
 func TestPool_GetAndPut(t *testing.T) {
+	requireDocker(t)
+
 	config := &Config{
-		Backend:       BackendDocker,
-		PoolSize:      2,
-		MaxPoolSize:   5,
+		Backend:        BackendDocker,
+		PoolSize:       2,
+		MaxPoolSize:    5,
 		DefaultTimeout: 30 * time.Second,
-		DefaultCPU:    1000,
-		DefaultMemory: 512,
+		DefaultCPU:     1000,
+		DefaultMemory:  512,
 	}
 
 	pool, err := NewPool(config)
@@ -582,12 +619,12 @@ func TestPool_GetAndPut(t *testing.T) {
 
 func TestPool_Stats(t *testing.T) {
 	config := &Config{
-		Backend:       BackendDocker,
-		PoolSize:      2,
-		MaxPoolSize:   5,
+		Backend:        BackendDocker,
+		PoolSize:       2,
+		MaxPoolSize:    5,
 		DefaultTimeout: 30 * time.Second,
-		DefaultCPU:    1000,
-		DefaultMemory: 512,
+		DefaultCPU:     1000,
+		DefaultMemory:  512,
 	}
 
 	pool, err := NewPool(config)
@@ -611,17 +648,15 @@ func TestPool_Stats(t *testing.T) {
 }
 
 func TestPool_Warmup(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
+	requireDocker(t)
 
 	config := &Config{
-		Backend:       BackendDocker,
-		PoolSize:      0, // Start with empty pool
-		MaxPoolSize:   5,
+		Backend:        BackendDocker,
+		PoolSize:       0, // Start with empty pool
+		MaxPoolSize:    5,
 		DefaultTimeout: 30 * time.Second,
-		DefaultCPU:    1000,
-		DefaultMemory: 512,
+		DefaultCPU:     1000,
+		DefaultMemory:  512,
 	}
 
 	pool, err := NewPool(config)
@@ -647,12 +682,12 @@ func TestPool_Warmup(t *testing.T) {
 
 func TestPool_Close(t *testing.T) {
 	config := &Config{
-		Backend:       BackendDocker,
-		PoolSize:      1,
-		MaxPoolSize:   5,
+		Backend:        BackendDocker,
+		PoolSize:       1,
+		MaxPoolSize:    5,
 		DefaultTimeout: 30 * time.Second,
-		DefaultCPU:    1000,
-		DefaultMemory: 512,
+		DefaultCPU:     1000,
+		DefaultMemory:  512,
 	}
 
 	pool, err := NewPool(config)
@@ -673,9 +708,7 @@ func TestPool_Close(t *testing.T) {
 }
 
 func TestDockerExecutor_Run(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
+	requireDocker(t)
 
 	executor, err := newDockerExecutor("python", 1000, 512)
 	if err != nil {

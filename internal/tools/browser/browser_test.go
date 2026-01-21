@@ -6,9 +6,48 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
+
+var playwrightCheck struct {
+	once sync.Once
+	err  error
+}
+
+func requirePlaywright(t *testing.T) {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("Skipping browser integration tests in short mode")
+	}
+	playwrightCheck.once.Do(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		pool, err := NewPool(PoolConfig{
+			MaxInstances: 1,
+			Timeout:      10 * time.Second,
+			Headless:     true,
+		})
+		if err != nil {
+			playwrightCheck.err = err
+			return
+		}
+		defer pool.Close()
+
+		instance, err := pool.Acquire(ctx)
+		if err != nil {
+			playwrightCheck.err = err
+			return
+		}
+		pool.Release(instance)
+	})
+
+	if playwrightCheck.err != nil {
+		t.Skipf("Playwright not available: %v", playwrightCheck.err)
+	}
+}
 
 // TestBrowserTool_Name tests the Name method
 func TestBrowserTool_Name(t *testing.T) {
@@ -55,6 +94,8 @@ func TestBrowserTool_Schema(t *testing.T) {
 
 // TestBrowserTool_Navigate tests navigation functionality
 func TestBrowserTool_Navigate(t *testing.T) {
+	requirePlaywright(t)
+
 	// Create test server
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
@@ -106,6 +147,8 @@ func TestBrowserTool_Navigate(t *testing.T) {
 
 // TestBrowserTool_Click tests click functionality
 func TestBrowserTool_Click(t *testing.T) {
+	requirePlaywright(t)
+
 	// Create test server with clickable button
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
@@ -162,6 +205,8 @@ func TestBrowserTool_Click(t *testing.T) {
 
 // TestBrowserTool_Type tests typing/filling forms
 func TestBrowserTool_Type(t *testing.T) {
+	requirePlaywright(t)
+
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		_, _ = w.Write([]byte(`
@@ -219,6 +264,8 @@ func TestBrowserTool_Type(t *testing.T) {
 
 // TestBrowserTool_Screenshot tests screenshot capture
 func TestBrowserTool_Screenshot(t *testing.T) {
+	requirePlaywright(t)
+
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		_, _ = w.Write([]byte(`
@@ -276,6 +323,8 @@ func TestBrowserTool_Screenshot(t *testing.T) {
 
 // TestBrowserTool_ExtractText tests text content extraction
 func TestBrowserTool_ExtractText(t *testing.T) {
+	requirePlaywright(t)
+
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		_, _ = w.Write([]byte(`
@@ -336,6 +385,8 @@ func TestBrowserTool_ExtractText(t *testing.T) {
 
 // TestBrowserTool_ExtractHTML tests HTML extraction
 func TestBrowserTool_ExtractHTML(t *testing.T) {
+	requirePlaywright(t)
+
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		_, _ = w.Write([]byte(`
@@ -395,6 +446,8 @@ func TestBrowserTool_ExtractHTML(t *testing.T) {
 
 // TestBrowserTool_ExecuteJS tests JavaScript execution
 func TestBrowserTool_ExecuteJS(t *testing.T) {
+	requirePlaywright(t)
+
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		_, _ = w.Write([]byte(`
@@ -450,6 +503,8 @@ func TestBrowserTool_ExecuteJS(t *testing.T) {
 
 // TestBrowserTool_WaitForElement tests waiting for elements
 func TestBrowserTool_WaitForElement(t *testing.T) {
+	requirePlaywright(t)
+
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		_, _ = w.Write([]byte(`
@@ -514,6 +569,8 @@ func TestBrowserTool_WaitForElement(t *testing.T) {
 
 // TestBrowserTool_InvalidAction tests handling of invalid actions
 func TestBrowserTool_InvalidAction(t *testing.T) {
+	requirePlaywright(t)
+
 	pool, err := NewPool(PoolConfig{
 		MaxInstances: 2,
 		Timeout:      30 * time.Second,
@@ -544,6 +601,8 @@ func TestBrowserTool_InvalidAction(t *testing.T) {
 
 // TestPool_Acquire tests browser instance acquisition
 func TestPool_Acquire(t *testing.T) {
+	requirePlaywright(t)
+
 	pool, err := NewPool(PoolConfig{
 		MaxInstances: 2,
 		Timeout:      30 * time.Second,
@@ -569,6 +628,8 @@ func TestPool_Acquire(t *testing.T) {
 
 // TestPool_MaxInstances tests pool max instances limit
 func TestPool_MaxInstances(t *testing.T) {
+	requirePlaywright(t)
+
 	pool, err := NewPool(PoolConfig{
 		MaxInstances: 1,
 		Timeout:      30 * time.Second,

@@ -25,15 +25,16 @@ type Pool struct {
 	closed    bool
 	pw        *playwright.Playwright
 	userAgent int // Counter for user agent rotation
+	created   int // Number of live instances
 }
 
 // PoolConfig configures the browser pool
 type PoolConfig struct {
-	MaxInstances int           // Maximum number of browser instances
-	Timeout      time.Duration // Default timeout for operations
-	Headless     bool          // Run browsers in headless mode
-	ViewportWidth  int         // Viewport width (default: 1920)
-	ViewportHeight int         // Viewport height (default: 1080)
+	MaxInstances   int           // Maximum number of browser instances
+	Timeout        time.Duration // Default timeout for operations
+	Headless       bool          // Run browsers in headless mode
+	ViewportWidth  int           // Viewport width (default: 1920)
+	ViewportHeight int           // Viewport height (default: 1080)
 }
 
 // NewPool creates a new browser instance pool
@@ -82,22 +83,38 @@ func NewPool(config PoolConfig) (*Pool, error) {
 
 // Acquire gets a browser instance from the pool or creates a new one
 func (p *Pool) Acquire(ctx context.Context) (*BrowserInstance, error) {
-	p.mu.Lock()
-	if p.closed {
+	for {
+		p.mu.Lock()
+		if p.closed {
+			p.mu.Unlock()
+			return nil, fmt.Errorf("pool is closed")
+		}
+		select {
+		case instance := <-p.instances:
+			p.mu.Unlock()
+			return instance, nil
+		default:
+		}
+		if p.created < p.config.MaxInstances {
+			p.created++
+			p.mu.Unlock()
+			instance, err := p.createInstance()
+			if err != nil {
+				p.mu.Lock()
+				p.created--
+				p.mu.Unlock()
+				return nil, err
+			}
+			return instance, nil
+		}
 		p.mu.Unlock()
-		return nil, fmt.Errorf("pool is closed")
-	}
-	p.mu.Unlock()
 
-	// Try to get an existing instance
-	select {
-	case instance := <-p.instances:
-		return instance, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
-		// No instances available, create a new one
-		return p.createInstance()
+		select {
+		case instance := <-p.instances:
+			return instance, nil
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 	}
 }
 
@@ -113,6 +130,7 @@ func (p *Pool) Release(instance *BrowserInstance) {
 	if p.closed {
 		// Pool is closed, close this instance
 		instance.cleanup()
+		p.created--
 		return
 	}
 
@@ -123,6 +141,7 @@ func (p *Pool) Release(instance *BrowserInstance) {
 	default:
 		// Pool is full, close this instance
 		instance.cleanup()
+		p.created--
 	}
 }
 
@@ -141,6 +160,7 @@ func (p *Pool) Close() error {
 	for instance := range p.instances {
 		instance.cleanup()
 	}
+	p.created = 0
 
 	// Stop Playwright
 	if p.pw != nil {
@@ -263,9 +283,9 @@ func (p *Pool) GetStats() PoolStats {
 	defer p.mu.Unlock()
 
 	return PoolStats{
-		MaxInstances:      p.config.MaxInstances,
+		MaxInstances:       p.config.MaxInstances,
 		AvailableInstances: len(p.instances),
-		IsClosed:          p.closed,
+		IsClosed:           p.closed,
 	}
 }
 

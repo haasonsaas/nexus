@@ -30,12 +30,12 @@ This document tracks planned improvements, technical debt, and architectural enh
 
 ### Error Handling Improvements
 - [x] ~~Add structured ProviderError with failover classification~~ ✅ Done
-- [ ] **Integrate ProviderError into Anthropic provider** - `internal/agent/providers/anthropic.go`
+- [x] **Integrate ProviderError into Anthropic provider** - `internal/agent/providers/anthropic.go` ✅ Done
   - Replace `fmt.Errorf` calls with `NewProviderError()`
   - Add status code extraction from API responses
   - Enable intelligent retry logic
 
-- [ ] **Integrate ProviderError into OpenAI provider** - `internal/agent/providers/openai.go`
+- [x] **Integrate ProviderError into OpenAI provider** - `internal/agent/providers/openai.go` ✅ Done
   - Same as Anthropic integration
   - Handle OpenAI-specific error codes
 
@@ -44,12 +44,12 @@ This document tracks planned improvements, technical debt, and architectural enh
 - [x] ~~Add mutex to ToolRegistry~~ ✅ Done
 - [x] ~~Fix MultiRateLimiter.Reset() deadlock potential~~ ✅ Done
 
-- [ ] **Add WaitGroup tracking in gateway** - `internal/gateway/server.go:65,102`
+- [x] **Add WaitGroup tracking in gateway** - `internal/gateway/server.go:65,102` ✅ Done
   - `processMessages` goroutine not tracked
   - `handleMessage` goroutines not tracked
   - Risk: Ungraceful shutdown, goroutines still running when Stop() completes
 
-- [ ] **Buffer the Runtime.Process channel** - `internal/agent/runtime.go:405-478`
+- [x] **Buffer the Runtime.Process channel** - `internal/agent/runtime.go:405-478` ✅ Done
   - Currently unbuffered, risks goroutine hang if caller doesn't consume
   - Add small buffer (e.g., 10) for safety
 
@@ -57,11 +57,11 @@ This document tracks planned improvements, technical debt, and architectural enh
 - [x] ~~Remove dead code in DuckDuckGo search~~ ✅ Done
 - [x] ~~Update deprecated Playwright APIs~~ ✅ Done
 
-- [ ] **Fix JSON marshal error handling** - `internal/tools/websearch/search.go:167`
+- [x] **Fix JSON marshal error handling** - `internal/tools/websearch/search.go:167` ✅ Done
   - `schemaBytes, _ := json.Marshal(schema)` ignores error
   - Low risk but should handle properly
 
-- [ ] **Add nil check in convertTools** - `internal/agent/providers/anthropic.go:782-790`
+- [x] **Add nil check in convertTools** - `internal/agent/providers/anthropic.go:782-790` ✅ Done
   - `toolParam` could be nil, not just `OfTool`
   - Risk: Nil pointer dereference
 

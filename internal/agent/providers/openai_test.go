@@ -3,6 +3,7 @@ package providers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -125,12 +126,52 @@ func TestConvertToOpenAITools(t *testing.T) {
 	}
 }
 
+func TestWrapOpenAIError(t *testing.T) {
+	provider := &OpenAIProvider{}
+
+	apiErr := &openai.APIError{
+		HTTPStatusCode: 429,
+		Message:        "rate limit exceeded",
+		Code:           "rate_limit_error",
+	}
+	wrapped := provider.wrapError(apiErr, "gpt-4o")
+	providerErr, ok := GetProviderError(wrapped)
+	if !ok {
+		t.Fatalf("expected ProviderError, got %T", wrapped)
+	}
+	if providerErr.Status != 429 {
+		t.Fatalf("expected status 429, got %d", providerErr.Status)
+	}
+	if providerErr.Reason != FailoverRateLimit {
+		t.Fatalf("expected reason %v, got %v", FailoverRateLimit, providerErr.Reason)
+	}
+	if providerErr.Code != "rate_limit_error" {
+		t.Fatalf("expected code rate_limit_error, got %q", providerErr.Code)
+	}
+
+	reqErr := &openai.RequestError{
+		HTTPStatusCode: 503,
+		Err:            errors.New("upstream unavailable"),
+	}
+	wrapped = provider.wrapError(reqErr, "gpt-4o")
+	providerErr, ok = GetProviderError(wrapped)
+	if !ok {
+		t.Fatalf("expected ProviderError, got %T", wrapped)
+	}
+	if providerErr.Status != 503 {
+		t.Fatalf("expected status 503, got %d", providerErr.Status)
+	}
+	if providerErr.Reason != FailoverServerError {
+		t.Fatalf("expected reason %v, got %v", FailoverServerError, providerErr.Reason)
+	}
+}
+
 func TestParseToolCallFromChunk(t *testing.T) {
 	tests := []struct {
-		name      string
-		delta     openai.ChatCompletionStreamChoiceDelta
-		wantCall  bool
-		wantDone  bool
+		name     string
+		delta    openai.ChatCompletionStreamChoiceDelta
+		wantCall bool
+		wantDone bool
 	}{
 		{
 			name: "tool call start",
@@ -340,9 +381,9 @@ func TestRetryLogic(t *testing.T) {
 	}
 
 	tests := []struct {
-		name         string
-		err          error
-		wantRetry    bool
+		name      string
+		err       error
+		wantRetry bool
 	}{
 		{"rate limit error", fmt.Errorf("rate limit exceeded"), true},
 		{"429 status", fmt.Errorf("HTTP 429"), true},

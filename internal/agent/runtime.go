@@ -404,7 +404,7 @@ func (r *Runtime) RegisterTool(tool Tool) {
 //	    fmt.Print(chunk.Text)
 //	}
 func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *models.Message) (<-chan *ResponseChunk, error) {
-	chunks := make(chan *ResponseChunk)
+	chunks := make(chan *ResponseChunk, processBufferSize)
 
 	go func() {
 		defer close(chunks)
@@ -478,6 +478,8 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 
 	return chunks, nil
 }
+
+const processBufferSize = 10
 
 // ResponseChunk is a streaming response chunk from the runtime.
 type ResponseChunk struct {

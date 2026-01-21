@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
@@ -153,6 +154,34 @@ func TestProviderMethods(t *testing.T) {
 		if !modelIDs[expected] {
 			t.Errorf("expected model %s not found", expected)
 		}
+	}
+}
+
+func TestWrapAnthropicError(t *testing.T) {
+	provider, err := NewAnthropicProvider(AnthropicConfig{
+		APIKey: "test-key",
+	})
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	apiErr := &anthropic.Error{
+		StatusCode: 429,
+		RequestID:  "req_123",
+	}
+	wrapped := provider.wrapError(apiErr, "claude-sonnet-4")
+	providerErr, ok := GetProviderError(wrapped)
+	if !ok {
+		t.Fatalf("expected ProviderError, got %T", wrapped)
+	}
+	if providerErr.Status != 429 {
+		t.Fatalf("expected status 429, got %d", providerErr.Status)
+	}
+	if providerErr.Reason != FailoverRateLimit {
+		t.Fatalf("expected reason %v, got %v", FailoverRateLimit, providerErr.Reason)
+	}
+	if providerErr.RequestID != "req_123" {
+		t.Fatalf("expected request ID req_123, got %q", providerErr.RequestID)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/agent"
@@ -310,7 +311,10 @@ func (p *OpenAIProvider) SupportsTools() bool {
 func (p *OpenAIProvider) Complete(ctx context.Context, req *agent.CompletionRequest) (<-chan *agent.CompletionChunk, error) {
 	// Validate API key is configured
 	if p.client == nil {
-		return nil, errors.New("OpenAI API key not configured")
+		return nil, p.wrapError(
+			NewProviderError("openai", req.Model, errors.New("OpenAI API key not configured")).WithStatus(http.StatusUnauthorized),
+			req.Model,
+		)
 	}
 
 	// Convert internal messages to OpenAI format (includes system prompt)
@@ -356,18 +360,19 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req *agent.CompletionRequ
 		}
 
 		// Check if error is retryable (rate limits, server errors)
-		if !p.isRetryableError(lastErr) {
-			return nil, fmt.Errorf("non-retryable error: %w", lastErr)
+		wrappedErr := p.wrapError(lastErr, req.Model)
+		if !p.isRetryableError(wrappedErr) {
+			return nil, fmt.Errorf("non-retryable error: %w", wrappedErr)
 		}
 	}
 
 	if lastErr != nil {
-		return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+		return nil, fmt.Errorf("max retries exceeded: %w", p.wrapError(lastErr, req.Model))
 	}
 
 	// Spawn goroutine to process stream and send chunks
 	chunks := make(chan *agent.CompletionChunk)
-	go p.processStream(ctx, stream, chunks)
+	go p.processStream(ctx, stream, chunks, req.Model)
 
 	return chunks, nil
 }
@@ -402,7 +407,7 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req *agent.CompletionRequ
 //   - Tool call chunks: Emitted when FinishReason is "tool_calls"
 //   - Done chunk: Emitted on io.EOF
 //   - Error chunk: Emitted on streaming errors
-func (p *OpenAIProvider) processStream(ctx context.Context, stream *openai.ChatCompletionStream, chunks chan<- *agent.CompletionChunk) {
+func (p *OpenAIProvider) processStream(ctx context.Context, stream *openai.ChatCompletionStream, chunks chan<- *agent.CompletionChunk, model string) {
 	defer close(chunks)
 	defer stream.Close()
 
@@ -435,7 +440,7 @@ func (p *OpenAIProvider) processStream(ctx context.Context, stream *openai.ChatC
 				return
 			}
 			// Stream error
-			chunks <- &agent.CompletionChunk{Error: err, Done: true}
+			chunks <- &agent.CompletionChunk{Error: p.wrapError(err, model), Done: true}
 			return
 		}
 
@@ -714,6 +719,9 @@ func (p *OpenAIProvider) isRetryableError(err error) bool {
 	if err == nil {
 		return false
 	}
+	if providerErr, ok := GetProviderError(err); ok {
+		return providerErr.Reason.IsRetryable()
+	}
 
 	// Check error message for retryable indicators
 	errMsg := err.Error()
@@ -736,6 +744,50 @@ func (p *OpenAIProvider) isRetryableError(err error) bool {
 	return false
 }
 
+func (p *OpenAIProvider) wrapError(err error, model string) error {
+	if err == nil {
+		return nil
+	}
+	if IsProviderError(err) {
+		return err
+	}
+
+	providerErr := NewProviderError("openai", model, err)
+
+	var apiErr *openai.APIError
+	if errors.As(err, &apiErr) {
+		providerErr.WithStatus(apiErr.HTTPStatusCode)
+		if apiErr.Message != "" {
+			providerErr.WithMessage(apiErr.Message)
+		}
+		if apiErr.Code != nil {
+			providerErr.WithCode(fmt.Sprint(apiErr.Code))
+		}
+		return providerErr
+	}
+
+	var reqErr *openai.RequestError
+	if errors.As(err, &reqErr) {
+		providerErr.WithStatus(reqErr.HTTPStatusCode)
+		if reqErr.Err != nil {
+			var inner *openai.APIError
+			if errors.As(reqErr.Err, &inner) {
+				if inner.Message != "" {
+					providerErr.WithMessage(inner.Message)
+				}
+				if inner.Code != nil {
+					providerErr.WithCode(fmt.Sprint(inner.Code))
+				}
+			} else {
+				providerErr.WithMessage(reqErr.Err.Error())
+			}
+		}
+		return providerErr
+	}
+
+	return providerErr
+}
+
 // contains checks if a string contains a substring.
 //
 // This is a simple helper function for error message inspection.
@@ -750,7 +802,7 @@ func (p *OpenAIProvider) isRetryableError(err error) bool {
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) &&
 		(s == substr || len(s) > len(substr) &&
-		(findSubstring(s, substr) >= 0))
+			(findSubstring(s, substr) >= 0))
 }
 
 // findSubstring finds the first occurrence of a substring.

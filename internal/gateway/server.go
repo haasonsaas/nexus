@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"sync"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
@@ -22,6 +23,10 @@ type Server struct {
 	grpc     *grpc.Server
 	channels *channels.Registry
 	logger   *slog.Logger
+	wg       sync.WaitGroup
+	cancel   context.CancelFunc
+
+	handleMessageHook func(context.Context, *models.Message)
 }
 
 // NewServer creates a new gateway server.
@@ -62,7 +67,7 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 
 	// Start message processing
-	go s.processMessages(ctx)
+	s.startProcessing(ctx)
 
 	// Start gRPC server
 	addr := fmt.Sprintf("%s:%d", s.config.Server.Host, s.config.Server.GRPCPort)
@@ -79,6 +84,10 @@ func (s *Server) Start(ctx context.Context) error {
 func (s *Server) Stop(ctx context.Context) error {
 	s.logger.Info("stopping server")
 
+	if s.cancel != nil {
+		s.cancel()
+	}
+
 	// Stop accepting new connections
 	s.grpc.GracefulStop()
 
@@ -87,19 +96,38 @@ func (s *Server) Stop(ctx context.Context) error {
 		s.logger.Error("error stopping channels", "error", err)
 	}
 
+	if err := s.waitForProcessing(ctx); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+func (s *Server) startProcessing(ctx context.Context) {
+	processCtx, cancel := context.WithCancel(ctx)
+	s.cancel = cancel
+	s.wg.Add(1)
+	go s.processMessages(processCtx)
 }
 
 // processMessages handles incoming messages from all channels.
 func (s *Server) processMessages(ctx context.Context) {
+	defer s.wg.Done()
 	messages := s.channels.AggregateMessages(ctx)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case msg := <-messages:
-			go s.handleMessage(ctx, msg)
+		case msg, ok := <-messages:
+			if !ok {
+				return
+			}
+			s.wg.Add(1)
+			go func(message *models.Message) {
+				defer s.wg.Done()
+				s.handleMessage(ctx, message)
+			}(msg)
 		}
 	}
 }
@@ -111,10 +139,30 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		"content_length", len(msg.Content),
 	)
 
+	if s.handleMessageHook != nil {
+		s.handleMessageHook(ctx, msg)
+		return
+	}
+
 	// TODO: Implement full message handling:
 	// 1. Route to session
 	// 2. Run agent
 	// 3. Send response
+}
+
+func (s *Server) waitForProcessing(ctx context.Context) error {
+	done := make(chan struct{})
+	go func() {
+		s.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // loggingInterceptor logs unary RPC calls.

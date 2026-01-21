@@ -73,11 +73,11 @@ type SearchResult struct {
 
 // SearchResponse represents the complete search response.
 type SearchResponse struct {
-	Query      string         `json:"query"`
-	Type       SearchType     `json:"type"`
-	Results    []SearchResult `json:"results"`
-	ResultCount int           `json:"result_count"`
-	Backend    SearchBackend  `json:"backend"`
+	Query       string         `json:"query"`
+	Type        SearchType     `json:"type"`
+	Results     []SearchResult `json:"results"`
+	ResultCount int            `json:"result_count"`
+	Backend     SearchBackend  `json:"backend"`
 }
 
 // cacheEntry holds a cached search result with expiration.
@@ -164,7 +164,10 @@ func (t *WebSearchTool) Schema() json.RawMessage {
 		"required": []string{"query"},
 	}
 
-	schemaBytes, _ := json.Marshal(schema)
+	schemaBytes, err := json.Marshal(schema)
+	if err != nil {
+		return json.RawMessage(`{"type":"object"}`)
+	}
 	return schemaBytes
 }
 
@@ -392,10 +395,10 @@ func (t *WebSearchTool) searchSearXNG(ctx context.Context, params *SearchParams)
 	var searxngResp struct {
 		Query   string `json:"query"`
 		Results []struct {
-			Title       string `json:"title"`
-			URL         string `json:"url"`
-			Content     string `json:"content"`
-			ImgSrc      string `json:"img_src,omitempty"`
+			Title         string `json:"title"`
+			URL           string `json:"url"`
+			Content       string `json:"content"`
+			ImgSrc        string `json:"img_src,omitempty"`
 			PublishedDate string `json:"publishedDate,omitempty"`
 		} `json:"results"`
 	}

@@ -457,8 +457,9 @@ func (p *AnthropicProvider) Complete(ctx context.Context, req *agent.CompletionR
 			}
 
 			// Check if error is retryable (rate limits, server errors, etc.)
-			if !p.isRetryableError(err) {
-				chunks <- &agent.CompletionChunk{Error: err}
+			wrappedErr := p.wrapError(err, p.getModel(req.Model))
+			if !p.isRetryableError(wrappedErr) {
+				chunks <- &agent.CompletionChunk{Error: wrappedErr}
 				return
 			}
 
@@ -479,12 +480,12 @@ func (p *AnthropicProvider) Complete(ctx context.Context, req *agent.CompletionR
 		}
 
 		if err != nil {
-			chunks <- &agent.CompletionChunk{Error: fmt.Errorf("anthropic: max retries exceeded: %w", err)}
+			chunks <- &agent.CompletionChunk{Error: fmt.Errorf("anthropic: max retries exceeded: %w", p.wrapError(err, p.getModel(req.Model)))}
 			return
 		}
 
 		// Process streaming events and send chunks to channel
-		p.processStream(stream, chunks)
+		p.processStream(stream, chunks, p.getModel(req.Model))
 	}()
 
 	return chunks, nil
@@ -583,7 +584,7 @@ func (p *AnthropicProvider) createStream(ctx context.Context, req *agent.Complet
 //   - Tool call chunks: Emitted when tool call is complete (after block_stop)
 //   - Done chunk: Emitted on message_stop
 //   - Error chunk: Emitted on stream errors
-func (p *AnthropicProvider) processStream(stream *ssestream.Stream[anthropic.MessageStreamEventUnion], chunks chan<- *agent.CompletionChunk) {
+func (p *AnthropicProvider) processStream(stream *ssestream.Stream[anthropic.MessageStreamEventUnion], chunks chan<- *agent.CompletionChunk, model string) {
 	var currentToolCall *models.ToolCall
 	var currentToolInput strings.Builder
 
@@ -645,7 +646,7 @@ func (p *AnthropicProvider) processStream(stream *ssestream.Stream[anthropic.Mes
 		case "error":
 			// Server-side error during streaming
 			chunks <- &agent.CompletionChunk{
-				Error: fmt.Errorf("anthropic stream error"),
+				Error: p.wrapError(errors.New("anthropic stream error"), model),
 			}
 		}
 	}
@@ -653,7 +654,7 @@ func (p *AnthropicProvider) processStream(stream *ssestream.Stream[anthropic.Mes
 	// Check for errors that occurred during stream iteration
 	if err := stream.Err(); err != nil {
 		chunks <- &agent.CompletionChunk{
-			Error: fmt.Errorf("anthropic: stream error: %w", err),
+			Error: p.wrapError(err, model),
 		}
 	}
 }
@@ -783,9 +784,10 @@ func (p *AnthropicProvider) convertTools(tools []agent.Tool) ([]anthropic.ToolUn
 		toolParam := anthropic.ToolUnionParamOfTool(schema, tool.Name())
 
 		// Set description if we can access the underlying ToolParam
-		if toolParam.OfTool != nil {
-			toolParam.OfTool.Description = anthropic.String(tool.Description())
+		if toolParam.OfTool == nil {
+			return nil, fmt.Errorf("invalid tool schema for %s: missing tool definition", tool.Name())
 		}
+		toolParam.OfTool.Description = anthropic.String(tool.Description())
 
 		result = append(result, toolParam)
 	}
@@ -863,6 +865,9 @@ func (p *AnthropicProvider) isRetryableError(err error) bool {
 	if err == nil {
 		return false
 	}
+	if providerErr, ok := GetProviderError(err); ok {
+		return providerErr.Reason.IsRetryable()
+	}
 
 	errMsg := err.Error()
 
@@ -899,6 +904,69 @@ func (p *AnthropicProvider) isRetryableError(err error) bool {
 	}
 
 	return false
+}
+
+type anthropicErrorPayload struct {
+	Error struct {
+		Type    string `json:"type"`
+		Message string `json:"message"`
+	} `json:"error"`
+	RequestID string `json:"request_id"`
+}
+
+func (p *AnthropicProvider) wrapError(err error, model string) error {
+	if err == nil {
+		return nil
+	}
+	if IsProviderError(err) {
+		return err
+	}
+
+	var apiErr *anthropic.Error
+	if errors.As(err, &apiErr) {
+		providerErr := &ProviderError{
+			Provider: "anthropic",
+			Model:    model,
+			Cause:    err,
+			Reason:   FailoverUnknown,
+		}
+		providerErr.WithStatus(apiErr.StatusCode)
+
+		message := ""
+		code := ""
+		requestID := apiErr.RequestID
+
+		raw := apiErr.RawJSON()
+		if raw != "" {
+			var payload anthropicErrorPayload
+			if json.Unmarshal([]byte(raw), &payload) == nil {
+				if payload.Error.Message != "" {
+					message = payload.Error.Message
+				}
+				if payload.Error.Type != "" {
+					code = payload.Error.Type
+				}
+				if payload.RequestID != "" {
+					requestID = payload.RequestID
+				}
+			}
+		}
+
+		if message != "" {
+			providerErr.WithMessage(message)
+		} else if providerErr.Message == "" {
+			providerErr.Message = "anthropic request failed"
+		}
+		if code != "" {
+			providerErr.WithCode(code)
+		}
+		if requestID != "" {
+			providerErr.WithRequestID(requestID)
+		}
+		return providerErr
+	}
+
+	return NewProviderError("anthropic", model, err)
 }
 
 // CountTokens estimates the token count for a completion request.

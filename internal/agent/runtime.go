@@ -70,6 +70,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"sync"
 
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/pkg/models"
@@ -487,6 +488,7 @@ type ResponseChunk struct {
 
 // ToolRegistry manages available tools.
 type ToolRegistry struct {
+	mu    sync.RWMutex
 	tools map[string]Tool
 }
 
@@ -499,18 +501,24 @@ func NewToolRegistry() *ToolRegistry {
 
 // Register adds a tool to the registry.
 func (r *ToolRegistry) Register(tool Tool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.tools[tool.Name()] = tool
 }
 
 // Get returns a tool by name.
 func (r *ToolRegistry) Get(name string) (Tool, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	tool, ok := r.tools[name]
 	return tool, ok
 }
 
 // Execute runs a tool by name.
 func (r *ToolRegistry) Execute(ctx context.Context, name string, params json.RawMessage) (*ToolResult, error) {
+	r.mu.RLock()
 	tool, ok := r.tools[name]
+	r.mu.RUnlock()
 	if !ok {
 		return &ToolResult{
 			Content: "tool not found: " + name,
@@ -522,6 +530,8 @@ func (r *ToolRegistry) Execute(ctx context.Context, name string, params json.Raw
 
 // AsLLMTools converts registered tools to LLM tool format.
 func (r *ToolRegistry) AsLLMTools() []Tool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	tools := make([]Tool, 0, len(r.tools))
 	for _, t := range r.tools {
 		tools = append(tools, t)

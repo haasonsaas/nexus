@@ -427,30 +427,16 @@ func (t *WebSearchTool) searchSearXNG(ctx context.Context, params *SearchParams)
 	}, nil
 }
 
-// searchDuckDuckGo performs a search using DuckDuckGo's HTML search (scraping).
+// searchDuckDuckGo performs a search using DuckDuckGo's Instant Answer API.
 func (t *WebSearchTool) searchDuckDuckGo(ctx context.Context, params *SearchParams) (*SearchResponse, error) {
-	// Build request URL
-	searchURL := "https://html.duckduckgo.com/html/"
-
-	formData := url.Values{}
-	formData.Set("q", params.Query)
-	formData.Set("kl", "us-en")
-
-	// Make request
-	req, err := http.NewRequestWithContext(ctx, "POST", searchURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; NexusBot/1.0)")
-
-	// Use the DuckDuckGo Instant Answer API instead for more reliable results
+	// Use the DuckDuckGo Instant Answer API for reliable structured results
 	instantURL := fmt.Sprintf("https://api.duckduckgo.com/?q=%s&format=json&no_html=1", url.QueryEscape(params.Query))
-	req, err = http.NewRequestWithContext(ctx, "GET", instantURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", instantURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
+
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; NexusBot/1.0)")
 
 	resp, err := t.httpClient.Do(req)
 	if err != nil {

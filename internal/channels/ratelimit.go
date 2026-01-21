@@ -203,8 +203,8 @@ func (m *MultiRateLimiter) get(name string) *RateLimiter {
 
 // Reset resets all rate limiters to full capacity.
 func (m *MultiRateLimiter) Reset() {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	for _, limiter := range m.limiters {
 		limiter.mu.Lock()

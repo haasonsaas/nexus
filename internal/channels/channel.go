@@ -2,6 +2,7 @@ package channels
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/haasonsaas/nexus/pkg/models"
@@ -124,11 +125,15 @@ func (r *Registry) StopAll(ctx context.Context) error {
 }
 
 // AggregateMessages returns a channel that receives messages from all adapters.
+// The returned channel is closed when the context is cancelled or all adapters close.
 func (r *Registry) AggregateMessages(ctx context.Context) <-chan *models.Message {
 	out := make(chan *models.Message)
+	var wg sync.WaitGroup
 
 	for _, adapter := range r.adapters {
+		wg.Add(1)
 		go func(a Adapter) {
+			defer wg.Done()
 			for {
 				select {
 				case <-ctx.Done():
@@ -146,6 +151,12 @@ func (r *Registry) AggregateMessages(ctx context.Context) <-chan *models.Message
 			}
 		}(adapter)
 	}
+
+	// Close output channel when all adapter goroutines complete
+	go func() {
+		wg.Wait()
+		close(out)
+	}()
 
 	return out
 }

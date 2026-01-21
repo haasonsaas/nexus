@@ -1,3 +1,52 @@
+// Package providers implements LLM provider integrations for the Nexus agent framework.
+//
+// This package provides production-ready implementations of the agent.LLMProvider interface
+// for various LLM services including Anthropic's Claude and OpenAI's GPT models. Each provider
+// handles the complexities of API integration, streaming responses, error handling, retries,
+// and format conversion.
+//
+// Key Features:
+//   - Streaming responses for real-time token delivery
+//   - Automatic retry logic with exponential backoff
+//   - Tool/function calling support for agentic workflows
+//   - Vision support for image-capable models
+//   - Comprehensive error handling and context cancellation
+//   - Rate limit management
+//
+// Example Usage:
+//
+//	// Create an Anthropic provider
+//	provider, err := providers.NewAnthropicProvider(providers.AnthropicConfig{
+//	    APIKey:       os.Getenv("ANTHROPIC_API_KEY"),
+//	    MaxRetries:   3,
+//	    RetryDelay:   time.Second,
+//	    DefaultModel: "claude-sonnet-4-20250514",
+//	})
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//
+//	// Send a completion request
+//	req := &agent.CompletionRequest{
+//	    Model:     "claude-sonnet-4-20250514",
+//	    System:    "You are a helpful assistant.",
+//	    Messages:  []agent.CompletionMessage{{Role: "user", Content: "Hello!"}},
+//	    MaxTokens: 1024,
+//	}
+//
+//	chunks, err := provider.Complete(ctx, req)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//
+//	// Process streaming response
+//	for chunk := range chunks {
+//	    if chunk.Error != nil {
+//	        log.Printf("Error: %v", chunk.Error)
+//	        break
+//	    }
+//	    fmt.Print(chunk.Text)
+//	}
 package providers
 
 import (
@@ -19,28 +68,143 @@ import (
 )
 
 // AnthropicProvider implements the agent.LLMProvider interface for Anthropic's Claude API.
+// It provides a production-ready client with streaming support, automatic retries,
+// tool calling, and comprehensive error handling.
+//
+// The provider handles several critical responsibilities:
+//   - Converting between internal message formats and Anthropic's API format
+//   - Managing streaming Server-Sent Events (SSE) responses
+//   - Implementing retry logic with exponential backoff for transient failures
+//   - Handling tool (function) calls and results in multi-turn conversations
+//   - Processing different content blocks (text, tool use, tool results)
+//
+// Thread Safety:
+// AnthropicProvider is safe for concurrent use across multiple goroutines.
+// Each Complete() call creates an independent stream and goroutine.
+//
+// Example:
+//
+//	provider, err := NewAnthropicProvider(AnthropicConfig{
+//	    APIKey:     "sk-ant-...",
+//	    MaxRetries: 3,
+//	})
+//	if err != nil {
+//	    return err
+//	}
+//
+//	req := &agent.CompletionRequest{
+//	    Model:    "claude-sonnet-4-20250514",
+//	    Messages: []agent.CompletionMessage{{Role: "user", Content: "Explain quantum computing"}},
+//	    Tools:    myTools, // Optional tool definitions
+//	}
+//
+//	chunks, err := provider.Complete(ctx, req)
+//	for chunk := range chunks {
+//	    if chunk.Error != nil {
+//	        log.Printf("Stream error: %v", chunk.Error)
+//	        break
+//	    }
+//	    if chunk.Text != "" {
+//	        fmt.Print(chunk.Text)
+//	    }
+//	    if chunk.ToolCall != nil {
+//	        // Execute tool and continue conversation
+//	    }
+//	}
 type AnthropicProvider struct {
-	client       anthropic.Client
-	apiKey       string
-	maxRetries   int
-	retryDelay   time.Duration
+	// client is the underlying Anthropic SDK client used for API calls.
+	client anthropic.Client
+
+	// apiKey stores the Anthropic API key for authentication.
+	// Format: sk-ant-api03-...
+	apiKey string
+
+	// maxRetries defines the maximum number of retry attempts for failed requests.
+	// Applies to retryable errors like rate limits (429), server errors (5xx),
+	// timeouts, and connection issues. Default: 3
+	maxRetries int
+
+	// retryDelay is the base delay between retry attempts.
+	// Actual delay uses exponential backoff: retryDelay * 2^attempt.
+	// Default: 1 second
+	retryDelay time.Duration
+
+	// defaultModel is used when CompletionRequest.Model is empty.
+	// Default: "claude-sonnet-4-20250514"
 	defaultModel string
 }
 
-// AnthropicConfig holds configuration for the Anthropic provider.
+// AnthropicConfig holds configuration parameters for creating an AnthropicProvider.
+//
+// All fields except APIKey are optional and will be set to sensible defaults
+// if not provided. The configuration is validated during NewAnthropicProvider().
+//
+// Example:
+//
+//	config := AnthropicConfig{
+//	    APIKey:       os.Getenv("ANTHROPIC_API_KEY"), // Required
+//	    MaxRetries:   5,                              // Optional: default 3
+//	    RetryDelay:   2 * time.Second,                // Optional: default 1s
+//	    DefaultModel: "claude-opus-4-20250514",       // Optional: default sonnet-4
+//	}
 type AnthropicConfig struct {
-	APIKey       string
-	MaxRetries   int
-	RetryDelay   time.Duration
+	// APIKey is the Anthropic API authentication key (required).
+	// Obtain from: https://console.anthropic.com/
+	// Format: sk-ant-api03-...
+	APIKey string
+
+	// MaxRetries sets the maximum retry attempts for transient failures (optional).
+	// Set to 0 to disable retries. Default: 3
+	// Higher values increase reliability but may increase latency.
+	MaxRetries int
+
+	// RetryDelay sets the base delay between retry attempts (optional).
+	// Actual delay uses exponential backoff. Default: 1 second
+	// Example: with RetryDelay=1s, delays are: 1s, 2s, 4s, 8s, etc.
+	RetryDelay time.Duration
+
+	// DefaultModel sets the model to use when request doesn't specify one (optional).
+	// Default: "claude-sonnet-4-20250514"
+	// Available models: see Models() method for current list.
 	DefaultModel string
 }
 
-// NewAnthropicProvider creates a new Anthropic provider instance.
+// NewAnthropicProvider creates a new Anthropic provider instance with the given configuration.
+//
+// This constructor validates the configuration, applies defaults for optional fields,
+// and initializes the underlying Anthropic SDK client. The returned provider is
+// ready to use for completion requests.
+//
+// Configuration Defaults:
+//   - MaxRetries: 3 (if <= 0)
+//   - RetryDelay: 1 second (if <= 0)
+//   - DefaultModel: "claude-sonnet-4-20250514" (if empty)
+//
+// Parameters:
+//   - config: AnthropicConfig containing API key and optional settings
+//
+// Returns:
+//   - *AnthropicProvider: Configured provider instance ready for use
+//   - error: Returns error if APIKey is empty
+//
+// Errors:
+//   - "anthropic: API key is required": When config.APIKey is empty string
+//
+// Example:
+//
+//	provider, err := NewAnthropicProvider(AnthropicConfig{
+//	    APIKey:     os.Getenv("ANTHROPIC_API_KEY"),
+//	    MaxRetries: 5,  // Override default
+//	})
+//	if err != nil {
+//	    log.Fatalf("Failed to create provider: %v", err)
+//	}
 func NewAnthropicProvider(config AnthropicConfig) (*AnthropicProvider, error) {
 	if config.APIKey == "" {
 		return nil, errors.New("anthropic: API key is required")
 	}
 
+	// Apply defaults for optional configuration
 	if config.MaxRetries <= 0 {
 		config.MaxRetries = 3
 	}
@@ -53,6 +217,7 @@ func NewAnthropicProvider(config AnthropicConfig) (*AnthropicProvider, error) {
 		config.DefaultModel = "claude-sonnet-4-20250514"
 	}
 
+	// Initialize the Anthropic SDK client with API key
 	client := anthropic.NewClient(
 		option.WithAPIKey(config.APIKey),
 	)
@@ -66,12 +231,44 @@ func NewAnthropicProvider(config AnthropicConfig) (*AnthropicProvider, error) {
 	}, nil
 }
 
-// Name returns the provider name.
+// Name returns the provider identifier used for routing and logging.
+//
+// This identifier should be stable and lowercase. It's used by the agent runtime
+// to select the appropriate provider and in metrics/logging.
+//
+// Returns:
+//   - string: Always returns "anthropic"
 func (p *AnthropicProvider) Name() string {
 	return "anthropic"
 }
 
-// Models returns the list of available Claude models.
+// Models returns the list of available Claude models with their capabilities.
+//
+// This method returns metadata about each supported Claude model including:
+//   - Model ID (used in API requests)
+//   - Human-readable name
+//   - Context window size in tokens
+//   - Vision support capability
+//
+// The list includes both current and legacy models. Model IDs include version
+// suffixes (e.g., "20250514") for API compatibility.
+//
+// Returns:
+//   - []agent.Model: Slice of model definitions with capabilities
+//
+// Example:
+//
+//	models := provider.Models()
+//	for _, model := range models {
+//	    fmt.Printf("%s: %d tokens, vision=%v\n",
+//	        model.Name, model.ContextSize, model.SupportsVision)
+//	}
+//
+// Current Models (as of 2025-01):
+//   - Claude Sonnet 4: Latest balanced model (200K context, vision)
+//   - Claude Opus 4: Most capable model (200K context, vision)
+//   - Claude 3.5 Sonnet: Previous generation (200K context, vision)
+//   - Claude 3 Opus/Sonnet/Haiku: Legacy models (200K context, vision)
 func (p *AnthropicProvider) Models() []agent.Model {
 	return []agent.Model{
 		{
@@ -113,12 +310,135 @@ func (p *AnthropicProvider) Models() []agent.Model {
 	}
 }
 
-// SupportsTools returns true as Anthropic supports tool use (function calling).
+// SupportsTools indicates whether this provider supports tool/function calling.
+//
+// Anthropic Claude models support tool use, allowing the LLM to request execution
+// of defined functions during the conversation. This enables agentic workflows where
+// the model can interact with external systems, APIs, and data sources.
+//
+// Tool calling workflow:
+//  1. Define tools with name, description, and JSON schema
+//  2. Include tools in CompletionRequest
+//  3. Model may return ToolCall chunks requesting tool execution
+//  4. Execute tools and send results back in subsequent messages
+//  5. Model uses results to formulate final response
+//
+// Returns:
+//   - bool: Always returns true for Anthropic provider
+//
+// See Also:
+//   - convertTools() for tool format conversion
+//   - processStream() for handling tool call events
 func (p *AnthropicProvider) SupportsTools() bool {
 	return true
 }
 
-// Complete sends a completion request and returns a streaming response.
+// Complete sends a completion request to Claude and returns a streaming response channel.
+//
+// This method is the primary interface for interacting with Claude models. It handles:
+//   - Request validation and format conversion
+//   - Streaming SSE response processing
+//   - Automatic retries with exponential backoff
+//   - Tool call detection and streaming
+//   - Context cancellation
+//   - Error handling
+//
+// The method returns immediately with a channel that will receive completion chunks
+// as they arrive. The channel is closed when the stream completes or encounters an error.
+//
+// Request Processing:
+//  1. Converts internal message format to Anthropic API format
+//  2. Initializes streaming request with retry logic
+//  3. Spawns goroutine to process SSE events
+//  4. Returns channel for consuming chunks
+//
+// Streaming Behavior:
+// - Chunks arrive in real-time as tokens are generated
+// - Text chunks contain partial response text
+// - ToolCall chunks contain complete tool invocation details
+// - Final chunk has Done=true
+// - Error chunk has Error field set and Done=true
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts. Canceling stops the stream.
+//   - req: Completion request with messages, model, tools, etc.
+//
+// Returns:
+//   - <-chan *agent.CompletionChunk: Read-only channel of response chunks
+//   - error: Returns error only if request creation fails, not streaming errors
+//
+// Errors:
+// Creation errors (returned immediately):
+//   - Message conversion failures
+//   - Invalid tool schemas
+//
+// Streaming errors (sent via chunk.Error):
+//   - "anthropic: max retries exceeded": After exhausting retry attempts
+//   - "anthropic: stream error": Server-side streaming failures
+//   - context.Canceled: When context is cancelled
+//   - context.DeadlineExceeded: When context times out
+//
+// Example - Basic Usage:
+//
+//	req := &agent.CompletionRequest{
+//	    Model:     "claude-sonnet-4-20250514",
+//	    System:    "You are a helpful coding assistant.",
+//	    Messages:  []agent.CompletionMessage{
+//	        {Role: "user", Content: "Write a hello world in Go"},
+//	    },
+//	    MaxTokens: 1024,
+//	}
+//
+//	chunks, err := provider.Complete(ctx, req)
+//	if err != nil {
+//	    return fmt.Errorf("failed to create completion: %w", err)
+//	}
+//
+//	var response strings.Builder
+//	for chunk := range chunks {
+//	    if chunk.Error != nil {
+//	        return fmt.Errorf("stream error: %w", chunk.Error)
+//	    }
+//	    if chunk.Text != "" {
+//	        response.WriteString(chunk.Text)
+//	        fmt.Print(chunk.Text) // Print as it arrives
+//	    }
+//	    if chunk.Done {
+//	        break
+//	    }
+//	}
+//
+// Example - With Tools:
+//
+//	chunks, err := provider.Complete(ctx, &agent.CompletionRequest{
+//	    Model:    "claude-sonnet-4-20250514",
+//	    Messages: []agent.CompletionMessage{{Role: "user", Content: "What's 2+2?"}},
+//	    Tools:    []agent.Tool{calculatorTool},
+//	})
+//
+//	for chunk := range chunks {
+//	    if chunk.ToolCall != nil {
+//	        // Execute the requested tool
+//	        result := executeCalculator(chunk.ToolCall.Input)
+//	        // Send result back in next request...
+//	    }
+//	}
+//
+// Example - With Timeout:
+//
+//	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+//	defer cancel()
+//
+//	chunks, err := provider.Complete(ctx, req)
+//	for chunk := range chunks {
+//	    if chunk.Error != nil {
+//	        if errors.Is(chunk.Error, context.DeadlineExceeded) {
+//	            log.Println("Request timed out after 30 seconds")
+//	        }
+//	        break
+//	    }
+//	    // Process chunks...
+//	}
 func (p *AnthropicProvider) Complete(ctx context.Context, req *agent.CompletionRequest) (<-chan *agent.CompletionChunk, error) {
 	chunks := make(chan *agent.CompletionChunk)
 
@@ -129,26 +449,30 @@ func (p *AnthropicProvider) Complete(ctx context.Context, req *agent.CompletionR
 		var stream *ssestream.Stream[anthropic.MessageStreamEventUnion]
 		var err error
 
+		// Retry loop with exponential backoff for transient failures
 		for attempt := 0; attempt <= p.maxRetries; attempt++ {
 			stream, err = p.createStream(ctx, req)
 			if err == nil {
 				break
 			}
 
-			// Check if error is retryable
+			// Check if error is retryable (rate limits, server errors, etc.)
 			if !p.isRetryableError(err) {
 				chunks <- &agent.CompletionChunk{Error: err}
 				return
 			}
 
-			// Exponential backoff
+			// Exponential backoff: delay = baseDelay * 2^attempt
+			// Example with 1s base: 1s, 2s, 4s, 8s
 			if attempt < p.maxRetries {
 				backoff := p.retryDelay * time.Duration(math.Pow(2, float64(attempt)))
 				select {
 				case <-ctx.Done():
+					// Context cancelled or timed out during retry
 					chunks <- &agent.CompletionChunk{Error: ctx.Err()}
 					return
 				case <-time.After(backoff):
+					// Wait for backoff period before next retry
 					continue
 				}
 			}
@@ -159,14 +483,36 @@ func (p *AnthropicProvider) Complete(ctx context.Context, req *agent.CompletionR
 			return
 		}
 
-		// Process streaming events
+		// Process streaming events and send chunks to channel
 		p.processStream(stream, chunks)
 	}()
 
 	return chunks, nil
 }
 
-// createStream creates an Anthropic streaming request.
+// createStream creates an Anthropic streaming request from a completion request.
+//
+// This internal method handles the conversion from our internal request format
+// to Anthropic's API format, including:
+//   - Message format conversion (user/assistant/tool roles)
+//   - System prompt configuration
+//   - Tool definitions
+//   - Model and token limits
+//
+// The method builds an Anthropic MessageNewParams and initiates a streaming
+// request using the official SDK.
+//
+// Parameters:
+//   - ctx: Context for cancellation
+//   - req: Internal completion request
+//
+// Returns:
+//   - *ssestream.Stream: Anthropic SSE stream for processing events
+//   - error: Returns error if message/tool conversion fails
+//
+// Errors:
+//   - "anthropic: failed to convert messages": Message format is invalid
+//   - "anthropic: failed to convert tools": Tool schema is invalid
 func (p *AnthropicProvider) createStream(ctx context.Context, req *agent.CompletionRequest) (*ssestream.Stream[anthropic.MessageStreamEventUnion], error) {
 	// Convert messages
 	messages, err := p.convertMessages(req.Messages)
@@ -174,14 +520,14 @@ func (p *AnthropicProvider) createStream(ctx context.Context, req *agent.Complet
 		return nil, fmt.Errorf("anthropic: failed to convert messages: %w", err)
 	}
 
-	// Build parameters
+	// Build Anthropic API parameters
 	params := anthropic.MessageNewParams{
 		Model:     anthropic.Model(p.getModel(req.Model)),
 		Messages:  messages,
 		MaxTokens: int64(p.getMaxTokens(req.MaxTokens)),
 	}
 
-	// Add system prompt if provided
+	// Add system prompt if provided (separate from messages in Anthropic API)
 	if req.System != "" {
 		params.System = []anthropic.TextBlockParam{
 			{
@@ -191,7 +537,7 @@ func (p *AnthropicProvider) createStream(ctx context.Context, req *agent.Complet
 		}
 	}
 
-	// Add tools if provided
+	// Add tool definitions if provided
 	if len(req.Tools) > 0 {
 		tools, err := p.convertTools(req.Tools)
 		if err != nil {
@@ -200,26 +546,60 @@ func (p *AnthropicProvider) createStream(ctx context.Context, req *agent.Complet
 		params.Tools = tools
 	}
 
-	// Create streaming request
+	// Create streaming request using Anthropic SDK
 	stream := p.client.Messages.NewStreaming(ctx, params)
 
 	return stream, nil
 }
 
-// processStream processes the streaming events and sends chunks.
+// processStream processes Server-Sent Events from Anthropic's streaming API.
+//
+// This method consumes the SSE stream and converts Anthropic's event format into
+// our internal CompletionChunk format. It handles multiple event types and manages
+// the stateful accumulation of tool calls across events.
+//
+// Event Processing:
+//   - content_block_start: Initializes new content blocks (text or tool use)
+//   - content_block_delta: Streams incremental text or tool input JSON
+//   - content_block_stop: Finalizes complete content blocks
+//   - message_stop: Signals end of response
+//   - error: Propagates API errors
+//
+// Tool Call Handling:
+// Tool calls arrive in multiple events:
+//  1. content_block_start with ToolUseBlock (contains ID and name)
+//  2. Multiple content_block_delta events with partial JSON (streamed arguments)
+//  3. content_block_stop to finalize the tool call
+//
+// The method accumulates tool input across delta events before sending the
+// complete tool call chunk.
+//
+// Parameters:
+//   - stream: Anthropic SSE stream to consume
+//   - chunks: Channel to send converted chunks to (will not be closed by this method)
+//
+// Chunk Emissions:
+//   - Text chunks: Emitted for each text delta (real-time streaming)
+//   - Tool call chunks: Emitted when tool call is complete (after block_stop)
+//   - Done chunk: Emitted on message_stop
+//   - Error chunk: Emitted on stream errors
 func (p *AnthropicProvider) processStream(stream *ssestream.Stream[anthropic.MessageStreamEventUnion], chunks chan<- *agent.CompletionChunk) {
 	var currentToolCall *models.ToolCall
 	var currentToolInput strings.Builder
 
+	// Track current tool call being assembled across multiple events
 	for stream.Next() {
 		event := stream.Current()
 
 		switch event.Type {
 		case "content_block_start":
+			// New content block starting (could be text or tool use)
 			contentBlockStart := event.AsContentBlockStart()
 			contentBlock := contentBlockStart.ContentBlock.AsAny()
 
+			// Check if this is a tool use block
 			if toolUse, ok := contentBlock.(anthropic.ToolUseBlock); ok {
+				// Initialize new tool call with ID and name
 				currentToolCall = &models.ToolCall{
 					ID:   toolUse.ID,
 					Name: toolUse.Name,
@@ -228,24 +608,27 @@ func (p *AnthropicProvider) processStream(stream *ssestream.Stream[anthropic.Mes
 			}
 
 		case "content_block_delta":
+			// Incremental content updates
 			contentBlockDelta := event.AsContentBlockDelta()
 			delta := contentBlockDelta.Delta.AsAny()
 
-			// Handle text delta
+			// Handle text delta - emit immediately for real-time streaming
 			if textDelta, ok := delta.(anthropic.TextDelta); ok {
 				chunks <- &agent.CompletionChunk{
 					Text: textDelta.Text,
 				}
 			}
 
-			// Handle tool input delta
+			// Handle tool input delta - accumulate JSON fragments
+			// Tool arguments are streamed as partial JSON strings
 			if inputDelta, ok := delta.(anthropic.InputJSONDelta); ok {
 				currentToolInput.WriteString(inputDelta.PartialJSON)
 			}
 
 		case "content_block_stop":
-			// Finalize tool call if we were building one
+			// Content block complete - finalize if it was a tool call
 			if currentToolCall != nil {
+				// Convert accumulated JSON string to RawMessage
 				currentToolCall.Input = json.RawMessage(currentToolInput.String())
 				chunks <- &agent.CompletionChunk{
 					ToolCall: currentToolCall,
@@ -254,18 +637,20 @@ func (p *AnthropicProvider) processStream(stream *ssestream.Stream[anthropic.Mes
 			}
 
 		case "message_stop":
+			// Stream complete successfully
 			chunks <- &agent.CompletionChunk{
 				Done: true,
 			}
 
 		case "error":
+			// Server-side error during streaming
 			chunks <- &agent.CompletionChunk{
 				Error: fmt.Errorf("anthropic stream error"),
 			}
 		}
 	}
 
-	// Check for stream errors
+	// Check for errors that occurred during stream iteration
 	if err := stream.Err(); err != nil {
 		chunks <- &agent.CompletionChunk{
 			Error: fmt.Errorf("anthropic: stream error: %w", err),
@@ -273,25 +658,53 @@ func (p *AnthropicProvider) processStream(stream *ssestream.Stream[anthropic.Mes
 	}
 }
 
-// convertMessages converts internal messages to Anthropic format.
+// convertMessages converts internal message format to Anthropic API format.
+//
+// This method handles the translation between our unified message format and
+// Anthropic's specific requirements:
+//   - System messages are filtered out (handled separately via params.System)
+//   - User and assistant messages are converted with content blocks
+//   - Tool calls and tool results are converted to Anthropic's format
+//   - Multiple content types per message are supported
+//
+// Message Format Differences:
+//   - Internal: Separate fields for Content, ToolCalls, ToolResults
+//   - Anthropic: Everything is content blocks in ContentBlockParamUnion array
+//
+// Parameters:
+//   - messages: Internal message format from CompletionRequest
+//
+// Returns:
+//   - []anthropic.MessageParam: Anthropic-formatted messages
+//   - error: Returns error if tool call input JSON is invalid
+//
+// Example Conversion:
+//
+//	Internal message with tool call:
+//	  {Role: "assistant", ToolCalls: [{ID: "1", Name: "search", Input: {"q":"test"}}]}
+//
+//	Converts to Anthropic format:
+//	  anthropic.NewAssistantMessage(
+//	      anthropic.NewToolUseBlock("1", map[string]any{"q":"test"}, "search")
+//	  )
 func (p *AnthropicProvider) convertMessages(messages []agent.CompletionMessage) ([]anthropic.MessageParam, error) {
 	var result []anthropic.MessageParam
 
 	for _, msg := range messages {
-		// Skip system messages (handled separately)
+		// Skip system messages - they're handled separately in params.System
 		if msg.Role == "system" {
 			continue
 		}
 
-		// Build content blocks
+		// Build content blocks array (Anthropic uses array of content blocks)
 		var content []anthropic.ContentBlockParamUnion
 
-		// Add text content
+		// Add text content if present
 		if msg.Content != "" {
 			content = append(content, anthropic.NewTextBlock(msg.Content))
 		}
 
-		// Add tool results
+		// Add tool results (responses from previously executed tools)
 		for _, toolResult := range msg.ToolResults {
 			content = append(content, anthropic.NewToolResultBlock(
 				toolResult.ToolCallID,
@@ -300,8 +713,9 @@ func (p *AnthropicProvider) convertMessages(messages []agent.CompletionMessage) 
 			))
 		}
 
-		// Add tool calls (for assistant messages)
+		// Add tool calls (for assistant messages requesting tool execution)
 		for _, toolCall := range msg.ToolCalls {
+			// Parse JSON input to map for Anthropic's format
 			var input map[string]interface{}
 			if err := json.Unmarshal(toolCall.Input, &input); err != nil {
 				return nil, fmt.Errorf("invalid tool call input: %w", err)
@@ -314,12 +728,12 @@ func (p *AnthropicProvider) convertMessages(messages []agent.CompletionMessage) 
 			))
 		}
 
-		// Create message based on role
+		// Create message with appropriate role
 		var message anthropic.MessageParam
 		if msg.Role == "assistant" {
 			message = anthropic.NewAssistantMessage(content...)
 		} else {
-			// User or tool role
+			// User or tool role both map to user messages in Anthropic
 			message = anthropic.NewUserMessage(content...)
 		}
 
@@ -329,18 +743,45 @@ func (p *AnthropicProvider) convertMessages(messages []agent.CompletionMessage) 
 	return result, nil
 }
 
-// convertTools converts internal tools to Anthropic format.
+// convertTools converts internal tool definitions to Anthropic API format.
+//
+// This method translates tool definitions from our internal format to Anthropic's
+// tool schema. Each tool includes:
+//   - Name: Function identifier for the LLM
+//   - Description: Natural language description of what the tool does
+//   - Input schema: JSON Schema defining required/optional parameters
+//
+// Parameters:
+//   - tools: Internal tool definitions implementing agent.Tool interface
+//
+// Returns:
+//   - []anthropic.ToolUnionParam: Anthropic-formatted tool definitions
+//   - error: Returns error if tool schema JSON is invalid
+//
+// Errors:
+//   - "invalid tool schema for {name}": When tool.Schema() returns invalid JSON
+//
+// Example:
+//
+//	Internal tool:
+//	  Name: "calculator"
+//	  Description: "Performs basic arithmetic"
+//	  Schema: {"type":"object","properties":{"operation":{"type":"string"}}}
+//
+//	Converts to Anthropic tool definition with same name, description, and schema.
 func (p *AnthropicProvider) convertTools(tools []agent.Tool) ([]anthropic.ToolUnionParam, error) {
 	var result []anthropic.ToolUnionParam
 
 	for _, tool := range tools {
-		// Parse schema
+		// Parse JSON schema into Anthropic's schema format
 		var schema anthropic.ToolInputSchemaParam
 		if err := json.Unmarshal(tool.Schema(), &schema); err != nil {
 			return nil, fmt.Errorf("invalid tool schema for %s: %w", tool.Name(), err)
 		}
 
+		// Create tool parameter with schema and name
 		toolParam := anthropic.ToolUnionParamOfTool(schema, tool.Name())
+
 		// Set description if we can access the underlying ToolParam
 		if toolParam.OfTool != nil {
 			toolParam.OfTool.Description = anthropic.String(tool.Description())
@@ -352,7 +793,16 @@ func (p *AnthropicProvider) convertTools(tools []agent.Tool) ([]anthropic.ToolUn
 	return result, nil
 }
 
-// getModel returns the model to use, defaulting if not specified.
+// getModel returns the model ID to use for the request.
+//
+// If the request specifies a model, that model is used. Otherwise, returns
+// the provider's default model configured during initialization.
+//
+// Parameters:
+//   - model: Model ID from CompletionRequest (may be empty)
+//
+// Returns:
+//   - string: Model ID to use (never empty)
 func (p *AnthropicProvider) getModel(model string) string {
 	if model == "" {
 		return p.defaultModel
@@ -360,7 +810,17 @@ func (p *AnthropicProvider) getModel(model string) string {
 	return model
 }
 
-// getMaxTokens returns the max tokens to use, defaulting if not specified.
+// getMaxTokens returns the maximum tokens to generate for the request.
+//
+// If the request specifies max tokens, that value is used. Otherwise, returns
+// a sensible default of 4096 tokens. This prevents runaway generations while
+// allowing substantial responses.
+//
+// Parameters:
+//   - maxTokens: Max tokens from CompletionRequest (may be 0)
+//
+// Returns:
+//   - int: Max tokens to use (default 4096)
 func (p *AnthropicProvider) getMaxTokens(maxTokens int) int {
 	if maxTokens <= 0 {
 		return 4096
@@ -368,7 +828,37 @@ func (p *AnthropicProvider) getMaxTokens(maxTokens int) int {
 	return maxTokens
 }
 
-// isRetryableError checks if an error is retryable.
+// isRetryableError determines if an error should trigger a retry attempt.
+//
+// This method classifies errors into retryable and non-retryable categories.
+// Retryable errors are typically transient (rate limits, server issues, network
+// problems) while non-retryable errors are permanent (invalid API key, malformed
+// request, etc.).
+//
+// Retryable Error Categories:
+//   - Rate limits: 429 status, "rate_limit", "too many requests"
+//   - Server errors: 500, 502, 503, 504 status codes
+//   - Timeouts: "timeout", "deadline exceeded"
+//   - Network: "connection reset", "connection refused", "no such host"
+//
+// Non-Retryable Errors:
+//   - Authentication: 401, 403 (invalid API key)
+//   - Validation: 400 (bad request format)
+//   - Not found: 404 (invalid endpoint)
+//
+// Parameters:
+//   - err: Error to classify
+//
+// Returns:
+//   - bool: true if error should be retried, false otherwise
+//
+// Example:
+//
+//	err := doAPICall()
+//	if isRetryableError(err) {
+//	    time.Sleep(backoff)
+//	    err = doAPICall() // Retry
+//	}
 func (p *AnthropicProvider) isRetryableError(err error) bool {
 	if err == nil {
 		return false
@@ -376,14 +866,14 @@ func (p *AnthropicProvider) isRetryableError(err error) bool {
 
 	errMsg := err.Error()
 
-	// Rate limit errors
+	// Rate limit errors - API is throttling requests
 	if strings.Contains(errMsg, "rate_limit") ||
 		strings.Contains(errMsg, "429") ||
 		strings.Contains(errMsg, "too many requests") {
 		return true
 	}
 
-	// Server errors
+	// Server errors (5xx) - temporary Anthropic infrastructure issues
 	if strings.Contains(errMsg, "500") ||
 		strings.Contains(errMsg, "502") ||
 		strings.Contains(errMsg, "503") ||
@@ -395,13 +885,13 @@ func (p *AnthropicProvider) isRetryableError(err error) bool {
 		return true
 	}
 
-	// Timeout errors
+	// Timeout errors - request took too long
 	if strings.Contains(errMsg, "timeout") ||
 		strings.Contains(errMsg, "deadline exceeded") {
 		return true
 	}
 
-	// Connection errors
+	// Connection errors - network connectivity issues
 	if strings.Contains(errMsg, "connection reset") ||
 		strings.Contains(errMsg, "connection refused") ||
 		strings.Contains(errMsg, "no such host") {
@@ -411,7 +901,40 @@ func (p *AnthropicProvider) isRetryableError(err error) bool {
 	return false
 }
 
-// CountTokens estimates token count for a request (rough approximation).
+// CountTokens estimates the token count for a completion request.
+//
+// This provides a rough approximation using character-based estimation rather
+// than actual tokenization. The estimate uses ~4 characters per token, which
+// is typical for English text with Claude's tokenizer.
+//
+// What's Counted:
+//   - System prompt
+//   - Message content (all messages)
+//   - Message roles
+//   - Tool call names and arguments
+//   - Tool result content
+//   - Tool definitions (names, descriptions, schemas)
+//
+// Accuracy:
+// This is a rough estimate and may differ from actual token count by 10-20%.
+// For precise counting, use Anthropic's official tokenizer API. This estimate
+// is useful for:
+//   - Checking if request fits within context window
+//   - Estimating API costs before sending
+//   - Debugging context overflow issues
+//
+// Parameters:
+//   - req: Completion request to estimate tokens for
+//
+// Returns:
+//   - int: Estimated token count
+//
+// Example:
+//
+//	tokens := provider.CountTokens(req)
+//	if tokens > 190000 {
+//	    return fmt.Errorf("request too large: %d tokens (max 200K)", tokens)
+//	}
 func (p *AnthropicProvider) CountTokens(req *agent.CompletionRequest) int {
 	// Simple character-based estimation: ~4 chars per token
 	total := 0

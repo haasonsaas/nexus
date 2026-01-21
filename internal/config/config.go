@@ -8,23 +8,25 @@ import (
 	"strings"
 	"time"
 
+	"github.com/haasonsaas/nexus/internal/skills"
 	"gopkg.in/yaml.v3"
 )
 
 // Config is the main configuration structure for Nexus.
 type Config struct {
-	Server    ServerConfig    `yaml:"server"`
-	Database  DatabaseConfig  `yaml:"database"`
-	Auth      AuthConfig      `yaml:"auth"`
-	Session   SessionConfig   `yaml:"session"`
-	Workspace WorkspaceConfig `yaml:"workspace"`
-	Identity  IdentityConfig  `yaml:"identity"`
-	User      UserConfig      `yaml:"user"`
-	Plugins   PluginsConfig   `yaml:"plugins"`
-	Channels  ChannelsConfig  `yaml:"channels"`
-	LLM       LLMConfig       `yaml:"llm"`
-	Tools     ToolsConfig     `yaml:"tools"`
-	Logging   LoggingConfig   `yaml:"logging"`
+	Server    ServerConfig        `yaml:"server"`
+	Database  DatabaseConfig      `yaml:"database"`
+	Auth      AuthConfig          `yaml:"auth"`
+	Session   SessionConfig       `yaml:"session"`
+	Workspace WorkspaceConfig     `yaml:"workspace"`
+	Identity  IdentityConfig      `yaml:"identity"`
+	User      UserConfig          `yaml:"user"`
+	Plugins   PluginsConfig       `yaml:"plugins"`
+	Skills    skills.SkillsConfig `yaml:"skills"`
+	Channels  ChannelsConfig      `yaml:"channels"`
+	LLM       LLMConfig           `yaml:"llm"`
+	Tools     ToolsConfig         `yaml:"tools"`
+	Logging   LoggingConfig       `yaml:"logging"`
 }
 
 type ServerConfig struct {

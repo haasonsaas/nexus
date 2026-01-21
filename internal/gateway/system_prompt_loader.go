@@ -9,6 +9,7 @@ import (
 
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/sessions"
+	"github.com/haasonsaas/nexus/internal/skills"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
@@ -22,6 +23,7 @@ func (s *Server) systemPromptForMessage(ctx context.Context, session *models.Ses
 		Heartbeat:         s.loadHeartbeat(msg),
 		WorkspaceSections: s.loadWorkspaceSections(),
 		MemoryFlush:       s.memoryFlushPrompt(ctx, session),
+		SkillContent:      s.loadSkillSections(ctx),
 	}
 
 	if s.config.Session.Memory.Enabled && s.memoryLogger != nil {
@@ -71,6 +73,38 @@ func (s *Server) loadHeartbeat(msg *models.Message) string {
 		return ""
 	}
 	return content
+}
+
+func (s *Server) loadSkillSections(ctx context.Context) []SkillSection {
+	if s.skillsManager == nil {
+		return nil
+	}
+
+	eligible := s.skillsManager.ListEligible()
+	if len(eligible) == 0 {
+		return nil
+	}
+
+	sections := make([]SkillSection, 0, len(eligible))
+	for _, skill := range eligible {
+		content, err := s.skillsManager.LoadContent(skill.Name)
+		if err != nil {
+			s.logger.Error("failed to load skill content",
+				"skill", skill.Name,
+				"error", err)
+			continue
+		}
+		if content == "" {
+			continue
+		}
+		sections = append(sections, SkillSection{
+			Name:        skill.Name,
+			Description: skill.Description,
+			Content:     content,
+		})
+	}
+
+	return sections
 }
 
 func (s *Server) memoryFlushPrompt(ctx context.Context, session *models.Session) string {
@@ -159,7 +193,56 @@ func BuildSystemPrompt(cfg *config.Config, sessionID string, msg *models.Message
 		opts.MemoryLines = lines
 	}
 
+	// Load skill content
+	skillSections, err := loadSkillSectionsFromConfig(cfg)
+	if err != nil {
+		return "", err
+	}
+	opts.SkillContent = skillSections
+
 	return buildSystemPrompt(cfg, opts), nil
+}
+
+// loadSkillSectionsFromConfig loads skill content from the skills configuration.
+func loadSkillSectionsFromConfig(cfg *config.Config) ([]SkillSection, error) {
+	if cfg == nil {
+		return nil, nil
+	}
+
+	mgr, err := skills.NewManager(&cfg.Skills, cfg.Workspace.Path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := mgr.Discover(ctx); err != nil {
+		return nil, err
+	}
+
+	eligible := mgr.ListEligible()
+	if len(eligible) == 0 {
+		return nil, nil
+	}
+
+	sections := make([]SkillSection, 0, len(eligible))
+	for _, skill := range eligible {
+		content, err := mgr.LoadContent(skill.Name)
+		if err != nil {
+			continue // Skip skills that fail to load
+		}
+		if content == "" {
+			continue
+		}
+		sections = append(sections, SkillSection{
+			Name:        skill.Name,
+			Description: skill.Description,
+			Content:     content,
+		})
+	}
+
+	return sections, nil
 }
 
 func isHeartbeatMessage(msg *models.Message) bool {

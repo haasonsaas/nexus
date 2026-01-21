@@ -23,6 +23,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/plugins"
 	"github.com/haasonsaas/nexus/internal/sessions"
+	"github.com/haasonsaas/nexus/internal/skills"
 	"github.com/haasonsaas/nexus/internal/tools/browser"
 	"github.com/haasonsaas/nexus/internal/tools/memorysearch"
 	"github.com/haasonsaas/nexus/internal/tools/sandbox"
@@ -45,8 +46,9 @@ type Server struct {
 	runtime   *agent.Runtime
 	sessions  sessions.Store
 
-	browserPool  *browser.Pool
-	memoryLogger *sessions.MemoryLogger
+	browserPool   *browser.Pool
+	memoryLogger  *sessions.MemoryLogger
+	skillsManager *skills.Manager
 
 	channelPlugins *channelPluginRegistry
 	runtimePlugins *plugins.RuntimeRegistry
@@ -95,6 +97,18 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	// Enable reflection for development
 	reflection.Register(grpcServer)
 
+	// Initialize skills manager
+	skillsMgr, err := skills.NewManager(&cfg.Skills, cfg.Workspace.Path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create skills manager: %w", err)
+	}
+	// Discover skills (non-blocking, errors logged)
+	go func() {
+		if err := skillsMgr.Discover(context.Background()); err != nil {
+			logger.Error("skill discovery failed", "error", err)
+		}
+	}()
+
 	server := &Server{
 		config:         cfg,
 		grpc:           grpcServer,
@@ -102,6 +116,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		logger:         logger,
 		channelPlugins: newChannelPluginRegistry(),
 		runtimePlugins: plugins.DefaultRuntimeRegistry(),
+		skillsManager:  skillsMgr,
 	}
 	registerBuiltinChannelPlugins(server.channelPlugins)
 

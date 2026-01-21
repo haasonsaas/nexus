@@ -52,6 +52,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/plugins"
 	"github.com/haasonsaas/nexus/internal/profile"
 	"github.com/haasonsaas/nexus/internal/service"
+	"github.com/haasonsaas/nexus/internal/skills"
 	"github.com/haasonsaas/nexus/internal/workspace"
 	"github.com/haasonsaas/nexus/pkg/models"
 	"github.com/spf13/cobra"
@@ -389,51 +390,266 @@ func buildProfileInitCmd() *cobra.Command {
 func buildSkillsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "skills",
-		Short: "Manage skill plugins",
+		Short: "Manage skills (SKILL.md-based)",
+		Long: `Manage skills that extend agent capabilities.
+
+Skills are discovered from:
+  - <workspace>/skills/ (highest priority)
+  - ~/.nexus/skills/ (user skills)
+  - Bundled skills (shipped with binary)
+  - Extra directories (skills.load.extraDirs)
+
+Each skill is a directory containing a SKILL.md file with YAML frontmatter.`,
 	}
-	cmd.AddCommand(buildSkillsListCmd(), buildSkillsEnableCmd(), buildSkillsDisableCmd())
+	cmd.AddCommand(
+		buildSkillsListCmd(),
+		buildSkillsShowCmd(),
+		buildSkillsCheckCmd(),
+		buildSkillsEnableCmd(),
+		buildSkillsDisableCmd(),
+	)
 	return cmd
 }
 
 func buildSkillsListCmd() *cobra.Command {
 	var configPath string
+	var all bool
 	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "List available skills",
+		Short: "List discovered skills",
+		Long: `List all discovered skills and their eligibility status.
+
+By default, only eligible skills are shown. Use --all to include ineligible skills.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			configPath = resolveConfigPath(configPath)
 			cfg, err := config.Load(configPath)
 			if err != nil {
 				return err
 			}
-			paths := append([]string{}, cfg.Plugins.Load.Paths...)
-			for _, entry := range cfg.Plugins.Entries {
-				if entry.Path != "" {
-					paths = append(paths, entry.Path)
+
+			mgr, err := skills.NewManager(&cfg.Skills, cfg.Workspace.Path, nil)
+			if err != nil {
+				return fmt.Errorf("failed to create skill manager: %w", err)
+			}
+
+			if err := mgr.Discover(cmd.Context()); err != nil {
+				return fmt.Errorf("skill discovery failed: %w", err)
+			}
+
+			out := cmd.OutOrStdout()
+			var skillsList []*skills.SkillEntry
+			if all {
+				skillsList = mgr.ListAll()
+			} else {
+				skillsList = mgr.ListEligible()
+			}
+
+			if len(skillsList) == 0 {
+				fmt.Fprintln(out, "No skills found.")
+				return nil
+			}
+
+			fmt.Fprintln(out, "Skills:")
+			for _, skill := range skillsList {
+				emoji := ""
+				if skill.Metadata != nil && skill.Metadata.Emoji != "" {
+					emoji = skill.Metadata.Emoji + " "
+				}
+
+				status := "eligible"
+				if all {
+					result, _ := mgr.CheckEligibility(skill.Name)
+					if result != nil && !result.Eligible {
+						status = "ineligible"
+					}
+				}
+
+				fmt.Fprintf(out, "  %s%s (%s, %s)\n", emoji, skill.Name, skill.Source, status)
+				if skill.Description != "" {
+					desc := skill.Description
+					if len(desc) > 60 {
+						desc = desc[:57] + "..."
+					}
+					fmt.Fprintf(out, "    %s\n", desc)
 				}
 			}
-			manifests, err := plugins.DiscoverManifests(paths)
+
+			if all {
+				reasons := mgr.GetIneligibleReasons()
+				if len(reasons) > 0 {
+					fmt.Fprintln(out, "\nIneligible reasons:")
+					for name, reason := range reasons {
+						fmt.Fprintf(out, "  %s: %s\n", name, reason)
+					}
+				}
+			}
+
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	cmd.Flags().BoolVarP(&all, "all", "a", false, "Show all skills including ineligible ones")
+	return cmd
+}
+
+func buildSkillsShowCmd() *cobra.Command {
+	var configPath string
+	var showContent bool
+	cmd := &cobra.Command{
+		Use:   "show [name]",
+		Short: "Show skill details",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
+			cfg, err := config.Load(configPath)
 			if err != nil {
 				return err
 			}
+
+			mgr, err := skills.NewManager(&cfg.Skills, cfg.Workspace.Path, nil)
+			if err != nil {
+				return fmt.Errorf("failed to create skill manager: %w", err)
+			}
+
+			if err := mgr.Discover(cmd.Context()); err != nil {
+				return fmt.Errorf("skill discovery failed: %w", err)
+			}
+
+			skill, ok := mgr.GetSkill(args[0])
+			if !ok {
+				return fmt.Errorf("skill not found: %s", args[0])
+			}
+
 			out := cmd.OutOrStdout()
-			fmt.Fprintln(out, "Skills:")
-			count := 0
-			for id, info := range manifests {
-				kind := strings.ToLower(strings.TrimSpace(info.Manifest.Kind))
-				if kind != "skill" && kind != "skills" {
-					continue
-				}
-				count++
-				enabled := "disabled"
-				if entry, ok := cfg.Plugins.Entries[id]; ok && entry.Enabled {
-					enabled = "enabled"
-				}
-				fmt.Fprintf(out, "  - %s (%s)\n", id, enabled)
+			fmt.Fprintf(out, "Skill: %s\n", skill.Name)
+			fmt.Fprintln(out, strings.Repeat("=", len(skill.Name)+7))
+			fmt.Fprintln(out)
+
+			if skill.Description != "" {
+				fmt.Fprintf(out, "Description: %s\n", skill.Description)
 			}
-			if count == 0 {
-				fmt.Fprintln(out, "  (none detected)")
+			if skill.Homepage != "" {
+				fmt.Fprintf(out, "Homepage: %s\n", skill.Homepage)
 			}
+			fmt.Fprintf(out, "Path: %s\n", skill.Path)
+			fmt.Fprintf(out, "Source: %s\n", skill.Source)
+
+			// Metadata
+			if skill.Metadata != nil {
+				fmt.Fprintln(out, "\nMetadata:")
+				if skill.Metadata.Emoji != "" {
+					fmt.Fprintf(out, "  Emoji: %s\n", skill.Metadata.Emoji)
+				}
+				if skill.Metadata.Always {
+					fmt.Fprintln(out, "  Always: true")
+				}
+				if len(skill.Metadata.OS) > 0 {
+					fmt.Fprintf(out, "  OS: %v\n", skill.Metadata.OS)
+				}
+				if skill.Metadata.PrimaryEnv != "" {
+					fmt.Fprintf(out, "  Primary Env: %s\n", skill.Metadata.PrimaryEnv)
+				}
+
+				// Requirements
+				if skill.Metadata.Requires != nil {
+					req := skill.Metadata.Requires
+					fmt.Fprintln(out, "\nRequirements:")
+					if len(req.Bins) > 0 {
+						fmt.Fprintf(out, "  Binaries: %v\n", req.Bins)
+					}
+					if len(req.AnyBins) > 0 {
+						fmt.Fprintf(out, "  Any Binary: %v\n", req.AnyBins)
+					}
+					if len(req.Env) > 0 {
+						fmt.Fprintf(out, "  Env Vars: %v\n", req.Env)
+					}
+					if len(req.Config) > 0 {
+						fmt.Fprintf(out, "  Config: %v\n", req.Config)
+					}
+				}
+
+				// Install specs
+				if len(skill.Metadata.Install) > 0 {
+					fmt.Fprintln(out, "\nInstall Options:")
+					for _, spec := range skill.Metadata.Install {
+						label := spec.Label
+						if label == "" {
+							label = spec.ID
+						}
+						fmt.Fprintf(out, "  - %s (%s)\n", label, spec.Kind)
+					}
+				}
+			}
+
+			// Eligibility
+			result, _ := mgr.CheckEligibility(skill.Name)
+			if result != nil {
+				fmt.Fprintln(out)
+				if result.Eligible {
+					fmt.Fprintln(out, "Status: Eligible")
+				} else {
+					fmt.Fprintf(out, "Status: Ineligible (%s)\n", result.Reason)
+				}
+			}
+
+			// Content
+			if showContent {
+				content, err := mgr.LoadContent(skill.Name)
+				if err != nil {
+					return fmt.Errorf("failed to load content: %w", err)
+				}
+				fmt.Fprintln(out, "\nContent:")
+				fmt.Fprintln(out, strings.Repeat("-", 40))
+				fmt.Fprintln(out, content)
+			}
+
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	cmd.Flags().BoolVar(&showContent, "content", false, "Show full skill content")
+	return cmd
+}
+
+func buildSkillsCheckCmd() *cobra.Command {
+	var configPath string
+	cmd := &cobra.Command{
+		Use:   "check [name]",
+		Short: "Check skill eligibility",
+		Long:  "Check if a skill is eligible to be loaded and show the reason if not.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
+			cfg, err := config.Load(configPath)
+			if err != nil {
+				return err
+			}
+
+			mgr, err := skills.NewManager(&cfg.Skills, cfg.Workspace.Path, nil)
+			if err != nil {
+				return fmt.Errorf("failed to create skill manager: %w", err)
+			}
+
+			if err := mgr.Discover(cmd.Context()); err != nil {
+				return fmt.Errorf("skill discovery failed: %w", err)
+			}
+
+			result, err := mgr.CheckEligibility(args[0])
+			if err != nil {
+				return err
+			}
+
+			out := cmd.OutOrStdout()
+			if result.Eligible {
+				fmt.Fprintf(out, "Skill '%s' is eligible\n", args[0])
+				if result.Reason != "" {
+					fmt.Fprintf(out, "  Reason: %s\n", result.Reason)
+				}
+			} else {
+				fmt.Fprintf(out, "Skill '%s' is NOT eligible\n", args[0])
+				fmt.Fprintf(out, "  Reason: %s\n", result.Reason)
+			}
+
 			return nil
 		},
 	}
@@ -444,8 +660,8 @@ func buildSkillsListCmd() *cobra.Command {
 func buildSkillsEnableCmd() *cobra.Command {
 	var configPath string
 	cmd := &cobra.Command{
-		Use:   "enable [id]",
-		Short: "Enable a skill plugin",
+		Use:   "enable [name]",
+		Short: "Enable a skill",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			configPath = resolveConfigPath(configPath)
@@ -453,7 +669,7 @@ func buildSkillsEnableCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			setPluginEnabled(raw, args[0], true)
+			setSkillEnabled(raw, args[0], true)
 			if err := doctor.WriteRawConfig(configPath, raw); err != nil {
 				return err
 			}
@@ -468,8 +684,8 @@ func buildSkillsEnableCmd() *cobra.Command {
 func buildSkillsDisableCmd() *cobra.Command {
 	var configPath string
 	cmd := &cobra.Command{
-		Use:   "disable [id]",
-		Short: "Disable a skill plugin",
+		Use:   "disable [name]",
+		Short: "Disable a skill",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			configPath = resolveConfigPath(configPath)
@@ -477,7 +693,7 @@ func buildSkillsDisableCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			setPluginEnabled(raw, args[0], false)
+			setSkillEnabled(raw, args[0], false)
 			if err := doctor.WriteRawConfig(configPath, raw); err != nil {
 				return err
 			}
@@ -487,6 +703,28 @@ func buildSkillsDisableCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
 	return cmd
+}
+
+func setSkillEnabled(raw map[string]any, name string, enabled bool) {
+	if raw == nil {
+		return
+	}
+	skillsSection, ok := raw["skills"].(map[string]any)
+	if !ok {
+		skillsSection = map[string]any{}
+		raw["skills"] = skillsSection
+	}
+	entries, ok := skillsSection["entries"].(map[string]any)
+	if !ok {
+		entries = map[string]any{}
+		skillsSection["entries"] = entries
+	}
+	entry, ok := entries[name].(map[string]any)
+	if !ok {
+		entry = map[string]any{}
+		entries[name] = entry
+	}
+	entry["enabled"] = enabled
 }
 
 // buildSetupCmd creates the "setup" command for initializing a workspace.

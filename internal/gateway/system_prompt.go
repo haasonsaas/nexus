@@ -14,6 +14,14 @@ type SystemPromptOptions struct {
 	Heartbeat         string
 	WorkspaceSections []PromptSection
 	MemoryFlush       string
+	SkillContent      []SkillSection
+}
+
+// SkillSection represents skill content to inject into the prompt.
+type SkillSection struct {
+	Name        string
+	Description string
+	Content     string
 }
 
 type PromptSection struct {
@@ -99,6 +107,18 @@ func buildSystemPrompt(cfg *config.Config, opts SystemPromptOptions) string {
 		lines = append(lines, fmt.Sprintf("Tool notes:\n%s", notes))
 	}
 
+	// Add skill content
+	if skillSections := normalizeSkillSections(opts.SkillContent); len(skillSections) > 0 {
+		lines = append(lines, "\n# Skills\n")
+		for _, skill := range skillSections {
+			skillHeader := fmt.Sprintf("## %s", skill.Name)
+			if skill.Description != "" {
+				skillHeader += fmt.Sprintf("\n%s", skill.Description)
+			}
+			lines = append(lines, fmt.Sprintf("%s\n\n%s", skillHeader, skill.Content))
+		}
+	}
+
 	lines = append(lines, "Do not exfiltrate secrets. Avoid destructive actions unless explicitly requested. Never stream partial replies to external messaging surfaces.")
 	lines = append(lines, "Be concise, direct, and ask clarifying questions when requirements are ambiguous.")
 
@@ -132,6 +152,26 @@ func normalizePromptSections(sections []PromptSection) []PromptSection {
 			continue
 		}
 		out = append(out, PromptSection{Label: label, Content: content})
+	}
+	return out
+}
+
+func normalizeSkillSections(sections []SkillSection) []SkillSection {
+	if len(sections) == 0 {
+		return nil
+	}
+	out := make([]SkillSection, 0, len(sections))
+	for _, section := range sections {
+		name := strings.TrimSpace(section.Name)
+		content := strings.TrimSpace(section.Content)
+		if name == "" || content == "" {
+			continue
+		}
+		out = append(out, SkillSection{
+			Name:        name,
+			Description: strings.TrimSpace(section.Description),
+			Content:     content,
+		})
 	}
 	return out
 }

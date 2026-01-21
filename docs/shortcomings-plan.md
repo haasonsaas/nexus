@@ -40,6 +40,8 @@
    - [x] Add a plugin registry with lazy loading.
    - [x] Add plugin manifest + schema validation and public plugin SDK types.
    - [x] Add schema-driven config validation + explicit defaults pipeline.
+   - [x] Add runtime plugin hooks (in-process register + optional .so loading).
+   - [x] Add operator UX for memory/heartbeat prompt preview and config doctor.
 
 5) Testing improvements
    - [x] Add unit test for buffered runtime response channel.
@@ -73,3 +75,4 @@
 - 2026-01-21: Added strict config parsing (unknown keys fail), validation checks, and explicit defaults pipeline.
 - 2026-01-21: Added channel plugin registry with lazy loading and split channel adapter interfaces into focused contracts.
 - 2026-01-21: Added plugin manifest discovery + schema validation and published a minimal plugin SDK surface.
+- 2026-01-21: Added runtime plugin hooks (.so loading), plus doctor/prompt CLI UX for memory/heartbeat.

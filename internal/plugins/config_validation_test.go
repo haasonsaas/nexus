@@ -1,0 +1,128 @@
+package plugins
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/haasonsaas/nexus/internal/config"
+)
+
+func TestValidateConfigMissingManifest(t *testing.T) {
+	cfg := writeConfigFile(t, `
+plugins:
+  entries:
+    voice-call:
+      enabled: true
+      config: {}
+llm:
+  default_provider: anthropic
+  providers:
+    anthropic: {}
+`)
+
+	parsed, err := config.Load(cfg)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if err := ValidateConfig(parsed); err == nil {
+		t.Fatalf("expected validation error")
+	}
+}
+
+func TestValidateConfigSchema(t *testing.T) {
+	dir := t.TempDir()
+	writeManifest(t, dir, `{
+  "id": "voice-call",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["token"],
+    "properties": {
+      "token": { "type": "string" }
+    }
+  }
+}`)
+
+	cfg := writeConfigFile(t, `
+plugins:
+  load:
+    paths:
+      - `+dir+`
+  entries:
+    voice-call:
+      enabled: true
+      config: {}
+llm:
+  default_provider: anthropic
+  providers:
+    anthropic: {}
+`)
+
+	parsed, err := config.Load(cfg)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if err := ValidateConfig(parsed); err == nil {
+		t.Fatalf("expected schema validation error")
+	}
+}
+
+func TestValidateConfigAcceptsPluginConfig(t *testing.T) {
+	dir := t.TempDir()
+	writeManifest(t, dir, `{
+  "id": "voice-call",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["token"],
+    "properties": {
+      "token": { "type": "string" }
+    }
+  }
+}`)
+
+	cfg := writeConfigFile(t, `
+plugins:
+  load:
+    paths:
+      - `+dir+`
+  entries:
+    voice-call:
+      enabled: true
+      config:
+        token: abc
+llm:
+  default_provider: anthropic
+  providers:
+    anthropic: {}
+`)
+
+	parsed, err := config.Load(cfg)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if err := ValidateConfig(parsed); err != nil {
+		t.Fatalf("expected validation to pass, got %v", err)
+	}
+}
+
+func writeConfigFile(t *testing.T, contents string) string {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "nexus.yaml")
+	if err := os.WriteFile(path, []byte(strings.TrimSpace(contents)), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	return path
+}
+
+func writeManifest(t *testing.T, dir string, contents string) string {
+	t.Helper()
+	path := filepath.Join(dir, "nexus.plugin.json")
+	if err := os.WriteFile(path, []byte(strings.TrimSpace(contents)), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	return path
+}

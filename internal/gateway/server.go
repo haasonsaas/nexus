@@ -24,6 +24,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/agent/providers"
 	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/config"
+	"github.com/haasonsaas/nexus/internal/plugins"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/tools/browser"
 	"github.com/haasonsaas/nexus/internal/tools/sandbox"
@@ -50,6 +51,7 @@ type Server struct {
 	memoryLogger *sessions.MemoryLogger
 
 	channelPlugins *channelPluginRegistry
+	runtimePlugins *plugins.RuntimeRegistry
 }
 
 // NewServer creates a new gateway server.
@@ -87,6 +89,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		channels:       channels.NewRegistry(),
 		logger:         logger,
 		channelPlugins: newChannelPluginRegistry(),
+		runtimePlugins: plugins.DefaultRuntimeRegistry(),
 	}
 	registerBuiltinChannelPlugins(server.channelPlugins)
 
@@ -372,6 +375,11 @@ func (s *Server) ensureRuntime(ctx context.Context) (*agent.Runtime, error) {
 	if err := s.registerTools(runtime); err != nil {
 		return nil, err
 	}
+	if s.runtimePlugins != nil {
+		if err := s.runtimePlugins.LoadTools(s.config, runtime); err != nil {
+			return nil, err
+		}
+	}
 
 	s.runtime = runtime
 	return runtime, nil
@@ -487,7 +495,13 @@ func (s *Server) registerChannelsFromConfig() error {
 		s.channelPlugins = newChannelPluginRegistry()
 		registerBuiltinChannelPlugins(s.channelPlugins)
 	}
-	return s.channelPlugins.LoadEnabled(s.config, s.channels, s.logger)
+	if err := s.channelPlugins.LoadEnabled(s.config, s.channels, s.logger); err != nil {
+		return err
+	}
+	if s.runtimePlugins == nil {
+		s.runtimePlugins = plugins.DefaultRuntimeRegistry()
+	}
+	return s.runtimePlugins.LoadChannels(s.config, s.channels)
 }
 
 func (s *Server) resolveConversationID(msg *models.Message) (string, error) {

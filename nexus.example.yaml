@@ -123,7 +123,7 @@ plugins:
   # entries:
   #   voice-call:
   #     enabled: true
-  #     path: ./plugins/voice-call
+  #     path: ./plugins/voice-call # directory containing nexus.plugin.json + plugin.so (or <id>.so)
   #     config:
   #       token: ${VOICE_CALL_TOKEN}
   sandbox:

@@ -7,8 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/haasonsaas/nexus/internal/plugins"
-	"github.com/haasonsaas/nexus/pkg/pluginsdk"
 	"gopkg.in/yaml.v3"
 )
 
@@ -355,9 +353,6 @@ func validateConfig(cfg *Config) error {
 		return &ConfigValidationError{Issues: issues}
 	}
 
-	if err := validatePlugins(cfg); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -386,71 +381,4 @@ func validHeartbeatMode(mode string) bool {
 	default:
 		return false
 	}
-}
-
-func validatePlugins(cfg *Config) error {
-	if cfg == nil || len(cfg.Plugins.Entries) == 0 {
-		return nil
-	}
-
-	paths := append([]string{}, cfg.Plugins.Load.Paths...)
-	for _, entry := range cfg.Plugins.Entries {
-		if entry.Path != "" {
-			paths = append(paths, entry.Path)
-		}
-	}
-
-	manifestIndex, err := plugins.DiscoverManifests(paths)
-	if err != nil {
-		return fmt.Errorf("plugin manifest discovery failed: %w", err)
-	}
-
-	var issues []string
-	for id, entry := range cfg.Plugins.Entries {
-		var info plugins.ManifestInfo
-		var ok bool
-
-		if entry.Path != "" {
-			info, err = plugins.LoadManifestForPath(entry.Path)
-			if err != nil {
-				issues = append(issues, fmt.Sprintf("plugins.entries.%s manifest error: %v", id, err))
-				continue
-			}
-			if strings.TrimSpace(info.Manifest.ID) != "" && info.Manifest.ID != id {
-				issues = append(issues, fmt.Sprintf("plugins.entries.%s manifest id mismatch: %q", id, info.Manifest.ID))
-				continue
-			}
-		} else {
-			info, ok = manifestIndex[id]
-			if !ok {
-				issues = append(issues, fmt.Sprintf("plugins.entries.%s missing manifest", id))
-				continue
-			}
-		}
-
-		if err := validateManifest(info.Manifest); err != nil {
-			issues = append(issues, fmt.Sprintf("plugins.entries.%s invalid manifest: %v", id, err))
-			continue
-		}
-
-		config := entry.Config
-		if config == nil {
-			config = map[string]any{}
-		}
-		if err := info.Manifest.ValidateConfig(config); err != nil {
-			issues = append(issues, fmt.Sprintf("plugins.entries.%s config invalid: %v", id, err))
-		}
-	}
-
-	if len(issues) > 0 {
-		return &ConfigValidationError{Issues: issues}
-	}
-	return nil
-}
-
-func validateManifest(manifest *pluginsdk.Manifest) error {
-	if manifest == nil {
-		return fmt.Errorf("manifest is nil")
-	}
-	return manifest.Validate()
 }

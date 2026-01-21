@@ -38,10 +38,14 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/config"
+	"github.com/haasonsaas/nexus/internal/gateway"
+	"github.com/haasonsaas/nexus/internal/plugins"
+	"github.com/haasonsaas/nexus/pkg/models"
 	"github.com/spf13/cobra"
 )
 
@@ -100,6 +104,8 @@ Documentation: https://github.com/haasonsaas/nexus`,
 		buildChannelsCmd(),
 		buildAgentsCmd(),
 		buildStatusCmd(),
+		buildDoctorCmd(),
+		buildPromptCmd(),
 	)
 
 	return rootCmd
@@ -170,6 +176,9 @@ func runServe(ctx context.Context, configPath string, debug bool) error {
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
+	}
+	if err := plugins.ValidateConfig(cfg); err != nil {
+		return fmt.Errorf("plugin validation failed: %w", err)
 	}
 
 	slog.Info("configuration loaded",
@@ -685,6 +694,95 @@ Shows the status of all components including:
 
 	cmd.Flags().StringVarP(&configPath, "config", "c", "nexus.yaml", "Path to config file")
 	cmd.Flags().BoolVar(&json, "json", false, "Output in JSON format")
+
+	return cmd
+}
+
+// buildDoctorCmd creates the "doctor" command for config validation.
+func buildDoctorCmd() *cobra.Command {
+	var configPath string
+
+	cmd := &cobra.Command{
+		Use:   "doctor",
+		Short: "Validate configuration and plugin manifests",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load(configPath)
+			if err != nil {
+				return fmt.Errorf("config validation failed: %w", err)
+			}
+			if err := plugins.ValidateConfig(cfg); err != nil {
+				return fmt.Errorf("plugin validation failed: %w", err)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Config OK (provider: %s)\n", cfg.LLM.DefaultProvider)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVarP(&configPath, "config", "c", "nexus.yaml",
+		"Path to YAML configuration file")
+
+	return cmd
+}
+
+// buildPromptCmd creates the "prompt" command for previewing the system prompt.
+func buildPromptCmd() *cobra.Command {
+	var (
+		configPath string
+		sessionID  string
+		channel    string
+		message    string
+		heartbeat  bool
+	)
+
+	cmd := &cobra.Command{
+		Use:   "prompt",
+		Short: "Render the system prompt for a session/message",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load(configPath)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+			if err := plugins.ValidateConfig(cfg); err != nil {
+				return fmt.Errorf("plugin validation failed: %w", err)
+			}
+
+			if strings.TrimSpace(sessionID) == "" {
+				return fmt.Errorf("session-id is required")
+			}
+			if strings.TrimSpace(channel) == "" {
+				return fmt.Errorf("channel is required")
+			}
+
+			msg := &models.Message{
+				Channel: models.ChannelType(channel),
+				Content: message,
+			}
+			if heartbeat {
+				if msg.Metadata == nil {
+					msg.Metadata = map[string]any{}
+				}
+				msg.Metadata["heartbeat"] = true
+				if strings.TrimSpace(msg.Content) == "" {
+					msg.Content = "heartbeat"
+				}
+			}
+
+			prompt, err := gateway.BuildSystemPrompt(cfg, sessionID, msg)
+			if err != nil {
+				return fmt.Errorf("failed to build prompt: %w", err)
+			}
+
+			fmt.Fprintln(cmd.OutOrStdout(), prompt)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVarP(&configPath, "config", "c", "nexus.yaml",
+		"Path to YAML configuration file")
+	cmd.Flags().StringVar(&sessionID, "session-id", "", "Session ID for memory scoping")
+	cmd.Flags().StringVar(&channel, "channel", "", "Channel type (telegram, discord, slack)")
+	cmd.Flags().StringVar(&message, "message", "", "Message content (used for heartbeat mode)")
+	cmd.Flags().BoolVar(&heartbeat, "heartbeat", false, "Force heartbeat prompt mode")
 
 	return cmd
 }

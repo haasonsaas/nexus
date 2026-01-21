@@ -244,6 +244,11 @@ Notes:
 - Config parsing is strict; unknown keys will fail validation.
 - Plugin entries require a manifest file (`nexus.plugin.json` or `clawdbot.plugin.json`) with a JSON schema.
 
+Validate configuration:
+```bash
+nexus doctor -c nexus.yaml
+```
+
 ### Deployment
 
 ```yaml

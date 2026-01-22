@@ -76,6 +76,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	agentctx "github.com/haasonsaas/nexus/internal/agent/context"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/tools/policy"
 	"github.com/haasonsaas/nexus/pkg/models"
@@ -396,6 +397,15 @@ type Runtime struct {
 
 	// maxIterations limits the agentic loop iterations (default 5)
 	maxIterations int
+
+	// toolExec configures tool execution behavior (timeouts, concurrency)
+	toolExec ToolExecConfig
+
+	// packOpts configures context packing behavior
+	packOpts *agentctx.PackOptions
+
+	// summarizeConfig configures conversation summarization
+	summarizeConfig *agentctx.SummarizationConfig
 }
 
 // NewRuntime creates a new agent runtime with the given provider and session store.
@@ -441,6 +451,21 @@ func (r *Runtime) SetToolEventStore(store ToolEventStore) {
 // SetMaxIterations configures the maximum agentic loop iterations (default 5).
 func (r *Runtime) SetMaxIterations(max int) {
 	r.maxIterations = max
+}
+
+// SetToolExecConfig configures tool execution behavior (timeouts, concurrency).
+func (r *Runtime) SetToolExecConfig(config ToolExecConfig) {
+	r.toolExec = config
+}
+
+// SetPackOptions configures context packing behavior.
+func (r *Runtime) SetPackOptions(opts *agentctx.PackOptions) {
+	r.packOpts = opts
+}
+
+// SetSummarizationConfig configures conversation summarization.
+func (r *Runtime) SetSummarizationConfig(config *agentctx.SummarizationConfig) {
+	r.summarizeConfig = config
 }
 
 // buildCompletionMessages converts stored message history to CompletionMessage slice.
@@ -764,9 +789,10 @@ const processBufferSize = 10
 
 // ResponseChunk is a streaming response chunk from the runtime.
 type ResponseChunk struct {
-	Text       string             `json:"text,omitempty"`
-	ToolResult *models.ToolResult `json:"tool_result,omitempty"`
-	Error      error              `json:"-"`
+	Text       string               `json:"text,omitempty"`
+	ToolResult *models.ToolResult   `json:"tool_result,omitempty"`
+	Event      *models.RuntimeEvent `json:"event,omitempty"`
+	Error      error                `json:"-"`
 }
 
 // ToolRegistry manages available tools.

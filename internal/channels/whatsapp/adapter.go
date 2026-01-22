@@ -145,7 +145,9 @@ func (a *Adapter) Stop(ctx context.Context) error {
 	a.wg.Wait()
 
 	// Close qrChan to unblock any receivers
-	close(a.qrChan)
+	if a.qrChan != nil {
+		close(a.qrChan)
+	}
 
 	if a.client != nil {
 		a.client.Disconnect()

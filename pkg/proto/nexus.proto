@@ -570,7 +570,7 @@ message EdgeRegister {
   repeated string channel_types = 5;
 
   // Capabilities flags.
-  EdgeCapabilities capabilities = 6;
+  BasicEdgeCapabilities capabilities = 6;
 
   // Edge version for compatibility checks.
   string version = 7;
@@ -600,8 +600,8 @@ message EdgeToolDefinition {
   bool produces_artifacts = 6;
 }
 
-// EdgeCapabilities describes what the edge can do.
-message EdgeCapabilities {
+// BasicEdgeCapabilities describes what the edge can do (legacy).
+message BasicEdgeCapabilities {
   // Can execute arbitrary tools.
   bool tools = 1;
 
@@ -804,7 +804,7 @@ message GetEdgeStatusRequest {
 }
 
 message GetEdgeStatusResponse {
-  EdgeStatus status = 1;
+  EdgeStatusInfo status = 1;
 }
 
 message ListEdgesRequest {
@@ -813,13 +813,13 @@ message ListEdgesRequest {
 }
 
 message ListEdgesResponse {
-  repeated EdgeStatus edges = 1;
+  repeated EdgeStatusInfo edges = 1;
   string next_page_token = 2;
   int32 total_count = 3;
 }
 
 // EdgeStatus describes the current state of an edge.
-message EdgeStatus {
+message EdgeStatusInfo {
   // Edge identifier.
   string edge_id = 1;
 

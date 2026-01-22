@@ -239,7 +239,7 @@ func (d *EdgeDaemon) register() error {
 				AuthToken:    d.config.AuthToken,
 				Tools:        toolDefs,
 				ChannelTypes: []string{}, // TODO: add channel support
-				Capabilities: &pb.EdgeCapabilities{
+				Capabilities: &pb.BasicEdgeCapabilities{
 					Tools:     true,
 					Channels:  false,
 					Streaming: true,

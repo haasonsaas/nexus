@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package nexus.v1;
+package edge.v1;
 
-option go_package = "github.com/haasonsaas/nexus/pkg/proto;proto";
+option go_package = "github.com/haasonsaas/nexus/pkg/proto/edge;edge";
 
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/struct.proto";

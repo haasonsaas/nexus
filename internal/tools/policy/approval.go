@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	proto "github.com/haasonsaas/nexus/pkg/proto"
+	edge "github.com/haasonsaas/nexus/pkg/proto/edge"
 )
 
 var (
@@ -25,7 +25,7 @@ type ApprovalRequest struct {
 	ToolName     string
 	EdgeID       string
 	Input        string // JSON-encoded input
-	RiskLevel    proto.RiskLevel
+	RiskLevel    edge.RiskLevel
 	TrustLevel   TrustLevel
 	SessionID    string
 	UserID       string
@@ -68,7 +68,7 @@ type ApprovalPolicy struct {
 	AutoApproveForTrusted bool
 
 	// ByRiskLevel defines approval requirements by risk level.
-	ByRiskLevel map[proto.RiskLevel]RiskApprovalPolicy
+	ByRiskLevel map[edge.RiskLevel]RiskApprovalPolicy
 }
 
 // RiskApprovalPolicy defines approval requirements for a specific risk level.
@@ -90,22 +90,22 @@ func DefaultApprovalPolicy() *ApprovalPolicy {
 		RequireApprovalForHighRisk:  true,
 		ApprovalTimeout:             5 * time.Minute,
 		AutoApproveForTrusted:       true,
-		ByRiskLevel: map[proto.RiskLevel]RiskApprovalPolicy{
-			proto.RiskLevel_RISK_LEVEL_LOW: {
+		ByRiskLevel: map[edge.RiskLevel]RiskApprovalPolicy{
+			edge.RiskLevel_RISK_LEVEL_LOW: {
 				RequireApproval: false,
 				MinTrustLevel:   TrustUntrusted,
 			},
-			proto.RiskLevel_RISK_LEVEL_MEDIUM: {
+			edge.RiskLevel_RISK_LEVEL_MEDIUM: {
 				RequireApproval:          false,
 				MinTrustLevel:            TrustTOFU,
 				MaxAutoApprovePerSession: 10,
 			},
-			proto.RiskLevel_RISK_LEVEL_HIGH: {
+			edge.RiskLevel_RISK_LEVEL_HIGH: {
 				RequireApproval:          true,
 				MinTrustLevel:            TrustTrusted,
 				MaxAutoApprovePerSession: 3,
 			},
-			proto.RiskLevel_RISK_LEVEL_CRITICAL: {
+			edge.RiskLevel_RISK_LEVEL_CRITICAL: {
 				RequireApproval: true,
 				MinTrustLevel:   TrustTrusted,
 			},
@@ -125,7 +125,7 @@ type ApprovalManager struct {
 	onApprovalDecided  func(*ApprovalRequest)
 
 	// Session tracking for rate limiting
-	sessionApprovals map[string]map[proto.RiskLevel]int // sessionID -> riskLevel -> count
+	sessionApprovals map[string]map[edge.RiskLevel]int // sessionID -> riskLevel -> count
 }
 
 // NewApprovalManager creates a new approval manager.
@@ -137,7 +137,7 @@ func NewApprovalManager(registry *ToolRegistry, policy *ApprovalPolicy) *Approva
 		policy:           policy,
 		requests:         make(map[string]*ApprovalRequest),
 		registry:         registry,
-		sessionApprovals: make(map[string]map[proto.RiskLevel]int),
+		sessionApprovals: make(map[string]map[edge.RiskLevel]int),
 	}
 }
 
@@ -157,7 +157,7 @@ func (m *ApprovalManager) SetApprovalDecidedHandler(fn func(*ApprovalRequest)) {
 
 // CheckApproval determines if tool execution requires approval and handles the workflow.
 // Returns nil if execution can proceed, or an error indicating the approval status.
-func (m *ApprovalManager) CheckApproval(ctx context.Context, toolName, edgeID, input, sessionID, userID string, riskLevel proto.RiskLevel) error {
+func (m *ApprovalManager) CheckApproval(ctx context.Context, toolName, edgeID, input, sessionID, userID string, riskLevel edge.RiskLevel) error {
 	if !IsEdgeTool(toolName) && edgeID == "" {
 		// Not an edge tool, no approval needed via this system
 		return nil
@@ -376,7 +376,7 @@ func (m *ApprovalManager) CleanupExpired() int {
 	return count
 }
 
-func (m *ApprovalManager) needsApproval(toolName, edgeID string, riskLevel proto.RiskLevel, trustLevel TrustLevel, sessionID string) bool {
+func (m *ApprovalManager) needsApproval(toolName, edgeID string, riskLevel edge.RiskLevel, trustLevel TrustLevel, sessionID string) bool {
 	// Check explicit always/never lists
 	for _, t := range m.policy.AlwaysRequireApprovalFor {
 		if t == toolName || matchToolPattern(t, toolName) {
@@ -429,24 +429,24 @@ func (m *ApprovalManager) needsApproval(toolName, edgeID string, riskLevel proto
 	}
 
 	if m.policy.RequireApprovalForHighRisk &&
-		(riskLevel == proto.RiskLevel_RISK_LEVEL_HIGH || riskLevel == proto.RiskLevel_RISK_LEVEL_CRITICAL) {
+		(riskLevel == edge.RiskLevel_RISK_LEVEL_HIGH || riskLevel == edge.RiskLevel_RISK_LEVEL_CRITICAL) {
 		return true
 	}
 
 	return false
 }
 
-func (m *ApprovalManager) trackAutoApproval(sessionID string, riskLevel proto.RiskLevel) {
+func (m *ApprovalManager) trackAutoApproval(sessionID string, riskLevel edge.RiskLevel) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	if m.sessionApprovals[sessionID] == nil {
-		m.sessionApprovals[sessionID] = make(map[proto.RiskLevel]int)
+		m.sessionApprovals[sessionID] = make(map[edge.RiskLevel]int)
 	}
 	m.sessionApprovals[sessionID][riskLevel]++
 }
 
-func (m *ApprovalManager) getSessionApprovalCount(sessionID string, riskLevel proto.RiskLevel) int {
+func (m *ApprovalManager) getSessionApprovalCount(sessionID string, riskLevel edge.RiskLevel) int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 

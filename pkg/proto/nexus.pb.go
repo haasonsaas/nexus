@@ -4202,7 +4202,7 @@ type EdgeRegister struct {
 	// Channels this edge can host (for edge-only channels like iMessage).
 	ChannelTypes []string `protobuf:"bytes,5,rep,name=channel_types,json=channelTypes,proto3" json:"channel_types,omitempty"`
 	// Capabilities flags.
-	Capabilities *EdgeCapabilities `protobuf:"bytes,6,opt,name=capabilities,proto3" json:"capabilities,omitempty"`
+	Capabilities *BasicEdgeCapabilities `protobuf:"bytes,6,opt,name=capabilities,proto3" json:"capabilities,omitempty"`
 	// Edge version for compatibility checks.
 	Version string `protobuf:"bytes,7,opt,name=version,proto3" json:"version,omitempty"`
 	// Metadata about the edge environment.
@@ -4276,7 +4276,7 @@ func (x *EdgeRegister) GetChannelTypes() []string {
 	return nil
 }
 
-func (x *EdgeRegister) GetCapabilities() *EdgeCapabilities {
+func (x *EdgeRegister) GetCapabilities() *BasicEdgeCapabilities {
 	if x != nil {
 		return x.Capabilities
 	}
@@ -4388,8 +4388,8 @@ func (x *EdgeToolDefinition) GetProducesArtifacts() bool {
 	return false
 }
 
-// EdgeCapabilities describes what the edge can do.
-type EdgeCapabilities struct {
+// BasicEdgeCapabilities describes what the edge can do (legacy).
+type BasicEdgeCapabilities struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Can execute arbitrary tools.
 	Tools bool `protobuf:"varint,1,opt,name=tools,proto3" json:"tools,omitempty"`
@@ -4403,20 +4403,20 @@ type EdgeCapabilities struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *EdgeCapabilities) Reset() {
-	*x = EdgeCapabilities{}
+func (x *BasicEdgeCapabilities) Reset() {
+	*x = BasicEdgeCapabilities{}
 	mi := &file_pkg_proto_nexus_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *EdgeCapabilities) String() string {
+func (x *BasicEdgeCapabilities) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*EdgeCapabilities) ProtoMessage() {}
+func (*BasicEdgeCapabilities) ProtoMessage() {}
 
-func (x *EdgeCapabilities) ProtoReflect() protoreflect.Message {
+func (x *BasicEdgeCapabilities) ProtoReflect() protoreflect.Message {
 	mi := &file_pkg_proto_nexus_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -4428,33 +4428,33 @@ func (x *EdgeCapabilities) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use EdgeCapabilities.ProtoReflect.Descriptor instead.
-func (*EdgeCapabilities) Descriptor() ([]byte, []int) {
+// Deprecated: Use BasicEdgeCapabilities.ProtoReflect.Descriptor instead.
+func (*BasicEdgeCapabilities) Descriptor() ([]byte, []int) {
 	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{56}
 }
 
-func (x *EdgeCapabilities) GetTools() bool {
+func (x *BasicEdgeCapabilities) GetTools() bool {
 	if x != nil {
 		return x.Tools
 	}
 	return false
 }
 
-func (x *EdgeCapabilities) GetChannels() bool {
+func (x *BasicEdgeCapabilities) GetChannels() bool {
 	if x != nil {
 		return x.Channels
 	}
 	return false
 }
 
-func (x *EdgeCapabilities) GetStreaming() bool {
+func (x *BasicEdgeCapabilities) GetStreaming() bool {
 	if x != nil {
 		return x.Streaming
 	}
 	return false
 }
 
-func (x *EdgeCapabilities) GetArtifacts() bool {
+func (x *BasicEdgeCapabilities) GetArtifacts() bool {
 	if x != nil {
 		return x.Artifacts
 	}
@@ -5236,7 +5236,7 @@ func (x *GetEdgeStatusRequest) GetEdgeId() string {
 
 type GetEdgeStatusResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Status        *EdgeStatus            `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	Status        *EdgeStatusInfo        `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5271,7 +5271,7 @@ func (*GetEdgeStatusResponse) Descriptor() ([]byte, []int) {
 	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{67}
 }
 
-func (x *GetEdgeStatusResponse) GetStatus() *EdgeStatus {
+func (x *GetEdgeStatusResponse) GetStatus() *EdgeStatusInfo {
 	if x != nil {
 		return x.Status
 	}
@@ -5332,7 +5332,7 @@ func (x *ListEdgesRequest) GetPageToken() string {
 
 type ListEdgesResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Edges         []*EdgeStatus          `protobuf:"bytes,1,rep,name=edges,proto3" json:"edges,omitempty"`
+	Edges         []*EdgeStatusInfo      `protobuf:"bytes,1,rep,name=edges,proto3" json:"edges,omitempty"`
 	NextPageToken string                 `protobuf:"bytes,2,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
 	TotalCount    int32                  `protobuf:"varint,3,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -5369,7 +5369,7 @@ func (*ListEdgesResponse) Descriptor() ([]byte, []int) {
 	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{69}
 }
 
-func (x *ListEdgesResponse) GetEdges() []*EdgeStatus {
+func (x *ListEdgesResponse) GetEdges() []*EdgeStatusInfo {
 	if x != nil {
 		return x.Edges
 	}
@@ -5391,7 +5391,7 @@ func (x *ListEdgesResponse) GetTotalCount() int32 {
 }
 
 // EdgeStatus describes the current state of an edge.
-type EdgeStatus struct {
+type EdgeStatusInfo struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Edge identifier.
 	EdgeId string `protobuf:"bytes,1,opt,name=edge_id,json=edgeId,proto3" json:"edge_id,omitempty"`
@@ -5417,20 +5417,20 @@ type EdgeStatus struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *EdgeStatus) Reset() {
-	*x = EdgeStatus{}
+func (x *EdgeStatusInfo) Reset() {
+	*x = EdgeStatusInfo{}
 	mi := &file_pkg_proto_nexus_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *EdgeStatus) String() string {
+func (x *EdgeStatusInfo) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*EdgeStatus) ProtoMessage() {}
+func (*EdgeStatusInfo) ProtoMessage() {}
 
-func (x *EdgeStatus) ProtoReflect() protoreflect.Message {
+func (x *EdgeStatusInfo) ProtoReflect() protoreflect.Message {
 	mi := &file_pkg_proto_nexus_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -5442,75 +5442,75 @@ func (x *EdgeStatus) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use EdgeStatus.ProtoReflect.Descriptor instead.
-func (*EdgeStatus) Descriptor() ([]byte, []int) {
+// Deprecated: Use EdgeStatusInfo.ProtoReflect.Descriptor instead.
+func (*EdgeStatusInfo) Descriptor() ([]byte, []int) {
 	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{70}
 }
 
-func (x *EdgeStatus) GetEdgeId() string {
+func (x *EdgeStatusInfo) GetEdgeId() string {
 	if x != nil {
 		return x.EdgeId
 	}
 	return ""
 }
 
-func (x *EdgeStatus) GetName() string {
+func (x *EdgeStatusInfo) GetName() string {
 	if x != nil {
 		return x.Name
 	}
 	return ""
 }
 
-func (x *EdgeStatus) GetConnectionStatus() EdgeConnectionStatus {
+func (x *EdgeStatusInfo) GetConnectionStatus() EdgeConnectionStatus {
 	if x != nil {
 		return x.ConnectionStatus
 	}
 	return EdgeConnectionStatus_EDGE_CONNECTION_STATUS_UNSPECIFIED
 }
 
-func (x *EdgeStatus) GetConnectedAt() *timestamppb.Timestamp {
+func (x *EdgeStatusInfo) GetConnectedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.ConnectedAt
 	}
 	return nil
 }
 
-func (x *EdgeStatus) GetLastHeartbeat() *timestamppb.Timestamp {
+func (x *EdgeStatusInfo) GetLastHeartbeat() *timestamppb.Timestamp {
 	if x != nil {
 		return x.LastHeartbeat
 	}
 	return nil
 }
 
-func (x *EdgeStatus) GetTools() []string {
+func (x *EdgeStatusInfo) GetTools() []string {
 	if x != nil {
 		return x.Tools
 	}
 	return nil
 }
 
-func (x *EdgeStatus) GetChannelTypes() []string {
+func (x *EdgeStatusInfo) GetChannelTypes() []string {
 	if x != nil {
 		return x.ChannelTypes
 	}
 	return nil
 }
 
-func (x *EdgeStatus) GetMetrics() *EdgeMetrics {
+func (x *EdgeStatusInfo) GetMetrics() *EdgeMetrics {
 	if x != nil {
 		return x.Metrics
 	}
 	return nil
 }
 
-func (x *EdgeStatus) GetVersion() string {
+func (x *EdgeStatusInfo) GetVersion() string {
 	if x != nil {
 		return x.Version
 	}
 	return ""
 }
 
-func (x *EdgeStatus) GetMetadata() map[string]string {
+func (x *EdgeStatusInfo) GetMetadata() map[string]string {
 	if x != nil {
 		return x.Metadata
 	}
@@ -5846,15 +5846,15 @@ const file_pkg_proto_nexus_proto_rawDesc = "" +
 	"\vtool_cancel\x18\x03 \x01(\v2\x1a.nexus.v1.ToolCancellationH\x00R\n" +
 	"toolCancel\x12+\n" +
 	"\x05event\x18\x04 \x01(\v2\x13.nexus.v1.CoreEventH\x00R\x05eventB\t\n" +
-	"\amessage\"\x8c\x03\n" +
+	"\amessage\"\x91\x03\n" +
 	"\fEdgeRegister\x12\x17\n" +
 	"\aedge_id\x18\x01 \x01(\tR\x06edgeId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1d\n" +
 	"\n" +
 	"auth_token\x18\x03 \x01(\tR\tauthToken\x122\n" +
 	"\x05tools\x18\x04 \x03(\v2\x1c.nexus.v1.EdgeToolDefinitionR\x05tools\x12#\n" +
-	"\rchannel_types\x18\x05 \x03(\tR\fchannelTypes\x12>\n" +
-	"\fcapabilities\x18\x06 \x01(\v2\x1a.nexus.v1.EdgeCapabilitiesR\fcapabilities\x12\x18\n" +
+	"\rchannel_types\x18\x05 \x03(\tR\fchannelTypes\x12C\n" +
+	"\fcapabilities\x18\x06 \x01(\v2\x1f.nexus.v1.BasicEdgeCapabilitiesR\fcapabilities\x12\x18\n" +
 	"\aversion\x18\a \x01(\tR\aversion\x12@\n" +
 	"\bmetadata\x18\b \x03(\v2$.nexus.v1.EdgeRegister.MetadataEntryR\bmetadata\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
@@ -5866,8 +5866,8 @@ const file_pkg_proto_nexus_proto_rawDesc = "" +
 	"\finput_schema\x18\x03 \x01(\tR\vinputSchema\x12+\n" +
 	"\x11requires_approval\x18\x04 \x01(\bR\x10requiresApproval\x12'\n" +
 	"\x0ftimeout_seconds\x18\x05 \x01(\x05R\x0etimeoutSeconds\x12-\n" +
-	"\x12produces_artifacts\x18\x06 \x01(\bR\x11producesArtifacts\"\x80\x01\n" +
-	"\x10EdgeCapabilities\x12\x14\n" +
+	"\x12produces_artifacts\x18\x06 \x01(\bR\x11producesArtifacts\"\x85\x01\n" +
+	"\x15BasicEdgeCapabilities\x12\x14\n" +
 	"\x05tools\x18\x01 \x01(\bR\x05tools\x12\x1a\n" +
 	"\bchannels\x18\x02 \x01(\bR\bchannels\x12\x1c\n" +
 	"\tstreaming\x18\x03 \x01(\bR\tstreaming\x12\x1c\n" +
@@ -5933,20 +5933,19 @@ const file_pkg_proto_nexus_proto_rawDesc = "" +
 	"\ttimestamp\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12+\n" +
 	"\x04data\x18\x03 \x01(\v2\x17.google.protobuf.StructR\x04data\"/\n" +
 	"\x14GetEdgeStatusRequest\x12\x17\n" +
-	"\aedge_id\x18\x01 \x01(\tR\x06edgeId\"E\n" +
-	"\x15GetEdgeStatusResponse\x12,\n" +
-	"\x06status\x18\x01 \x01(\v2\x14.nexus.v1.EdgeStatusR\x06status\"N\n" +
+	"\aedge_id\x18\x01 \x01(\tR\x06edgeId\"I\n" +
+	"\x15GetEdgeStatusResponse\x120\n" +
+	"\x06status\x18\x01 \x01(\v2\x18.nexus.v1.EdgeStatusInfoR\x06status\"N\n" +
 	"\x10ListEdgesRequest\x12\x1b\n" +
 	"\tpage_size\x18\x01 \x01(\x05R\bpageSize\x12\x1d\n" +
 	"\n" +
-	"page_token\x18\x02 \x01(\tR\tpageToken\"\x88\x01\n" +
-	"\x11ListEdgesResponse\x12*\n" +
-	"\x05edges\x18\x01 \x03(\v2\x14.nexus.v1.EdgeStatusR\x05edges\x12&\n" +
+	"page_token\x18\x02 \x01(\tR\tpageToken\"\x8c\x01\n" +
+	"\x11ListEdgesResponse\x12.\n" +
+	"\x05edges\x18\x01 \x03(\v2\x18.nexus.v1.EdgeStatusInfoR\x05edges\x12&\n" +
 	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\x12\x1f\n" +
 	"\vtotal_count\x18\x03 \x01(\x05R\n" +
-	"totalCount\"\x8b\x04\n" +
-	"\n" +
-	"EdgeStatus\x12\x17\n" +
+	"totalCount\"\x93\x04\n" +
+	"\x0eEdgeStatusInfo\x12\x17\n" +
 	"\aedge_id\x18\x01 \x01(\tR\x06edgeId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12K\n" +
 	"\x11connection_status\x18\x03 \x01(\x0e2\x1e.nexus.v1.EdgeConnectionStatusR\x10connectionStatus\x12=\n" +
@@ -5955,9 +5954,9 @@ const file_pkg_proto_nexus_proto_rawDesc = "" +
 	"\x05tools\x18\x06 \x03(\tR\x05tools\x12#\n" +
 	"\rchannel_types\x18\a \x03(\tR\fchannelTypes\x12/\n" +
 	"\ametrics\x18\b \x01(\v2\x15.nexus.v1.EdgeMetricsR\ametrics\x12\x18\n" +
-	"\aversion\x18\t \x01(\tR\aversion\x12>\n" +
+	"\aversion\x18\t \x01(\tR\aversion\x12B\n" +
 	"\bmetadata\x18\n" +
-	" \x03(\v2\".nexus.v1.EdgeStatus.MetadataEntryR\bmetadata\x1a;\n" +
+	" \x03(\v2&.nexus.v1.EdgeStatusInfo.MetadataEntryR\bmetadata\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*o\n" +
@@ -6131,7 +6130,7 @@ var file_pkg_proto_nexus_proto_goTypes = []any{
 	(*CoreMessage)(nil),               // 63: nexus.v1.CoreMessage
 	(*EdgeRegister)(nil),              // 64: nexus.v1.EdgeRegister
 	(*EdgeToolDefinition)(nil),        // 65: nexus.v1.EdgeToolDefinition
-	(*EdgeCapabilities)(nil),          // 66: nexus.v1.EdgeCapabilities
+	(*BasicEdgeCapabilities)(nil),     // 66: nexus.v1.BasicEdgeCapabilities
 	(*EdgeRegistered)(nil),            // 67: nexus.v1.EdgeRegistered
 	(*EdgeHeartbeat)(nil),             // 68: nexus.v1.EdgeHeartbeat
 	(*EdgeMetrics)(nil),               // 69: nexus.v1.EdgeMetrics
@@ -6145,7 +6144,7 @@ var file_pkg_proto_nexus_proto_goTypes = []any{
 	(*GetEdgeStatusResponse)(nil),     // 77: nexus.v1.GetEdgeStatusResponse
 	(*ListEdgesRequest)(nil),          // 78: nexus.v1.ListEdgesRequest
 	(*ListEdgesResponse)(nil),         // 79: nexus.v1.ListEdgesResponse
-	(*EdgeStatus)(nil),                // 80: nexus.v1.EdgeStatus
+	(*EdgeStatusInfo)(nil),            // 80: nexus.v1.EdgeStatusInfo
 	nil,                               // 81: nexus.v1.SendMessageRequest.MetadataEntry
 	nil,                               // 82: nexus.v1.Message.MetadataEntry
 	nil,                               // 83: nexus.v1.Session.MetadataEntry
@@ -6160,7 +6159,7 @@ var file_pkg_proto_nexus_proto_goTypes = []any{
 	nil,                               // 92: nexus.v1.HealthCheckResponse.MetadataEntry
 	nil,                               // 93: nexus.v1.EdgeRegister.MetadataEntry
 	nil,                               // 94: nexus.v1.ToolExecutionRequest.MetadataEntry
-	nil,                               // 95: nexus.v1.EdgeStatus.MetadataEntry
+	nil,                               // 95: nexus.v1.EdgeStatusInfo.MetadataEntry
 	(*structpb.Struct)(nil),           // 96: google.protobuf.Struct
 	(*timestamppb.Timestamp)(nil),     // 97: google.protobuf.Timestamp
 }
@@ -6246,7 +6245,7 @@ var file_pkg_proto_nexus_proto_depIdxs = []int32{
 	73,  // 78: nexus.v1.CoreMessage.tool_cancel:type_name -> nexus.v1.ToolCancellation
 	75,  // 79: nexus.v1.CoreMessage.event:type_name -> nexus.v1.CoreEvent
 	65,  // 80: nexus.v1.EdgeRegister.tools:type_name -> nexus.v1.EdgeToolDefinition
-	66,  // 81: nexus.v1.EdgeRegister.capabilities:type_name -> nexus.v1.EdgeCapabilities
+	66,  // 81: nexus.v1.EdgeRegister.capabilities:type_name -> nexus.v1.BasicEdgeCapabilities
 	93,  // 82: nexus.v1.EdgeRegister.metadata:type_name -> nexus.v1.EdgeRegister.MetadataEntry
 	97,  // 83: nexus.v1.EdgeHeartbeat.timestamp:type_name -> google.protobuf.Timestamp
 	69,  // 84: nexus.v1.EdgeHeartbeat.metrics:type_name -> nexus.v1.EdgeMetrics
@@ -6258,13 +6257,13 @@ var file_pkg_proto_nexus_proto_depIdxs = []int32{
 	8,   // 90: nexus.v1.CoreEvent.type:type_name -> nexus.v1.CoreEventType
 	97,  // 91: nexus.v1.CoreEvent.timestamp:type_name -> google.protobuf.Timestamp
 	96,  // 92: nexus.v1.CoreEvent.data:type_name -> google.protobuf.Struct
-	80,  // 93: nexus.v1.GetEdgeStatusResponse.status:type_name -> nexus.v1.EdgeStatus
-	80,  // 94: nexus.v1.ListEdgesResponse.edges:type_name -> nexus.v1.EdgeStatus
-	9,   // 95: nexus.v1.EdgeStatus.connection_status:type_name -> nexus.v1.EdgeConnectionStatus
-	97,  // 96: nexus.v1.EdgeStatus.connected_at:type_name -> google.protobuf.Timestamp
-	97,  // 97: nexus.v1.EdgeStatus.last_heartbeat:type_name -> google.protobuf.Timestamp
-	69,  // 98: nexus.v1.EdgeStatus.metrics:type_name -> nexus.v1.EdgeMetrics
-	95,  // 99: nexus.v1.EdgeStatus.metadata:type_name -> nexus.v1.EdgeStatus.MetadataEntry
+	80,  // 93: nexus.v1.GetEdgeStatusResponse.status:type_name -> nexus.v1.EdgeStatusInfo
+	80,  // 94: nexus.v1.ListEdgesResponse.edges:type_name -> nexus.v1.EdgeStatusInfo
+	9,   // 95: nexus.v1.EdgeStatusInfo.connection_status:type_name -> nexus.v1.EdgeConnectionStatus
+	97,  // 96: nexus.v1.EdgeStatusInfo.connected_at:type_name -> google.protobuf.Timestamp
+	97,  // 97: nexus.v1.EdgeStatusInfo.last_heartbeat:type_name -> google.protobuf.Timestamp
+	69,  // 98: nexus.v1.EdgeStatusInfo.metrics:type_name -> nexus.v1.EdgeMetrics
+	95,  // 99: nexus.v1.EdgeStatusInfo.metadata:type_name -> nexus.v1.EdgeStatusInfo.MetadataEntry
 	10,  // 100: nexus.v1.NexusGateway.Stream:input_type -> nexus.v1.ClientMessage
 	31,  // 101: nexus.v1.SessionService.CreateSession:input_type -> nexus.v1.CreateSessionRequest
 	33,  // 102: nexus.v1.SessionService.GetSession:input_type -> nexus.v1.GetSessionRequest

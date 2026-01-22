@@ -129,7 +129,7 @@ type EdgeConnection struct {
 	ChannelTypes []string
 
 	// Capabilities of this edge.
-	Capabilities *pb.EdgeCapabilities
+	Capabilities *pb.BasicEdgeCapabilities
 
 	// Version of the edge daemon.
 	Version string
@@ -691,7 +691,7 @@ func (m *Manager) CancelTool(execID, reason string) error {
 }
 
 // GetEdge returns the status of an edge.
-func (m *Manager) GetEdge(edgeID string) (*pb.EdgeStatus, bool) {
+func (m *Manager) GetEdge(edgeID string) (*pb.EdgeStatusInfo, bool) {
 	m.mu.RLock()
 	conn, ok := m.edges[edgeID]
 	m.mu.RUnlock()
@@ -704,11 +704,11 @@ func (m *Manager) GetEdge(edgeID string) (*pb.EdgeStatus, bool) {
 }
 
 // ListEdges returns all connected edges.
-func (m *Manager) ListEdges() []*pb.EdgeStatus {
+func (m *Manager) ListEdges() []*pb.EdgeStatusInfo {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	result := make([]*pb.EdgeStatus, 0, len(m.edges))
+	result := make([]*pb.EdgeStatusInfo, 0, len(m.edges))
 	for _, conn := range m.edges {
 		result = append(result, m.edgeToStatus(conn))
 	}
@@ -759,8 +759,8 @@ func (m *Manager) Metrics() Metrics {
 	return *m.metrics
 }
 
-// edgeToStatus converts an EdgeConnection to a pb.EdgeStatus.
-func (m *Manager) edgeToStatus(conn *EdgeConnection) *pb.EdgeStatus {
+// edgeToStatus converts an EdgeConnection to a pb.EdgeStatusInfo.
+func (m *Manager) edgeToStatus(conn *EdgeConnection) *pb.EdgeStatusInfo {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 
@@ -769,7 +769,7 @@ func (m *Manager) edgeToStatus(conn *EdgeConnection) *pb.EdgeStatus {
 		tools = append(tools, name)
 	}
 
-	return &pb.EdgeStatus{
+	return &pb.EdgeStatusInfo{
 		EdgeId:           conn.ID,
 		Name:             conn.Name,
 		ConnectionStatus: conn.Status,

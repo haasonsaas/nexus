@@ -10,7 +10,7 @@ import (
 
 	"google.golang.org/grpc/metadata"
 
-	proto "github.com/haasonsaas/nexus/pkg/proto"
+	edgepb "github.com/haasonsaas/nexus/pkg/proto/edge"
 )
 
 func TestNewClient(t *testing.T) {
@@ -57,11 +57,11 @@ func TestNewClient(t *testing.T) {
 		client := NewClient(ClientConfig{
 			GatewayAddr:  "localhost:50051",
 			EdgeID:       "secret-edge",
-			AuthMethod:   proto.AuthMethod_AUTH_METHOD_SHARED_SECRET,
+			AuthMethod:   edgepb.AuthMethod_AUTH_METHOD_SHARED_SECRET,
 			SharedSecret: "my-secret",
 		}, nil)
 
-		if client.config.AuthMethod != proto.AuthMethod_AUTH_METHOD_SHARED_SECRET {
+		if client.config.AuthMethod != edgepb.AuthMethod_AUTH_METHOD_SHARED_SECRET {
 			t.Errorf("expected shared secret auth, got %v", client.config.AuthMethod)
 		}
 		if client.config.SharedSecret != "my-secret" {
@@ -74,11 +74,11 @@ func TestNewClient(t *testing.T) {
 		client := NewClient(ClientConfig{
 			GatewayAddr: "localhost:50051",
 			EdgeID:      "tofu-edge",
-			AuthMethod:  proto.AuthMethod_AUTH_METHOD_TOFU,
+			AuthMethod:  edgepb.AuthMethod_AUTH_METHOD_TOFU,
 			PrivateKey:  priv,
 		}, nil)
 
-		if client.config.AuthMethod != proto.AuthMethod_AUTH_METHOD_TOFU {
+		if client.config.AuthMethod != edgepb.AuthMethod_AUTH_METHOD_TOFU {
 			t.Errorf("expected TOFU auth, got %v", client.config.AuthMethod)
 		}
 		if client.config.PrivateKey == nil {
@@ -97,14 +97,14 @@ func TestRegisterTool(t *testing.T) {
 		Name:        "test_tool",
 		Description: "A test tool",
 		InputSchema: json.RawMessage(`{"type": "object"}`),
-		Category:    proto.ToolCategory_TOOL_CATEGORY_CUSTOM,
-		RiskLevel:   proto.RiskLevel_RISK_LEVEL_LOW,
+		Category:    edgepb.ToolCategory_TOOL_CATEGORY_CUSTOM,
+		RiskLevel:   edgepb.RiskLevel_RISK_LEVEL_LOW,
 	}
 
 	called := false
-	handler := func(ctx context.Context, req *ToolExecutionRequest) (*ToolExecutionResult, error) {
+	handler := func(ctx context.Context, req *ToolExecutionRequest) (*ClientToolResult, error) {
 		called = true
-		return &ToolExecutionResult{Success: true}, nil
+		return &ClientToolResult{Success: true}, nil
 	}
 
 	client.RegisterTool(tool, handler)
@@ -156,8 +156,8 @@ func TestRegisterMultipleTools(t *testing.T) {
 	}
 
 	for _, tool := range tools {
-		client.RegisterTool(tool, func(ctx context.Context, req *ToolExecutionRequest) (*ToolExecutionResult, error) {
-			return &ToolExecutionResult{Success: true}, nil
+		client.RegisterTool(tool, func(ctx context.Context, req *ToolExecutionRequest) (*ClientToolResult, error) {
+			return &ClientToolResult{Success: true}, nil
 		})
 	}
 
@@ -238,9 +238,9 @@ func TestToolConversion(t *testing.T) {
 		Name:              "complex_tool",
 		Description:       "A complex tool",
 		InputSchema:       json.RawMessage(`{"type": "object", "properties": {"name": {"type": "string"}}}`),
-		Category:          proto.ToolCategory_TOOL_CATEGORY_SYSTEM,
+		Category:          edgepb.ToolCategory_TOOL_CATEGORY_SYSTEM,
 		RequiresApproval:  true,
-		RiskLevel:         proto.RiskLevel_RISK_LEVEL_HIGH,
+		RiskLevel:         edgepb.RiskLevel_RISK_LEVEL_HIGH,
 		SupportsStreaming: true,
 		Metadata:          map[string]string{"version": "1.0"},
 	}
@@ -251,13 +251,13 @@ func TestToolConversion(t *testing.T) {
 	registeredTool := client.tools["complex_tool"]
 	client.mu.RUnlock()
 
-	if registeredTool.Category != proto.ToolCategory_TOOL_CATEGORY_SYSTEM {
+	if registeredTool.Category != edgepb.ToolCategory_TOOL_CATEGORY_SYSTEM {
 		t.Errorf("expected category SYSTEM, got %v", registeredTool.Category)
 	}
 	if !registeredTool.RequiresApproval {
 		t.Error("expected RequiresApproval to be true")
 	}
-	if registeredTool.RiskLevel != proto.RiskLevel_RISK_LEVEL_HIGH {
+	if registeredTool.RiskLevel != edgepb.RiskLevel_RISK_LEVEL_HIGH {
 		t.Errorf("expected risk level HIGH, got %v", registeredTool.RiskLevel)
 	}
 	if !registeredTool.SupportsStreaming {
@@ -292,8 +292,8 @@ func TestToolExecutionRequest(t *testing.T) {
 	}
 }
 
-func TestToolExecutionResult(t *testing.T) {
-	result := &ToolExecutionResult{
+func TestClientToolResult(t *testing.T) {
+	result := &ClientToolResult{
 		Success:      true,
 		Output:       map[string]string{"result": "ok"},
 		ErrorMessage: "",
@@ -308,7 +308,7 @@ func TestToolExecutionResult(t *testing.T) {
 	}
 
 	// Test with error
-	errorResult := &ToolExecutionResult{
+	errorResult := &ClientToolResult{
 		Success:      false,
 		ErrorMessage: "something went wrong",
 		DurationMS:   50,
@@ -351,16 +351,16 @@ func TestToolOverwrite(t *testing.T) {
 	client.RegisterTool(&Tool{
 		Name:        "my_tool",
 		Description: "Original description",
-	}, func(ctx context.Context, req *ToolExecutionRequest) (*ToolExecutionResult, error) {
-		return &ToolExecutionResult{Output: "v1"}, nil
+	}, func(ctx context.Context, req *ToolExecutionRequest) (*ClientToolResult, error) {
+		return &ClientToolResult{Output: "v1"}, nil
 	})
 
 	// Overwrite with new tool
 	client.RegisterTool(&Tool{
 		Name:        "my_tool",
 		Description: "Updated description",
-	}, func(ctx context.Context, req *ToolExecutionRequest) (*ToolExecutionResult, error) {
-		return &ToolExecutionResult{Output: "v2"}, nil
+	}, func(ctx context.Context, req *ToolExecutionRequest) (*ClientToolResult, error) {
+		return &ClientToolResult{Output: "v2"}, nil
 	})
 
 	client.mu.RLock()

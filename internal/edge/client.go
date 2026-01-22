@@ -17,7 +17,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	proto "github.com/haasonsaas/nexus/pkg/proto"
+	edgepb "github.com/haasonsaas/nexus/pkg/proto/edge"
 )
 
 // Client connects to the Nexus gateway as an edge daemon.
@@ -25,8 +25,8 @@ type Client struct {
 	config  ClientConfig
 	logger  *slog.Logger
 	conn    *grpc.ClientConn
-	service proto.EdgeServiceClient
-	stream  proto.EdgeService_ConnectClient
+	service edgepb.EdgeServiceClient
+	stream  edgepb.EdgeService_ConnectClient
 
 	mu           sync.RWMutex
 	sessionToken string
@@ -36,7 +36,7 @@ type Client struct {
 
 	// Channels for coordination
 	done     chan struct{}
-	requests chan *proto.ToolExecutionRequest
+	requests chan *edgepb.ToolExecutionRequest
 }
 
 // ClientConfig configures the edge client.
@@ -51,7 +51,7 @@ type ClientConfig struct {
 	EdgeName string
 
 	// AuthMethod determines how to authenticate with the gateway.
-	AuthMethod proto.AuthMethod
+	AuthMethod edgepb.AuthMethod
 
 	// SharedSecret is the pre-shared key (for AuthMethodSharedSecret).
 	SharedSecret string
@@ -74,15 +74,15 @@ type Tool struct {
 	Name              string
 	Description       string
 	InputSchema       json.RawMessage
-	Category          proto.ToolCategory
+	Category          edgepb.ToolCategory
 	RequiresApproval  bool
-	RiskLevel         proto.RiskLevel
+	RiskLevel         edgepb.RiskLevel
 	SupportsStreaming bool
 	Metadata          map[string]string
 }
 
 // ToolHandler handles execution of a tool.
-type ToolHandler func(ctx context.Context, req *ToolExecutionRequest) (*ToolExecutionResult, error)
+type ToolHandler func(ctx context.Context, req *ToolExecutionRequest) (*ClientToolResult, error)
 
 // ToolExecutionRequest represents a tool execution request.
 type ToolExecutionRequest struct {
@@ -97,13 +97,13 @@ type ToolExecutionRequest struct {
 	Timeout   time.Duration
 }
 
-// ToolExecutionResult represents a tool execution result.
-type ToolExecutionResult struct {
+// ClientToolResult represents a tool execution result.
+type ClientToolResult struct {
 	Success      bool
 	Output       interface{}
 	ErrorMessage string
 	DurationMS   int32
-	Attachments  []*proto.ToolAttachment
+	Attachments  []*edgepb.ToolAttachment
 }
 
 // NewClient creates a new edge client.
@@ -126,7 +126,7 @@ func NewClient(config ClientConfig, logger *slog.Logger) *Client {
 		logger:   logger,
 		tools:    make(map[string]*Tool),
 		handlers: make(map[string]ToolHandler),
-		requests: make(chan *proto.ToolExecutionRequest, config.MaxConcurrentExecutions),
+		requests: make(chan *edgepb.ToolExecutionRequest, config.MaxConcurrentExecutions),
 		done:     make(chan struct{}),
 	}
 }
@@ -151,7 +151,7 @@ func (c *Client) Connect(ctx context.Context) error {
 		return fmt.Errorf("dial gateway: %w", err)
 	}
 	c.conn = conn
-	c.service = proto.NewEdgeServiceClient(conn)
+	c.service = edgepb.NewEdgeServiceClient(conn)
 
 	// Start bidirectional stream
 	stream, err := c.service.Connect(ctx)
@@ -212,26 +212,26 @@ func (c *Client) IsConnected() bool {
 
 func (c *Client) authenticate(ctx context.Context) error {
 	var publicKey []byte
-	if c.config.AuthMethod == proto.AuthMethod_AUTH_METHOD_TOFU {
+	if c.config.AuthMethod == edgepb.AuthMethod_AUTH_METHOD_TOFU {
 		publicKey = c.config.PrivateKey.Public().(ed25519.PublicKey) //nolint:errcheck // type is guaranteed by ed25519
 	}
 
-	authReq := &proto.AuthenticateRequest{
+	authReq := &edgepb.AuthenticateRequest{
 		EdgeId:          c.config.EdgeID,
 		EdgeName:        c.config.EdgeName,
 		AuthMethod:      c.config.AuthMethod,
 		SharedSecret:    c.config.SharedSecret,
 		PublicKey:       publicKey,
 		ProtocolVersion: "1.0",
-		Capabilities: &proto.EdgeCapabilities{
+		Capabilities: &edgepb.EdgeCapabilities{
 			MaxConcurrentExecutions: int32(c.config.MaxConcurrentExecutions),
 			SupportsStreaming:       true,
 		},
 	}
 
 	// Send auth request
-	if err := c.stream.Send(&proto.EdgeMessage{
-		Message: &proto.EdgeMessage_Authenticate{
+	if err := c.stream.Send(&edgepb.EdgeMessage{
+		Message: &edgepb.EdgeMessage_Authenticate{
 			Authenticate: authReq,
 		},
 	}); err != nil {
@@ -250,7 +250,7 @@ func (c *Client) authenticate(ctx context.Context) error {
 	}
 
 	// Handle TOFU challenge
-	if !authResp.Success && len(authResp.Challenge) > 0 && c.config.AuthMethod == proto.AuthMethod_AUTH_METHOD_TOFU {
+	if !authResp.Success && len(authResp.Challenge) > 0 && c.config.AuthMethod == edgepb.AuthMethod_AUTH_METHOD_TOFU {
 		c.logger.Info("TOFU challenge received, signing...")
 
 		// Sign the challenge
@@ -258,8 +258,8 @@ func (c *Client) authenticate(ctx context.Context) error {
 
 		// Send signed challenge
 		authReq.Signature = signature
-		if err := c.stream.Send(&proto.EdgeMessage{
-			Message: &proto.EdgeMessage_Authenticate{
+		if err := c.stream.Send(&edgepb.EdgeMessage{
+			Message: &edgepb.EdgeMessage_Authenticate{
 				Authenticate: authReq,
 			},
 		}); err != nil {
@@ -295,9 +295,9 @@ func (c *Client) authenticate(ctx context.Context) error {
 
 func (c *Client) registerTools(ctx context.Context) error {
 	c.mu.RLock()
-	tools := make([]*proto.EdgeTool, 0, len(c.tools))
+	tools := make([]*edgepb.EdgeTool, 0, len(c.tools))
 	for _, tool := range c.tools {
-		tools = append(tools, &proto.EdgeTool{
+		tools = append(tools, &edgepb.EdgeTool{
 			Name:              tool.Name,
 			Description:       tool.Description,
 			InputSchema:       string(tool.InputSchema),
@@ -315,9 +315,9 @@ func (c *Client) registerTools(ctx context.Context) error {
 	}
 
 	// Send registration request
-	if err := c.stream.Send(&proto.EdgeMessage{
-		Message: &proto.EdgeMessage_RegisterTools{
-			RegisterTools: &proto.RegisterToolsRequest{
+	if err := c.stream.Send(&edgepb.EdgeMessage{
+		Message: &edgepb.EdgeMessage_RegisterTools{
+			RegisterTools: &edgepb.RegisterToolsRequest{
 				EdgeId:     c.config.EdgeID,
 				Tools:      tools,
 				ReplaceAll: true,
@@ -380,9 +380,9 @@ func (c *Client) receiveLoop(ctx context.Context) {
 	}
 }
 
-func (c *Client) handleMessage(ctx context.Context, msg *proto.GatewayMessage) {
+func (c *Client) handleMessage(ctx context.Context, msg *edgepb.GatewayMessage) {
 	switch m := msg.Message.(type) {
-	case *proto.GatewayMessage_ToolRequest:
+	case *edgepb.GatewayMessage_ToolRequest:
 		c.logger.Debug("received tool request",
 			"request_id", m.ToolRequest.RequestId,
 			"tool", m.ToolRequest.ToolName,
@@ -393,28 +393,28 @@ func (c *Client) handleMessage(ctx context.Context, msg *proto.GatewayMessage) {
 			c.logger.Warn("execution queue full, rejecting request",
 				"request_id", m.ToolRequest.RequestId,
 			)
-			c.sendToolResult(ctx, m.ToolRequest.RequestId, &ToolExecutionResult{
+			c.sendToolResult(ctx, m.ToolRequest.RequestId, &ClientToolResult{
 				Success:      false,
 				ErrorMessage: "edge daemon overloaded",
 			})
 		}
 
-	case *proto.GatewayMessage_ToolCancel:
+	case *edgepb.GatewayMessage_ToolCancel:
 		c.logger.Info("tool cancellation requested",
 			"request_id", m.ToolCancel.RequestId,
 			"reason", m.ToolCancel.Reason,
 		)
 		// TODO: implement cancellation
 
-	case *proto.GatewayMessage_Heartbeat:
+	case *edgepb.GatewayMessage_Heartbeat:
 		c.logger.Debug("heartbeat ack received")
 
-	case *proto.GatewayMessage_StatusUpdate:
+	case *edgepb.GatewayMessage_StatusUpdate:
 		if !m.StatusUpdate.AcceptingRequests {
 			c.logger.Warn("gateway not accepting requests")
 		}
 
-	case *proto.GatewayMessage_Error:
+	case *edgepb.GatewayMessage_Error:
 		c.logger.Error("gateway error",
 			"code", m.Error.Code,
 			"message", m.Error.Message,
@@ -433,7 +433,7 @@ func (c *Client) executionLoop(ctx context.Context) {
 			return
 		case req := <-c.requests:
 			sem <- struct{}{} // acquire
-			go func(r *proto.ToolExecutionRequest) {
+			go func(r *edgepb.ToolExecutionRequest) {
 				defer func() { <-sem }() // release
 				c.executeToolRequest(ctx, r)
 			}(req)
@@ -441,7 +441,7 @@ func (c *Client) executionLoop(ctx context.Context) {
 	}
 }
 
-func (c *Client) executeToolRequest(ctx context.Context, req *proto.ToolExecutionRequest) {
+func (c *Client) executeToolRequest(ctx context.Context, req *edgepb.ToolExecutionRequest) {
 	start := time.Now()
 
 	c.mu.RLock()
@@ -449,7 +449,7 @@ func (c *Client) executeToolRequest(ctx context.Context, req *proto.ToolExecutio
 	c.mu.RUnlock()
 
 	if !ok {
-		c.sendToolResult(ctx, req.RequestId, &ToolExecutionResult{
+		c.sendToolResult(ctx, req.RequestId, &ClientToolResult{
 			Success:      false,
 			ErrorMessage: fmt.Sprintf("tool not found: %s", req.ToolName),
 		})
@@ -482,7 +482,7 @@ func (c *Client) executeToolRequest(ctx context.Context, req *proto.ToolExecutio
 	// Execute
 	result, err := handler(execCtx, execReq)
 	if err != nil {
-		result = &ToolExecutionResult{
+		result = &ClientToolResult{
 			Success:      false,
 			ErrorMessage: err.Error(),
 		}
@@ -492,7 +492,7 @@ func (c *Client) executeToolRequest(ctx context.Context, req *proto.ToolExecutio
 	c.sendToolResult(ctx, req.RequestId, result)
 }
 
-func (c *Client) sendToolResult(ctx context.Context, requestID string, result *ToolExecutionResult) {
+func (c *Client) sendToolResult(ctx context.Context, requestID string, result *ClientToolResult) {
 	var output string
 	if result.Output != nil {
 		data, err := json.Marshal(result.Output)
@@ -503,14 +503,14 @@ func (c *Client) sendToolResult(ctx context.Context, requestID string, result *T
 		}
 	}
 
-	var errorCode proto.ToolErrorCode
+	var errorCode edgepb.ToolErrorCode
 	if !result.Success {
-		errorCode = proto.ToolErrorCode_TOOL_ERROR_CODE_INTERNAL
+		errorCode = edgepb.ToolErrorCode_TOOL_ERROR_CODE_INTERNAL
 	}
 
-	if err := c.stream.Send(&proto.EdgeMessage{
-		Message: &proto.EdgeMessage_ToolResult{
-			ToolResult: &proto.ToolExecutionResult{
+	if err := c.stream.Send(&edgepb.EdgeMessage{
+		Message: &edgepb.EdgeMessage_ToolResult{
+			ToolResult: &edgepb.ToolExecutionResult{
 				RequestId:    requestID,
 				Success:      result.Success,
 				Output:       output,
@@ -545,13 +545,13 @@ func (c *Client) heartbeatLoop(ctx context.Context) {
 }
 
 func (c *Client) sendHeartbeat(ctx context.Context) {
-	if err := c.stream.Send(&proto.EdgeMessage{
-		Message: &proto.EdgeMessage_Heartbeat{
-			Heartbeat: &proto.HeartbeatRequest{
+	if err := c.stream.Send(&edgepb.EdgeMessage{
+		Message: &edgepb.EdgeMessage_Heartbeat{
+			Heartbeat: &edgepb.HeartbeatRequest{
 				EdgeId:    c.config.EdgeID,
 				Timestamp: timestamppb.Now(),
-				Status: &proto.EdgeStatusUpdate{
-					Status:           proto.EdgeStatus_EDGE_STATUS_READY,
+				Status: &edgepb.EdgeStatusUpdate{
+					Status:           edgepb.EdgeStatus_EDGE_STATUS_READY,
 					ActiveExecutions: 0,
 				},
 			},

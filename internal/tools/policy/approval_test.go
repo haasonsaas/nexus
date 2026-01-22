@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	proto "github.com/haasonsaas/nexus/pkg/proto"
+	edge "github.com/haasonsaas/nexus/pkg/proto/edge"
 )
 
 func TestApprovalManager_NoApprovalNeeded(t *testing.T) {
@@ -16,7 +16,7 @@ func TestApprovalManager_NoApprovalNeeded(t *testing.T) {
 		ApprovalTimeout:             time.Minute,
 	})
 
-	err := manager.CheckApproval(context.Background(), "edge:device.tool", "device", "{}", "session1", "user1", proto.RiskLevel_RISK_LEVEL_LOW)
+	err := manager.CheckApproval(context.Background(), "edge:device.tool", "device", "{}", "session1", "user1", edge.RiskLevel_RISK_LEVEL_LOW)
 	if err != nil {
 		t.Errorf("expected no approval needed, got %v", err)
 	}
@@ -28,7 +28,7 @@ func TestApprovalManager_ApprovalRequired(t *testing.T) {
 		ApprovalTimeout:             time.Minute,
 	})
 
-	err := manager.CheckApproval(context.Background(), "edge:device.tool", "device", "{}", "session1", "user1", proto.RiskLevel_RISK_LEVEL_LOW)
+	err := manager.CheckApproval(context.Background(), "edge:device.tool", "device", "{}", "session1", "user1", edge.RiskLevel_RISK_LEVEL_LOW)
 	if err == nil {
 		t.Error("expected approval required error")
 	}
@@ -44,7 +44,7 @@ func TestApprovalManager_ApproveAndDeny(t *testing.T) {
 	})
 
 	t.Run("approve request", func(t *testing.T) {
-		err := manager.CheckApproval(context.Background(), "edge:device.tool", "device", "{}", "session1", "user1", proto.RiskLevel_RISK_LEVEL_LOW)
+		err := manager.CheckApproval(context.Background(), "edge:device.tool", "device", "{}", "session1", "user1", edge.RiskLevel_RISK_LEVEL_LOW)
 		if err == nil {
 			t.Fatal("expected approval required error")
 		}
@@ -75,7 +75,7 @@ func TestApprovalManager_ApproveAndDeny(t *testing.T) {
 	})
 
 	t.Run("deny request", func(t *testing.T) {
-		err := manager.CheckApproval(context.Background(), "edge:device.tool2", "device", "{}", "session2", "user1", proto.RiskLevel_RISK_LEVEL_LOW)
+		err := manager.CheckApproval(context.Background(), "edge:device.tool2", "device", "{}", "session2", "user1", edge.RiskLevel_RISK_LEVEL_LOW)
 		requestID := extractRequestID(err.Error())
 
 		err = manager.Deny(requestID, "admin", "security concern")
@@ -102,7 +102,7 @@ func TestApprovalManager_Expiration(t *testing.T) {
 		ApprovalTimeout:             10 * time.Millisecond, // Very short for testing
 	})
 
-	err := manager.CheckApproval(context.Background(), "edge:device.tool", "device", "{}", "session1", "user1", proto.RiskLevel_RISK_LEVEL_LOW)
+	err := manager.CheckApproval(context.Background(), "edge:device.tool", "device", "{}", "session1", "user1", edge.RiskLevel_RISK_LEVEL_LOW)
 	requestID := extractRequestID(err.Error())
 
 	// Wait for expiration
@@ -132,16 +132,16 @@ func TestApprovalManager_TrustLevels(t *testing.T) {
 
 	manager := NewApprovalManager(registry, &ApprovalPolicy{
 		ApprovalTimeout: time.Minute,
-		ByRiskLevel: map[proto.RiskLevel]RiskApprovalPolicy{
-			proto.RiskLevel_RISK_LEVEL_LOW: {
+		ByRiskLevel: map[edge.RiskLevel]RiskApprovalPolicy{
+			edge.RiskLevel_RISK_LEVEL_LOW: {
 				RequireApproval: false,
 				MinTrustLevel:   TrustUntrusted, // No minimum for low risk
 			},
-			proto.RiskLevel_RISK_LEVEL_MEDIUM: {
+			edge.RiskLevel_RISK_LEVEL_MEDIUM: {
 				RequireApproval: false,
 				MinTrustLevel:   TrustTOFU, // Need at least TOFU
 			},
-			proto.RiskLevel_RISK_LEVEL_HIGH: {
+			edge.RiskLevel_RISK_LEVEL_HIGH: {
 				RequireApproval: true,
 				MinTrustLevel:   TrustTrusted, // Need fully trusted
 			},
@@ -151,18 +151,18 @@ func TestApprovalManager_TrustLevels(t *testing.T) {
 	tests := []struct {
 		name         string
 		edgeID       string
-		riskLevel    proto.RiskLevel
+		riskLevel    edge.RiskLevel
 		wantApproval bool
 	}{
-		{"trusted + low risk", "trusted-device", proto.RiskLevel_RISK_LEVEL_LOW, false},
-		{"trusted + medium risk", "trusted-device", proto.RiskLevel_RISK_LEVEL_MEDIUM, false},
-		{"trusted + high risk", "trusted-device", proto.RiskLevel_RISK_LEVEL_HIGH, false}, // Trusted bypasses high risk
-		{"tofu + low risk", "tofu-device", proto.RiskLevel_RISK_LEVEL_LOW, false},
-		{"tofu + medium risk", "tofu-device", proto.RiskLevel_RISK_LEVEL_MEDIUM, false},
-		{"tofu + high risk", "tofu-device", proto.RiskLevel_RISK_LEVEL_HIGH, true}, // TOFU not enough for high risk
-		{"untrusted + low risk", "untrusted-device", proto.RiskLevel_RISK_LEVEL_LOW, false},
-		{"untrusted + medium risk", "untrusted-device", proto.RiskLevel_RISK_LEVEL_MEDIUM, true}, // Need TOFU for medium
-		{"untrusted + high risk", "untrusted-device", proto.RiskLevel_RISK_LEVEL_HIGH, true},
+		{"trusted + low risk", "trusted-device", edge.RiskLevel_RISK_LEVEL_LOW, false},
+		{"trusted + medium risk", "trusted-device", edge.RiskLevel_RISK_LEVEL_MEDIUM, false},
+		{"trusted + high risk", "trusted-device", edge.RiskLevel_RISK_LEVEL_HIGH, false}, // Trusted bypasses high risk
+		{"tofu + low risk", "tofu-device", edge.RiskLevel_RISK_LEVEL_LOW, false},
+		{"tofu + medium risk", "tofu-device", edge.RiskLevel_RISK_LEVEL_MEDIUM, false},
+		{"tofu + high risk", "tofu-device", edge.RiskLevel_RISK_LEVEL_HIGH, true}, // TOFU not enough for high risk
+		{"untrusted + low risk", "untrusted-device", edge.RiskLevel_RISK_LEVEL_LOW, false},
+		{"untrusted + medium risk", "untrusted-device", edge.RiskLevel_RISK_LEVEL_MEDIUM, true}, // Need TOFU for medium
+		{"untrusted + high risk", "untrusted-device", edge.RiskLevel_RISK_LEVEL_HIGH, true},
 	}
 
 	for _, tt := range tests {
@@ -186,14 +186,14 @@ func TestApprovalManager_AlwaysNeverLists(t *testing.T) {
 	})
 
 	t.Run("always requires approval", func(t *testing.T) {
-		err := manager.CheckApproval(context.Background(), "edge:device.dangerous_tool", "device", "{}", "session1", "user1", proto.RiskLevel_RISK_LEVEL_LOW)
+		err := manager.CheckApproval(context.Background(), "edge:device.dangerous_tool", "device", "{}", "session1", "user1", edge.RiskLevel_RISK_LEVEL_LOW)
 		if err == nil || !strings.Contains(err.Error(), "approval required") {
 			t.Error("expected approval required for always-approve tool")
 		}
 	})
 
 	t.Run("never requires approval", func(t *testing.T) {
-		err := manager.CheckApproval(context.Background(), "edge:device.safe_tool", "device", "{}", "session1", "user1", proto.RiskLevel_RISK_LEVEL_HIGH)
+		err := manager.CheckApproval(context.Background(), "edge:device.safe_tool", "device", "{}", "session1", "user1", edge.RiskLevel_RISK_LEVEL_HIGH)
 		if err != nil {
 			t.Errorf("expected no approval for never-approve tool, got %v", err)
 		}
@@ -203,8 +203,8 @@ func TestApprovalManager_AlwaysNeverLists(t *testing.T) {
 func TestApprovalManager_RateLimit(t *testing.T) {
 	manager := NewApprovalManager(nil, &ApprovalPolicy{
 		ApprovalTimeout: time.Minute,
-		ByRiskLevel: map[proto.RiskLevel]RiskApprovalPolicy{
-			proto.RiskLevel_RISK_LEVEL_MEDIUM: {
+		ByRiskLevel: map[edge.RiskLevel]RiskApprovalPolicy{
+			edge.RiskLevel_RISK_LEVEL_MEDIUM: {
 				RequireApproval:          false,
 				MinTrustLevel:            TrustUntrusted,
 				MaxAutoApprovePerSession: 2,
@@ -216,14 +216,14 @@ func TestApprovalManager_RateLimit(t *testing.T) {
 
 	// First two should be auto-approved
 	for i := 0; i < 2; i++ {
-		err := manager.CheckApproval(context.Background(), "edge:device.tool", "device", "{}", sessionID, "user1", proto.RiskLevel_RISK_LEVEL_MEDIUM)
+		err := manager.CheckApproval(context.Background(), "edge:device.tool", "device", "{}", sessionID, "user1", edge.RiskLevel_RISK_LEVEL_MEDIUM)
 		if err != nil {
 			t.Errorf("request %d should be auto-approved, got %v", i+1, err)
 		}
 	}
 
 	// Third should require approval (rate limit hit)
-	err := manager.CheckApproval(context.Background(), "edge:device.tool", "device", "{}", sessionID, "user1", proto.RiskLevel_RISK_LEVEL_MEDIUM)
+	err := manager.CheckApproval(context.Background(), "edge:device.tool", "device", "{}", sessionID, "user1", edge.RiskLevel_RISK_LEVEL_MEDIUM)
 	if err == nil || !strings.Contains(err.Error(), "approval required") {
 		t.Error("expected approval required after rate limit")
 	}
@@ -237,7 +237,7 @@ func TestApprovalManager_ListPending(t *testing.T) {
 
 	// Create multiple pending requests
 	for i := 0; i < 3; i++ {
-		manager.CheckApproval(context.Background(), "edge:device.tool", "device", "{}", "session1", "user1", proto.RiskLevel_RISK_LEVEL_LOW)
+		manager.CheckApproval(context.Background(), "edge:device.tool", "device", "{}", "session1", "user1", edge.RiskLevel_RISK_LEVEL_LOW)
 	}
 
 	pending := manager.ListPending()
@@ -253,9 +253,9 @@ func TestApprovalManager_ListBySession(t *testing.T) {
 	})
 
 	// Create requests for different sessions
-	manager.CheckApproval(context.Background(), "edge:device.tool1", "device", "{}", "session1", "user1", proto.RiskLevel_RISK_LEVEL_LOW)
-	manager.CheckApproval(context.Background(), "edge:device.tool2", "device", "{}", "session1", "user1", proto.RiskLevel_RISK_LEVEL_LOW)
-	manager.CheckApproval(context.Background(), "edge:device.tool3", "device", "{}", "session2", "user1", proto.RiskLevel_RISK_LEVEL_LOW)
+	manager.CheckApproval(context.Background(), "edge:device.tool1", "device", "{}", "session1", "user1", edge.RiskLevel_RISK_LEVEL_LOW)
+	manager.CheckApproval(context.Background(), "edge:device.tool2", "device", "{}", "session1", "user1", edge.RiskLevel_RISK_LEVEL_LOW)
+	manager.CheckApproval(context.Background(), "edge:device.tool3", "device", "{}", "session2", "user1", edge.RiskLevel_RISK_LEVEL_LOW)
 
 	session1Requests := manager.ListBySession("session1")
 	if len(session1Requests) != 2 {
@@ -288,7 +288,7 @@ func TestApprovalManager_Callbacks(t *testing.T) {
 	})
 
 	// Trigger approval required
-	err := manager.CheckApproval(context.Background(), "edge:device.tool", "device", "{}", "session1", "user1", proto.RiskLevel_RISK_LEVEL_LOW)
+	err := manager.CheckApproval(context.Background(), "edge:device.tool", "device", "{}", "session1", "user1", edge.RiskLevel_RISK_LEVEL_LOW)
 	if !requiredCalled {
 		t.Error("expected approval required callback to be called")
 	}
@@ -315,7 +315,7 @@ func TestApprovalManager_WaitForApproval(t *testing.T) {
 	})
 
 	t.Run("approved", func(t *testing.T) {
-		err := manager.CheckApproval(context.Background(), "edge:device.tool", "device", "{}", "session1", "user1", proto.RiskLevel_RISK_LEVEL_LOW)
+		err := manager.CheckApproval(context.Background(), "edge:device.tool", "device", "{}", "session1", "user1", edge.RiskLevel_RISK_LEVEL_LOW)
 		requestID := extractRequestID(err.Error())
 
 		// Approve in background
@@ -334,7 +334,7 @@ func TestApprovalManager_WaitForApproval(t *testing.T) {
 	})
 
 	t.Run("denied", func(t *testing.T) {
-		err := manager.CheckApproval(context.Background(), "edge:device.tool2", "device", "{}", "session2", "user1", proto.RiskLevel_RISK_LEVEL_LOW)
+		err := manager.CheckApproval(context.Background(), "edge:device.tool2", "device", "{}", "session2", "user1", edge.RiskLevel_RISK_LEVEL_LOW)
 		requestID := extractRequestID(err.Error())
 
 		// Deny in background
@@ -356,7 +356,7 @@ func TestApprovalManager_WaitForApproval(t *testing.T) {
 	})
 
 	t.Run("context cancelled", func(t *testing.T) {
-		err := manager.CheckApproval(context.Background(), "edge:device.tool3", "device", "{}", "session3", "user1", proto.RiskLevel_RISK_LEVEL_LOW)
+		err := manager.CheckApproval(context.Background(), "edge:device.tool3", "device", "{}", "session3", "user1", edge.RiskLevel_RISK_LEVEL_LOW)
 		requestID := extractRequestID(err.Error())
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -380,7 +380,7 @@ func TestApprovalManager_CleanupExpired(t *testing.T) {
 
 	// Create some requests
 	for i := 0; i < 3; i++ {
-		manager.CheckApproval(context.Background(), "edge:device.tool", "device", "{}", "session1", "user1", proto.RiskLevel_RISK_LEVEL_LOW)
+		manager.CheckApproval(context.Background(), "edge:device.tool", "device", "{}", "session1", "user1", edge.RiskLevel_RISK_LEVEL_LOW)
 	}
 
 	// Wait for expiration
@@ -400,7 +400,7 @@ func TestApprovalManager_NonEdgeTool(t *testing.T) {
 	})
 
 	// Non-edge tools should not require approval via this system
-	err := manager.CheckApproval(context.Background(), "core.read", "", "{}", "session1", "user1", proto.RiskLevel_RISK_LEVEL_HIGH)
+	err := manager.CheckApproval(context.Background(), "core.read", "", "{}", "session1", "user1", edge.RiskLevel_RISK_LEVEL_HIGH)
 	if err != nil {
 		t.Errorf("non-edge tool should not require approval, got %v", err)
 	}

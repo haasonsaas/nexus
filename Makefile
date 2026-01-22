@@ -58,9 +58,9 @@ proto:
 		PATH=$$PATH:$$HOME/go/bin protoc --go_out=. --go_opt=paths=source_relative \
 			--go-grpc_out=. --go-grpc_opt=paths=source_relative \
 			pkg/proto/nexus.proto; \
-		PATH=$$PATH:$$HOME/go/bin protoc --go_out=. --go_opt=paths=source_relative \
-			--go-grpc_out=. --go-grpc_opt=paths=source_relative \
-			pkg/proto/edge.proto; \
+		PATH=$$PATH:$$HOME/go/bin protoc -I pkg/proto/edge --go_out=pkg/proto/edge --go_opt=paths=source_relative \
+			--go-grpc_out=pkg/proto/edge --go-grpc_opt=paths=source_relative \
+			pkg/proto/edge/edge.proto; \
 	fi
 	@echo "Protobuf code generated successfully!"
 

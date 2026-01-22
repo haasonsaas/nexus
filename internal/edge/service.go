@@ -27,7 +27,7 @@ func (s *Service) GetEdgeStatus(ctx context.Context, req *pb.GetEdgeStatusReques
 	status, ok := s.manager.GetEdge(req.EdgeId)
 	if !ok {
 		return &pb.GetEdgeStatusResponse{
-			Status: &pb.EdgeStatus{
+			Status: &pb.EdgeStatusInfo{
 				EdgeId:           req.EdgeId,
 				ConnectionStatus: pb.EdgeConnectionStatus_EDGE_CONNECTION_STATUS_DISCONNECTED,
 			},

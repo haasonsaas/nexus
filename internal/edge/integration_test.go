@@ -81,7 +81,7 @@ func TestEdgeIntegration(t *testing.T) {
 						InputSchema: `{"type":"object","properties":{"message":{"type":"string"}},"required":["message"]}`,
 					},
 				},
-				Capabilities: &pb.EdgeCapabilities{
+				Capabilities: &pb.BasicEdgeCapabilities{
 					Tools:    true,
 					Channels: false,
 				},

@@ -565,20 +565,33 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 	go func() {
 		defer close(chunks)
 
-		// 1. Get conversation history and build initial messages
+		emitEvent := func(ev *models.RuntimeEvent) {
+			if ev == nil {
+				return
+			}
+			// Never block streaming text/tool results on lifecycle events.
+			select {
+			case chunks <- &ResponseChunk{Event: ev}:
+			default:
+			}
+		}
+
+		emitIterEvent := func(eventType models.RuntimeEventType, iter int) {
+			ev := &models.RuntimeEvent{
+				Type:      eventType,
+				Iteration: iter,
+			}
+			emitEvent(ev)
+		}
+
+		// 1) Load history (pre-incoming message)
 		history, err := r.sessions.GetHistory(ctx, session.ID, 50)
 		if err != nil {
 			chunks <- &ResponseChunk{Error: err}
 			return
 		}
 
-		messages, err := r.buildCompletionMessages(history)
-		if err != nil {
-			chunks <- &ResponseChunk{Error: err}
-			return
-		}
-
-		// Add and persist the new user message
+		// 2) Persist inbound user message (source of truth)
 		if msg.ID == "" {
 			msg.ID = uuid.NewString()
 		}
@@ -592,22 +605,103 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 			chunks <- &ResponseChunk{Error: fmt.Errorf("failed to persist user message: %w", err)}
 			return
 		}
-		messages = append(messages, CompletionMessage{
-			Role:        string(msg.Role),
-			Content:     msg.Content,
-			Attachments: msg.Attachments,
-		})
 
-		// 2. Get tools, filtered by policy if set
+		// 3) Optional summarization (Phase 2)
+		var summaryMsg *models.Message
+		if r.summarizeConfig != nil {
+			summaryMsg = agentctx.FindLatestSummary(history)
+
+			cfg := *r.summarizeConfig
+			// SummaryProvider backed by the current runtime/provider
+			summaryProvider := &llmSummaryProvider{
+				runtime: r,
+				session: session,
+			}
+			summarizer := agentctx.NewSummarizer(summaryProvider, cfg)
+
+			if summarizer.ShouldSummarize(history, summaryMsg) {
+				emitEvent((&models.RuntimeEvent{Type: models.EventSummarizing}).WithMessage("Summarizing conversation history..."))
+
+				newSummary, sumErr := summarizer.Summarize(ctx, session.ID, history, summaryMsg)
+				if sumErr != nil {
+					chunks <- &ResponseChunk{Error: sumErr}
+					return
+				}
+				if newSummary != nil {
+					if newSummary.ID == "" {
+						newSummary.ID = uuid.NewString()
+					}
+					if newSummary.SessionID == "" {
+						newSummary.SessionID = session.ID
+					}
+					if newSummary.CreatedAt.IsZero() {
+						newSummary.CreatedAt = time.Now()
+					}
+
+					if err := r.sessions.AppendMessage(ctx, session.ID, newSummary); err != nil {
+						chunks <- &ResponseChunk{Error: fmt.Errorf("failed to persist summary message: %w", err)}
+						return
+					}
+					summaryMsg = newSummary
+				}
+			}
+		} else {
+			// Even if summarization is disabled, still allow packing to include existing summary
+			summaryMsg = agentctx.FindLatestSummary(history)
+		}
+
+		// 4) Context packing
+		packOpts := agentctx.DefaultPackOptions()
+		if r.packOpts != nil {
+			packOpts = *r.packOpts
+		}
+		packer := agentctx.NewPacker(packOpts)
+
+		packedModels, err := packer.Pack(history, msg, summaryMsg)
+		if err != nil {
+			chunks <- &ResponseChunk{Error: err}
+			return
+		}
+
+		// 5) System prompt composition:
+		// We skip RoleSystem messages when converting to provider messages, so fold them into req.System.
+		var systemParts []string
+		if system, ok := systemPromptFromContext(ctx); ok {
+			systemParts = append(systemParts, system)
+		} else if r.defaultSystem != "" {
+			systemParts = append(systemParts, r.defaultSystem)
+		}
+
+		nonSystemPacked := make([]*models.Message, 0, len(packedModels))
+		for _, m := range packedModels {
+			if m == nil {
+				continue
+			}
+			if m.Role == models.RoleSystem {
+				if strings.TrimSpace(m.Content) != "" {
+					systemParts = append(systemParts, m.Content)
+				}
+				continue
+			}
+			nonSystemPacked = append(nonSystemPacked, m)
+		}
+
+		messages, err := r.buildCompletionMessages(nonSystemPacked)
+		if err != nil {
+			chunks <- &ResponseChunk{Error: err}
+			return
+		}
+
+		// 6) Tools (filtered by policy for request-time exposure)
 		tools := r.tools.AsLLMTools()
 		var resolver *policy.Resolver
 		var toolPolicy *policy.Policy
-		if r, p, ok := toolPolicyFromContext(ctx); ok {
-			resolver, toolPolicy = r, p
+		if res, pol, ok := toolPolicyFromContext(ctx); ok {
+			resolver, toolPolicy = res, pol
 			tools = filterToolsByPolicy(resolver, toolPolicy, tools)
 		}
 
-		// 3. Build base completion request
+		// 7) Build base request
 		req := &CompletionRequest{
 			Messages:  messages,
 			Tools:     tools,
@@ -616,20 +710,24 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 		if r.defaultModel != "" {
 			req.Model = r.defaultModel
 		}
-		if system, ok := systemPromptFromContext(ctx); ok {
-			req.System = system
-		} else if r.defaultSystem != "" {
-			req.System = r.defaultSystem
+		if len(systemParts) > 0 {
+			req.System = strings.Join(systemParts, "\n\n")
 		}
 
-		// 4. Agentic loop - iterate until no tool calls or max iterations
+		// Tool executor config
+		toolExecCfg := r.toolExec
+		if toolExecCfg.Concurrency <= 0 || toolExecCfg.PerToolTimeout <= 0 {
+			toolExecCfg = DefaultToolExecConfig()
+		}
+		toolExec := NewToolExecutor(r.tools, toolExecCfg)
+
+		// 8) Agentic loop
 		maxIters := r.maxIterations
 		if maxIters <= 0 {
 			maxIters = 5
 		}
 
 		for iter := 0; iter < maxIters; iter++ {
-			// Check for cancellation
 			select {
 			case <-ctx.Done():
 				chunks <- &ResponseChunk{Error: ctx.Err()}
@@ -637,17 +735,17 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 			default:
 			}
 
-			// Call LLM
+			emitIterEvent(models.EventIterationStart, iter)
+			emitEvent((&models.RuntimeEvent{Type: models.EventThinkingStart}).WithIteration(iter))
+
 			completion, err := r.provider.Complete(ctx, req)
 			if err != nil {
 				chunks <- &ResponseChunk{Error: err}
 				return
 			}
 
-			// Pre-generate assistant message ID so tool calls can be correlated
 			assistantMsgID := uuid.NewString()
 
-			// Collect response: stream text, accumulate tool calls
 			var textBuilder strings.Builder
 			var toolCalls []models.ToolCall
 
@@ -669,14 +767,17 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 				if chunk.ToolCall != nil {
 					tc := *chunk.ToolCall
 					toolCalls = append(toolCalls, tc)
-					// Persist tool call event immediately when received
+
+					// Persist tool call event immediately (best-effort)
 					if r.toolEvents != nil {
 						_ = r.toolEvents.AddToolCall(ctx, session.ID, assistantMsgID, &tc)
 					}
 				}
 			}
 
-			// Build assistant message from this turn
+			emitEvent((&models.RuntimeEvent{Type: models.EventThinkingEnd}).WithIteration(iter))
+
+			// Persist assistant message for this turn
 			assistantMsg := &models.Message{
 				ID:        assistantMsgID,
 				SessionID: session.ID,
@@ -685,104 +786,169 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 				ToolCalls: toolCalls,
 				CreatedAt: time.Now(),
 			}
-
-			// Persist assistant message
 			if err := r.sessions.AppendMessage(ctx, session.ID, assistantMsg); err != nil {
 				chunks <- &ResponseChunk{Error: fmt.Errorf("failed to persist assistant message: %w", err)}
 				return
 			}
 
-			// Add to conversation for next iteration
-			messages = append(messages, CompletionMessage{
+			// Add assistant message to request messages
+			req.Messages = append(req.Messages, CompletionMessage{
 				Role:      "assistant",
 				Content:   assistantMsg.Content,
 				ToolCalls: assistantMsg.ToolCalls,
 			})
 
-			// No tool calls = done
+			// No tools requested => done
 			if len(toolCalls) == 0 {
+				emitIterEvent(models.EventIterationEnd, iter)
 				return
 			}
 
-			// Execute tools and collect results
-			var toolResults []models.ToolResult
+			// Policy-filter tools BEFORE executor runs; maintain original ordering
+			results := make([]models.ToolResult, len(toolCalls))
+			denied := make([]bool, len(toolCalls))
+
+			allowedCalls := make([]models.ToolCall, 0, len(toolCalls))
+			allowedToOriginal := make([]int, 0, len(toolCalls))
+
 			for i := range toolCalls {
-				tc := toolCalls[i] // Shadow to avoid range variable pointer bug
+				tc := toolCalls[i]
 
-				// Check policy at execution time
-				if resolver != nil && toolPolicy != nil {
-					if !resolver.IsAllowed(toolPolicy, tc.Name) {
-						result := models.ToolResult{
-							ToolCallID: tc.ID,
-							Content:    "tool not allowed: " + tc.Name,
-							IsError:    true,
-						}
-						toolResults = append(toolResults, result)
-						chunks <- &ResponseChunk{ToolResult: &result}
-						// Persist tool result event even for denied tools
-						if r.toolEvents != nil {
-							_ = r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &result)
-						}
-						continue
-					}
-				}
-
-				// Execute the tool
-				execResult, err := r.tools.Execute(ctx, tc.Name, tc.Input)
-				var result models.ToolResult
-				if err != nil {
-					result = models.ToolResult{
+				if resolver != nil && toolPolicy != nil && !resolver.IsAllowed(toolPolicy, tc.Name) {
+					denied[i] = true
+					res := models.ToolResult{
 						ToolCallID: tc.ID,
-						Content:    err.Error(),
+						Content:    "tool not allowed: " + tc.Name,
 						IsError:    true,
 					}
-				} else {
-					result = models.ToolResult{
-						ToolCallID: tc.ID,
-						Content:    execResult.Content,
-						IsError:    execResult.IsError,
+					results[i] = res
+
+					// Emit a tool_failed event (denied)
+					emitEvent(models.NewToolEvent(models.EventToolFailed, tc.Name, tc.ID).
+						WithIteration(iter).
+						WithMessage("tool not allowed by policy"))
+
+					// Persist tool result event even when denied (best-effort)
+					if r.toolEvents != nil {
+						_ = r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res)
 					}
+
+					continue
 				}
 
-				toolResults = append(toolResults, result)
-				chunks <- &ResponseChunk{ToolResult: &result}
+				allowedToOriginal = append(allowedToOriginal, i)
+				allowedCalls = append(allowedCalls, tc)
+			}
 
-				// Persist tool result event
+			// Execute allowed tools concurrently (with tool lifecycle events)
+			emitToolEvent := func(ev *models.RuntimeEvent) {
+				if ev == nil {
+					return
+				}
+				ev.WithIteration(iter)
+				emitEvent(ev)
+			}
+
+			execResults := toolExec.ExecuteConcurrently(ctx, allowedCalls, emitToolEvent)
+
+			// Merge executor results back into original ordering, persist tool result events
+			for _, er := range execResults {
+				if er.Index < 0 || er.Index >= len(allowedToOriginal) {
+					continue
+				}
+				origIdx := allowedToOriginal[er.Index]
+				results[origIdx] = er.Result
+
+				// Persist tool result event (best-effort)
 				if r.toolEvents != nil {
-					_ = r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &result)
+					tc := toolCalls[origIdx]
+					res := results[origIdx]
+					_ = r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res)
 				}
 			}
 
-			// Build tool message with results
+			// Stream tool results to caller in original order
+			for i := range results {
+				res := results[i]
+				// Guard: ensure ToolCallID is set even if something went wrong
+				if res.ToolCallID == "" && i < len(toolCalls) {
+					res.ToolCallID = toolCalls[i].ID
+				}
+				resCopy := res
+				chunks <- &ResponseChunk{ToolResult: &resCopy}
+			}
+
+			// Persist tool message
 			toolMsg := &models.Message{
 				ID:          uuid.NewString(),
 				SessionID:   session.ID,
 				Role:        models.RoleTool,
-				ToolResults: toolResults,
+				ToolResults: results,
 				CreatedAt:   time.Now(),
 			}
-
-			// Persist tool message
 			if err := r.sessions.AppendMessage(ctx, session.ID, toolMsg); err != nil {
 				chunks <- &ResponseChunk{Error: fmt.Errorf("failed to persist tool message: %w", err)}
 				return
 			}
 
-			// Add to conversation for next iteration
-			messages = append(messages, CompletionMessage{
+			// Add tool message to request messages
+			req.Messages = append(req.Messages, CompletionMessage{
 				Role:        "tool",
-				ToolResults: toolResults,
+				ToolResults: results,
 			})
 
-			// Update request for next iteration
-			req.Messages = messages
+			emitIterEvent(models.EventIterationEnd, iter)
 		}
 
-		// Hit max iterations
 		chunks <- &ResponseChunk{Error: fmt.Errorf("max iterations (%d) reached", maxIters)}
 	}()
 
 	return chunks, nil
+}
+
+// llmSummaryProvider implements agentctx.SummaryProvider using the runtime's LLM provider.
+type llmSummaryProvider struct {
+	runtime *Runtime
+	session *models.Session
+}
+
+func (p *llmSummaryProvider) Summarize(ctx context.Context, messages []*models.Message, maxLength int) (string, error) {
+	prompt := agentctx.BuildSummarizationPrompt(messages, maxLength)
+
+	req := &CompletionRequest{
+		Messages: []CompletionMessage{
+			{Role: "user", Content: prompt},
+		},
+		MaxTokens: 1024,
+	}
+
+	if p.runtime.defaultModel != "" {
+		req.Model = p.runtime.defaultModel
+	}
+	req.System = "You summarize conversations. Return only the summary text."
+
+	ch, err := p.runtime.provider.Complete(ctx, req)
+	if err != nil {
+		return "", err
+	}
+
+	var b strings.Builder
+	for chunk := range ch {
+		if chunk == nil {
+			continue
+		}
+		if chunk.Error != nil {
+			return "", chunk.Error
+		}
+		if chunk.Done {
+			break
+		}
+		if chunk.Text != "" {
+			b.WriteString(chunk.Text)
+		}
+	}
+
+	return strings.TrimSpace(b.String()), nil
 }
 
 const processBufferSize = 10

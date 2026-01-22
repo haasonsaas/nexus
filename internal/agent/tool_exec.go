@@ -60,9 +60,13 @@ type ToolExecResult struct {
 	TimedOut   bool
 }
 
+// EventCallback is a non-blocking callback for tool lifecycle events.
+type EventCallback func(*models.RuntimeEvent)
+
 // ExecuteConcurrently executes multiple tool calls with concurrency limits and timeouts.
 // Results are returned in the same order as the input tool calls.
-func (e *ToolExecutor) ExecuteConcurrently(ctx context.Context, toolCalls []models.ToolCall, eventChan chan<- *models.RuntimeEvent) []ToolExecResult {
+// The emit callback is called for lifecycle events (non-blocking, never blocks execution).
+func (e *ToolExecutor) ExecuteConcurrently(ctx context.Context, toolCalls []models.ToolCall, emit EventCallback) []ToolExecResult {
 	results := make([]ToolExecResult, len(toolCalls))
 
 	// Semaphore for concurrency limiting
@@ -92,8 +96,8 @@ func (e *ToolExecutor) ExecuteConcurrently(ctx context.Context, toolCalls []mode
 			}
 
 			// Emit tool_started event
-			if eventChan != nil {
-				eventChan <- models.NewToolEvent(models.EventToolStarted, call.Name, call.ID)
+			if emit != nil {
+				emit(models.NewToolEvent(models.EventToolStarted, call.Name, call.ID))
 			}
 
 			// Execute with timeout
@@ -113,7 +117,7 @@ func (e *ToolExecutor) ExecuteConcurrently(ctx context.Context, toolCalls []mode
 			}
 
 			// Emit completion event
-			if eventChan != nil {
+			if emit != nil {
 				var eventType models.RuntimeEventType
 				if timedOut {
 					eventType = models.EventToolTimeout
@@ -124,7 +128,7 @@ func (e *ToolExecutor) ExecuteConcurrently(ctx context.Context, toolCalls []mode
 				}
 				event := models.NewToolEvent(eventType, call.Name, call.ID)
 				event.WithMeta("duration_ms", endTime.Sub(startTime).Milliseconds())
-				eventChan <- event
+				emit(event)
 			}
 		}(i, tc)
 	}

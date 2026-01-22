@@ -39,7 +39,8 @@
 - **Web Search** - SearXNG-powered web search with content extraction
 - **Browser Automation** - Playwright-based web browsing and scraping
 - **Memory Search** - Semantic search across conversation history
-- **Code Sandbox** - Container-based code execution (planned: Firecracker microVMs)
+- **Code Sandbox** - Container-based execution + Firecracker microVM isolation
+- **Voice Transcription** - OpenAI Whisper for audio message processing
 
 ### MCP Integration
 
@@ -52,10 +53,11 @@ Full Model Context Protocol support:
 
 ### Memory & Context
 
-- **Vector Memory** - SQLite-vec backend with semantic search
+- **Vector Memory** - SQLite-vec, LanceDB, or pgvector backends
 - **Embedding Providers** - OpenAI, Ollama (local)
 - **Conversation Summarization** - Automatic context compaction
 - **Tool Policies** - Fine-grained allow/deny rules per tool
+- **Multi-Agent** - Supervisor, router, and handoff orchestration patterns
 
 ### Infrastructure
 
@@ -63,6 +65,7 @@ Full Model Context Protocol support:
 - **CockroachDB** - Distributed SQL for horizontal scaling
 - **Full Persistence** - Conversation history with vector embeddings
 - **OAuth + API Keys** - Flexible authentication for users and services
+- **Web Dashboard** - htmx-powered UI for session management
 
 ## Architecture
 
@@ -334,13 +337,18 @@ nexus/
 │   │   └── imessage/       # iMessage (alpha)
 │   ├── mcp/                # MCP client & manager
 │   ├── memory/             # Vector memory
-│   │   ├── backend/        # SQLite-vec (more planned)
+│   │   ├── backend/        # SQLite-vec, LanceDB, pgvector
 │   │   └── embeddings/     # OpenAI, Ollama providers
+│   ├── media/              # Media processing
+│   │   └── transcribe/     # Whisper voice transcription
+│   ├── multiagent/         # Multi-agent orchestration
 │   ├── tools/              # Tool implementations
 │   │   ├── browser/        # Playwright automation
 │   │   ├── websearch/      # SearXNG integration
 │   │   ├── memorysearch/   # Semantic memory search
+│   │   ├── sandbox/        # Code execution (Docker + Firecracker)
 │   │   └── policy/         # Tool access control
+│   ├── web/                # Web UI dashboard
 │   ├── sessions/           # Session & message persistence
 │   ├── gateway/            # gRPC server
 │   └── config/             # Configuration loading
@@ -440,12 +448,23 @@ Prometheus metrics at `/metrics`:
 
 ## Roadmap
 
-- [ ] Firecracker microVM sandbox
-- [ ] LanceDB vector backend
-- [ ] pgvector backend
-- [ ] Voice message transcription
-- [ ] Multi-agent orchestration
-- [ ] Web UI for session management
+### Completed
+
+- [x] Firecracker microVM sandbox - Secure code execution with real isolation
+- [x] LanceDB vector backend - Fast, embedded vector storage
+- [x] pgvector backend - PostgreSQL-native vectors for CockroachDB/Postgres
+- [x] Voice message transcription - OpenAI Whisper integration
+- [x] Multi-agent orchestration - Supervisor, router, and handoff patterns
+- [x] Web UI for session management - htmx + Go templates dashboard
+
+### Planned
+
+- [ ] Plugin marketplace - Discover and install community plugins
+- [ ] Scheduled tasks - Cron-based agent triggers
+- [ ] RAG pipelines - Document ingestion and chunking
+- [ ] Agent templates - Pre-built agents for common use cases
+- [ ] Mobile app - React Native client for iOS/Android
+- [ ] Conversation branching - Fork and explore alternative paths
 
 ## Contributing
 

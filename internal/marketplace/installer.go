@@ -111,27 +111,48 @@ func (i *Installer) Install(ctx context.Context, id string, opts pluginsdk.Insta
 			"signedBy", result.SignedBy)
 	}
 
-	// Extract and install
-	wasInstalled := false
+	// Extract and stage install
 	var previousVersion string
 	if existing, ok := i.store.Get(id); ok {
-		wasInstalled = true
 		previousVersion = existing.Version
 	}
 
-	installPath, binaryPath, err := i.extractArtifact(id, data, artifact)
+	stageDir, err := os.MkdirTemp(i.store.BasePath(), ".install-")
+	if err != nil {
+		return nil, fmt.Errorf("create staging dir: %w", err)
+	}
+	defer os.RemoveAll(stageDir)
+
+	binaryPath, err := i.extractArtifactToDir(stageDir, data, artifact)
 	if err != nil {
 		return nil, fmt.Errorf("extract artifact: %w", err)
 	}
 
-	cleanup := !wasInstalled
-	defer func() {
-		if cleanup {
-			if err := i.store.RemovePluginDir(id); err != nil {
-				i.logger.Warn("failed to clean up plugin dir after install error", "id", id, "error", err)
-			}
-		}
-	}()
+	manifestData, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshal manifest: %w", err)
+	}
+	manifestPath := filepath.Join(stageDir, pluginsdk.ManifestFilename)
+	if err := os.WriteFile(manifestPath, manifestData, 0o644); err != nil {
+		return nil, fmt.Errorf("save manifest: %w", err)
+	}
+	if _, err := os.Stat(binaryPath); err != nil {
+		return nil, fmt.Errorf("plugin binary missing: %w", err)
+	}
+	if _, err := os.Stat(manifestPath); err != nil {
+		return nil, fmt.Errorf("plugin manifest missing: %w", err)
+	}
+
+	installPath := i.store.PluginPath(id)
+	relBinary, err := filepath.Rel(stageDir, binaryPath)
+	if err != nil {
+		return nil, fmt.Errorf("resolve binary path: %w", err)
+	}
+	backupPath, hadExisting, err := stageInstall(stageDir, installPath, os.Rename)
+	if err != nil {
+		return nil, err
+	}
+	binaryPath = filepath.Join(installPath, relBinary)
 
 	// Create installed plugin entry
 	installed := &pluginsdk.InstalledPlugin{
@@ -151,20 +172,18 @@ func (i *Installer) Install(ctx context.Context, id string, opts pluginsdk.Insta
 		Manifest:     manifest,
 	}
 
-	// Save manifest
-	manifestData, err := json.MarshalIndent(manifest, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("marshal manifest: %w", err)
-	}
-	if err := i.store.WritePluginFile(id, pluginsdk.ManifestFilename, manifestData, 0o644); err != nil {
-		return nil, fmt.Errorf("save manifest: %w", err)
-	}
-
 	// Add to store
 	if err := i.store.Add(installed); err != nil {
+		if rollbackErr := rollbackInstall(installPath, backupPath, hadExisting); rollbackErr != nil {
+			i.logger.Warn("failed to rollback install after store error", "error", rollbackErr)
+		}
 		return nil, fmt.Errorf("save to store: %w", err)
 	}
-	cleanup = false
+	if backupPath != "" {
+		if err := os.RemoveAll(backupPath); err != nil {
+			i.logger.Warn("failed to remove backup after install", "path", backupPath, "error", err)
+		}
+	}
 
 	i.logger.Info("plugin installed",
 		"id", id,
@@ -306,13 +325,13 @@ func (i *Installer) UpdateAll(ctx context.Context) ([]*InstallResult, error) {
 }
 
 // extractArtifact extracts a downloaded artifact.
-func (i *Installer) extractArtifact(id string, data []byte, artifact *pluginsdk.PluginArtifact) (string, string, error) {
-	installPath, err := i.store.EnsurePluginDir(id)
-	if err != nil {
-		return "", "", err
+func (i *Installer) extractArtifactToDir(destDir string, data []byte, artifact *pluginsdk.PluginArtifact) (string, error) {
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
+		return "", fmt.Errorf("create plugin directory: %w", err)
 	}
 
 	var binaryPath string
+	var err error
 	format := artifact.Format
 	if format == "" {
 		format = detectFormat(artifact.URL)
@@ -321,28 +340,77 @@ func (i *Installer) extractArtifact(id string, data []byte, artifact *pluginsdk.
 	switch format {
 	case "so", "":
 		// Raw .so file
-		binaryPath = filepath.Join(installPath, "plugin.so")
+		binaryPath = filepath.Join(destDir, "plugin.so")
 		if err := os.WriteFile(binaryPath, data, 0o755); err != nil {
-			return "", "", fmt.Errorf("write binary: %w", err)
+			return "", fmt.Errorf("write binary: %w", err)
 		}
 
 	case "tar.gz", "tgz":
-		binaryPath, err = i.extractTarGz(installPath, data)
+		binaryPath, err = i.extractTarGz(destDir, data)
 		if err != nil {
-			return "", "", err
+			return "", err
 		}
 
 	case "zip":
-		binaryPath, err = i.extractZip(installPath, data)
+		binaryPath, err = i.extractZip(destDir, data)
 		if err != nil {
-			return "", "", err
+			return "", err
 		}
 
 	default:
-		return "", "", fmt.Errorf("unsupported artifact format: %s", format)
+		return "", fmt.Errorf("unsupported artifact format: %s", format)
 	}
 
-	return installPath, binaryPath, nil
+	return binaryPath, nil
+}
+
+func stageInstall(tempDir, liveDir string, renameFn func(string, string) error) (string, bool, error) {
+	info, err := os.Stat(liveDir)
+	hasLive := false
+	if err == nil {
+		if !info.IsDir() {
+			return "", true, fmt.Errorf("live path is not a directory: %s", liveDir)
+		}
+		hasLive = true
+	} else if !os.IsNotExist(err) {
+		return "", false, fmt.Errorf("stat live path: %w", err)
+	}
+
+	var backupPath string
+	if hasLive {
+		backupPath = fmt.Sprintf("%s.bak-%s", liveDir, time.Now().Format("20060102-150405"))
+		if err := renameFn(liveDir, backupPath); err != nil {
+			return "", true, fmt.Errorf("backup existing plugin: %w", err)
+		}
+	}
+
+	if err := renameFn(tempDir, liveDir); err != nil {
+		if hasLive && backupPath != "" {
+			if rbErr := renameFn(backupPath, liveDir); rbErr != nil {
+				return backupPath, hasLive, fmt.Errorf("activate plugin failed: %w; rollback failed: %v", err, rbErr)
+			}
+		}
+		return backupPath, hasLive, fmt.Errorf("activate plugin failed: %w", err)
+	}
+
+	return backupPath, hasLive, nil
+}
+
+func rollbackInstall(liveDir, backupPath string, hadExisting bool) error {
+	if hadExisting && backupPath != "" {
+		failedPath := fmt.Sprintf("%s.failed-%s", liveDir, time.Now().Format("20060102-150405"))
+		if err := os.Rename(liveDir, failedPath); err != nil {
+			return fmt.Errorf("move failed install: %w", err)
+		}
+		if err := os.Rename(backupPath, liveDir); err != nil {
+			return fmt.Errorf("restore backup: %w", err)
+		}
+		if err := os.RemoveAll(failedPath); err != nil {
+			return fmt.Errorf("cleanup failed install: %w", err)
+		}
+		return nil
+	}
+	return os.RemoveAll(liveDir)
 }
 
 // extractTarGz extracts a .tar.gz archive.

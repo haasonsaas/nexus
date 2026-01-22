@@ -36,6 +36,26 @@ func (e stubEmbedder) MaxBatchSize() int { return 8 }
 
 var _ embeddings.Provider = stubEmbedder{}
 
+type errorEmbedder struct {
+	err error
+}
+
+func (e errorEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
+	return nil, e.err
+}
+
+func (e errorEmbedder) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
+	return nil, e.err
+}
+
+func (e errorEmbedder) Name() string { return "error" }
+
+func (e errorEmbedder) Dimension() int { return 0 }
+
+func (e errorEmbedder) MaxBatchSize() int { return 1 }
+
+var _ embeddings.Provider = errorEmbedder{}
+
 type recordingStore struct {
 	lastSearch *models.DocumentSearchRequest
 	lastDoc    *models.Document
@@ -115,6 +135,39 @@ func TestSearchToolScopeIDFromSession(t *testing.T) {
 	}
 }
 
+func TestSearchToolNoResults(t *testing.T) {
+	store := &recordingStore{}
+	manager := index.NewManager(store, stubEmbedder{dim: 3}, nil)
+	tool := NewSearchTool(manager, nil)
+
+	params := json.RawMessage(`{"query":"nothing"}`)
+	result, err := tool.Execute(context.Background(), params)
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("expected no error result")
+	}
+	if result.Content == "" || result.Content == "[]" {
+		t.Fatalf("expected friendly no-results message")
+	}
+}
+
+func TestSearchToolEmbedderError(t *testing.T) {
+	store := &recordingStore{}
+	manager := index.NewManager(store, errorEmbedder{err: context.DeadlineExceeded}, nil)
+	tool := NewSearchTool(manager, nil)
+
+	params := json.RawMessage(`{"query":"timeout"}`)
+	result, err := tool.Execute(context.Background(), params)
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatalf("expected error result")
+	}
+}
+
 func TestUploadToolAddsScopeMetadata(t *testing.T) {
 	store := &recordingStore{}
 	manager := index.NewManager(store, stubEmbedder{dim: 3}, nil)
@@ -144,5 +197,23 @@ func TestUploadToolAddsScopeMetadata(t *testing.T) {
 	}
 	if store.lastDoc.Metadata.ChannelID != session.ChannelID {
 		t.Fatalf("expected ChannelID %q, got %q", session.ChannelID, store.lastDoc.Metadata.ChannelID)
+	}
+}
+
+func TestUploadToolRejectsLargeContent(t *testing.T) {
+	store := &recordingStore{}
+	manager := index.NewManager(store, stubEmbedder{dim: 3}, nil)
+	tool := NewUploadTool(manager, &UploadToolConfig{MaxContentLength: 5})
+
+	params := json.RawMessage(`{"name":"Doc","content":"too long","content_type":"text/plain"}`)
+	result, err := tool.Execute(context.Background(), params)
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatalf("expected error result")
+	}
+	if store.lastDoc != nil {
+		t.Fatalf("expected no document stored")
 	}
 }

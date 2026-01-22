@@ -524,7 +524,7 @@ func (s *CockroachStore) AppendMessage(ctx context.Context, sessionID string, ms
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer func() {
-		_ = tx.Rollback()
+		_ = tx.Rollback() //nolint:errcheck // Rollback after commit returns ErrTxDone which is expected
 	}()
 
 	_, err = tx.StmtContext(ctx, s.stmtAppendMessage).ExecContext(ctx,

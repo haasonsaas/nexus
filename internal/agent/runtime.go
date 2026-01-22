@@ -70,9 +70,12 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/tools/policy"
 	"github.com/haasonsaas/nexus/pkg/models"
@@ -341,6 +344,16 @@ type ToolResult struct {
 	IsError bool `json:"is_error,omitempty"`
 }
 
+// ToolEventStore persists tool calls and results for audit, replay, and analytics.
+// This is optional - if nil, tool events are not persisted separately from messages.
+type ToolEventStore interface {
+	// AddToolCall persists a tool call event.
+	AddToolCall(ctx context.Context, sessionID, messageID string, call *models.ToolCall) error
+
+	// AddToolResult persists a tool result event.
+	AddToolResult(ctx context.Context, sessionID, messageID string, call *models.ToolCall, result *models.ToolResult) error
+}
+
 // Runtime orchestrates agent conversations with LLM providers and tools.
 //
 // The Runtime is the central coordination point for agent interactions:
@@ -372,11 +385,17 @@ type Runtime struct {
 	// sessions stores conversation history for continuity
 	sessions sessions.Store
 
+	// toolEvents optionally persists tool calls/results for audit and replay
+	toolEvents ToolEventStore
+
 	// defaultModel is used when requests omit a model
 	defaultModel string
 
 	// defaultSystem is used when requests omit a system prompt
 	defaultSystem string
+
+	// maxIterations limits the agentic loop iterations (default 5)
+	maxIterations int
 }
 
 // NewRuntime creates a new agent runtime with the given provider and session store.
@@ -412,6 +431,53 @@ func (r *Runtime) SetDefaultModel(model string) {
 // SetSystemPrompt configures the fallback system prompt used when requests omit one.
 func (r *Runtime) SetSystemPrompt(system string) {
 	r.defaultSystem = system
+}
+
+// SetToolEventStore configures optional tool event persistence for audit and replay.
+func (r *Runtime) SetToolEventStore(store ToolEventStore) {
+	r.toolEvents = store
+}
+
+// SetMaxIterations configures the maximum agentic loop iterations (default 5).
+func (r *Runtime) SetMaxIterations(max int) {
+	r.maxIterations = max
+}
+
+// buildCompletionMessages converts stored message history to CompletionMessage slice.
+// This handles the mapping of all role types including tool calls and results.
+func (r *Runtime) buildCompletionMessages(history []*models.Message) ([]CompletionMessage, error) {
+	out := make([]CompletionMessage, 0, len(history))
+
+	for _, m := range history {
+		if m == nil {
+			continue
+		}
+
+		if m.Role == "" {
+			return nil, fmt.Errorf("history message missing role (id=%s)", m.ID)
+		}
+
+		cm := CompletionMessage{
+			Role: string(m.Role),
+		}
+
+		if m.Content != "" {
+			cm.Content = m.Content
+		}
+		if len(m.Attachments) > 0 {
+			cm.Attachments = m.Attachments
+		}
+		if len(m.ToolCalls) > 0 {
+			cm.ToolCalls = m.ToolCalls
+		}
+		if len(m.ToolResults) > 0 {
+			cm.ToolResults = m.ToolResults
+		}
+
+		out = append(out, cm)
+	}
+
+	return out, nil
 }
 
 // RegisterTool adds a tool to the runtime, making it available for LLM function calling.
@@ -474,95 +540,197 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 	go func() {
 		defer close(chunks)
 
-		// 1. Get conversation history
+		// 1. Get conversation history and build initial messages
 		history, err := r.sessions.GetHistory(ctx, session.ID, 50)
 		if err != nil {
 			chunks <- &ResponseChunk{Error: err}
 			return
 		}
 
-		// 2. Build completion request
-		messages := make([]CompletionMessage, 0, len(history)+1)
-		for _, m := range history {
-			messages = append(messages, CompletionMessage{
-				Role:    string(m.Role),
-				Content: m.Content,
-			})
-		}
-		messages = append(messages, CompletionMessage{
-			Role:    string(msg.Role),
-			Content: msg.Content,
-		})
-
-		tools := r.tools.AsLLMTools()
-		if resolver, toolPolicy, ok := toolPolicyFromContext(ctx); ok {
-			tools = filterToolsByPolicy(resolver, toolPolicy, tools)
-		}
-		req := &CompletionRequest{
-			Messages:  messages,
-			Tools:     tools,
-			MaxTokens: 4096,
-		}
-		if req.Model == "" && r.defaultModel != "" {
-			req.Model = r.defaultModel
-		}
-		if system, ok := systemPromptFromContext(ctx); ok {
-			req.System = system
-		} else if req.System == "" && r.defaultSystem != "" {
-			req.System = r.defaultSystem
-		}
-
-		// 3. Call LLM
-		completion, err := r.provider.Complete(ctx, req)
+		messages, err := r.buildCompletionMessages(history)
 		if err != nil {
 			chunks <- &ResponseChunk{Error: err}
 			return
 		}
 
-		// 4. Process stream, executing tools as needed
-		for chunk := range completion {
-			if chunk.Error != nil {
-				chunks <- &ResponseChunk{Error: chunk.Error}
+		// Add the new user message
+		messages = append(messages, CompletionMessage{
+			Role:        string(msg.Role),
+			Content:     msg.Content,
+			Attachments: msg.Attachments,
+		})
+
+		// 2. Get tools, filtered by policy if set
+		tools := r.tools.AsLLMTools()
+		var resolver *policy.Resolver
+		var toolPolicy *policy.Policy
+		if r, p, ok := toolPolicyFromContext(ctx); ok {
+			resolver, toolPolicy = r, p
+			tools = filterToolsByPolicy(resolver, toolPolicy, tools)
+		}
+
+		// 3. Build base completion request
+		req := &CompletionRequest{
+			Messages:  messages,
+			Tools:     tools,
+			MaxTokens: 4096,
+		}
+		if r.defaultModel != "" {
+			req.Model = r.defaultModel
+		}
+		if system, ok := systemPromptFromContext(ctx); ok {
+			req.System = system
+		} else if r.defaultSystem != "" {
+			req.System = r.defaultSystem
+		}
+
+		// 4. Agentic loop - iterate until no tool calls or max iterations
+		maxIters := r.maxIterations
+		if maxIters <= 0 {
+			maxIters = 5
+		}
+
+		for iter := 0; iter < maxIters; iter++ {
+			// Check for cancellation
+			select {
+			case <-ctx.Done():
+				chunks <- &ResponseChunk{Error: ctx.Err()}
+				return
+			default:
+			}
+
+			// Call LLM
+			completion, err := r.provider.Complete(ctx, req)
+			if err != nil {
+				chunks <- &ResponseChunk{Error: err}
 				return
 			}
 
-			if chunk.ToolCall != nil {
-				if resolver, toolPolicy, ok := toolPolicyFromContext(ctx); ok {
-					if !resolver.IsAllowed(toolPolicy, chunk.ToolCall.Name) {
-						chunks <- &ResponseChunk{
-							ToolResult: &models.ToolResult{
-								ToolCallID: chunk.ToolCall.ID,
-								Content:    "tool not allowed: " + chunk.ToolCall.Name,
-								IsError:    true,
-							},
+			// Collect response: stream text, accumulate tool calls
+			var textBuilder strings.Builder
+			var toolCalls []models.ToolCall
+
+			for chunk := range completion {
+				if chunk.Error != nil {
+					chunks <- &ResponseChunk{Error: chunk.Error}
+					return
+				}
+				if chunk.Text != "" {
+					textBuilder.WriteString(chunk.Text)
+					chunks <- &ResponseChunk{Text: chunk.Text}
+				}
+				if chunk.ToolCall != nil {
+					toolCalls = append(toolCalls, *chunk.ToolCall)
+				}
+			}
+
+			// Build assistant message from this turn
+			assistantMsg := &models.Message{
+				ID:        uuid.NewString(),
+				SessionID: session.ID,
+				Role:      models.RoleAssistant,
+				Content:   textBuilder.String(),
+				ToolCalls: toolCalls,
+				CreatedAt: time.Now(),
+			}
+
+			// Persist assistant message
+			if err := r.sessions.AppendMessage(ctx, session.ID, assistantMsg); err != nil {
+				chunks <- &ResponseChunk{Error: fmt.Errorf("failed to persist assistant message: %w", err)}
+				return
+			}
+
+			// Add to conversation for next iteration
+			messages = append(messages, CompletionMessage{
+				Role:      "assistant",
+				Content:   assistantMsg.Content,
+				ToolCalls: assistantMsg.ToolCalls,
+			})
+
+			// No tool calls = done
+			if len(toolCalls) == 0 {
+				return
+			}
+
+			// Execute tools and collect results
+			var toolResults []models.ToolResult
+			for _, tc := range toolCalls {
+				// Check policy at execution time
+				if resolver != nil && toolPolicy != nil {
+					if !resolver.IsAllowed(toolPolicy, tc.Name) {
+						result := models.ToolResult{
+							ToolCallID: tc.ID,
+							Content:    "tool not allowed: " + tc.Name,
+							IsError:    true,
 						}
+						toolResults = append(toolResults, result)
+						chunks <- &ResponseChunk{ToolResult: &result}
 						continue
 					}
 				}
-				// Execute tool
-				result, err := r.tools.Execute(ctx, chunk.ToolCall.Name, chunk.ToolCall.Input)
-				if err != nil {
-					chunks <- &ResponseChunk{
-						ToolResult: &models.ToolResult{
-							ToolCallID: chunk.ToolCall.ID,
-							Content:    err.Error(),
-							IsError:    true,
-						},
-					}
-				} else {
-					chunks <- &ResponseChunk{
-						ToolResult: &models.ToolResult{
-							ToolCallID: chunk.ToolCall.ID,
-							Content:    result.Content,
-							IsError:    result.IsError,
-						},
+
+				// Persist tool call event
+				if r.toolEvents != nil {
+					if err := r.toolEvents.AddToolCall(ctx, session.ID, assistantMsg.ID, &tc); err != nil {
+						// Log but don't fail - tool event persistence is best-effort
 					}
 				}
-				// Continue conversation with tool result...
-			} else if chunk.Text != "" {
-				chunks <- &ResponseChunk{Text: chunk.Text}
+
+				// Execute the tool
+				execResult, err := r.tools.Execute(ctx, tc.Name, tc.Input)
+				var result models.ToolResult
+				if err != nil {
+					result = models.ToolResult{
+						ToolCallID: tc.ID,
+						Content:    err.Error(),
+						IsError:    true,
+					}
+				} else {
+					result = models.ToolResult{
+						ToolCallID: tc.ID,
+						Content:    execResult.Content,
+						IsError:    execResult.IsError,
+					}
+				}
+
+				toolResults = append(toolResults, result)
+				chunks <- &ResponseChunk{ToolResult: &result}
+
+				// Persist tool result event
+				if r.toolEvents != nil {
+					if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &result); err != nil {
+						// Log but don't fail
+					}
+				}
 			}
+
+			// Build tool message with results
+			toolMsg := &models.Message{
+				ID:          uuid.NewString(),
+				SessionID:   session.ID,
+				Role:        models.RoleTool,
+				ToolResults: toolResults,
+				CreatedAt:   time.Now(),
+			}
+
+			// Persist tool message
+			if err := r.sessions.AppendMessage(ctx, session.ID, toolMsg); err != nil {
+				chunks <- &ResponseChunk{Error: fmt.Errorf("failed to persist tool message: %w", err)}
+				return
+			}
+
+			// Add to conversation for next iteration
+			messages = append(messages, CompletionMessage{
+				Role:        "tool",
+				ToolResults: toolResults,
+			})
+
+			// Update request for next iteration
+			req.Messages = messages
 		}
+
+		// Hit max iterations
+		chunks <- &ResponseChunk{Error: fmt.Errorf("max iterations (%d) reached", maxIters)}
 	}()
 
 	return chunks, nil

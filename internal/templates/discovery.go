@@ -707,7 +707,10 @@ func (s *RegistrySource) downloadTemplate(ctx context.Context, meta RegistryTemp
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		if err != nil {
+			return nil, fmt.Errorf("download failed with status %d (read body error): %w", resp.StatusCode, err)
+		}
 		return nil, fmt.Errorf("download failed with status %d: %s", resp.StatusCode, string(body))
 	}
 

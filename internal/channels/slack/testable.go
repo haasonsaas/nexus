@@ -163,7 +163,10 @@ func (a *TestableAdapter) Send(ctx context.Context, msg *models.Message) error {
 			Channel:   channel,
 			Timestamp: timestamp,
 		}
-		_ = a.apiClient.AddReactionContext(ctx, reaction, msgRef)
+		if err := a.apiClient.AddReactionContext(ctx, reaction, msgRef); err != nil {
+			a.metrics.RecordError(channels.ErrCodeInternal)
+			a.logger.Warn("failed to add slack reaction", "error", err)
+		}
 	}
 
 	return nil

@@ -695,6 +695,19 @@ func runMemoryCompact(cmd *cobra.Command, configPath string) error {
 // MCP Command Handlers
 // =============================================================================
 
+type mcpStopper interface {
+	Stop() error
+}
+
+func stopMCPManager(mgr mcpStopper) {
+	if mgr == nil {
+		return
+	}
+	if err := mgr.Stop(); err != nil {
+		slog.Warn("failed to stop MCP manager", "error", err)
+	}
+}
+
 // runMcpServers handles the mcp servers command.
 func runMcpServers(cmd *cobra.Command, configPath string) error {
 	cfg, mgr, err := loadMCPManager(configPath)
@@ -706,11 +719,7 @@ func runMcpServers(cmd *cobra.Command, configPath string) error {
 			return err
 		}
 	}
-	defer func() {
-		if err := mgr.Stop(); err != nil {
-			slog.Warn("failed to stop MCP manager", "error", err)
-		}
-	}()
+	defer stopMCPManager(mgr)
 
 	out := cmd.OutOrStdout()
 	statuses := mgr.Status()
@@ -738,11 +747,7 @@ func runMcpConnect(cmd *cobra.Command, configPath, serverID string) error {
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err := mgr.Stop(); err != nil {
-			slog.Warn("failed to stop MCP manager", "error", err)
-		}
-	}()
+	defer stopMCPManager(mgr)
 
 	if err := mgr.Connect(cmd.Context(), serverID); err != nil {
 		return err
@@ -757,11 +762,7 @@ func runMcpTools(cmd *cobra.Command, configPath, serverID string) error {
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err := mgr.Stop(); err != nil {
-			slog.Warn("failed to stop MCP manager", "error", err)
-		}
-	}()
+	defer stopMCPManager(mgr)
 
 	if serverID != "" {
 		if err := mgr.Connect(cmd.Context(), serverID); err != nil {
@@ -810,7 +811,7 @@ func runMcpCall(cmd *cobra.Command, configPath, qualifiedName string, rawArgs []
 	if err != nil {
 		return err
 	}
-	defer mgr.Stop()
+	defer stopMCPManager(mgr)
 
 	if err := mgr.Connect(cmd.Context(), serverID); err != nil {
 		return err
@@ -848,7 +849,7 @@ func runMcpResources(cmd *cobra.Command, configPath, serverID string) error {
 	if err != nil {
 		return err
 	}
-	defer mgr.Stop()
+	defer stopMCPManager(mgr)
 
 	if serverID != "" {
 		if err := mgr.Connect(cmd.Context(), serverID); err != nil {
@@ -893,7 +894,7 @@ func runMcpRead(cmd *cobra.Command, configPath, serverID, uri string) error {
 	if err != nil {
 		return err
 	}
-	defer mgr.Stop()
+	defer stopMCPManager(mgr)
 
 	if err := mgr.Connect(cmd.Context(), serverID); err != nil {
 		return err
@@ -921,7 +922,7 @@ func runMcpPrompts(cmd *cobra.Command, configPath, serverID string) error {
 	if err != nil {
 		return err
 	}
-	defer mgr.Stop()
+	defer stopMCPManager(mgr)
 
 	if serverID != "" {
 		if err := mgr.Connect(cmd.Context(), serverID); err != nil {
@@ -970,7 +971,7 @@ func runMcpPrompt(cmd *cobra.Command, configPath, qualifiedName string, rawArgs 
 	if err != nil {
 		return err
 	}
-	defer mgr.Stop()
+	defer stopMCPManager(mgr)
 
 	if err := mgr.Connect(cmd.Context(), serverID); err != nil {
 		return err

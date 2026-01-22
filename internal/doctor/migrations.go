@@ -3,13 +3,18 @@ package doctor
 import (
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 
+	"github.com/haasonsaas/nexus/internal/config"
 	"gopkg.in/yaml.v3"
 )
 
 // MigrationReport records applied migrations.
 type MigrationReport struct {
-	Applied []string
+	Applied     []string
+	FromVersion int
+	ToVersion   int
 }
 
 // LoadRawConfig reads a YAML config file into a mutable map.
@@ -34,14 +39,30 @@ func WriteRawConfig(path string, raw map[string]any) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o644)
+	mode := os.FileMode(0o644)
+	if info, err := os.Stat(path); err == nil {
+		mode = info.Mode().Perm()
+	}
+	return os.WriteFile(path, data, mode)
 }
 
 // ApplyConfigMigrations updates legacy config keys in-place.
-func ApplyConfigMigrations(raw map[string]any) MigrationReport {
-	report := MigrationReport{}
+func ApplyConfigMigrations(raw map[string]any) (MigrationReport, error) {
+	report := MigrationReport{ToVersion: config.CurrentVersion}
 	if raw == nil {
-		return report
+		return report, nil
+	}
+
+	version, err := parseConfigVersion(raw)
+	if err != nil {
+		return report, err
+	}
+	report.FromVersion = version
+	if version < 0 {
+		return report, fmt.Errorf("invalid config version %d", version)
+	}
+	if version > config.CurrentVersion {
+		return report, &config.VersionError{Version: version, Current: config.CurrentVersion, Reason: "newer than this build"}
 	}
 
 	plugins, _ := getStringMap(raw, "plugins")
@@ -72,7 +93,45 @@ func ApplyConfigMigrations(raw map[string]any) MigrationReport {
 		report.Applied = append(report.Applied, "removed observability (unsupported)")
 	}
 
-	return report
+	if version < config.CurrentVersion {
+		raw["version"] = config.CurrentVersion
+		report.Applied = append(report.Applied, fmt.Sprintf("set version to %d", config.CurrentVersion))
+	}
+
+	return report, nil
+}
+
+func parseConfigVersion(raw map[string]any) (int, error) {
+	if raw == nil {
+		return 0, nil
+	}
+	value, ok := raw["version"]
+	if !ok || value == nil {
+		return 0, nil
+	}
+	switch typed := value.(type) {
+	case int:
+		return typed, nil
+	case int64:
+		return int(typed), nil
+	case int32:
+		return int(typed), nil
+	case float64:
+		return int(typed), nil
+	case float32:
+		return int(typed), nil
+	case string:
+		if strings.TrimSpace(typed) == "" {
+			return 0, nil
+		}
+		parsed, err := strconv.Atoi(strings.TrimSpace(typed))
+		if err != nil {
+			return 0, fmt.Errorf("invalid config version %q", typed)
+		}
+		return parsed, nil
+	default:
+		return 0, fmt.Errorf("invalid config version type %T", value)
+	}
 }
 
 func ensureStringMap(root map[string]any, key string) map[string]any {

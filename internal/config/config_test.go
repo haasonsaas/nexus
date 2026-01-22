@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -344,7 +345,11 @@ func writeConfig(t *testing.T, contents string) string {
 	t.Helper()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "nexus.yaml")
-	if err := os.WriteFile(path, []byte(strings.TrimSpace(contents)), 0o644); err != nil {
+	trimmed := strings.TrimSpace(contents)
+	if !strings.HasPrefix(trimmed, "version:") {
+		trimmed = fmt.Sprintf("version: %d\n%s", CurrentVersion, trimmed)
+	}
+	if err := os.WriteFile(path, []byte(trimmed), 0o644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 	return path

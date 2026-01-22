@@ -18,6 +18,7 @@ import (
 
 // Config is the main configuration structure for Nexus.
 type Config struct {
+	Version       int                       `yaml:"version"`
 	Server        ServerConfig              `yaml:"server"`
 	Gateway       GatewayConfig             `yaml:"gateway"`
 	Commands      CommandsConfig            `yaml:"commands"`
@@ -35,6 +36,7 @@ type Config struct {
 	RAG           RAGConfig                 `yaml:"rag"`
 	MCP           mcp.Config                `yaml:"mcp"`
 	Edge          EdgeConfig                `yaml:"edge"`
+	Artifacts     ArtifactConfig            `yaml:"artifacts"`
 	Channels      ChannelsConfig            `yaml:"channels"`
 	LLM           LLMConfig                 `yaml:"llm"`
 	Tools         ToolsConfig               `yaml:"tools"`
@@ -711,6 +713,33 @@ type EdgeConfig struct {
 	EventBufferSize int `yaml:"event_buffer_size"`
 }
 
+// ArtifactConfig configures artifact storage and retention.
+type ArtifactConfig struct {
+	// Backend specifies storage backend: "local", "s3", or "minio".
+	Backend string `yaml:"backend"`
+
+	// LocalPath is the directory for local storage.
+	LocalPath string `yaml:"local_path"`
+
+	// S3Bucket is the bucket name for S3/MinIO storage.
+	S3Bucket string `yaml:"s3_bucket"`
+
+	// S3Endpoint is the endpoint URL for MinIO or S3-compatible storage.
+	S3Endpoint string `yaml:"s3_endpoint"`
+
+	// S3Region is the AWS region for S3.
+	S3Region string `yaml:"s3_region"`
+
+	// TTLs configures retention period by artifact type.
+	TTLs map[string]time.Duration `yaml:"ttls"`
+
+	// PruneInterval is how often to cleanup expired artifacts.
+	PruneInterval time.Duration `yaml:"prune_interval"`
+
+	// MaxStorageSize is the total quota in bytes (0 = unlimited).
+	MaxStorageSize int64 `yaml:"max_storage_size"`
+}
+
 // Load reads and parses the configuration file.
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
@@ -729,6 +758,9 @@ func Load(path string) (*Config, error) {
 	}
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
 		return nil, fmt.Errorf("failed to parse config: expected single document")
+	}
+	if err := ValidateVersion(cfg.Version); err != nil {
+		return nil, err
 	}
 
 	applyEnvOverrides(&cfg)
@@ -758,6 +790,7 @@ func applyDefaults(cfg *Config) {
 	applyMarketplaceDefaults(&cfg.Marketplace)
 	applyRAGDefaults(&cfg.RAG)
 	applyEdgeDefaults(&cfg.Edge)
+	applyArtifactDefaults(&cfg.Artifacts)
 }
 
 func applyServerDefaults(cfg *ServerConfig) {
@@ -1057,6 +1090,26 @@ func applyEdgeDefaults(cfg *EdgeConfig) {
 	}
 	if cfg.EventBufferSize == 0 {
 		cfg.EventBufferSize = 1000
+	}
+}
+
+func applyArtifactDefaults(cfg *ArtifactConfig) {
+	if cfg.Backend == "" {
+		cfg.Backend = "local"
+	}
+	if cfg.LocalPath == "" {
+		cfg.LocalPath = filepath.Join(os.TempDir(), "nexus-artifacts")
+	}
+	if cfg.PruneInterval == 0 {
+		cfg.PruneInterval = time.Hour
+	}
+	if cfg.TTLs == nil {
+		cfg.TTLs = map[string]time.Duration{
+			"screenshot": 7 * 24 * time.Hour,
+			"recording":  30 * 24 * time.Hour,
+			"file":       14 * 24 * time.Hour,
+			"default":    24 * time.Hour,
+		}
 	}
 }
 

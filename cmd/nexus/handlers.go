@@ -30,6 +30,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/onboard"
 	"github.com/haasonsaas/nexus/internal/plugins"
 	"github.com/haasonsaas/nexus/internal/profile"
+	"github.com/haasonsaas/nexus/internal/provisioning"
 	"github.com/haasonsaas/nexus/internal/service"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/skills"
@@ -61,10 +62,23 @@ func runServe(ctx context.Context, configPath string, debug bool) error {
 	)
 
 	if raw, err := doctor.LoadRawConfig(configPath); err == nil {
-		migrations := doctor.ApplyConfigMigrations(raw)
+		migrations, err := doctor.ApplyConfigMigrations(raw)
+		if err != nil {
+			return fmt.Errorf("config migrations failed: %w", err)
+		}
 		if len(migrations.Applied) > 0 {
-			slog.Warn("config migrations detected; run `nexus doctor --repair`",
-				"count", len(migrations.Applied))
+			backupPath, err := doctor.BackupConfig(configPath)
+			if err != nil {
+				return fmt.Errorf("failed to backup config before migration: %w", err)
+			}
+			if err := doctor.WriteRawConfig(configPath, raw); err != nil {
+				return fmt.Errorf("failed to write migrated config: %w", err)
+			}
+			slog.Info("config migrations applied",
+				"from_version", migrations.FromVersion,
+				"to_version", migrations.ToVersion,
+				"count", len(migrations.Applied),
+				"backup", backupPath)
 		}
 	} else {
 		slog.Warn("failed to inspect config for migrations", "error", err)
@@ -1269,9 +1283,16 @@ func runDoctor(cmd *cobra.Command, configPath string, repair, probe, audit bool)
 	if err != nil {
 		return fmt.Errorf("failed to read config: %w", err)
 	}
-	migrations := doctor.ApplyConfigMigrations(raw)
+	migrations, err := doctor.ApplyConfigMigrations(raw)
+	if err != nil {
+		return fmt.Errorf("config migrations failed: %w", err)
+	}
 	if len(migrations.Applied) > 0 {
 		if repair {
+			backupPath, err := doctor.BackupConfig(configPath)
+			if err != nil {
+				return fmt.Errorf("failed to backup config before migration: %w", err)
+			}
 			if err := doctor.WriteRawConfig(configPath, raw); err != nil {
 				return fmt.Errorf("failed to write migrated config: %w", err)
 			}
@@ -1279,6 +1300,7 @@ func runDoctor(cmd *cobra.Command, configPath string, repair, probe, audit bool)
 			for _, note := range migrations.Applied {
 				fmt.Fprintf(out, "  - %s\n", note)
 			}
+			fmt.Fprintf(out, "Backup created: %s\n", backupPath)
 		} else {
 			fmt.Fprintln(out, "Config migrations available (run `nexus doctor --repair` to apply):")
 			for _, note := range migrations.Applied {
@@ -1290,7 +1312,7 @@ func runDoctor(cmd *cobra.Command, configPath string, repair, probe, audit bool)
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		if len(migrations.Applied) > 0 && !repair {
-			return fmt.Errorf("config validation failed (legacy keys detected). run `nexus doctor --repair`: %w", err)
+			return fmt.Errorf("config validation failed (migrations available). run `nexus doctor --repair`: %w", err)
 		}
 		return fmt.Errorf("config validation failed: %w", err)
 	}
@@ -2237,6 +2259,66 @@ func printChannelTest(out io.Writer, channel string) {
 	fmt.Fprintln(out, "API credentials valid")
 	fmt.Fprintln(out, "Bot permissions verified")
 	fmt.Fprintln(out, "Test message sent successfully")
+}
+
+// runChannelsEnable enables a channel in the configuration.
+func runChannelsEnable(cmd *cobra.Command, configPath, channel string) error {
+	prov := provisioning.NewChannelProvisioner(configPath, nil)
+	channelType := models.ChannelType(channel)
+
+	if err := prov.EnableChannel(cmd.Context(), channelType); err != nil {
+		return fmt.Errorf("enable channel: %w", err)
+	}
+
+	fmt.Fprintf(cmd.OutOrStdout(), "Channel %s enabled\n", channel)
+	return nil
+}
+
+// runChannelsDisable disables a channel in the configuration.
+func runChannelsDisable(cmd *cobra.Command, configPath, channel string) error {
+	prov := provisioning.NewChannelProvisioner(configPath, nil)
+	channelType := models.ChannelType(channel)
+
+	if err := prov.DisableChannel(cmd.Context(), channelType); err != nil {
+		return fmt.Errorf("disable channel: %w", err)
+	}
+
+	fmt.Fprintf(cmd.OutOrStdout(), "Channel %s disabled\n", channel)
+	return nil
+}
+
+// runChannelsValidate validates channel configuration.
+func runChannelsValidate(cmd *cobra.Command, configPath, channel string) error {
+	prov := provisioning.NewChannelProvisioner(configPath, nil)
+	out := cmd.OutOrStdout()
+
+	if channel == "" {
+		// Validate all channels
+		channels, err := prov.ListChannels(cmd.Context())
+		if err != nil {
+			return fmt.Errorf("list channels: %w", err)
+		}
+
+		fmt.Fprintln(out, "Channel Validation")
+		fmt.Fprintln(out, "==================")
+		for _, ch := range channels {
+			err := prov.ValidateChannel(cmd.Context(), ch.Type)
+			if err != nil {
+				fmt.Fprintf(out, "%-12s ✗ %v\n", ch.Type, err)
+			} else {
+				fmt.Fprintf(out, "%-12s ✓ Valid\n", ch.Type)
+			}
+		}
+	} else {
+		// Validate specific channel
+		channelType := models.ChannelType(channel)
+		if err := prov.ValidateChannel(cmd.Context(), channelType); err != nil {
+			return fmt.Errorf("%s: %w", channel, err)
+		}
+		fmt.Fprintf(out, "%s: Valid\n", channel)
+	}
+
+	return nil
 }
 
 // =============================================================================

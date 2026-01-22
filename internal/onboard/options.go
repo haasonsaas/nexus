@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/haasonsaas/nexus/internal/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -47,6 +48,7 @@ func BuildConfig(opts Options) map[string]any {
 	}
 
 	cfg := map[string]any{
+		"version": config.CurrentVersion,
 		"server": map[string]any{
 			"host":         "0.0.0.0",
 			"grpc_port":    50051,

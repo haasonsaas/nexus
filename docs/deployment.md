@@ -145,6 +145,7 @@ metadata:
   namespace: nexus
 data:
   nexus.yaml: |
+    version: 1
     server:
       host: 0.0.0.0
       grpc_port: 50051

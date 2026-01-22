@@ -758,6 +758,9 @@ Nexus supports multiple messaging platforms:
 	cmd.AddCommand(buildChannelsStatusCmd())
 	cmd.AddCommand(buildChannelsTestCmd())
 	cmd.AddCommand(buildChannelsLoginCmd())
+	cmd.AddCommand(buildChannelsEnableCmd())
+	cmd.AddCommand(buildChannelsDisableCmd())
+	cmd.AddCommand(buildChannelsValidateCmd())
 
 	return cmd
 }
@@ -835,6 +838,73 @@ to verify that credentials are correct and the bot has necessary permissions.`,
 		},
 	}
 
+	return cmd
+}
+
+func buildChannelsEnableCmd() *cobra.Command {
+	var configPath string
+
+	cmd := &cobra.Command{
+		Use:   "enable <channel>",
+		Short: "Enable a channel",
+		Long:  "Enable a messaging channel in the configuration.",
+		Example: `  # Enable Telegram
+  nexus channels enable telegram
+
+  # Enable Discord
+  nexus channels enable discord`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
+			return runChannelsEnable(cmd, configPath, args[0])
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to config file")
+	return cmd
+}
+
+func buildChannelsDisableCmd() *cobra.Command {
+	var configPath string
+
+	cmd := &cobra.Command{
+		Use:   "disable <channel>",
+		Short: "Disable a channel",
+		Long:  "Disable a messaging channel in the configuration.",
+		Example: `  # Disable Telegram
+  nexus channels disable telegram`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
+			return runChannelsDisable(cmd, configPath, args[0])
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to config file")
+	return cmd
+}
+
+func buildChannelsValidateCmd() *cobra.Command {
+	var configPath string
+
+	cmd := &cobra.Command{
+		Use:   "validate [channel]",
+		Short: "Validate channel configuration",
+		Long:  "Validate that a channel has all required credentials configured.",
+		Example: `  # Validate all channels
+  nexus channels validate
+
+  # Validate specific channel
+  nexus channels validate telegram`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
+			channel := ""
+			if len(args) > 0 {
+				channel = args[0]
+			}
+			return runChannelsValidate(cmd, configPath, channel)
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to config file")
 	return cmd
 }
 

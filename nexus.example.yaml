@@ -1,6 +1,8 @@
 # Nexus Configuration Example
 # Copy this file to nexus.yaml and fill in your credentials
 
+version: 1
+
 server:
   host: 0.0.0.0
   grpc_port: 50051

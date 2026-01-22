@@ -27,6 +27,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/commands"
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/cron"
+	"github.com/haasonsaas/nexus/internal/edge"
 	"github.com/haasonsaas/nexus/internal/hooks"
 	"github.com/haasonsaas/nexus/internal/hooks/bundled"
 	"github.com/haasonsaas/nexus/internal/jobs"
@@ -96,6 +97,9 @@ type Server struct {
 
 	broadcastManager *BroadcastManager
 	hooksRegistry    *hooks.Registry
+
+	edgeManager *edge.Manager
+	edgeService *edge.Service
 
 	// messageSem limits concurrent message processing to prevent unbounded goroutine growth
 	messageSem chan struct{}
@@ -298,6 +302,27 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		}
 	}()
 
+	// Initialize edge manager if enabled
+	var edgeManager *edge.Manager
+	var edgeService *edge.Service
+	if cfg.Edge.Enabled {
+		edgeAuth, err := buildEdgeAuthenticator(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("edge authenticator: %w", err)
+		}
+
+		managerConfig := edge.ManagerConfig{
+			HeartbeatInterval:  cfg.Edge.HeartbeatInterval,
+			HeartbeatTimeout:   cfg.Edge.HeartbeatTimeout,
+			DefaultToolTimeout: cfg.Edge.DefaultToolTimeout,
+			MaxConcurrentTools: cfg.Edge.MaxConcurrentTools,
+			EventBufferSize:    cfg.Edge.EventBufferSize,
+		}
+		edgeManager = edge.NewManager(managerConfig, edgeAuth, logger)
+		edgeService = edge.NewService(edgeManager)
+		logger.Info("edge service initialized", "auth_mode", cfg.Edge.AuthMode)
+	}
+
 	startupCancelUsed = true
 	server := &Server{
 		config:             cfg,
@@ -319,6 +344,8 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		toolPolicyResolver: toolPolicyResolver,
 		jobStore:           jobStore,
 		hooksRegistry:      hooksRegistry,
+		edgeManager:        edgeManager,
+		edgeService:        edgeService,
 		commandRegistry:    commandRegistry,
 		commandParser:      commandParser,
 		activeRuns:         make(map[string]activeRun),
@@ -332,6 +359,9 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	proto.RegisterAgentServiceServer(grpcServer, grpcSvc)
 	proto.RegisterChannelServiceServer(grpcServer, grpcSvc)
 	proto.RegisterHealthServiceServer(grpcServer, grpcSvc)
+	if edgeService != nil {
+		proto.RegisterEdgeServiceServer(grpcServer, edgeService)
+	}
 	registerBuiltinChannelPlugins(server.channelPlugins)
 
 	if err := server.registerChannelsFromConfig(); err != nil {
@@ -369,4 +399,23 @@ func (s *Server) registerChannelsFromConfig() error {
 		s.runtimePlugins = plugins.DefaultRuntimeRegistry()
 	}
 	return s.runtimePlugins.LoadChannels(s.config, s.channels)
+}
+
+// buildEdgeAuthenticator creates an edge authenticator based on configuration.
+func buildEdgeAuthenticator(cfg *config.Config) (edge.Authenticator, error) {
+	switch cfg.Edge.AuthMode {
+	case "dev":
+		return edge.NewDevAuthenticator(), nil
+	case "tofu":
+		return edge.NewTOFUAuthenticator(nil), nil
+	case "token", "":
+		return edge.NewTokenAuthenticator(cfg.Edge.Tokens), nil
+	default:
+		return nil, fmt.Errorf("unknown edge auth mode: %s", cfg.Edge.AuthMode)
+	}
+}
+
+// EdgeManager returns the edge manager for managing edge connections.
+func (s *Server) EdgeManager() *edge.Manager {
+	return s.edgeManager
 }

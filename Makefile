@@ -54,10 +54,13 @@ proto:
 		PATH=$$PATH:$$HOME/go/bin buf generate; \
 	else \
 		echo "Using protoc for code generation..."; \
-		mkdir -p pkg/proto; \
+		mkdir -p pkg/proto pkg/proto/edge; \
 		PATH=$$PATH:$$HOME/go/bin protoc --go_out=. --go_opt=paths=source_relative \
 			--go-grpc_out=. --go-grpc_opt=paths=source_relative \
 			pkg/proto/nexus.proto; \
+		PATH=$$PATH:$$HOME/go/bin protoc --go_out=. --go_opt=paths=source_relative \
+			--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+			pkg/proto/edge.proto; \
 	fi
 	@echo "Protobuf code generated successfully!"
 

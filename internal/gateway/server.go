@@ -22,6 +22,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/cron"
+	"github.com/haasonsaas/nexus/internal/tasks"
 	"github.com/haasonsaas/nexus/internal/jobs"
 	"github.com/haasonsaas/nexus/internal/mcp"
 	"github.com/haasonsaas/nexus/internal/media"
@@ -70,6 +71,8 @@ type Server struct {
 	runtimePlugins     *plugins.RuntimeRegistry
 	authService        *auth.Service
 	cronScheduler      *cron.Scheduler
+	taskScheduler      *tasks.Scheduler
+	taskStore          tasks.Store
 	mcpManager         *mcp.Manager
 	firecrackerBackend *firecracker.Backend
 
@@ -202,6 +205,25 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		}
 	}
 
+	// Initialize task store if tasks are enabled
+	var taskStore tasks.Store
+	if cfg.Tasks.Enabled && cfg.Database.URL != "" {
+		taskStoreCfg := tasks.DefaultCockroachConfig()
+		if cfg.Database.MaxConnections > 0 {
+			taskStoreCfg.MaxOpenConns = cfg.Database.MaxConnections
+		}
+		if cfg.Database.ConnMaxLifetime > 0 {
+			taskStoreCfg.ConnMaxLifetime = cfg.Database.ConnMaxLifetime
+		}
+		dbTaskStore, err := tasks.NewCockroachStoreFromDSN(cfg.Database.URL, taskStoreCfg)
+		if err != nil {
+			logger.Warn("task store initialization failed, scheduled tasks disabled", "error", err)
+		} else {
+			taskStore = dbTaskStore
+			logger.Info("scheduled tasks store initialized")
+		}
+	}
+
 	server := &Server{
 		config:             cfg,
 		grpc:               grpcServer,
@@ -216,6 +238,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		stores:             stores,
 		authService:        authService,
 		cronScheduler:      cronScheduler,
+		taskStore:          taskStore,
 		mcpManager:         mcpManager,
 		toolPolicyResolver: toolPolicyResolver,
 		jobStore:           jobStore,
@@ -256,6 +279,11 @@ func (s *Server) Start(ctx context.Context) error {
 		if err := s.cronScheduler.Start(ctx); err != nil {
 			return fmt.Errorf("failed to start cron scheduler: %w", err)
 		}
+	}
+
+	// Start task scheduler if enabled
+	if err := s.startTaskScheduler(ctx); err != nil {
+		return fmt.Errorf("failed to start task scheduler: %w", err)
 	}
 
 	// Start message processing
@@ -322,6 +350,16 @@ func (s *Server) Stop(ctx context.Context) error {
 			s.logger.Error("error stopping cron scheduler", "error", err)
 		}
 	}
+	if s.taskScheduler != nil {
+		if err := s.taskScheduler.Stop(ctx); err != nil {
+			s.logger.Error("error stopping task scheduler", "error", err)
+		}
+	}
+	if closer, ok := s.taskStore.(tasks.Closer); ok {
+		if err := closer.Close(); err != nil {
+			s.logger.Error("error closing task store", "error", err)
+		}
+	}
 	if s.mcpManager != nil {
 		if err := s.mcpManager.Stop(); err != nil {
 			s.logger.Error("error stopping MCP manager", "error", err)
@@ -349,6 +387,63 @@ func (s *Server) startProcessing(ctx context.Context) {
 	s.cancel = cancel
 	s.wg.Add(1)
 	go s.processMessages(processCtx)
+}
+
+// startTaskScheduler initializes and starts the task scheduler if enabled.
+func (s *Server) startTaskScheduler(ctx context.Context) error {
+	if s.taskStore == nil || !s.config.Tasks.Enabled {
+		return nil
+	}
+
+	// Ensure runtime is available (needed for task execution)
+	runtime, err := s.ensureRuntime(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to initialize runtime for task scheduler: %w", err)
+	}
+
+	// Create the executor that uses the agent runtime
+	executor := tasks.NewAgentExecutor(runtime, s.sessions, tasks.AgentExecutorConfig{
+		Logger: s.logger.With("component", "task-executor"),
+	})
+
+	// Build scheduler config from settings
+	schedulerCfg := tasks.DefaultSchedulerConfig()
+	if s.config.Tasks.WorkerID != "" {
+		schedulerCfg.WorkerID = s.config.Tasks.WorkerID
+	}
+	if s.config.Tasks.PollInterval > 0 {
+		schedulerCfg.PollInterval = s.config.Tasks.PollInterval
+	}
+	if s.config.Tasks.AcquireInterval > 0 {
+		schedulerCfg.AcquireInterval = s.config.Tasks.AcquireInterval
+	}
+	if s.config.Tasks.LockDuration > 0 {
+		schedulerCfg.LockDuration = s.config.Tasks.LockDuration
+	}
+	if s.config.Tasks.MaxConcurrency > 0 {
+		schedulerCfg.MaxConcurrency = s.config.Tasks.MaxConcurrency
+	}
+	if s.config.Tasks.CleanupInterval > 0 {
+		schedulerCfg.CleanupInterval = s.config.Tasks.CleanupInterval
+	}
+	if s.config.Tasks.StaleTimeout > 0 {
+		schedulerCfg.StaleTimeout = s.config.Tasks.StaleTimeout
+	}
+	schedulerCfg.Logger = s.logger.With("component", "task-scheduler")
+
+	// Create and start the scheduler
+	s.taskScheduler = tasks.NewScheduler(s.taskStore, executor, schedulerCfg)
+
+	if err := s.taskScheduler.Start(ctx); err != nil {
+		return fmt.Errorf("task scheduler start: %w", err)
+	}
+
+	s.logger.Info("task scheduler started",
+		"worker_id", s.taskScheduler.WorkerID(),
+		"max_concurrency", schedulerCfg.MaxConcurrency,
+	)
+
+	return nil
 }
 
 // startJobPruning starts a background goroutine that prunes old jobs.

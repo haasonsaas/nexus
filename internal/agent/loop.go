@@ -29,6 +29,10 @@ type LoopConfig struct {
 	// StreamToolResults streams tool results as they complete
 	// Default: true
 	StreamToolResults bool
+
+	// BranchStore provides branch-aware storage operations
+	// If nil, standard session history is used
+	BranchStore sessions.BranchStore
 }
 
 // DefaultLoopConfig returns the default loop configuration.
@@ -108,13 +112,14 @@ func (l *AgenticLoop) ConfigureTool(name string, config *ToolConfig) {
 
 // LoopState tracks the current state of an agentic loop execution.
 type LoopState struct {
-	Phase         LoopPhase
-	Iteration     int
-	Messages      []CompletionMessage
-	PendingTools  []models.ToolCall
-	ToolResults   []models.ToolResult
+	Phase           LoopPhase
+	Iteration       int
+	Messages        []CompletionMessage
+	PendingTools    []models.ToolCall
+	ToolResults     []models.ToolResult
 	AccumulatedText string
-	LastError     error
+	LastError       error
+	BranchID        string // Current branch for branch-aware loops
 }
 
 // Run executes the agentic loop and streams results.
@@ -205,10 +210,38 @@ func (l *AgenticLoop) Run(ctx context.Context, session *models.Session, msg *mod
 
 // initializeState loads conversation history and sets up initial state.
 func (l *AgenticLoop) initializeState(ctx context.Context, session *models.Session, msg *models.Message, state *LoopState) error {
-	// Get conversation history
-	history, err := l.sessions.GetHistory(ctx, session.ID, 50)
-	if err != nil {
-		return fmt.Errorf("failed to get history: %w", err)
+	var history []*models.Message
+	var err error
+
+	// Use branch-aware history if branch store is configured and message has a branch
+	if l.config.BranchStore != nil && msg.BranchID != "" {
+		state.BranchID = msg.BranchID
+		history, err = l.config.BranchStore.GetBranchHistory(ctx, msg.BranchID, 50)
+		if err != nil {
+			return fmt.Errorf("failed to get branch history: %w", err)
+		}
+	} else if l.config.BranchStore != nil {
+		// Try to get primary branch for session
+		branch, branchErr := l.config.BranchStore.GetPrimaryBranch(ctx, session.ID)
+		if branchErr == nil {
+			state.BranchID = branch.ID
+			history, err = l.config.BranchStore.GetBranchHistory(ctx, branch.ID, 50)
+			if err != nil {
+				return fmt.Errorf("failed to get branch history: %w", err)
+			}
+		} else {
+			// Fall back to standard session history
+			history, err = l.sessions.GetHistory(ctx, session.ID, 50)
+			if err != nil {
+				return fmt.Errorf("failed to get history: %w", err)
+			}
+		}
+	} else {
+		// Standard session history
+		history, err = l.sessions.GetHistory(ctx, session.ID, 50)
+		if err != nil {
+			return fmt.Errorf("failed to get history: %w", err)
+		}
 	}
 
 	// Build messages from history
@@ -228,6 +261,13 @@ func (l *AgenticLoop) initializeState(ctx context.Context, session *models.Sessi
 	})
 
 	return nil
+}
+
+// RunWithBranch executes the agentic loop on a specific branch.
+func (l *AgenticLoop) RunWithBranch(ctx context.Context, session *models.Session, msg *models.Message, branchID string) (<-chan *ResponseChunk, error) {
+	// Set branch ID on message for initializeState
+	msg.BranchID = branchID
+	return l.Run(ctx, session, msg)
 }
 
 // streamPhase streams from the LLM and collects any tool calls.

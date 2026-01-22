@@ -1,0 +1,252 @@
+{{define "sessions/branches.html"}}
+<div class="branches-container">
+    <div class="branches-header">
+        <h3>Conversation Branches</h3>
+        <button class="btn btn-primary btn-sm"
+                hx-get="/ui/api/sessions/{{.Session.ID}}/branches/new"
+                hx-target="#branch-modal"
+                hx-swap="innerHTML">
+            New Branch
+        </button>
+    </div>
+
+    {{if .Branches}}
+    <div class="branch-tree">
+        {{template "sessions/branch_node.html" .BranchTree}}
+    </div>
+    {{else}}
+    <div class="empty-state">
+        <p>No branches yet. Create one to explore alternative conversation paths.</p>
+    </div>
+    {{end}}
+</div>
+
+<div id="branch-modal" class="modal-container"></div>
+{{end}}
+
+{{define "sessions/branch_node.html"}}
+<div class="branch-node depth-{{.Depth}}{{if .Branch.IsPrimary}} primary{{end}}{{if eq .Branch.Status "merged"}} merged{{end}}{{if eq .Branch.Status "archived"}} archived{{end}}"
+     data-branch-id="{{.Branch.ID}}">
+    <div class="branch-info">
+        <div class="branch-header">
+            <span class="branch-name">
+                {{if .Branch.IsPrimary}}
+                <span class="badge badge-primary">main</span>
+                {{end}}
+                {{.Branch.Name}}
+            </span>
+            <span class="branch-status status-{{.Branch.Status}}">{{.Branch.Status}}</span>
+        </div>
+        <div class="branch-meta">
+            <span class="branch-messages">{{.MessageCount}} messages</span>
+            <span class="branch-time">{{.Branch.UpdatedAt | formatTime}}</span>
+        </div>
+        {{if .Branch.Description}}
+        <div class="branch-description">{{.Branch.Description}}</div>
+        {{end}}
+        <div class="branch-actions">
+            <a href="/ui/sessions/{{.Branch.SessionID}}?branch={{.Branch.ID}}"
+               class="btn btn-sm btn-secondary">View</a>
+            {{if not .Branch.IsPrimary}}
+            {{if eq .Branch.Status "active"}}
+            <button class="btn btn-sm btn-outline"
+                    hx-get="/ui/api/sessions/{{.Branch.SessionID}}/branches/{{.Branch.ID}}/fork"
+                    hx-target="#branch-modal"
+                    hx-swap="innerHTML">Fork</button>
+            <button class="btn btn-sm btn-outline"
+                    hx-get="/ui/api/sessions/{{.Branch.SessionID}}/branches/{{.Branch.ID}}/merge"
+                    hx-target="#branch-modal"
+                    hx-swap="innerHTML">Merge</button>
+            <button class="btn btn-sm btn-danger-outline"
+                    hx-post="/ui/api/sessions/{{.Branch.SessionID}}/branches/{{.Branch.ID}}/archive"
+                    hx-confirm="Archive this branch? It can be restored later.">Archive</button>
+            {{end}}
+            {{end}}
+        </div>
+    </div>
+    {{if .Children}}
+    <div class="branch-children">
+        {{range .Children}}
+        {{template "sessions/branch_node.html" .}}
+        {{end}}
+    </div>
+    {{end}}
+</div>
+{{end}}
+
+{{define "sessions/branch_selector.html"}}
+<div class="branch-selector">
+    <label for="branch-select">Branch:</label>
+    <select id="branch-select" name="branch_id"
+            hx-get="/ui/sessions/{{.Session.ID}}"
+            hx-target="body"
+            hx-swap="outerHTML"
+            hx-include="[name='branch_id']">
+        {{range .Branches}}
+        <option value="{{.ID}}"{{if eq .ID $.CurrentBranchID}} selected{{end}}>
+            {{.Name}}{{if .IsPrimary}} (main){{end}}
+            {{if eq .Status "merged"}} [merged]{{end}}
+            {{if eq .Status "archived"}} [archived]{{end}}
+        </option>
+        {{end}}
+    </select>
+    {{if .CurrentBranch}}
+    <div class="branch-info-inline">
+        <span class="branch-status status-{{.CurrentBranch.Status}}">{{.CurrentBranch.Status}}</span>
+        {{if .CurrentBranch.Description}}
+        <span class="branch-description" title="{{.CurrentBranch.Description}}">{{.CurrentBranch.Description | truncate 50}}</span>
+        {{end}}
+    </div>
+    {{end}}
+</div>
+{{end}}
+
+{{define "sessions/branch_form_new.html"}}
+<div class="modal-content">
+    <div class="modal-header">
+        <h4>Create New Branch</h4>
+        <button class="modal-close" onclick="this.closest('.modal-container').innerHTML=''">&times;</button>
+    </div>
+    <form hx-post="/ui/api/sessions/{{.Session.ID}}/branches"
+          hx-target="#branches-list"
+          hx-swap="outerHTML"
+          hx-on::after-request="this.closest('.modal-container').innerHTML=''">
+        <div class="form-group">
+            <label for="branch-name">Branch Name</label>
+            <input type="text" id="branch-name" name="name" required
+                   placeholder="e.g., explore-alternative, test-idea">
+        </div>
+        <div class="form-group">
+            <label for="branch-description">Description (optional)</label>
+            <textarea id="branch-description" name="description" rows="2"
+                      placeholder="What is this branch for?"></textarea>
+        </div>
+        <div class="form-group">
+            <label for="parent-branch">Fork From</label>
+            <select id="parent-branch" name="parent_branch_id">
+                {{range .Branches}}
+                {{if eq .Status "active"}}
+                <option value="{{.ID}}"{{if .IsPrimary}} selected{{end}}>
+                    {{.Name}}{{if .IsPrimary}} (main){{end}}
+                </option>
+                {{end}}
+                {{end}}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="branch-point">Branch Point</label>
+            <select id="branch-point" name="branch_point">
+                <option value="0">Latest message</option>
+                {{range .RecentMessages}}
+                <option value="{{.SequenceNum}}">
+                    #{{.SequenceNum}} - {{.Content | truncate 40}}
+                </option>
+                {{end}}
+            </select>
+            <small class="form-help">Select which message to branch from</small>
+        </div>
+        <div class="form-actions">
+            <button type="button" class="btn btn-secondary"
+                    onclick="this.closest('.modal-container').innerHTML=''">Cancel</button>
+            <button type="submit" class="btn btn-primary">Create Branch</button>
+        </div>
+    </form>
+</div>
+{{end}}
+
+{{define "sessions/branch_form_merge.html"}}
+<div class="modal-content">
+    <div class="modal-header">
+        <h4>Merge Branch</h4>
+        <button class="modal-close" onclick="this.closest('.modal-container').innerHTML=''">&times;</button>
+    </div>
+    <div class="merge-preview">
+        <div class="merge-source">
+            <label>Source Branch</label>
+            <span class="branch-name">{{.SourceBranch.Name}}</span>
+            <span class="message-count">{{.SourceStats.OwnMessages}} messages to merge</span>
+        </div>
+        <div class="merge-arrow">&#8594;</div>
+        <div class="merge-target">
+            <label>Target Branch</label>
+            <select id="merge-target" name="target_branch_id">
+                {{range .Branches}}
+                {{if and (ne .ID $.SourceBranch.ID) (eq .Status "active")}}
+                <option value="{{.ID}}"{{if .IsPrimary}} selected{{end}}>
+                    {{.Name}}{{if .IsPrimary}} (main){{end}}
+                </option>
+                {{end}}
+                {{end}}
+            </select>
+        </div>
+    </div>
+    <form hx-post="/ui/api/sessions/{{.Session.ID}}/branches/{{.SourceBranch.ID}}/merge"
+          hx-target="#branches-list"
+          hx-swap="outerHTML"
+          hx-on::after-request="this.closest('.modal-container').innerHTML=''">
+        <input type="hidden" name="target_branch_id" id="merge-target-hidden">
+        <div class="form-group">
+            <label>Merge Strategy</label>
+            <div class="radio-group">
+                <label class="radio-option">
+                    <input type="radio" name="strategy" value="continue" checked>
+                    <span class="radio-label">Continue</span>
+                    <span class="radio-description">Append branch messages after target's current messages</span>
+                </label>
+                <label class="radio-option">
+                    <input type="radio" name="strategy" value="replace">
+                    <span class="radio-label">Replace</span>
+                    <span class="radio-description">Replace target history from branch point with branch messages</span>
+                </label>
+            </div>
+        </div>
+        <div class="form-actions">
+            <button type="button" class="btn btn-secondary"
+                    onclick="this.closest('.modal-container').innerHTML=''">Cancel</button>
+            <button type="submit" class="btn btn-primary">Merge Branch</button>
+        </div>
+    </form>
+    <script>
+        document.getElementById('merge-target').addEventListener('change', function() {
+            document.getElementById('merge-target-hidden').value = this.value;
+        });
+        document.getElementById('merge-target-hidden').value = document.getElementById('merge-target').value;
+    </script>
+</div>
+{{end}}
+
+{{define "sessions/branch_compare.html"}}
+<div class="branch-compare">
+    <div class="compare-header">
+        <h4>Branch Comparison</h4>
+    </div>
+    <div class="compare-summary">
+        <div class="compare-branch source">
+            <span class="branch-name">{{.Compare.SourceBranch.Name}}</span>
+            <span class="ahead-count">{{.Compare.SourceAhead}} ahead</span>
+        </div>
+        <div class="compare-divider">
+            {{if .Compare.CommonAncestor}}
+            <span class="common-ancestor">Common: {{.Compare.CommonAncestor.Name}}</span>
+            {{end}}
+        </div>
+        <div class="compare-branch target">
+            <span class="branch-name">{{.Compare.TargetBranch.Name}}</span>
+            <span class="ahead-count">{{.Compare.TargetAhead}} ahead</span>
+        </div>
+    </div>
+    {{if .SourceMessages}}
+    <div class="compare-messages">
+        <h5>Source Branch Messages</h5>
+        <div class="message-list">
+            {{range .SourceMessages}}
+            <div class="message-preview">
+                <span class="message-role">{{.Role}}</span>
+                <span class="message-content">{{.Content | truncate 100}}</span>
+            </div>
+            {{end}}
+        </div>
+    </div>
+    {{end}}
+</div>
+{{end}}

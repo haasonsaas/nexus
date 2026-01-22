@@ -41,6 +41,8 @@ const (
 type Message struct {
 	ID          string         `json:"id"`
 	SessionID   string         `json:"session_id"`
+	BranchID    string         `json:"branch_id,omitempty"`    // Branch this message belongs to
+	SequenceNum int64          `json:"sequence_num,omitempty"` // Order within the branch
 	Channel     ChannelType    `json:"channel"`
 	ChannelID   string         `json:"channel_id"` // Platform-specific message ID
 	Direction   Direction      `json:"direction"`

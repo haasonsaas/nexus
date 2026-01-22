@@ -355,3 +355,123 @@ func (p *Packer) truncateToolResults(m *models.Message) *models.Message {
 	}
 	return &copy
 }
+
+// BranchPackOptions extends PackOptions with branch-specific settings.
+type BranchPackOptions struct {
+	PackOptions
+
+	// BranchID is the target branch to pack messages for.
+	BranchID string
+
+	// IncludeInheritedMessages includes messages from ancestor branches.
+	IncludeInheritedMessages bool
+
+	// BranchPoint limits inherited messages to those at or before this sequence.
+	// If 0, all inherited messages are included.
+	BranchPoint int64
+}
+
+// DefaultBranchPackOptions returns sensible defaults for branch-aware packing.
+func DefaultBranchPackOptions() BranchPackOptions {
+	return BranchPackOptions{
+		PackOptions:              DefaultPackOptions(),
+		IncludeInheritedMessages: true,
+	}
+}
+
+// BranchPackResult extends PackResult with branch information.
+type BranchPackResult struct {
+	*PackResult
+
+	// BranchID is the branch these messages are packed for.
+	BranchID string
+
+	// InheritedCount is the number of messages inherited from ancestors.
+	InheritedCount int
+
+	// OwnCount is the number of messages from the current branch.
+	OwnCount int
+
+	// BranchPath lists the ancestor branch IDs in order.
+	BranchPath []string
+}
+
+// PackWithBranch packs messages with branch awareness.
+// It handles message inheritance from ancestor branches and ensures proper
+// ordering of inherited vs own messages.
+//
+// The packed result includes (in order):
+//  1. Summary message (if IncludeSummary and summary exists)
+//  2. Inherited messages from ancestor branches (respecting BranchPoint)
+//  3. Own messages from the current branch
+//  4. The incoming user message
+func (p *Packer) PackWithBranch(
+	history []*models.Message,
+	incoming *models.Message,
+	summary *models.Message,
+	branchOpts BranchPackOptions,
+) *BranchPackResult {
+	// Separate messages into inherited and own based on branch_id
+	var inherited, own []*models.Message
+
+	for _, m := range history {
+		if m == nil {
+			continue
+		}
+		if p.isSummaryMessage(m) {
+			continue
+		}
+		if m.BranchID == branchOpts.BranchID {
+			own = append(own, m)
+		} else if branchOpts.IncludeInheritedMessages {
+			// Apply branch point filter for inherited messages
+			if branchOpts.BranchPoint > 0 && m.SequenceNum > branchOpts.BranchPoint {
+				continue
+			}
+			inherited = append(inherited, m)
+		}
+	}
+
+	// Combine for packing: inherited first (already chronological), then own
+	combined := make([]*models.Message, 0, len(inherited)+len(own))
+	combined = append(combined, inherited...)
+	combined = append(combined, own...)
+
+	// Use base Pack implementation
+	baseResult := p.PackWithDiagnostics(combined, incoming, summary)
+
+	// Count how many of each type made it through
+	inheritedCount := 0
+	ownCount := 0
+	for _, m := range baseResult.Messages {
+		if m == summary || m == incoming {
+			continue
+		}
+		if m.BranchID == branchOpts.BranchID {
+			ownCount++
+		} else {
+			inheritedCount++
+		}
+	}
+
+	return &BranchPackResult{
+		PackResult:     baseResult,
+		BranchID:       branchOpts.BranchID,
+		InheritedCount: inheritedCount,
+		OwnCount:       ownCount,
+	}
+}
+
+// PackBranchHistory is a convenience method that packs branch history
+// with inherited messages properly ordered.
+func (p *Packer) PackBranchHistory(
+	branchHistory []*models.Message,
+	incoming *models.Message,
+	summary *models.Message,
+	branchID string,
+) ([]*models.Message, error) {
+	opts := DefaultBranchPackOptions()
+	opts.BranchID = branchID
+	result := p.PackWithBranch(branchHistory, incoming, summary, opts)
+	return result.Messages, nil
+}

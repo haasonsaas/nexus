@@ -12,28 +12,33 @@ import (
 	"github.com/haasonsaas/nexus/internal/mcp"
 	"github.com/haasonsaas/nexus/internal/memory"
 	"github.com/haasonsaas/nexus/internal/skills"
+	"github.com/haasonsaas/nexus/internal/templates"
 	"gopkg.in/yaml.v3"
 )
 
 // Config is the main configuration structure for Nexus.
 type Config struct {
-	Server        ServerConfig        `yaml:"server"`
-	Database      DatabaseConfig      `yaml:"database"`
-	Auth          AuthConfig          `yaml:"auth"`
-	Session       SessionConfig       `yaml:"session"`
-	Workspace     WorkspaceConfig     `yaml:"workspace"`
-	Identity      IdentityConfig      `yaml:"identity"`
-	User          UserConfig          `yaml:"user"`
-	Plugins       PluginsConfig       `yaml:"plugins"`
-	Skills        skills.SkillsConfig `yaml:"skills"`
-	VectorMemory  memory.Config       `yaml:"vector_memory"`
-	MCP           mcp.Config          `yaml:"mcp"`
-	Channels      ChannelsConfig      `yaml:"channels"`
-	LLM           LLMConfig           `yaml:"llm"`
-	Tools         ToolsConfig         `yaml:"tools"`
-	Cron          CronConfig          `yaml:"cron"`
-	Logging       LoggingConfig       `yaml:"logging"`
-	Transcription TranscriptionConfig `yaml:"transcription"`
+	Server        ServerConfig              `yaml:"server"`
+	Database      DatabaseConfig            `yaml:"database"`
+	Auth          AuthConfig                `yaml:"auth"`
+	Session       SessionConfig             `yaml:"session"`
+	Workspace     WorkspaceConfig           `yaml:"workspace"`
+	Identity      IdentityConfig            `yaml:"identity"`
+	User          UserConfig                `yaml:"user"`
+	Plugins       PluginsConfig             `yaml:"plugins"`
+	Marketplace   MarketplaceConfig         `yaml:"marketplace"`
+	Skills        skills.SkillsConfig       `yaml:"skills"`
+	Templates     templates.TemplatesConfig `yaml:"templates"`
+	VectorMemory  memory.Config             `yaml:"vector_memory"`
+	RAG           RAGConfig                 `yaml:"rag"`
+	MCP           mcp.Config                `yaml:"mcp"`
+	Channels      ChannelsConfig            `yaml:"channels"`
+	LLM           LLMConfig                 `yaml:"llm"`
+	Tools         ToolsConfig               `yaml:"tools"`
+	Cron          CronConfig                `yaml:"cron"`
+	Tasks         TasksConfig               `yaml:"tasks"`
+	Logging       LoggingConfig             `yaml:"logging"`
+	Transcription TranscriptionConfig       `yaml:"transcription"`
 }
 
 type ServerConfig struct {
@@ -132,6 +137,27 @@ type PluginEntryConfig struct {
 	Enabled bool           `yaml:"enabled"`
 	Path    string         `yaml:"path"`
 	Config  map[string]any `yaml:"config"`
+}
+
+// MarketplaceConfig configures the plugin marketplace.
+type MarketplaceConfig struct {
+	// Enabled enables marketplace functionality.
+	Enabled bool `yaml:"enabled"`
+
+	// Registries are the registry URLs to search for plugins.
+	Registries []string `yaml:"registries"`
+
+	// TrustedKeys are the trusted signing keys (name -> base64 public key).
+	TrustedKeys map[string]string `yaml:"trusted_keys"`
+
+	// AutoUpdate enables automatic updates for plugins.
+	AutoUpdate bool `yaml:"auto_update"`
+
+	// CheckInterval is how often to check for updates (e.g., "24h").
+	CheckInterval string `yaml:"check_interval"`
+
+	// SkipVerify skips signature verification (not recommended).
+	SkipVerify bool `yaml:"skip_verify"`
 }
 
 type OAuthConfig struct {
@@ -345,6 +371,45 @@ type CronWebhookConfig struct {
 	Timeout time.Duration     `yaml:"timeout"`
 }
 
+// TasksConfig configures the scheduled tasks system.
+type TasksConfig struct {
+	// Enabled enables the scheduled tasks scheduler.
+	Enabled bool `yaml:"enabled"`
+
+	// WorkerID uniquely identifies this scheduler instance for distributed locking.
+	// Defaults to a generated UUID if empty.
+	WorkerID string `yaml:"worker_id"`
+
+	// PollInterval is how often the scheduler checks for due tasks.
+	// Defaults to 10 seconds.
+	PollInterval time.Duration `yaml:"poll_interval"`
+
+	// AcquireInterval is how often the scheduler tries to acquire pending executions.
+	// Defaults to 1 second.
+	AcquireInterval time.Duration `yaml:"acquire_interval"`
+
+	// LockDuration is how long an execution lock is held.
+	// Should be longer than the maximum expected execution time.
+	// Defaults to 10 minutes.
+	LockDuration time.Duration `yaml:"lock_duration"`
+
+	// MaxConcurrency is the maximum number of concurrent task executions.
+	// Defaults to 5.
+	MaxConcurrency int `yaml:"max_concurrency"`
+
+	// CleanupInterval is how often stale executions are cleaned up.
+	// Defaults to 1 minute.
+	CleanupInterval time.Duration `yaml:"cleanup_interval"`
+
+	// StaleTimeout is how long an execution can run before being marked stale.
+	// Defaults to 30 minutes.
+	StaleTimeout time.Duration `yaml:"stale_timeout"`
+
+	// DefaultTimeout is the default timeout for task execution if not specified on the task.
+	// Defaults to 5 minutes.
+	DefaultTimeout time.Duration `yaml:"default_timeout"`
+}
+
 type BrowserConfig struct {
 	Enabled  bool   `yaml:"enabled"`
 	Headless bool   `yaml:"headless"`
@@ -379,6 +444,119 @@ type MemorySearchEmbeddingsConfig struct {
 type LoggingConfig struct {
 	Level  string `yaml:"level"`
 	Format string `yaml:"format"`
+}
+
+// RAGConfig configures the Retrieval-Augmented Generation pipeline.
+type RAGConfig struct {
+	// Enabled enables the RAG system.
+	Enabled bool `yaml:"enabled"`
+
+	// Store configures the document store backend.
+	Store RAGStoreConfig `yaml:"store"`
+
+	// Chunking configures document chunking.
+	Chunking RAGChunkingConfig `yaml:"chunking"`
+
+	// Embeddings configures the embedding provider.
+	Embeddings RAGEmbeddingsConfig `yaml:"embeddings"`
+
+	// Search configures default search behavior.
+	Search RAGSearchConfig `yaml:"search"`
+
+	// ContextInjection configures automatic context injection.
+	ContextInjection RAGContextInjectionConfig `yaml:"context_injection"`
+}
+
+// RAGStoreConfig configures the RAG document store.
+type RAGStoreConfig struct {
+	// Backend is the storage backend: "pgvector"
+	Backend string `yaml:"backend"`
+
+	// DSN is the PostgreSQL connection string (for pgvector).
+	// If empty and UseDatabaseURL is true, uses the main database.url.
+	DSN string `yaml:"dsn"`
+
+	// UseDatabaseURL uses the main database.url for pgvector storage.
+	UseDatabaseURL bool `yaml:"use_database_url"`
+
+	// Dimension is the embedding vector dimension.
+	// Default: 1536 (OpenAI text-embedding-3-small)
+	Dimension int `yaml:"dimension"`
+
+	// RunMigrations controls whether to run migrations on startup.
+	RunMigrations *bool `yaml:"run_migrations"`
+}
+
+// RAGChunkingConfig configures document chunking.
+type RAGChunkingConfig struct {
+	// ChunkSize is the target chunk size in characters.
+	// Default: 1000
+	ChunkSize int `yaml:"chunk_size"`
+
+	// ChunkOverlap is the overlap between chunks in characters.
+	// Default: 200
+	ChunkOverlap int `yaml:"chunk_overlap"`
+
+	// MinChunkSize is the minimum chunk size to keep.
+	// Default: 100
+	MinChunkSize int `yaml:"min_chunk_size"`
+}
+
+// RAGEmbeddingsConfig configures the embedding provider for RAG.
+type RAGEmbeddingsConfig struct {
+	// Provider is the embedding provider: "openai", "ollama"
+	Provider string `yaml:"provider"`
+
+	// APIKey is the API key for the provider.
+	APIKey string `yaml:"api_key"`
+
+	// BaseURL is the API base URL (optional).
+	BaseURL string `yaml:"base_url"`
+
+	// Model is the embedding model to use.
+	// Default: "text-embedding-3-small" for OpenAI
+	Model string `yaml:"model"`
+
+	// BatchSize is the maximum texts per embedding batch.
+	// Default: 100
+	BatchSize int `yaml:"batch_size"`
+}
+
+// RAGSearchConfig configures default search behavior.
+type RAGSearchConfig struct {
+	// DefaultLimit is the default number of results.
+	// Default: 5
+	DefaultLimit int `yaml:"default_limit"`
+
+	// DefaultThreshold is the default similarity threshold (0-1).
+	// Default: 0.7
+	DefaultThreshold float32 `yaml:"default_threshold"`
+
+	// MaxResults is the maximum results allowed.
+	// Default: 20
+	MaxResults int `yaml:"max_results"`
+}
+
+// RAGContextInjectionConfig configures automatic context injection.
+type RAGContextInjectionConfig struct {
+	// Enabled enables automatic RAG context injection.
+	Enabled bool `yaml:"enabled"`
+
+	// MaxChunks is the maximum chunks to inject.
+	// Default: 5
+	MaxChunks int `yaml:"max_chunks"`
+
+	// MaxTokens is the maximum tokens to inject.
+	// Default: 2000
+	MaxTokens int `yaml:"max_tokens"`
+
+	// MinScore is the minimum similarity score for inclusion.
+	// Default: 0.7
+	MinScore float32 `yaml:"min_score"`
+
+	// Scope limits retrieval: "global", "agent", "session", "channel"
+	// Default: "global"
+	Scope string `yaml:"scope"`
 }
 
 // TranscriptionConfig configures audio transcription.
@@ -446,6 +624,8 @@ func applyDefaults(cfg *Config) {
 	applyLLMDefaults(&cfg.LLM)
 	applyLoggingDefaults(&cfg.Logging)
 	applyTranscriptionDefaults(&cfg.Transcription)
+	applyMarketplaceDefaults(&cfg.Marketplace)
+	applyRAGDefaults(&cfg.RAG)
 }
 
 func applyServerDefaults(cfg *ServerConfig) {
@@ -635,6 +815,72 @@ func applyTranscriptionDefaults(cfg *TranscriptionConfig) {
 	}
 	if cfg.Model == "" {
 		cfg.Model = "whisper-1"
+	}
+}
+
+func applyMarketplaceDefaults(cfg *MarketplaceConfig) {
+	if len(cfg.Registries) == 0 {
+		cfg.Registries = []string{"https://plugins.nexus.dev"}
+	}
+	if cfg.CheckInterval == "" {
+		cfg.CheckInterval = "24h"
+	}
+}
+
+func applyRAGDefaults(cfg *RAGConfig) {
+	// Store defaults
+	if cfg.Store.Backend == "" {
+		cfg.Store.Backend = "pgvector"
+	}
+	if cfg.Store.Dimension == 0 {
+		cfg.Store.Dimension = 1536
+	}
+
+	// Chunking defaults
+	if cfg.Chunking.ChunkSize == 0 {
+		cfg.Chunking.ChunkSize = 1000
+	}
+	if cfg.Chunking.ChunkOverlap == 0 {
+		cfg.Chunking.ChunkOverlap = 200
+	}
+	if cfg.Chunking.MinChunkSize == 0 {
+		cfg.Chunking.MinChunkSize = 100
+	}
+
+	// Embeddings defaults
+	if cfg.Embeddings.Provider == "" {
+		cfg.Embeddings.Provider = "openai"
+	}
+	if cfg.Embeddings.Model == "" {
+		cfg.Embeddings.Model = "text-embedding-3-small"
+	}
+	if cfg.Embeddings.BatchSize == 0 {
+		cfg.Embeddings.BatchSize = 100
+	}
+
+	// Search defaults
+	if cfg.Search.DefaultLimit == 0 {
+		cfg.Search.DefaultLimit = 5
+	}
+	if cfg.Search.DefaultThreshold == 0 {
+		cfg.Search.DefaultThreshold = 0.7
+	}
+	if cfg.Search.MaxResults == 0 {
+		cfg.Search.MaxResults = 20
+	}
+
+	// Context injection defaults
+	if cfg.ContextInjection.MaxChunks == 0 {
+		cfg.ContextInjection.MaxChunks = 5
+	}
+	if cfg.ContextInjection.MaxTokens == 0 {
+		cfg.ContextInjection.MaxTokens = 2000
+	}
+	if cfg.ContextInjection.MinScore == 0 {
+		cfg.ContextInjection.MinScore = 0.7
+	}
+	if cfg.ContextInjection.Scope == "" {
+		cfg.ContextInjection.Scope = "global"
 	}
 }
 

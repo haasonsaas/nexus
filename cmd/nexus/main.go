@@ -51,6 +51,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/doctor"
 	"github.com/haasonsaas/nexus/internal/gateway"
+	"github.com/haasonsaas/nexus/internal/marketplace"
 	"github.com/haasonsaas/nexus/internal/mcp"
 	"github.com/haasonsaas/nexus/internal/memory"
 	"github.com/haasonsaas/nexus/internal/onboard"
@@ -61,6 +62,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/skills"
 	"github.com/haasonsaas/nexus/internal/workspace"
 	"github.com/haasonsaas/nexus/pkg/models"
+	"github.com/haasonsaas/nexus/pkg/pluginsdk"
 	"github.com/spf13/cobra"
 )
 
@@ -128,6 +130,7 @@ Documentation: https://github.com/haasonsaas/nexus`,
 		buildAuthCmd(),
 		buildProfileCmd(),
 		buildSkillsCmd(),
+		buildPluginsCmd(),
 		buildServiceCmd(),
 		buildMemoryCmd(),
 		buildMcpCmd(),
@@ -3045,5 +3048,581 @@ Views:
 	cmd.Flags().BoolVar(&showTime, "time", false, "Show timestamps for each event")
 	cmd.Flags().StringVar(&view, "view", "default", "Output view (default, context)")
 
+	return cmd
+}
+
+// buildPluginsCmd creates the "plugins" command group for marketplace operations.
+func buildPluginsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "plugins",
+		Short: "Manage marketplace plugins",
+		Long: `Manage plugins from the Nexus plugin marketplace.
+
+Commands for searching, installing, updating, and managing plugins.
+Plugins extend Nexus with additional channels, tools, and integrations.
+
+Plugin store: ~/.nexus/plugins/
+Default registry: https://plugins.nexus.dev`,
+	}
+	cmd.AddCommand(
+		buildPluginsSearchCmd(),
+		buildPluginsInstallCmd(),
+		buildPluginsListCmd(),
+		buildPluginsUpdateCmd(),
+		buildPluginsUninstallCmd(),
+		buildPluginsVerifyCmd(),
+		buildPluginsInfoCmd(),
+		buildPluginsEnableCmd(),
+		buildPluginsDisableCmd(),
+	)
+	return cmd
+}
+
+func createMarketplaceManager(cfg *config.Config) (*marketplace.Manager, error) {
+	managerCfg := &marketplace.ManagerConfig{
+		Registries:  cfg.Marketplace.Registries,
+		TrustedKeys: cfg.Marketplace.TrustedKeys,
+	}
+	return marketplace.NewManager(managerCfg)
+}
+
+func buildPluginsSearchCmd() *cobra.Command {
+	var (
+		configPath string
+		category   string
+		limit      int
+	)
+	cmd := &cobra.Command{
+		Use:   "search [query]",
+		Short: "Search for plugins in the marketplace",
+		Long: `Search for plugins in the configured registries.
+
+Examples:
+  nexus plugins search slack
+  nexus plugins search --category channels
+  nexus plugins search discord --limit 10`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
+			cfg, err := config.Load(configPath)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			mgr, err := createMarketplaceManager(cfg)
+			if err != nil {
+				return fmt.Errorf("failed to create marketplace manager: %w", err)
+			}
+
+			query := ""
+			if len(args) > 0 {
+				query = args[0]
+			}
+
+			opts := marketplace.DefaultSearchOptions()
+			opts.Category = category
+			if limit > 0 {
+				opts.Limit = limit
+			}
+
+			results, err := mgr.Search(cmd.Context(), query, opts)
+			if err != nil {
+				return fmt.Errorf("search failed: %w", err)
+			}
+
+			out := cmd.OutOrStdout()
+			if len(results) == 0 {
+				fmt.Fprintln(out, "No plugins found.")
+				return nil
+			}
+
+			fmt.Fprintf(out, "Found %d plugins:\n\n", len(results))
+			for _, result := range results {
+				plugin := result.Plugin
+				status := ""
+				if result.Installed {
+					if result.UpdateAvailable {
+						status = fmt.Sprintf(" [installed: %s, update available: %s]", result.InstalledVersion, plugin.Version)
+					} else {
+						status = fmt.Sprintf(" [installed: %s]", result.InstalledVersion)
+					}
+				}
+
+				fmt.Fprintf(out, "  %s (%s)%s\n", plugin.ID, plugin.Version, status)
+				if plugin.Description != "" {
+					desc := plugin.Description
+					if len(desc) > 70 {
+						desc = desc[:67] + "..."
+					}
+					fmt.Fprintf(out, "    %s\n", desc)
+				}
+				if len(plugin.Categories) > 0 {
+					fmt.Fprintf(out, "    Categories: %s\n", strings.Join(plugin.Categories, ", "))
+				}
+				fmt.Fprintln(out)
+			}
+
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	cmd.Flags().StringVar(&category, "category", "", "Filter by category (channels, tools, integrations)")
+	cmd.Flags().IntVar(&limit, "limit", 20, "Maximum number of results")
+	return cmd
+}
+
+func buildPluginsInstallCmd() *cobra.Command {
+	var (
+		configPath string
+		version    string
+		force      bool
+		skipVerify bool
+		autoUpdate bool
+	)
+	cmd := &cobra.Command{
+		Use:   "install [plugin-id]",
+		Short: "Install a plugin from the marketplace",
+		Long: `Install a plugin from the configured registries.
+
+Examples:
+  nexus plugins install nexus/slack-enhanced
+  nexus plugins install nexus/discord-voice --version 1.2.0
+  nexus plugins install my-plugin --auto-update`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
+			cfg, err := config.Load(configPath)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			mgr, err := createMarketplaceManager(cfg)
+			if err != nil {
+				return fmt.Errorf("failed to create marketplace manager: %w", err)
+			}
+
+			pluginID := args[0]
+			if err := marketplace.ValidatePluginID(pluginID); err != nil {
+				return err
+			}
+
+			opts := pluginsdk.InstallOptions{
+				Version:    version,
+				Force:      force,
+				SkipVerify: skipVerify || cfg.Marketplace.SkipVerify,
+				AutoUpdate: autoUpdate || cfg.Marketplace.AutoUpdate,
+			}
+
+			result, err := mgr.Install(cmd.Context(), pluginID, opts)
+			if err != nil {
+				return fmt.Errorf("installation failed: %w", err)
+			}
+
+			out := cmd.OutOrStdout()
+			if result.Updated {
+				fmt.Fprintf(out, "Updated plugin: %s (%s -> %s)\n", pluginID, result.PreviousVersion, result.Plugin.Version)
+			} else {
+				fmt.Fprintf(out, "Installed plugin: %s (%s)\n", pluginID, result.Plugin.Version)
+			}
+			fmt.Fprintf(out, "  Path: %s\n", result.Plugin.Path)
+			if result.Plugin.Verified {
+				fmt.Fprintln(out, "  Verified: yes")
+			}
+
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	cmd.Flags().StringVar(&version, "version", "", "Specific version to install")
+	cmd.Flags().BoolVar(&force, "force", false, "Force reinstall if already installed")
+	cmd.Flags().BoolVar(&skipVerify, "skip-verify", false, "Skip signature verification (not recommended)")
+	cmd.Flags().BoolVar(&autoUpdate, "auto-update", false, "Enable automatic updates")
+	return cmd
+}
+
+func buildPluginsListCmd() *cobra.Command {
+	var configPath string
+	var showAll bool
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List installed plugins",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
+			cfg, err := config.Load(configPath)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			mgr, err := createMarketplaceManager(cfg)
+			if err != nil {
+				return fmt.Errorf("failed to create marketplace manager: %w", err)
+			}
+
+			plugins := mgr.List()
+			out := cmd.OutOrStdout()
+
+			if len(plugins) == 0 {
+				fmt.Fprintln(out, "No plugins installed.")
+				fmt.Fprintln(out, "\nUse 'nexus plugins search' to find plugins.")
+				return nil
+			}
+
+			fmt.Fprintf(out, "Installed plugins (%d):\n\n", len(plugins))
+			for _, plugin := range plugins {
+				status := "enabled"
+				if !plugin.Enabled {
+					status = "disabled"
+				}
+
+				autoUpdate := ""
+				if plugin.AutoUpdate {
+					autoUpdate = ", auto-update"
+				}
+
+				verified := ""
+				if plugin.Verified {
+					verified = ", verified"
+				}
+
+				fmt.Fprintf(out, "  %s (%s) [%s%s%s]\n", plugin.ID, plugin.Version, status, autoUpdate, verified)
+				if showAll {
+					fmt.Fprintf(out, "    Path: %s\n", plugin.Path)
+					fmt.Fprintf(out, "    Installed: %s\n", plugin.InstalledAt.Format(time.RFC3339))
+					if plugin.Manifest != nil && plugin.Manifest.Description != "" {
+						fmt.Fprintf(out, "    %s\n", plugin.Manifest.Description)
+					}
+				}
+			}
+
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	cmd.Flags().BoolVarP(&showAll, "all", "a", false, "Show detailed information")
+	return cmd
+}
+
+func buildPluginsUpdateCmd() *cobra.Command {
+	var (
+		configPath string
+		all        bool
+		force      bool
+		skipVerify bool
+	)
+	cmd := &cobra.Command{
+		Use:   "update [plugin-id]",
+		Short: "Update a plugin or all plugins",
+		Long: `Update an installed plugin to the latest version.
+
+Examples:
+  nexus plugins update nexus/slack-enhanced
+  nexus plugins update --all`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
+			cfg, err := config.Load(configPath)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			mgr, err := createMarketplaceManager(cfg)
+			if err != nil {
+				return fmt.Errorf("failed to create marketplace manager: %w", err)
+			}
+
+			out := cmd.OutOrStdout()
+
+			if all || len(args) == 0 {
+				// Check for updates first
+				updates, err := mgr.CheckUpdates(cmd.Context())
+				if err != nil {
+					return fmt.Errorf("failed to check updates: %w", err)
+				}
+
+				if len(updates) == 0 {
+					fmt.Fprintln(out, "All plugins are up to date.")
+					return nil
+				}
+
+				fmt.Fprintf(out, "Updates available for %d plugins:\n", len(updates))
+				for id, newVersion := range updates {
+					installed, _ := mgr.Get(id)
+					fmt.Fprintf(out, "  %s: %s -> %s\n", id, installed.Version, newVersion)
+				}
+				fmt.Fprintln(out)
+
+				results, err := mgr.UpdateAll(cmd.Context())
+				if err != nil {
+					return fmt.Errorf("update failed: %w", err)
+				}
+
+				if len(results) == 0 {
+					fmt.Fprintln(out, "No plugins were updated.")
+				} else {
+					fmt.Fprintf(out, "Updated %d plugins.\n", len(results))
+				}
+				return nil
+			}
+
+			// Update specific plugin
+			pluginID := args[0]
+			opts := pluginsdk.UpdateOptions{
+				Force:      force,
+				SkipVerify: skipVerify || cfg.Marketplace.SkipVerify,
+			}
+
+			result, err := mgr.Update(cmd.Context(), pluginID, opts)
+			if err != nil {
+				return fmt.Errorf("update failed: %w", err)
+			}
+
+			fmt.Fprintf(out, "Updated plugin: %s (%s -> %s)\n", pluginID, result.PreviousVersion, result.Plugin.Version)
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	cmd.Flags().BoolVar(&all, "all", false, "Update all plugins with updates available")
+	cmd.Flags().BoolVar(&force, "force", false, "Force update even if already at latest version")
+	cmd.Flags().BoolVar(&skipVerify, "skip-verify", false, "Skip signature verification")
+	return cmd
+}
+
+func buildPluginsUninstallCmd() *cobra.Command {
+	var configPath string
+	cmd := &cobra.Command{
+		Use:   "uninstall [plugin-id]",
+		Short: "Uninstall a plugin",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
+			cfg, err := config.Load(configPath)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			mgr, err := createMarketplaceManager(cfg)
+			if err != nil {
+				return fmt.Errorf("failed to create marketplace manager: %w", err)
+			}
+
+			pluginID := args[0]
+			if err := mgr.Uninstall(cmd.Context(), pluginID); err != nil {
+				return fmt.Errorf("uninstall failed: %w", err)
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Uninstalled plugin: %s\n", pluginID)
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	return cmd
+}
+
+func buildPluginsVerifyCmd() *cobra.Command {
+	var configPath string
+	cmd := &cobra.Command{
+		Use:   "verify [plugin-id]",
+		Short: "Verify an installed plugin's integrity",
+		Long: `Verify an installed plugin's checksum and signature.
+
+This checks that the plugin binary hasn't been modified since installation.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
+			cfg, err := config.Load(configPath)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			mgr, err := createMarketplaceManager(cfg)
+			if err != nil {
+				return fmt.Errorf("failed to create marketplace manager: %w", err)
+			}
+
+			pluginID := args[0]
+			result, err := mgr.Verify(cmd.Context(), pluginID)
+			if err != nil {
+				return fmt.Errorf("verification failed: %w", err)
+			}
+
+			out := cmd.OutOrStdout()
+			if result.Valid {
+				fmt.Fprintf(out, "Plugin '%s' verification PASSED\n", pluginID)
+				fmt.Fprintf(out, "  Checksum: %s\n", result.ComputedChecksum)
+				if result.SignedBy != "" {
+					fmt.Fprintf(out, "  Signed by: %s\n", result.SignedBy)
+				}
+			} else {
+				fmt.Fprintf(out, "Plugin '%s' verification FAILED\n", pluginID)
+				if result.Error != nil {
+					fmt.Fprintf(out, "  Error: %s\n", result.Error)
+				}
+				return fmt.Errorf("verification failed")
+			}
+
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	return cmd
+}
+
+func buildPluginsInfoCmd() *cobra.Command {
+	var configPath string
+	cmd := &cobra.Command{
+		Use:   "info [plugin-id]",
+		Short: "Show detailed plugin information",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
+			cfg, err := config.Load(configPath)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			mgr, err := createMarketplaceManager(cfg)
+			if err != nil {
+				return fmt.Errorf("failed to create marketplace manager: %w", err)
+			}
+
+			out := cmd.OutOrStdout()
+
+			// If no plugin ID, show marketplace info
+			if len(args) == 0 {
+				info := mgr.Info()
+				fmt.Fprintln(out, "Marketplace Information")
+				fmt.Fprintln(out, "=======================")
+				fmt.Fprintf(out, "Store Path:      %s\n", info.StorePath)
+				fmt.Fprintf(out, "Platform:        %s\n", info.Platform)
+				fmt.Fprintf(out, "Installed:       %d plugins\n", info.InstalledCount)
+				fmt.Fprintf(out, "Enabled:         %d plugins\n", info.EnabledCount)
+				fmt.Fprintf(out, "Auto-update:     %d plugins\n", info.AutoUpdateCount)
+				fmt.Fprintf(out, "Trusted Keys:    %v\n", info.HasTrustedKeys)
+				fmt.Fprintln(out, "\nRegistries:")
+				for _, reg := range info.Registries {
+					fmt.Fprintf(out, "  - %s\n", reg)
+				}
+				return nil
+			}
+
+			// Show specific plugin info
+			pluginID := args[0]
+			result, err := mgr.PluginInfo(cmd.Context(), pluginID)
+			if err != nil {
+				return fmt.Errorf("failed to get plugin info: %w", err)
+			}
+
+			fmt.Fprintf(out, "Plugin: %s\n", pluginID)
+			fmt.Fprintln(out, strings.Repeat("=", len(pluginID)+8))
+			fmt.Fprintln(out)
+
+			if result.Manifest != nil {
+				m := result.Manifest
+				fmt.Fprintf(out, "Name:        %s\n", m.Name)
+				fmt.Fprintf(out, "Version:     %s\n", m.Version)
+				if m.Description != "" {
+					fmt.Fprintf(out, "Description: %s\n", m.Description)
+				}
+				if m.Author != "" {
+					fmt.Fprintf(out, "Author:      %s\n", m.Author)
+				}
+				if m.License != "" {
+					fmt.Fprintf(out, "License:     %s\n", m.License)
+				}
+				if m.Homepage != "" {
+					fmt.Fprintf(out, "Homepage:    %s\n", m.Homepage)
+				}
+				if len(m.Categories) > 0 {
+					fmt.Fprintf(out, "Categories:  %s\n", strings.Join(m.Categories, ", "))
+				}
+				if len(m.Keywords) > 0 {
+					fmt.Fprintf(out, "Keywords:    %s\n", strings.Join(m.Keywords, ", "))
+				}
+				fmt.Fprintf(out, "Compatible:  %v\n", result.Compatible)
+				fmt.Fprintln(out)
+			}
+
+			if result.Installed != nil {
+				i := result.Installed
+				fmt.Fprintln(out, "Installation:")
+				fmt.Fprintf(out, "  Version:     %s\n", i.Version)
+				fmt.Fprintf(out, "  Path:        %s\n", i.Path)
+				fmt.Fprintf(out, "  Enabled:     %v\n", i.Enabled)
+				fmt.Fprintf(out, "  Auto-update: %v\n", i.AutoUpdate)
+				fmt.Fprintf(out, "  Verified:    %v\n", i.Verified)
+				fmt.Fprintf(out, "  Installed:   %s\n", i.InstalledAt.Format(time.RFC3339))
+				if result.UpdateAvailable {
+					fmt.Fprintf(out, "\n  UPDATE AVAILABLE: %s\n", result.Manifest.Version)
+				}
+			} else {
+				fmt.Fprintln(out, "Status: Not installed")
+			}
+
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	return cmd
+}
+
+func buildPluginsEnableCmd() *cobra.Command {
+	var configPath string
+	cmd := &cobra.Command{
+		Use:   "enable [plugin-id]",
+		Short: "Enable a plugin",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
+			cfg, err := config.Load(configPath)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			mgr, err := createMarketplaceManager(cfg)
+			if err != nil {
+				return fmt.Errorf("failed to create marketplace manager: %w", err)
+			}
+
+			pluginID := args[0]
+			if err := mgr.Enable(pluginID); err != nil {
+				return fmt.Errorf("failed to enable plugin: %w", err)
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Enabled plugin: %s\n", pluginID)
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	return cmd
+}
+
+func buildPluginsDisableCmd() *cobra.Command {
+	var configPath string
+	cmd := &cobra.Command{
+		Use:   "disable [plugin-id]",
+		Short: "Disable a plugin",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
+			cfg, err := config.Load(configPath)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			mgr, err := createMarketplaceManager(cfg)
+			if err != nil {
+				return fmt.Errorf("failed to create marketplace manager: %w", err)
+			}
+
+			pluginID := args[0]
+			if err := mgr.Disable(pluginID); err != nil {
+				return fmt.Errorf("failed to disable plugin: %w", err)
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Disabled plugin: %s\n", pluginID)
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
 	return cmd
 }

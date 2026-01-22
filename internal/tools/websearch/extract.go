@@ -14,8 +14,8 @@ import (
 
 // ContentExtractor extracts readable content from web pages.
 type ContentExtractor struct {
-	httpClient     *http.Client
-	skipSSRFCheck  bool // For testing only - allows localhost URLs
+	httpClient    *http.Client
+	skipSSRFCheck bool // For testing only - allows localhost URLs
 }
 
 // NewContentExtractor creates a new content extractor.

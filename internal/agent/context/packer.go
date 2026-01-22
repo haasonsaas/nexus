@@ -81,15 +81,16 @@ func (p *Packer) Pack(history []*models.Message, incoming *models.Message, summa
 	totalChars := 0
 	totalMsgs := 0
 
-	// Reserve space for incoming message
-	incomingChars := p.messageChars(incoming)
-	totalChars += incomingChars
-	totalMsgs++
+	// Reserve space for incoming message (only if present)
+	if incoming != nil {
+		incomingChars := p.messageChars(incoming)
+		totalChars += incomingChars
+		totalMsgs++
+	}
 
 	// Reserve space for summary if present and enabled
-	var summaryChars int
 	if p.opts.IncludeSummary && summary != nil {
-		summaryChars = p.messageChars(summary)
+		summaryChars := p.messageChars(summary)
 		totalChars += summaryChars
 		totalMsgs++
 	}
@@ -107,7 +108,8 @@ func (p *Packer) Pack(history []*models.Message, incoming *models.Message, summa
 	}
 
 	// Select messages from the end (most recent) backwards
-	selected := make([]*models.Message, 0)
+	// Build in reverse order, then reverse once (O(n) instead of O(n²))
+	selectedReverse := make([]*models.Message, 0)
 	for i := len(filtered) - 1; i >= 0; i-- {
 		m := filtered[i]
 		msgChars := p.messageChars(m)
@@ -120,10 +122,15 @@ func (p *Packer) Pack(history []*models.Message, incoming *models.Message, summa
 			break
 		}
 
-		// Prepend to maintain chronological order
-		selected = append([]*models.Message{m}, selected...)
+		selectedReverse = append(selectedReverse, m)
 		totalMsgs++
 		totalChars += msgChars
+	}
+
+	// Reverse selectedReverse to get chronological order
+	selected := make([]*models.Message, len(selectedReverse))
+	for i, m := range selectedReverse {
+		selected[len(selectedReverse)-1-i] = m
 	}
 
 	// Build final result in order
@@ -132,7 +139,7 @@ func (p *Packer) Pack(history []*models.Message, incoming *models.Message, summa
 		result = append(result, summary)
 	}
 
-	// 2. Selected history messages (already in chronological order)
+	// 2. Selected history messages (now in chronological order)
 	for _, m := range selected {
 		// Truncate tool results if needed
 		packed := p.truncateToolResults(m)

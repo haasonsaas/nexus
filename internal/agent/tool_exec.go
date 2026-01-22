@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -148,12 +149,18 @@ func (e *ToolExecutor) executeWithTimeout(ctx context.Context, call models.ToolC
 
 	select {
 	case <-ctx.Done():
-		// Timeout or cancellation
+		// Distinguish between timeout and cancellation
+		var content string
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			content = fmt.Sprintf("tool execution timed out after %v", e.config.PerToolTimeout)
+		} else {
+			content = "tool execution canceled"
+		}
 		return models.ToolResult{
 			ToolCallID: call.ID,
-			Content:    fmt.Sprintf("tool execution timed out after %v", e.config.PerToolTimeout),
+			Content:    content,
 			IsError:    true,
-		}, true
+		}, errors.Is(ctx.Err(), context.DeadlineExceeded)
 	case res := <-resultChan:
 		if res.err != nil {
 			return models.ToolResult{

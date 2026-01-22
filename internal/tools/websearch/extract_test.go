@@ -41,7 +41,7 @@ func TestContentExtractor_Extract_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	extractor := NewContentExtractor()
+	extractor := NewContentExtractorForTesting()
 	content, err := extractor.Extract(context.Background(), server.URL)
 
 	if err != nil {
@@ -85,7 +85,7 @@ func TestContentExtractor_Extract_NonHTML(t *testing.T) {
 	}))
 	defer server.Close()
 
-	extractor := NewContentExtractor()
+	extractor := NewContentExtractorForTesting()
 	_, err := extractor.Extract(context.Background(), server.URL)
 
 	if err == nil {
@@ -103,7 +103,7 @@ func TestContentExtractor_Extract_HTTPError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	extractor := NewContentExtractor()
+	extractor := NewContentExtractorForTesting()
 	_, err := extractor.Extract(context.Background(), server.URL)
 
 	if err == nil {
@@ -116,7 +116,7 @@ func TestContentExtractor_Extract_HTTPError(t *testing.T) {
 }
 
 func TestContentExtractor_Extract_InvalidURL(t *testing.T) {
-	extractor := NewContentExtractor()
+	extractor := NewContentExtractorForTesting()
 	_, err := extractor.Extract(context.Background(), "not-a-valid-url")
 
 	if err == nil {
@@ -131,7 +131,7 @@ func TestContentExtractor_Extract_Timeout(t *testing.T) {
 	}))
 	defer server.Close()
 
-	extractor := NewContentExtractor()
+	extractor := NewContentExtractorForTesting()
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
@@ -170,7 +170,7 @@ func TestContentExtractor_ExtractTitle(t *testing.T) {
 		},
 	}
 
-	extractor := NewContentExtractor()
+	extractor := NewContentExtractorForTesting()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -205,7 +205,7 @@ func TestContentExtractor_ExtractMetaDescription(t *testing.T) {
 		},
 	}
 
-	extractor := NewContentExtractor()
+	extractor := NewContentExtractorForTesting()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -250,7 +250,7 @@ func TestContentExtractor_ExtractMainContent(t *testing.T) {
 		},
 	}
 
-	extractor := NewContentExtractor()
+	extractor := NewContentExtractorForTesting()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -299,7 +299,7 @@ func TestContentExtractor_RemoveTag(t *testing.T) {
 		},
 	}
 
-	extractor := NewContentExtractor()
+	extractor := NewContentExtractorForTesting()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -338,7 +338,7 @@ func TestContentExtractor_ExtractText(t *testing.T) {
 		},
 	}
 
-	extractor := NewContentExtractor()
+	extractor := NewContentExtractorForTesting()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -387,7 +387,7 @@ func TestContentExtractor_CleanText(t *testing.T) {
 		},
 	}
 
-	extractor := NewContentExtractor()
+	extractor := NewContentExtractorForTesting()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -418,7 +418,7 @@ func TestContentExtractor_ExtractBatch(t *testing.T) {
 	}))
 	defer server3.Close()
 
-	extractor := NewContentExtractor()
+	extractor := NewContentExtractorForTesting()
 	urls := []string{server1.URL, server2.URL, server3.URL}
 
 	results := extractor.ExtractBatch(context.Background(), urls)
@@ -461,7 +461,7 @@ func TestContentExtractor_LengthLimit(t *testing.T) {
 	}))
 	defer server.Close()
 
-	extractor := NewContentExtractor()
+	extractor := NewContentExtractorForTesting()
 	content, err := extractor.Extract(context.Background(), server.URL)
 
 	if err != nil {
@@ -551,7 +551,7 @@ func TestContentExtractor_RealWorldHTML(t *testing.T) {
 	}))
 	defer server.Close()
 
-	extractor := NewContentExtractor()
+	extractor := NewContentExtractorForTesting()
 	content, err := extractor.Extract(context.Background(), server.URL)
 
 	if err != nil {

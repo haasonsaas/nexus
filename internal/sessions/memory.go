@@ -10,6 +10,10 @@ import (
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
+// maxMessagesPerSession limits messages stored per session to prevent unbounded memory growth.
+// When exceeded, old messages are trimmed to maintain the limit.
+const maxMessagesPerSession = 1000
+
 // MemoryStore provides an in-memory Store implementation for testing and local runs.
 type MemoryStore struct {
 	mu       sync.RWMutex
@@ -188,6 +192,13 @@ func (m *MemoryStore) AppendMessage(ctx context.Context, sessionID string, msg *
 		clone.CreatedAt = time.Now()
 	}
 	m.messages[sessionID] = append(m.messages[sessionID], clone)
+
+	// Trim old messages if limit is exceeded to prevent unbounded memory growth
+	if len(m.messages[sessionID]) > maxMessagesPerSession {
+		// Keep the most recent messages
+		excess := len(m.messages[sessionID]) - maxMessagesPerSession
+		m.messages[sessionID] = m.messages[sessionID][excess:]
+	}
 	return nil
 }
 

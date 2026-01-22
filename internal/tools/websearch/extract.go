@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -12,7 +14,8 @@ import (
 
 // ContentExtractor extracts readable content from web pages.
 type ContentExtractor struct {
-	httpClient *http.Client
+	httpClient     *http.Client
+	skipSSRFCheck  bool // For testing only - allows localhost URLs
 }
 
 // NewContentExtractor creates a new content extractor.
@@ -21,13 +24,106 @@ func NewContentExtractor() *ContentExtractor {
 		httpClient: &http.Client{
 			Timeout: 15 * time.Second,
 		},
+		skipSSRFCheck: false,
 	}
 }
 
+// NewContentExtractorForTesting creates a content extractor that allows localhost URLs.
+// This should only be used in tests.
+func NewContentExtractorForTesting() *ContentExtractor {
+	return &ContentExtractor{
+		httpClient: &http.Client{
+			Timeout: 15 * time.Second,
+		},
+		skipSSRFCheck: true,
+	}
+}
+
+// isPrivateOrReservedIP checks if an IP address is private, loopback, or reserved.
+func isPrivateOrReservedIP(ip net.IP) bool {
+	if ip == nil {
+		return false
+	}
+	// Check for loopback (127.x.x.x, ::1)
+	if ip.IsLoopback() {
+		return true
+	}
+	// Check for link-local (169.254.x.x, fe80::/10)
+	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		return true
+	}
+	// Check for private ranges (10.x.x.x, 172.16-31.x.x, 192.168.x.x, fc00::/7)
+	if ip.IsPrivate() {
+		return true
+	}
+	// Check for unspecified (0.0.0.0, ::)
+	if ip.IsUnspecified() {
+		return true
+	}
+	// Check for multicast
+	if ip.IsMulticast() {
+		return true
+	}
+	// Check for cloud metadata endpoint (169.254.169.254)
+	metadataIP := net.ParseIP("169.254.169.254")
+	if ip.Equal(metadataIP) {
+		return true
+	}
+	return false
+}
+
+// validateURLForSSRF validates a URL to prevent SSRF attacks.
+func validateURLForSSRF(rawURL string) error {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL: %w", err)
+	}
+
+	// Only allow http and https schemes
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("URL scheme must be http or https, got: %s", parsed.Scheme)
+	}
+
+	// Extract hostname (without port)
+	hostname := parsed.Hostname()
+	if hostname == "" {
+		return fmt.Errorf("URL must have a hostname")
+	}
+
+	// Block localhost variants
+	lowerHost := strings.ToLower(hostname)
+	if lowerHost == "localhost" || strings.HasSuffix(lowerHost, ".localhost") {
+		return fmt.Errorf("localhost URLs are not allowed")
+	}
+
+	// Resolve hostname to IP addresses
+	ips, err := net.LookupIP(hostname)
+	if err != nil {
+		// If we can't resolve, allow the request (DNS may be handled by proxy)
+		return nil
+	}
+
+	// Check all resolved IPs
+	for _, ip := range ips {
+		if isPrivateOrReservedIP(ip) {
+			return fmt.Errorf("URL resolves to private/reserved IP address")
+		}
+	}
+
+	return nil
+}
+
 // Extract fetches and extracts readable content from a URL.
-func (e *ContentExtractor) Extract(ctx context.Context, url string) (string, error) {
+func (e *ContentExtractor) Extract(ctx context.Context, targetURL string) (string, error) {
+	// Validate URL to prevent SSRF attacks (skip in test mode)
+	if !e.skipSSRFCheck {
+		if err := validateURLForSSRF(targetURL); err != nil {
+			return "", fmt.Errorf("URL validation failed: %w", err)
+		}
+	}
+
 	// Fetch the page
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", targetURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
@@ -251,7 +347,10 @@ func (e *ContentExtractor) cleanText(text string) string {
 	return text
 }
 
-// ExtractBatch extracts content from multiple URLs concurrently.
+// maxBatchConcurrency limits concurrent extractions in ExtractBatch.
+const maxBatchConcurrency = 5
+
+// ExtractBatch extracts content from multiple URLs concurrently with a concurrency limit.
 func (e *ContentExtractor) ExtractBatch(ctx context.Context, urls []string) map[string]string {
 	results := make(map[string]string)
 	resultsChan := make(chan struct {
@@ -259,22 +358,27 @@ func (e *ContentExtractor) ExtractBatch(ctx context.Context, urls []string) map[
 		content string
 	}, len(urls))
 
-	// Extract concurrently
-	for _, url := range urls {
-		go func(u string) {
-			content, err := e.Extract(ctx, u)
+	// Use semaphore to limit concurrency
+	sem := make(chan struct{}, maxBatchConcurrency)
+
+	// Extract concurrently with limit
+	for _, u := range urls {
+		sem <- struct{}{} // Acquire semaphore slot
+		go func(targetURL string) {
+			defer func() { <-sem }() // Release semaphore slot
+			content, err := e.Extract(ctx, targetURL)
 			if err == nil {
 				resultsChan <- struct {
 					url     string
 					content string
-				}{u, content}
+				}{targetURL, content}
 			} else {
 				resultsChan <- struct {
 					url     string
 					content string
-				}{u, ""}
+				}{targetURL, ""}
 			}
-		}(url)
+		}(u)
 	}
 
 	// Collect results

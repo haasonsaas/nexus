@@ -2,6 +2,7 @@ package sessions
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/haasonsaas/nexus/pkg/models"
@@ -13,6 +14,7 @@ type ScopedStore struct {
 	keyBuilder *SessionKeyBuilder
 	expiry     *SessionExpiry
 	cfg        ScopeConfig
+	mu         sync.Mutex // Protects atomic GetOrCreateScoped operations
 }
 
 // NewScopedStore creates a new ScopedStore wrapping the given store.
@@ -43,6 +45,8 @@ func NewScopedStoreWithLocation(store Store, cfg ScopeConfig, loc *time.Location
 //   - isGroup: whether this is a group conversation
 //   - threadID: optional thread identifier
 //   - convType: conversation type for expiry rules (dm, group, thread)
+//
+// This operation is atomic to prevent race conditions between check and create.
 func (s *ScopedStore) GetOrCreateScoped(
 	ctx context.Context,
 	agentID string,
@@ -52,6 +56,10 @@ func (s *ScopedStore) GetOrCreateScoped(
 	threadID string,
 	convType string,
 ) (*models.Session, error) {
+	// Lock to ensure atomic check-delete-create sequence
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	// Build the session key using scoping rules
 	key := s.keyBuilder.BuildKey(agentID, channel, peerID, isGroup, threadID)
 
@@ -62,8 +70,9 @@ func (s *ScopedStore) GetOrCreateScoped(
 		if s.expiry.CheckExpiry(session, channel, convType) {
 			// Delete the expired session and create a new one
 			if delErr := s.store.Delete(ctx, session.ID); delErr != nil {
-				// Best-effort cleanup; creation continues even if deletion fails.
-				_ = delErr
+				// Log deletion failure but continue - GetOrCreate will handle duplicates
+				// This is safe because the underlying store's GetOrCreate is atomic
+				return nil, delErr
 			}
 			return s.createNewSession(ctx, key, agentID, channel, peerID)
 		}

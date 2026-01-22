@@ -14,6 +14,10 @@ import (
 	"time"
 )
 
+// maxPendingRequests limits the number of concurrent pending requests
+// to prevent memory exhaustion from unresponsive servers.
+const maxPendingRequests = 1000
+
 // StdioTransport implements the MCP stdio transport.
 type StdioTransport struct {
 	config *ServerConfig
@@ -159,9 +163,13 @@ func (t *StdioTransport) Call(ctx context.Context, method string, params any) (j
 		req.Params = paramsJSON
 	}
 
-	// Create response channel
+	// Create response channel with pending limit check
 	respChan := make(chan *JSONRPCResponse, 1)
 	t.pendingMu.Lock()
+	if len(t.pending) >= maxPendingRequests {
+		t.pendingMu.Unlock()
+		return nil, fmt.Errorf("too many pending requests (limit: %d)", maxPendingRequests)
+	}
 	t.pending[id] = respChan
 	t.pendingMu.Unlock()
 

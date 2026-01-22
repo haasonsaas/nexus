@@ -56,6 +56,11 @@ func (t *HTTPTransport) Connect(ctx context.Context) error {
 		return fmt.Errorf("URL is required for HTTP transport")
 	}
 
+	// Validate configuration before connecting
+	if err := t.config.Validate(); err != nil {
+		return fmt.Errorf("invalid config: %w", err)
+	}
+
 	// Test connection with a simple request
 	// We don't call initialize here - that's done by the client
 	t.connected.Store(true)
@@ -122,11 +127,12 @@ func (t *HTTPTransport) Call(ctx context.Context, method string, params any) (js
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, readErr := io.ReadAll(resp.Body)
+		// Limit error body read to prevent memory exhaustion
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		if readErr != nil {
-			return nil, fmt.Errorf("HTTP %d with unreadable body: %w", resp.StatusCode, readErr)
+			return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
 		}
-		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	var rpcResp JSONRPCResponse

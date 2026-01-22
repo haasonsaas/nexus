@@ -2,6 +2,7 @@ package artifacts
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -12,9 +13,10 @@ import (
 
 // LocalStore stores artifacts on the local filesystem.
 type LocalStore struct {
-	mu       sync.RWMutex
-	basePath string
-	index    map[string]string // artifactID -> relative path
+	mu        sync.RWMutex
+	basePath  string
+	indexPath string
+	index     map[string]string // artifactID -> relative path
 }
 
 // NewLocalStore creates a local disk store.
@@ -22,10 +24,15 @@ func NewLocalStore(basePath string) (*LocalStore, error) {
 	if err := os.MkdirAll(basePath, 0755); err != nil {
 		return nil, fmt.Errorf("create artifact directory: %w", err)
 	}
-	return &LocalStore{
-		basePath: basePath,
-		index:    make(map[string]string),
-	}, nil
+	store := &LocalStore{
+		basePath:  basePath,
+		indexPath: filepath.Join(basePath, "index.json"),
+		index:     make(map[string]string),
+	}
+	if err := store.loadIndex(); err != nil {
+		return nil, err
+	}
+	return store, nil
 }
 
 // Put stores artifact data on disk.
@@ -79,7 +86,12 @@ func (s *LocalStore) Put(ctx context.Context, artifactID string, data io.Reader,
 
 	s.mu.Lock()
 	s.index[artifactID] = relPath
+	err = s.persistIndexLocked()
 	s.mu.Unlock()
+	if err != nil {
+		_ = os.Remove(filePath)
+		return "", fmt.Errorf("persist artifact index: %w", err)
+	}
 
 	// Reference format: file:///path/to/artifact
 	reference := fmt.Sprintf("file://%s", filePath)
@@ -106,19 +118,27 @@ func (s *LocalStore) Get(ctx context.Context, artifactID string) (io.ReadCloser,
 
 // Delete removes an artifact from disk.
 func (s *LocalStore) Delete(ctx context.Context, artifactID string) error {
-	s.mu.Lock()
+	s.mu.RLock()
 	relPath, ok := s.index[artifactID]
-	if ok {
-		delete(s.index, artifactID)
-	}
-	s.mu.Unlock()
+	s.mu.RUnlock()
 
 	if !ok {
 		return nil // Already deleted
 	}
 
 	filePath := filepath.Join(s.basePath, relPath)
-	return os.Remove(filePath)
+	if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	s.mu.Lock()
+	delete(s.index, artifactID)
+	err := s.persistIndexLocked()
+	s.mu.Unlock()
+	if err != nil {
+		return fmt.Errorf("persist artifact index: %w", err)
+	}
+	return nil
 }
 
 // Exists checks if an artifact exists.
@@ -142,6 +162,39 @@ func (s *LocalStore) Exists(ctx context.Context, artifactID string) (bool, error
 // Close releases resources.
 func (s *LocalStore) Close() error {
 	return nil
+}
+
+func (s *LocalStore) loadIndex() error {
+	data, err := os.ReadFile(s.indexPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read artifact index: %w", err)
+	}
+	if len(data) == 0 {
+		return nil
+	}
+	var stored map[string]string
+	if err := json.Unmarshal(data, &stored); err != nil {
+		return fmt.Errorf("parse artifact index: %w", err)
+	}
+	if stored != nil {
+		s.index = stored
+	}
+	return nil
+}
+
+func (s *LocalStore) persistIndexLocked() error {
+	data, err := json.MarshalIndent(s.index, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmpPath := s.indexPath + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, s.indexPath)
 }
 
 // extensionForMime returns a file extension for a MIME type.

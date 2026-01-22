@@ -147,7 +147,7 @@ func (p *ChannelProvisioner) updateChannelEnabled(channelType models.ChannelType
 		return fmt.Errorf("marshal config: %w", err)
 	}
 
-	if err := os.WriteFile(p.configPath, output, 0644); err != nil {
+	if err := writeFilePreserveMode(p.configPath, output); err != nil {
 		return fmt.Errorf("write config: %w", err)
 	}
 
@@ -156,6 +156,18 @@ func (p *ChannelProvisioner) updateChannelEnabled(channelType models.ChannelType
 		"enabled", enabled)
 
 	return nil
+}
+
+func writeFilePreserveMode(path string, data []byte) error {
+	mode := os.FileMode(0o644)
+	if info, err := os.Stat(path); err == nil {
+		mode = info.Mode().Perm()
+	}
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, data, mode); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
 }
 
 // setYAMLValue sets a value at the given path in a YAML node.

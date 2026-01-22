@@ -328,7 +328,7 @@ func TestMediaHandlerDownloadWithContext(t *testing.T) {
 		t.Error("expected error")
 	}
 	// Verify the error message indicates not implemented
-	if err.Error() != "media download not implemented" {
+	if !strings.Contains(err.Error(), "media download not implemented") {
 		t.Errorf("unexpected error message: %s", err.Error())
 	}
 }

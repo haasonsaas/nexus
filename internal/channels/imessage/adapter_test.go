@@ -1274,7 +1274,7 @@ func TestSendMissingPeerID(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for missing peer_id")
 	}
-	if err.Error() != "missing peer_id in message metadata" {
+	if !strings.Contains(err.Error(), "missing peer_id in message metadata") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }

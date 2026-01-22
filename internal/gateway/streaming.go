@@ -371,9 +371,9 @@ func (r *StreamingRegistry) GetBehavior(channel models.ChannelType) StreamingBeh
 	}
 	// Default fallback
 	return StreamingBehavior{
-		Mode:             StreamingDisabled,
-		UpdateInterval:   time.Second,
-		TypingInterval:   4 * time.Second,
+		Mode:              StreamingDisabled,
+		UpdateInterval:    time.Second,
+		TypingInterval:    4 * time.Second,
 		SplitLongMessages: false,
 	}
 }

@@ -19,6 +19,7 @@ import (
 // Config is the main configuration structure for Nexus.
 type Config struct {
 	Server        ServerConfig              `yaml:"server"`
+	Gateway       GatewayConfig             `yaml:"gateway"`
 	Database      DatabaseConfig            `yaml:"database"`
 	Auth          AuthConfig                `yaml:"auth"`
 	Session       SessionConfig             `yaml:"session"`
@@ -39,6 +40,22 @@ type Config struct {
 	Tasks         TasksConfig               `yaml:"tasks"`
 	Logging       LoggingConfig             `yaml:"logging"`
 	Transcription TranscriptionConfig       `yaml:"transcription"`
+}
+
+// GatewayConfig configures gateway-level message routing and processing.
+type GatewayConfig struct {
+	Broadcast BroadcastConfig `yaml:"broadcast"`
+}
+
+// BroadcastConfig configures broadcast groups for message routing.
+type BroadcastConfig struct {
+	// Strategy defines how messages are processed: "parallel" or "sequential".
+	Strategy string `yaml:"strategy"`
+
+	// Groups maps peer_id to a list of agent_ids that should process messages.
+	// When a message arrives from a peer in this map, it will be routed to all
+	// specified agents instead of the default single agent.
+	Groups map[string][]string `yaml:"groups"`
 }
 
 type ServerConfig struct {
@@ -75,6 +92,42 @@ type SessionConfig struct {
 	Memory         MemoryConfig      `yaml:"memory"`
 	Heartbeat      HeartbeatConfig   `yaml:"heartbeat"`
 	MemoryFlush    MemoryFlushConfig `yaml:"memory_flush"`
+	Scoping        SessionScopeConfig `yaml:"scoping"`
+}
+
+// SessionScopeConfig controls advanced session scoping behavior.
+type SessionScopeConfig struct {
+	// DMScope controls how DM sessions are scoped:
+	// - "main": all DMs share one session (default)
+	// - "per-peer": separate session per peer
+	// - "per-channel-peer": separate session per channel+peer combination
+	DMScope string `yaml:"dm_scope"`
+
+	// IdentityLinks maps canonical IDs to platform-specific peer IDs.
+	// Format: canonical_id -> ["provider:peer_id", "provider:peer_id", ...]
+	// This allows cross-channel identity resolution for unified sessions.
+	IdentityLinks map[string][]string `yaml:"identity_links"`
+
+	// Reset configures default session reset behavior.
+	Reset ResetConfig `yaml:"reset"`
+
+	// ResetByType configures reset behavior per conversation type (dm, group, thread).
+	ResetByType map[string]ResetConfig `yaml:"reset_by_type"`
+
+	// ResetByChannel configures reset behavior per channel (slack, discord, etc).
+	ResetByChannel map[string]ResetConfig `yaml:"reset_by_channel"`
+}
+
+// ResetConfig controls when sessions are automatically reset.
+type ResetConfig struct {
+	// Mode is the reset mode: "daily", "idle", "daily+idle", or "never" (default).
+	Mode string `yaml:"mode"`
+
+	// AtHour is the hour (0-23) to reset sessions when mode includes "daily".
+	AtHour int `yaml:"at_hour"`
+
+	// IdleMinutes is the number of minutes of inactivity before reset when mode includes "idle".
+	IdleMinutes int `yaml:"idle_minutes"`
 }
 
 type MemoryConfig struct {
@@ -292,11 +345,18 @@ type ToolExecutionConfig struct {
 
 // ApprovalConfig controls tool approval behavior.
 type ApprovalConfig struct {
+	// Profile is a pre-configured tool access level.
+	// Valid profiles: "coding", "messaging", "readonly", "full", "minimal".
+	// When set, the profile's default tools are included in the allowlist.
+	Profile string `yaml:"profile"`
+
 	// Allowlist contains tools that are always allowed (no approval needed).
 	// Supports patterns like "mcp:*", "read_*", "*" (all).
+	// Also supports group references like "group:fs", "group:runtime".
 	Allowlist []string `yaml:"allowlist"`
 
 	// Denylist contains tools that are always denied.
+	// Supports patterns and group references like Allowlist.
 	Denylist []string `yaml:"denylist"`
 
 	// SafeBins are stdin-only tools that are safe to auto-allow.
@@ -692,6 +752,16 @@ func applySessionDefaults(cfg *SessionConfig) {
 	if cfg.MemoryFlush.Prompt == "" {
 		cfg.MemoryFlush.Prompt = "Session nearing compaction. If there are durable facts, store them in memory/YYYY-MM-DD.md or MEMORY.md. Reply NO_REPLY if nothing needs attention."
 	}
+	applySessionScopeDefaults(&cfg.Scoping)
+}
+
+func applySessionScopeDefaults(cfg *SessionScopeConfig) {
+	if cfg.DMScope == "" {
+		cfg.DMScope = "main"
+	}
+	if cfg.Reset.Mode == "" {
+		cfg.Reset.Mode = "never"
+	}
 }
 
 func applyWorkspaceDefaults(cfg *WorkspaceConfig) {
@@ -964,6 +1034,31 @@ func validateConfig(cfg *Config) error {
 	if cfg.Session.MemoryFlush.Threshold < 0 {
 		issues = append(issues, "session.memory_flush.threshold must be >= 0")
 	}
+	if !validDMScope(cfg.Session.Scoping.DMScope) {
+		issues = append(issues, "session.scoping.dm_scope must be \"main\", \"per-peer\", or \"per-channel-peer\"")
+	}
+	if !validResetMode(cfg.Session.Scoping.Reset.Mode) {
+		issues = append(issues, "session.scoping.reset.mode must be \"never\", \"daily\", \"idle\", or \"daily+idle\"")
+	}
+	if cfg.Session.Scoping.Reset.AtHour < 0 || cfg.Session.Scoping.Reset.AtHour > 23 {
+		issues = append(issues, "session.scoping.reset.at_hour must be between 0 and 23")
+	}
+	if cfg.Session.Scoping.Reset.IdleMinutes < 0 {
+		issues = append(issues, "session.scoping.reset.idle_minutes must be >= 0")
+	}
+	for convType, resetCfg := range cfg.Session.Scoping.ResetByType {
+		if !validConversationType(convType) {
+			issues = append(issues, fmt.Sprintf("session.scoping.reset_by_type key %q must be \"dm\", \"group\", or \"thread\"", convType))
+		}
+		if !validResetMode(resetCfg.Mode) {
+			issues = append(issues, fmt.Sprintf("session.scoping.reset_by_type[%s].mode must be \"never\", \"daily\", \"idle\", or \"daily+idle\"", convType))
+		}
+	}
+	for channel, resetCfg := range cfg.Session.Scoping.ResetByChannel {
+		if !validResetMode(resetCfg.Mode) {
+			issues = append(issues, fmt.Sprintf("session.scoping.reset_by_channel[%s].mode must be \"never\", \"daily\", \"idle\", or \"daily+idle\"", channel))
+		}
+	}
 	if cfg.Workspace.MaxChars < 0 {
 		issues = append(issues, "workspace.max_chars must be >= 0")
 	}
@@ -1035,6 +1130,13 @@ func validateConfig(cfg *Config) error {
 	if cfg.Tools.Execution.MaxToolCalls < 0 {
 		issues = append(issues, "tools.execution.max_tool_calls must be >= 0")
 	}
+	if profile := strings.ToLower(strings.TrimSpace(cfg.Tools.Execution.Approval.Profile)); profile != "" {
+		switch profile {
+		case "coding", "messaging", "readonly", "full", "minimal":
+		default:
+			issues = append(issues, "tools.execution.approval.profile must be \"coding\", \"messaging\", \"readonly\", \"full\", or \"minimal\"")
+		}
+	}
 
 	if cfg.Cron.Enabled {
 		for i, job := range cfg.Cron.Jobs {
@@ -1087,6 +1189,33 @@ func validMemoryScope(scope string) bool {
 func validHeartbeatMode(mode string) bool {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case "always", "on_demand":
+		return true
+	default:
+		return false
+	}
+}
+
+func validDMScope(scope string) bool {
+	switch strings.ToLower(strings.TrimSpace(scope)) {
+	case "main", "per-peer", "per-channel-peer":
+		return true
+	default:
+		return false
+	}
+}
+
+func validResetMode(mode string) bool {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "never", "daily", "idle", "daily+idle":
+		return true
+	default:
+		return false
+	}
+}
+
+func validConversationType(convType string) bool {
+	switch strings.ToLower(strings.TrimSpace(convType)) {
+	case "dm", "group", "thread":
 		return true
 	default:
 		return false

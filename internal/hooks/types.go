@@ -22,21 +22,30 @@ const (
 	EventSessionUpdated EventType = "session.updated"
 	EventSessionEnded   EventType = "session.ended"
 
-	// Command events
+	// Command events (Clawdbot patterns: command:new, command:reset, command:stop)
+	EventCommandNew       EventType = "command.new"
+	EventCommandReset     EventType = "command.reset"
+	EventCommandStop      EventType = "command.stop"
 	EventCommandDetected  EventType = "command.detected"
 	EventCommandExecuted  EventType = "command.executed"
 	EventCommandCompleted EventType = "command.completed"
 
 	// Tool events
-	EventToolCalled    EventType = "tool.called"
-	EventToolCompleted EventType = "tool.completed"
+	EventToolCalled        EventType = "tool.called"
+	EventToolCompleted     EventType = "tool.completed"
+	EventToolResultPersist EventType = "tool.result_persist"
 
-	// Agent events
+	// Agent events (Clawdbot patterns: agent:bootstrap)
+	EventAgentBootstrap EventType = "agent.bootstrap"
 	EventAgentStarted   EventType = "agent.started"
 	EventAgentCompleted EventType = "agent.completed"
 	EventAgentError     EventType = "agent.error"
 
-	// Lifecycle events
+	// Gateway events (Clawdbot patterns: gateway:startup)
+	EventGatewayStartup  EventType = "gateway.startup"
+	EventGatewayShutdown EventType = "gateway.shutdown"
+
+	// Lifecycle events (legacy, prefer gateway.* events)
 	EventStartup  EventType = "lifecycle.startup"
 	EventShutdown EventType = "lifecycle.shutdown"
 )

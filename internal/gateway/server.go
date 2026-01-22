@@ -22,7 +22,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/cron"
-	"github.com/haasonsaas/nexus/internal/tasks"
+	"github.com/haasonsaas/nexus/internal/hooks"
 	"github.com/haasonsaas/nexus/internal/jobs"
 	"github.com/haasonsaas/nexus/internal/mcp"
 	"github.com/haasonsaas/nexus/internal/media"
@@ -32,6 +32,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/skills"
 	"github.com/haasonsaas/nexus/internal/storage"
+	"github.com/haasonsaas/nexus/internal/tasks"
 	"github.com/haasonsaas/nexus/internal/tools/browser"
 	jobtools "github.com/haasonsaas/nexus/internal/tools/jobs"
 	"github.com/haasonsaas/nexus/internal/tools/memorysearch"
@@ -80,6 +81,9 @@ type Server struct {
 	llmProvider        agent.LLMProvider
 	defaultModel       string
 	jobStore           jobs.Store
+
+	broadcastManager *BroadcastManager
+	hooksRegistry    *hooks.Registry
 }
 
 // NewServer creates a new gateway server.
@@ -224,6 +228,41 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		}
 	}
 
+	// Initialize hooks registry
+	hooksRegistry := hooks.NewRegistry(logger)
+	hooks.SetGlobalRegistry(hooksRegistry)
+
+	// Discover and register hooks (non-blocking)
+	go func() {
+		discoverCtx := context.Background()
+		sources := hooks.BuildDefaultSources(
+			cfg.Workspace.Path,
+			hooks.DefaultLocalPath(),
+			"", // bundled path (TODO: embed bundled hooks)
+			nil, // extra dirs
+		)
+		discoveredHooks, err := hooks.DiscoverAll(discoverCtx, sources)
+		if err != nil {
+			logger.Error("hook discovery failed", "error", err)
+			return
+		}
+
+		gatingCtx := hooks.NewGatingContext(nil)
+		eligible := hooks.FilterEligible(discoveredHooks, gatingCtx)
+		logger.Info("discovered hooks", "total", len(discoveredHooks), "eligible", len(eligible))
+
+		// Register discovered hooks with the registry
+		for _, h := range eligible {
+			for _, eventKey := range h.Config.Events {
+				hooksRegistry.Register(eventKey, createHookHandler(h, logger),
+					hooks.WithName(h.Config.Name),
+					hooks.WithSource(string(h.Source)),
+					hooks.WithPriority(h.Config.Priority),
+				)
+			}
+		}
+	}()
+
 	server := &Server{
 		config:             cfg,
 		grpc:               grpcServer,
@@ -242,6 +281,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		mcpManager:         mcpManager,
 		toolPolicyResolver: toolPolicyResolver,
 		jobStore:           jobStore,
+		hooksRegistry:      hooksRegistry,
 	}
 	grpcSvc := newGRPCService(server)
 	proto.RegisterNexusGatewayServer(grpcServer, grpcSvc)
@@ -292,6 +332,13 @@ func (s *Server) Start(ctx context.Context) error {
 	// Start job pruning background task
 	s.startJobPruning(ctx)
 
+	// Trigger gateway:startup hook
+	startupEvent := hooks.NewEvent(hooks.EventGatewayStartup, "").
+		WithContext("workspace", s.config.Workspace.Path).
+		WithContext("host", s.config.Server.Host).
+		WithContext("grpc_port", s.config.Server.GRPCPort)
+	s.hooksRegistry.TriggerAsync(ctx, startupEvent)
+
 	// Start gRPC server
 	addr := fmt.Sprintf("%s:%d", s.config.Server.Host, s.config.Server.GRPCPort)
 	lis, err := net.Listen("tcp", addr)
@@ -306,6 +353,13 @@ func (s *Server) Start(ctx context.Context) error {
 // Stop gracefully shuts down the server.
 func (s *Server) Stop(ctx context.Context) error {
 	s.logger.Info("stopping server")
+
+	// Trigger gateway:shutdown hook
+	shutdownEvent := hooks.NewEvent(hooks.EventGatewayShutdown, "").
+		WithContext("uptime", time.Since(s.startTime).String())
+	if err := s.hooksRegistry.Trigger(ctx, shutdownEvent); err != nil {
+		s.logger.Warn("shutdown hook error", "error", err)
+	}
 
 	if s.cancel != nil {
 		s.cancel()
@@ -522,6 +576,13 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		return
 	}
 
+	// Check for broadcast routing
+	peerID := s.extractPeerID(msg)
+	if peerID != "" && s.broadcastManager != nil && s.broadcastManager.IsBroadcastPeer(peerID) {
+		s.handleBroadcastMessage(ctx, peerID, msg, runtime)
+		return
+	}
+
 	channelID, err := s.resolveConversationID(msg)
 	if err != nil {
 		s.logger.Error("failed to resolve conversation id", "error", err)
@@ -625,6 +686,133 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 			session.Metadata["memory_flush_confirmed_at"] = time.Now().Format(time.RFC3339)
 			if err := s.sessions.Update(ctx, session); err != nil {
 				s.logger.Error("failed to update memory flush confirmation", "error", err)
+			}
+		}
+	}
+}
+
+// extractPeerID extracts a peer identifier from the message metadata.
+// The peer_id is used to determine if the message should be broadcast to multiple agents.
+func (s *Server) extractPeerID(msg *models.Message) string {
+	if msg.Metadata == nil {
+		return ""
+	}
+	// Check for explicit peer_id in metadata
+	if peerID, ok := msg.Metadata["peer_id"].(string); ok && peerID != "" {
+		return peerID
+	}
+	// Fall back to channel-specific identifiers that can serve as peer IDs
+	switch msg.Channel {
+	case models.ChannelTelegram:
+		if chatID, ok := msg.Metadata["chat_id"]; ok {
+			switch v := chatID.(type) {
+			case int64:
+				return strconv.FormatInt(v, 10)
+			case int:
+				return strconv.Itoa(v)
+			case string:
+				return v
+			}
+		}
+	case models.ChannelSlack:
+		// Use user_id as peer identifier for Slack
+		if userID, ok := msg.Metadata["slack_user"].(string); ok && userID != "" {
+			return userID
+		}
+	case models.ChannelDiscord:
+		// Use user_id as peer identifier for Discord
+		if userID, ok := msg.Metadata["discord_user_id"].(string); ok && userID != "" {
+			return userID
+		}
+	case models.ChannelWhatsApp:
+		if sender, ok := msg.Metadata["sender"].(string); ok && sender != "" {
+			return sender
+		}
+	case models.ChannelSignal:
+		if sender, ok := msg.Metadata["sender"].(string); ok && sender != "" {
+			return sender
+		}
+	case models.ChannelIMessage:
+		if sender, ok := msg.Metadata["sender"].(string); ok && sender != "" {
+			return sender
+		}
+	case models.ChannelMatrix:
+		if sender, ok := msg.Metadata["sender"].(string); ok && sender != "" {
+			return sender
+		}
+	}
+	return ""
+}
+
+// handleBroadcastMessage processes a message that should be broadcast to multiple agents.
+func (s *Server) handleBroadcastMessage(ctx context.Context, peerID string, msg *models.Message, runtime *agent.Runtime) {
+	s.logger.Debug("processing broadcast message",
+		"peer_id", peerID,
+		"channel", msg.Channel,
+	)
+
+	// Ensure broadcast manager has current runtime and sessions
+	s.broadcastManager.runtime = runtime
+	s.broadcastManager.sessions = s.sessions
+
+	results, err := s.broadcastManager.ProcessBroadcast(
+		ctx,
+		peerID,
+		msg,
+		s.resolveConversationID,
+		s.systemPromptForMessage,
+	)
+	if err != nil {
+		s.logger.Error("broadcast processing failed", "error", err)
+		return
+	}
+
+	adapter, ok := s.channels.GetOutbound(msg.Channel)
+	if !ok {
+		s.logger.Error("no adapter registered for channel", "channel", msg.Channel)
+		return
+	}
+
+	// Send responses from all agents
+	for _, result := range results {
+		if result.Error != nil {
+			s.logger.Error("agent broadcast error",
+				"agent_id", result.AgentID,
+				"error", result.Error,
+			)
+			continue
+		}
+
+		if result.Response == "" {
+			continue
+		}
+
+		outbound := &models.Message{
+			SessionID: result.SessionID,
+			Channel:   msg.Channel,
+			Direction: models.DirectionOutbound,
+			Role:      models.RoleAssistant,
+			Content:   result.Response,
+			Metadata:  s.buildReplyMetadata(msg),
+			CreatedAt: time.Now(),
+		}
+
+		// Add agent identifier to metadata so the recipient knows which agent responded
+		if outbound.Metadata == nil {
+			outbound.Metadata = make(map[string]any)
+		}
+		outbound.Metadata["broadcast_agent_id"] = result.AgentID
+
+		if err := adapter.Send(ctx, outbound); err != nil {
+			s.logger.Error("failed to send broadcast response",
+				"agent_id", result.AgentID,
+				"error", err,
+			)
+		}
+
+		if s.memoryLogger != nil {
+			if err := s.memoryLogger.Append(outbound); err != nil {
+				s.logger.Error("failed to write memory log", "error", err)
 			}
 		}
 	}
@@ -734,6 +922,19 @@ func (s *Server) ensureRuntime(ctx context.Context) (*agent.Runtime, error) {
 		}
 	}
 	s.registerMCPSamplingHandler()
+
+	// Initialize broadcast manager if configured
+	if s.broadcastManager == nil && s.config.Gateway.Broadcast.Groups != nil && len(s.config.Gateway.Broadcast.Groups) > 0 {
+		s.broadcastManager = NewBroadcastManager(
+			BroadcastConfig{
+				Strategy: BroadcastStrategy(s.config.Gateway.Broadcast.Strategy),
+				Groups:   s.config.Gateway.Broadcast.Groups,
+			},
+			s.sessions,
+			runtime,
+			s.logger,
+		)
+	}
 
 	s.runtime = runtime
 	return runtime, nil
@@ -1224,5 +1425,20 @@ func scopeUsesThread(scope string) bool {
 		return false
 	default:
 		return true
+	}
+}
+
+// createHookHandler creates a handler function for a discovered hook.
+// The hook's content (from HOOK.md) is logged when triggered.
+func createHookHandler(h *hooks.HookEntry, logger *slog.Logger) hooks.Handler {
+	return func(ctx context.Context, event *hooks.Event) error {
+		logger.Debug("hook triggered",
+			"hook", h.Config.Name,
+			"event_type", event.Type,
+			"event_action", event.Action,
+		)
+		// For now, hooks are informational - they log when triggered.
+		// Future: Execute hook scripts, send notifications, etc.
+		return nil
 	}
 }

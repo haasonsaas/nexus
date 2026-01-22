@@ -297,6 +297,49 @@ llm:
 	}
 }
 
+func TestLoadValidatesApprovalProfile(t *testing.T) {
+	path := writeConfig(t, `
+tools:
+  execution:
+    approval:
+      profile: invalid
+llm:
+  default_provider: anthropic
+  providers:
+    anthropic: {}
+`)
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatalf("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "approval.profile") {
+		t.Fatalf("expected approval.profile error, got %v", err)
+	}
+}
+
+func TestLoadValidApprovalProfile(t *testing.T) {
+	profiles := []string{"coding", "messaging", "readonly", "full", "minimal"}
+	for _, profile := range profiles {
+		t.Run(profile, func(t *testing.T) {
+			path := writeConfig(t, `
+tools:
+  execution:
+    approval:
+      profile: `+profile+`
+llm:
+  default_provider: anthropic
+  providers:
+    anthropic: {}
+`)
+
+			if _, err := Load(path); err != nil {
+				t.Fatalf("expected config to load with profile %q, got %v", profile, err)
+			}
+		})
+	}
+}
+
 func writeConfig(t *testing.T, contents string) string {
 	t.Helper()
 	dir := t.TempDir()

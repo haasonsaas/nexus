@@ -182,7 +182,10 @@ func (m *CompactionManager) ConfirmFlush(ctx context.Context, sessionID string) 
 
 		// Perform compaction
 		_, err := m.performCompaction(ctx, sessionID, 0)
-		return err
+		if err != nil {
+			return fmt.Errorf("accept flush compaction: %w", err)
+		}
+		return nil
 	}
 	m.mu.Unlock()
 	return nil
@@ -198,7 +201,10 @@ func (m *CompactionManager) RejectFlush(ctx context.Context, sessionID string) e
 
 		// Proceed with compaction anyway
 		_, err := m.performCompaction(ctx, sessionID, 0)
-		return err
+		if err != nil {
+			return fmt.Errorf("reject flush compaction: %w", err)
+		}
+		return nil
 	}
 	m.mu.Unlock()
 	return nil

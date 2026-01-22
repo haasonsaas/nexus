@@ -185,7 +185,7 @@ func (t *HTTPTransport) Notify(ctx context.Context, method string, params any) e
 	if err != nil {
 		return fmt.Errorf("http request: %w", err)
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 
 	return nil
 }
@@ -236,7 +236,8 @@ func (t *HTTPTransport) Respond(ctx context.Context, id any, result any, rpcErr 
 	if err != nil {
 		return fmt.Errorf("http request: %w", err)
 	}
-	respHTTP.Body.Close()
+	defer respHTTP.Body.Close()
+
 	return nil
 }
 

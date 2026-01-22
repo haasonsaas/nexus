@@ -34,7 +34,7 @@ func (s *Server) ensureRuntime(ctx context.Context) (*agent.Runtime, error) {
 	if s.sessions == nil {
 		store, err := s.newSessionStore()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("create session store: %w", err)
 		}
 		s.sessions = store
 	}
@@ -51,7 +51,7 @@ func (s *Server) ensureRuntime(ctx context.Context) (*agent.Runtime, error) {
 
 	provider, defaultModel, err := s.newProvider()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create LLM provider: %w", err)
 	}
 	if s.llmProvider == nil {
 		s.llmProvider = provider
@@ -74,11 +74,11 @@ func (s *Server) ensureRuntime(ctx context.Context) (*agent.Runtime, error) {
 		runtime.SetSystemPrompt(system)
 	}
 	if err := s.registerTools(ctx, runtime); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("register tools: %w", err)
 	}
 	if s.runtimePlugins != nil {
 		if err := s.runtimePlugins.LoadTools(s.config, runtime); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("load runtime plugins: %w", err)
 		}
 	}
 	s.registerMCPSamplingHandler()

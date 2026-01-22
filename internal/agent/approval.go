@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -256,7 +257,7 @@ func (c *ApprovalChecker) Approve(ctx context.Context, requestID, decidedBy stri
 
 	req, err := store.Get(ctx, requestID)
 	if err != nil {
-		return err
+		return fmt.Errorf("get approval request %q: %w", requestID, err)
 	}
 	if req == nil {
 		return nil
@@ -265,7 +266,10 @@ func (c *ApprovalChecker) Approve(ctx context.Context, requestID, decidedBy stri
 	req.Decision = ApprovalAllowed
 	req.DecidedAt = time.Now()
 	req.DecidedBy = decidedBy
-	return store.Update(ctx, req)
+	if err := store.Update(ctx, req); err != nil {
+		return fmt.Errorf("update approval request %q: %w", requestID, err)
+	}
+	return nil
 }
 
 // Deny denies a pending approval request, preventing the tool call from executing.
@@ -280,7 +284,7 @@ func (c *ApprovalChecker) Deny(ctx context.Context, requestID, decidedBy string)
 
 	req, err := store.Get(ctx, requestID)
 	if err != nil {
-		return err
+		return fmt.Errorf("get approval request %q: %w", requestID, err)
 	}
 	if req == nil {
 		return nil
@@ -289,7 +293,10 @@ func (c *ApprovalChecker) Deny(ctx context.Context, requestID, decidedBy string)
 	req.Decision = ApprovalDenied
 	req.DecidedAt = time.Now()
 	req.DecidedBy = decidedBy
-	return store.Update(ctx, req)
+	if err := store.Update(ctx, req); err != nil {
+		return fmt.Errorf("update approval request %q: %w", requestID, err)
+	}
+	return nil
 }
 
 // GetPendingRequests returns all pending approval requests for the specified agent.

@@ -15,11 +15,11 @@ import (
 
 // MemoryRepository is an in-memory implementation for testing and simple deployments.
 type MemoryRepository struct {
-	mu        sync.RWMutex
-	store     Store
-	metadata  map[string]*Metadata
+	mu         sync.RWMutex
+	store      Store
+	metadata   map[string]*Metadata
 	inlineData map[string][]byte
-	logger    *slog.Logger
+	logger     *slog.Logger
 }
 
 // NewMemoryRepository creates a repository backed by the given store.

@@ -30,6 +30,12 @@ type Metrics struct {
 	connectionsClosed atomic.Uint64
 	reconnectAttempts atomic.Uint64
 
+	// Message action counters
+	actionsByType   map[MessageAction]*atomic.Uint64
+	actionsFailed   map[MessageAction]*atomic.Uint64
+	actionsLatency  map[MessageAction]*LatencyHistogram
+	actionsMu       sync.RWMutex
+
 	// Channel metadata
 	channelType models.ChannelType
 	startTime   time.Time
@@ -41,6 +47,9 @@ func NewMetrics(channelType models.ChannelType) *Metrics {
 		errorsByCode:   make(map[ErrorCode]*atomic.Uint64),
 		sendLatency:    NewLatencyHistogram(),
 		receiveLatency: NewLatencyHistogram(),
+		actionsByType:  make(map[MessageAction]*atomic.Uint64),
+		actionsFailed:  make(map[MessageAction]*atomic.Uint64),
+		actionsLatency: make(map[MessageAction]*LatencyHistogram),
 		channelType:    channelType,
 		startTime:      time.Now(),
 	}
@@ -99,6 +108,38 @@ func (m *Metrics) RecordReconnectAttempt() {
 	m.reconnectAttempts.Add(1)
 }
 
+// RecordActionExecuted records a successful message action execution.
+func (m *Metrics) RecordActionExecuted(action MessageAction, duration time.Duration) {
+	m.actionsMu.Lock()
+	counter, exists := m.actionsByType[action]
+	if !exists {
+		counter = &atomic.Uint64{}
+		m.actionsByType[action] = counter
+	}
+	latency, lexists := m.actionsLatency[action]
+	if !lexists {
+		latency = NewLatencyHistogram()
+		m.actionsLatency[action] = latency
+	}
+	m.actionsMu.Unlock()
+
+	counter.Add(1)
+	latency.Record(duration)
+}
+
+// RecordActionFailed records a failed message action execution.
+func (m *Metrics) RecordActionFailed(action MessageAction) {
+	m.actionsMu.Lock()
+	counter, exists := m.actionsFailed[action]
+	if !exists {
+		counter = &atomic.Uint64{}
+		m.actionsFailed[action] = counter
+	}
+	m.actionsMu.Unlock()
+
+	counter.Add(1)
+}
+
 // Snapshot returns a point-in-time view of all metrics.
 func (m *Metrics) Snapshot() MetricsSnapshot {
 	m.errorsMu.RLock()
@@ -107,6 +148,22 @@ func (m *Metrics) Snapshot() MetricsSnapshot {
 		errors[code] = counter.Load()
 	}
 	m.errorsMu.RUnlock()
+
+	// Collect action metrics
+	m.actionsMu.RLock()
+	actionsByType := make(map[MessageAction]uint64, len(m.actionsByType))
+	for action, counter := range m.actionsByType {
+		actionsByType[action] = counter.Load()
+	}
+	actionsFailed := make(map[MessageAction]uint64, len(m.actionsFailed))
+	for action, counter := range m.actionsFailed {
+		actionsFailed[action] = counter.Load()
+	}
+	actionsLatency := make(map[MessageAction]LatencySnapshot, len(m.actionsLatency))
+	for action, histogram := range m.actionsLatency {
+		actionsLatency[action] = histogram.Snapshot()
+	}
+	m.actionsMu.RUnlock()
 
 	return MetricsSnapshot{
 		ChannelType:       m.channelType,
@@ -120,6 +177,9 @@ func (m *Metrics) Snapshot() MetricsSnapshot {
 		ConnectionsClosed: m.connectionsClosed.Load(),
 		ReconnectAttempts: m.reconnectAttempts.Load(),
 		Uptime:            time.Since(m.startTime),
+		ActionsByType:     actionsByType,
+		ActionsFailed:     actionsFailed,
+		ActionsLatency:    actionsLatency,
 	}
 }
 
@@ -136,6 +196,11 @@ type MetricsSnapshot struct {
 	ConnectionsClosed uint64
 	ReconnectAttempts uint64
 	Uptime            time.Duration
+
+	// Message action metrics
+	ActionsByType   map[MessageAction]uint64
+	ActionsFailed   map[MessageAction]uint64
+	ActionsLatency  map[MessageAction]LatencySnapshot
 }
 
 // LatencyHistogram tracks latency measurements using a simple bucketing approach.

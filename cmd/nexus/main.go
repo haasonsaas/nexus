@@ -110,6 +110,7 @@ Documentation: https://github.com/haasonsaas/nexus`,
 		buildMcpCmd(),
 		buildTraceCmd(),
 		buildEdgeCmd(),
+		buildEventsCmd(),
 	)
 
 	return rootCmd

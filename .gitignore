@@ -44,4 +44,4 @@ logs/
 # Temporary files
 tmp/
 temp/
-nexus
+/nexus

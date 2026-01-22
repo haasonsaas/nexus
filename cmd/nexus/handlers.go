@@ -24,6 +24,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/gateway"
 	"github.com/haasonsaas/nexus/internal/marketplace"
 	"github.com/haasonsaas/nexus/internal/memory"
+	"github.com/haasonsaas/nexus/internal/observability"
 	"github.com/haasonsaas/nexus/internal/onboard"
 	"github.com/haasonsaas/nexus/internal/plugins"
 	"github.com/haasonsaas/nexus/internal/profile"
@@ -2407,5 +2408,93 @@ func runEdgeApprove(cmd *cobra.Command, configPath string, edgeID string) error 
 func runEdgeRevoke(cmd *cobra.Command, configPath string, edgeID string) error {
 	fmt.Fprintf(cmd.OutOrStdout(), "Revoking edge: %s\n", edgeID)
 	fmt.Fprintln(cmd.OutOrStdout(), "No approved edge found with that ID.")
+	return nil
+}
+
+// =============================================================================
+// Events Command Handlers
+// =============================================================================
+
+// runEventsShow shows the event timeline for a specific run.
+func runEventsShow(cmd *cobra.Command, configPath string, runID string, format string) error {
+	// For now, we use a memory store - in production this would connect to persistent storage
+	store := observability.NewMemoryEventStore(10000)
+
+	events, err := store.GetByRunID(runID)
+	if err != nil {
+		return fmt.Errorf("failed to get events: %w", err)
+	}
+
+	if len(events) == 0 {
+		fmt.Fprintf(cmd.OutOrStdout(), "No events found for run: %s\n", runID)
+		fmt.Fprintln(cmd.OutOrStdout(), "\nNote: Events are currently stored in memory and are lost when the server restarts.")
+		fmt.Fprintln(cmd.OutOrStdout(), "To capture events, ensure the server is running and processing requests.")
+		return nil
+	}
+
+	timeline := observability.BuildTimeline(events)
+
+	switch format {
+	case "json":
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(timeline)
+	default:
+		fmt.Fprint(cmd.OutOrStdout(), observability.FormatTimeline(timeline))
+	}
+
+	return nil
+}
+
+// runEventsList lists recent events.
+func runEventsList(cmd *cobra.Command, configPath string, limit int, eventType string, sessionID string) error {
+	// For now, we use a memory store - in production this would connect to persistent storage
+	store := observability.NewMemoryEventStore(10000)
+
+	var events []*observability.Event
+	var err error
+
+	if sessionID != "" {
+		events, err = store.GetBySessionID(sessionID)
+	} else if eventType != "" {
+		events, err = store.GetByType(observability.EventType(eventType), limit)
+	} else {
+		// Get recent events by time range (last 24 hours)
+		end := time.Now()
+		start := end.Add(-24 * time.Hour)
+		events, err = store.GetByTimeRange(start, end)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to get events: %w", err)
+	}
+
+	if len(events) == 0 {
+		fmt.Fprintln(cmd.OutOrStdout(), "No events found.")
+		fmt.Fprintln(cmd.OutOrStdout(), "\nNote: Events are currently stored in memory and are lost when the server restarts.")
+		return nil
+	}
+
+	// Apply limit
+	if limit > 0 && len(events) > limit {
+		events = events[:limit]
+	}
+
+	fmt.Fprintf(cmd.OutOrStdout(), "Found %d events:\n\n", len(events))
+	for _, e := range events {
+		timestamp := e.Timestamp.Format("15:04:05.000")
+		errorMark := ""
+		if e.Error != "" {
+			errorMark = " ❌"
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "[%s] %s: %s%s\n", timestamp, e.Type, e.Name, errorMark)
+		if e.RunID != "" {
+			fmt.Fprintf(cmd.OutOrStdout(), "         Run: %s\n", e.RunID)
+		}
+		if e.Error != "" {
+			fmt.Fprintf(cmd.OutOrStdout(), "         Error: %s\n", e.Error)
+		}
+	}
+
 	return nil
 }

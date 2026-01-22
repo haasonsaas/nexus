@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -187,6 +188,12 @@ func (s *Store) AddDocument(ctx context.Context, doc *models.Document, chunks []
 	}
 	doc.UpdatedAt = time.Now()
 	doc.ChunkCount = len(chunks)
+
+	for i, chunk := range chunks {
+		if err := s.validateEmbedding(chunk.Embedding, true); err != nil {
+			return fmt.Errorf("validate embedding for chunk %d: %w", i, err)
+		}
+	}
 
 	metadata, err := json.Marshal(doc.Metadata)
 	if err != nil {
@@ -469,6 +476,9 @@ func (s *Store) Search(ctx context.Context, req *models.DocumentSearchRequest, e
 	if req.Threshold <= 0 {
 		req.Threshold = 0.7
 	}
+	if err := s.validateEmbedding(embedding, false); err != nil {
+		return nil, err
+	}
 
 	queryVec := encodeEmbedding(embedding)
 
@@ -594,6 +604,9 @@ func (s *Store) UpdateChunkEmbeddings(ctx context.Context, embeddings map[string
 	defer stmt.Close()
 
 	for id, embedding := range embeddings {
+		if err := s.validateEmbedding(embedding, true); err != nil {
+			return fmt.Errorf("validate embedding for chunk %s: %w", id, err)
+		}
 		embeddingStr := encodeEmbedding(embedding)
 		_, err := stmt.ExecContext(ctx, embeddingStr, id)
 		if err != nil {
@@ -632,6 +645,24 @@ func (s *Store) Close() error {
 }
 
 // Helper functions
+
+func (s *Store) validateEmbedding(embedding []float32, allowEmpty bool) error {
+	if len(embedding) == 0 {
+		if allowEmpty {
+			return nil
+		}
+		return fmt.Errorf("embedding is empty")
+	}
+	if s.dimension > 0 && len(embedding) != s.dimension {
+		return fmt.Errorf("embedding dimension mismatch: got %d, want %d", len(embedding), s.dimension)
+	}
+	for _, v := range embedding {
+		if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
+			return fmt.Errorf("embedding contains invalid values")
+		}
+	}
+	return nil
+}
 
 func encodeEmbedding(embedding []float32) sql.NullString {
 	if len(embedding) == 0 {

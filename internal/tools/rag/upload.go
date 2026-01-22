@@ -184,6 +184,17 @@ func (t *UploadTool) Execute(ctx context.Context, params json.RawMessage) (*agen
 		Description: input.Description,
 		Tags:        input.Tags,
 	}
+	if session := agent.SessionFromContext(ctx); session != nil {
+		if metadata.AgentID == "" {
+			metadata.AgentID = session.AgentID
+		}
+		if metadata.SessionID == "" {
+			metadata.SessionID = session.ID
+		}
+		if metadata.ChannelID == "" {
+			metadata.ChannelID = session.ChannelID
+		}
+	}
 
 	// Index the document
 	req := &index.IndexRequest{

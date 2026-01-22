@@ -61,6 +61,7 @@ func NewManager(docStore store.DocumentStore, embedder embeddings.Provider, cfg 
 	if cfg == nil {
 		cfg = DefaultConfig()
 	}
+	ensureDefaultParsers()
 
 	// Create chunker with config
 	chunkCfg := chunker.Config{
@@ -154,6 +155,11 @@ func (m *Manager) Index(ctx context.Context, req *IndexRequest) (*IndexResult, e
 		return nil, fmt.Errorf("parse failed: %w", err)
 	}
 
+	metadata := models.DocumentMetadata{}
+	if parseResult.Metadata != nil {
+		metadata = *parseResult.Metadata
+	}
+
 	// Create document
 	doc := &models.Document{
 		ID:          uuid.New().String(),
@@ -162,7 +168,7 @@ func (m *Manager) Index(ctx context.Context, req *IndexRequest) (*IndexResult, e
 		SourceURI:   req.SourceURI,
 		ContentType: req.ContentType,
 		Content:     parseResult.Content,
-		Metadata:    *parseResult.Metadata,
+		Metadata:    metadata,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}

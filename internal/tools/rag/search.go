@@ -114,6 +114,10 @@ func (t *SearchTool) Schema() json.RawMessage {
       "type": "string",
       "enum": ["global", "agent", "session", "channel"],
       "description": "Limit search to a specific scope (default: global)"
+    },
+    "scope_id": {
+      "type": "string",
+      "description": "Scope identifier (agent_id, session_id, or channel_id). If omitted, uses the current session context when available."
     }
   },
   "required": ["query"]
@@ -127,6 +131,7 @@ type searchInput struct {
 	Threshold float32  `json:"threshold,omitempty"`
 	Tags      []string `json:"tags,omitempty"`
 	Scope     string   `json:"scope,omitempty"`
+	ScopeID   string   `json:"scope_id,omitempty"`
 }
 
 // searchOutput represents a single search result.
@@ -185,10 +190,31 @@ func (t *SearchTool) Execute(ctx context.Context, params json.RawMessage) (*agen
 		scope = models.DocumentScopeChannel
 	}
 
+	scopeID := strings.TrimSpace(input.ScopeID)
+	if scope != models.DocumentScopeGlobal && scopeID == "" {
+		if session := agent.SessionFromContext(ctx); session != nil {
+			switch scope {
+			case models.DocumentScopeAgent:
+				scopeID = session.AgentID
+			case models.DocumentScopeSession:
+				scopeID = session.ID
+			case models.DocumentScopeChannel:
+				scopeID = session.ChannelID
+			}
+		}
+	}
+	if scope != models.DocumentScopeGlobal && scopeID == "" {
+		return &agent.ToolResult{
+			Content: "Scope requires scope_id or active session context",
+			IsError: true,
+		}, nil
+	}
+
 	// Perform search
 	req := &models.DocumentSearchRequest{
 		Query:     query,
 		Scope:     scope,
+		ScopeID:   scopeID,
 		Limit:     limit,
 		Threshold: threshold,
 		Tags:      input.Tags,

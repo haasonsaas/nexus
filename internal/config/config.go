@@ -1101,6 +1101,13 @@ func validateConfig(cfg *Config) error {
 		}
 	}
 
+	// JWT secret validation: require minimum 32 bytes when set
+	if jwtSecret := strings.TrimSpace(cfg.Auth.JWTSecret); jwtSecret != "" {
+		if len(jwtSecret) < 32 {
+			issues = append(issues, "auth.jwt_secret must be at least 32 characters for security")
+		}
+	}
+
 	if provider := strings.ToLower(strings.TrimSpace(cfg.Tools.WebSearch.Provider)); provider != "" {
 		switch provider {
 		case "searxng", "brave", "duckduckgo":

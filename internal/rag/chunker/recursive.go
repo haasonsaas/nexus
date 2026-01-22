@@ -155,6 +155,7 @@ func (s *RecursiveCharacterTextSplitter) splitText(text string, separators []str
 	var result []Chunk
 	var currentChunk strings.Builder
 	startOffset := 0
+	originalLen := 0 // Track original (untrimmed) content length for accurate offsets
 
 	for i, split := range splits {
 		// Add separator back if configured and not the last split
@@ -167,6 +168,7 @@ func (s *RecursiveCharacterTextSplitter) splitText(text string, separators []str
 		if currentChunk.Len() > 0 && currentChunk.Len()+len(piece) > s.config.ChunkSize {
 			// Save current chunk
 			chunkContent := currentChunk.String()
+			chunkOriginalLen := originalLen
 			if !s.config.PreserveWhitespace {
 				chunkContent = strings.TrimSpace(chunkContent)
 			}
@@ -174,13 +176,14 @@ func (s *RecursiveCharacterTextSplitter) splitText(text string, separators []str
 				result = append(result, Chunk{
 					Content:     chunkContent,
 					StartOffset: startOffset,
-					EndOffset:   startOffset + len(chunkContent),
+					EndOffset:   startOffset + chunkOriginalLen,
 				})
 			}
 
-			// Reset for next chunk
+			// Reset for next chunk - advance by original length, not trimmed
 			currentChunk.Reset()
-			startOffset += len(chunkContent)
+			startOffset += chunkOriginalLen
+			originalLen = 0
 		}
 
 		// If single piece is too large, recursively split it
@@ -188,6 +191,7 @@ func (s *RecursiveCharacterTextSplitter) splitText(text string, separators []str
 			// First save any accumulated content
 			if currentChunk.Len() > 0 {
 				chunkContent := currentChunk.String()
+				chunkOriginalLen := originalLen
 				if !s.config.PreserveWhitespace {
 					chunkContent = strings.TrimSpace(chunkContent)
 				}
@@ -195,11 +199,12 @@ func (s *RecursiveCharacterTextSplitter) splitText(text string, separators []str
 					result = append(result, Chunk{
 						Content:     chunkContent,
 						StartOffset: startOffset,
-						EndOffset:   startOffset + len(chunkContent),
+						EndOffset:   startOffset + chunkOriginalLen,
 					})
 				}
-				startOffset += len(chunkContent)
+				startOffset += chunkOriginalLen
 				currentChunk.Reset()
+				originalLen = 0
 			}
 
 			// Recursively split the large piece
@@ -212,12 +217,14 @@ func (s *RecursiveCharacterTextSplitter) splitText(text string, separators []str
 			startOffset += len(piece)
 		} else {
 			currentChunk.WriteString(piece)
+			originalLen += len(piece)
 		}
 	}
 
 	// Don't forget the last chunk
 	if currentChunk.Len() > 0 {
 		chunkContent := currentChunk.String()
+		chunkOriginalLen := originalLen
 		if !s.config.PreserveWhitespace {
 			chunkContent = strings.TrimSpace(chunkContent)
 		}
@@ -225,7 +232,7 @@ func (s *RecursiveCharacterTextSplitter) splitText(text string, separators []str
 			result = append(result, Chunk{
 				Content:     chunkContent,
 				StartOffset: startOffset,
-				EndOffset:   startOffset + len(chunkContent),
+				EndOffset:   startOffset + chunkOriginalLen,
 			})
 		}
 	}
@@ -259,10 +266,14 @@ func (s *RecursiveCharacterTextSplitter) mergeChunksWithOverlap(chunks []Chunk, 
 		overlapText := prevChunk.Content[len(prevChunk.Content)-overlap:]
 		newContent := overlapText + chunk.Content
 
-		// Adjust offsets
+		// Adjust offsets - ensure StartOffset doesn't go negative
+		newStartOffset := chunk.StartOffset - overlap
+		if newStartOffset < 0 {
+			newStartOffset = 0
+		}
 		result[i] = Chunk{
 			Content:     newContent,
-			StartOffset: chunk.StartOffset - overlap,
+			StartOffset: newStartOffset,
 			EndOffset:   chunk.EndOffset,
 		}
 	}

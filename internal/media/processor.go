@@ -126,7 +126,12 @@ func (p *DefaultProcessor) getData(attachment *Attachment, opts ProcessingOption
 
 	// Read from local path
 	if attachment.LocalPath != "" {
-		data, err := os.ReadFile(attachment.LocalPath)
+		// Validate path to prevent directory traversal attacks
+		safePath, err := p.validateLocalPath(attachment.LocalPath, opts.AllowedBasePath)
+		if err != nil {
+			return nil, fmt.Errorf("invalid local path: %w", err)
+		}
+		data, err := os.ReadFile(safePath)
 		if err != nil {
 			return nil, fmt.Errorf("read local file: %w", err)
 		}
@@ -171,6 +176,35 @@ func (p *DefaultProcessor) download(url string, opts ProcessingOptions) ([]byte,
 	}
 
 	return data, nil
+}
+
+// validateLocalPath validates a local file path to prevent directory traversal attacks.
+// If allowedBasePath is set, the path must be within that directory.
+// If allowedBasePath is empty, local file reads are rejected for security.
+func (p *DefaultProcessor) validateLocalPath(path, allowedBasePath string) (string, error) {
+	if allowedBasePath == "" {
+		return "", fmt.Errorf("local file access not allowed without AllowedBasePath")
+	}
+
+	// Clean and resolve paths
+	cleanBase, err := filepath.Abs(filepath.Clean(allowedBasePath))
+	if err != nil {
+		return "", fmt.Errorf("invalid base path: %w", err)
+	}
+
+	cleanPath, err := filepath.Abs(filepath.Clean(path))
+	if err != nil {
+		return "", fmt.Errorf("invalid path: %w", err)
+	}
+
+	// Ensure the path is within the allowed base
+	// Add trailing separator to base to prevent prefix matching attacks
+	// e.g., /allowed/pathEVIL should not match /allowed/path
+	if !strings.HasPrefix(cleanPath, cleanBase+string(filepath.Separator)) && cleanPath != cleanBase {
+		return "", fmt.Errorf("path %q is outside allowed directory", path)
+	}
+
+	return cleanPath, nil
 }
 
 func (p *DefaultProcessor) processImage(data []byte, mimeType string, opts ProcessingOptions) (*Content, error) {

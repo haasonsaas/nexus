@@ -61,8 +61,10 @@ func (t *HTTPTransport) Connect(ctx context.Context) error {
 	t.logger.Info("HTTP transport ready", "url", t.config.URL)
 
 	// Start SSE listener for notifications
+	// Note: we don't pass the Connect ctx here as it may be short-lived.
+	// The sseLoop has its own lifecycle controlled by stopChan.
 	t.wg.Add(1)
-	go t.sseLoop(ctx)
+	go t.sseLoop()
 
 	return nil
 }
@@ -235,8 +237,16 @@ func (t *HTTPTransport) Connected() bool {
 }
 
 // sseLoop listens for Server-Sent Events.
-func (t *HTTPTransport) sseLoop(ctx context.Context) {
+// Uses its own context tied to stopChan to avoid leaking goroutines.
+func (t *HTTPTransport) sseLoop() {
 	defer t.wg.Done()
+
+	// Create a context that's cancelled when stopChan closes
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-t.stopChan
+		cancel()
+	}()
 
 	// Build SSE endpoint URL
 	sseURL := strings.TrimSuffix(t.config.URL, "/") + "/sse"
@@ -244,8 +254,6 @@ func (t *HTTPTransport) sseLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			return
-		case <-t.stopChan:
 			return
 		default:
 		}
@@ -255,8 +263,6 @@ func (t *HTTPTransport) sseLoop(ctx context.Context) {
 		// Wait before reconnecting
 		select {
 		case <-ctx.Done():
-			return
-		case <-t.stopChan:
 			return
 		case <-time.After(5 * time.Second):
 		}
@@ -295,8 +301,6 @@ func (t *HTTPTransport) connectSSE(ctx context.Context, sseURL string) {
 	for scanner.Scan() {
 		select {
 		case <-ctx.Done():
-			return
-		case <-t.stopChan:
 			return
 		default:
 		}

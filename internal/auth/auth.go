@@ -2,6 +2,7 @@ package auth
 
 import (
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"errors"
 	"strings"
@@ -72,15 +73,24 @@ func (s *Service) ValidateJWT(token string) (*models.User, error) {
 }
 
 // ValidateAPIKey validates an API key and returns the associated user.
+// Uses constant-time comparison to prevent timing attacks.
 func (s *Service) ValidateAPIKey(key string) (*models.User, error) {
 	if s == nil || len(s.apiKeys) == 0 {
 		return nil, ErrAuthDisabled
 	}
-	user, ok := s.apiKeys[strings.TrimSpace(key)]
-	if !ok {
+	inputKey := strings.TrimSpace(key)
+	// Iterate through all keys using constant-time comparison
+	// to prevent timing attacks that could reveal valid keys.
+	var matchedUser *models.User
+	for storedKey, user := range s.apiKeys {
+		if subtle.ConstantTimeCompare([]byte(inputKey), []byte(storedKey)) == 1 {
+			matchedUser = user
+		}
+	}
+	if matchedUser == nil {
 		return nil, ErrInvalidKey
 	}
-	return user, nil
+	return matchedUser, nil
 }
 
 func buildAPIKeyMap(keys []APIKeyConfig) map[string]*models.User {

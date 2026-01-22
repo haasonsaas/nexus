@@ -7,6 +7,7 @@ import (
 )
 
 var (
+	globalMu       sync.RWMutex
 	globalRegistry *Registry
 	globalOnce     sync.Once
 )
@@ -15,15 +16,22 @@ var (
 // The registry is created lazily on first access.
 func Global() *Registry {
 	globalOnce.Do(func() {
+		globalMu.Lock()
 		globalRegistry = NewRegistry(nil)
+		globalMu.Unlock()
 	})
-	return globalRegistry
+	globalMu.RLock()
+	r := globalRegistry
+	globalMu.RUnlock()
+	return r
 }
 
 // SetGlobalRegistry replaces the global registry.
 // This should only be called during initialization.
 func SetGlobalRegistry(r *Registry) {
+	globalMu.Lock()
 	globalRegistry = r
+	globalMu.Unlock()
 }
 
 // SetGlobalLogger sets the logger for the global registry.

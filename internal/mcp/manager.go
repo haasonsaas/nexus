@@ -10,10 +10,11 @@ import (
 
 // Manager manages multiple MCP server connections.
 type Manager struct {
-	config  *Config
-	logger  *slog.Logger
-	clients map[string]*Client
-	mu      sync.RWMutex
+	config     *Config
+	logger     *slog.Logger
+	clients    map[string]*Client
+	connecting map[string]bool // tracks in-progress connection attempts
+	mu         sync.RWMutex
 
 	samplingHandler SamplingHandler
 }
@@ -31,9 +32,10 @@ func NewManager(cfg *Config, logger *slog.Logger) *Manager {
 	}
 
 	return &Manager{
-		config:  cfg,
-		logger:  logger.With("component", "mcp"),
-		clients: make(map[string]*Client),
+		config:     cfg,
+		logger:     logger.With("component", "mcp"),
+		clients:    make(map[string]*Client),
+		connecting: make(map[string]bool),
 	}
 }
 
@@ -92,24 +94,38 @@ func (m *Manager) Connect(ctx context.Context, serverID string) error {
 		return fmt.Errorf("server %q not found in config", serverID)
 	}
 
-	// Check if already connected
-	m.mu.RLock()
+	// Check if already connected or connection in progress
+	m.mu.Lock()
 	if _, exists := m.clients[serverID]; exists {
-		m.mu.RUnlock()
+		m.mu.Unlock()
 		return nil
 	}
-	m.mu.RUnlock()
+	if m.connecting[serverID] {
+		m.mu.Unlock()
+		return nil // Another goroutine is already connecting
+	}
+	m.connecting[serverID] = true
+	m.mu.Unlock()
 
-	// Create and connect client
+	// Create and connect client (outside lock to avoid blocking other operations)
 	client := NewClient(serverCfg, m.logger)
-	if err := client.Connect(ctx); err != nil {
+	err := client.Connect(ctx)
+
+	m.mu.Lock()
+	delete(m.connecting, serverID)
+	if err != nil {
+		m.mu.Unlock()
 		return err
+	}
+	// Double-check in case another goroutine connected while we were connecting
+	if _, exists := m.clients[serverID]; exists {
+		m.mu.Unlock()
+		client.Close() // Clean up duplicate
+		return nil
 	}
 	if m.samplingHandler != nil {
 		client.HandleSampling(m.samplingHandler)
 	}
-
-	m.mu.Lock()
 	m.clients[serverID] = client
 	m.mu.Unlock()
 

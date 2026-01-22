@@ -126,6 +126,10 @@ type ProcessingOptions struct {
 
 	// Timeout for processing operations
 	Timeout time.Duration
+
+	// AllowedBasePath restricts local file reads to this directory.
+	// If empty, local file reads are rejected for security.
+	AllowedBasePath string
 }
 
 // DefaultOptions returns sensible default processing options.

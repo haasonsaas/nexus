@@ -47,6 +47,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/doctor"
 	"github.com/haasonsaas/nexus/internal/gateway"
@@ -130,6 +131,7 @@ Documentation: https://github.com/haasonsaas/nexus`,
 		buildServiceCmd(),
 		buildMemoryCmd(),
 		buildMcpCmd(),
+		buildTraceCmd(),
 	)
 
 	return rootCmd
@@ -2656,6 +2658,335 @@ func buildPromptCmd() *cobra.Command {
 	cmd.Flags().StringVar(&channel, "channel", "", "Channel type (telegram, discord, slack)")
 	cmd.Flags().StringVar(&message, "message", "", "Message content (used for heartbeat mode)")
 	cmd.Flags().BoolVar(&heartbeat, "heartbeat", false, "Force heartbeat prompt mode")
+
+	return cmd
+}
+
+// =============================================================================
+// Trace Commands
+// =============================================================================
+
+// buildTraceCmd creates the "trace" command group for JSONL trace operations.
+func buildTraceCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "trace",
+		Short: "Manage JSONL trace files for debugging and replay",
+		Long: `Manage JSONL trace files for debugging and replay.
+
+Trace files record agent events in JSONL format for:
+- Debugging agent behavior
+- Replaying runs for testing
+- Computing statistics from historical runs
+- Validating trace structure
+
+Example workflow:
+  nexus trace validate run.jsonl     # Check trace structure
+  nexus trace stats run.jsonl        # View computed statistics
+  nexus trace replay run.jsonl       # Replay events to stdout`,
+	}
+	cmd.AddCommand(
+		buildTraceValidateCmd(),
+		buildTraceStatsCmd(),
+		buildTraceReplayCmd(),
+	)
+	return cmd
+}
+
+// buildTraceValidateCmd creates the "trace validate" subcommand.
+func buildTraceValidateCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "validate <file>",
+		Short: "Validate a trace file structure",
+		Long: `Validate a JSONL trace file for structural correctness.
+
+Checks:
+- Header has valid version
+- First event is run.started
+- Last event is run.finished or run.error
+- Sequences are strictly increasing
+- All events can be parsed`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			filePath := args[0]
+			out := cmd.OutOrStdout()
+
+			f, err := os.Open(filePath)
+			if err != nil {
+				return fmt.Errorf("failed to open trace file: %w", err)
+			}
+			defer f.Close()
+
+			reader, err := agent.NewTraceReader(f)
+			if err != nil {
+				return fmt.Errorf("failed to read trace: %w", err)
+			}
+
+			// Replay to validate
+			replayer := agent.NewTraceReplayer(reader, agent.NopSink{})
+			stats, err := replayer.Replay(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("replay failed: %w", err)
+			}
+
+			// Print header info
+			header := reader.Header()
+			fmt.Fprintf(out, "Trace: %s\n", filePath)
+			fmt.Fprintf(out, "  Run ID:     %s\n", header.RunID)
+			fmt.Fprintf(out, "  Version:    %d\n", header.Version)
+			fmt.Fprintf(out, "  Started:    %s\n", header.StartedAt.Format(time.RFC3339))
+			if header.AppVersion != "" {
+				fmt.Fprintf(out, "  App:        %s\n", header.AppVersion)
+			}
+			if header.Environment != "" {
+				fmt.Fprintf(out, "  Env:        %s\n", header.Environment)
+			}
+			fmt.Fprintln(out)
+
+			// Print stats
+			fmt.Fprintf(out, "Events: %d (seq %d..%d)\n", stats.EventCount, stats.FirstSequence, stats.LastSequence)
+			fmt.Fprintln(out)
+
+			// Print validation results
+			if stats.Valid() {
+				fmt.Fprintln(out, "✓ Trace is valid")
+				return nil
+			}
+
+			fmt.Fprintln(out, "✗ Validation errors:")
+			for _, e := range stats.Errors {
+				fmt.Fprintf(out, "  - %s\n", e)
+			}
+			return fmt.Errorf("trace validation failed with %d errors", len(stats.Errors))
+		},
+	}
+	return cmd
+}
+
+// buildTraceStatsCmd creates the "trace stats" subcommand.
+func buildTraceStatsCmd() *cobra.Command {
+	var jsonOutput bool
+
+	cmd := &cobra.Command{
+		Use:   "stats <file>",
+		Short: "Compute and display statistics from a trace file",
+		Long: `Recompute run statistics from a JSONL trace file.
+
+Statistics include:
+- Timing (wall time, model time, tool time)
+- Token counts (input/output)
+- Iteration and tool call counts
+- Error counts`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			filePath := args[0]
+			out := cmd.OutOrStdout()
+
+			f, err := os.Open(filePath)
+			if err != nil {
+				return fmt.Errorf("failed to open trace file: %w", err)
+			}
+			defer f.Close()
+
+			reader, err := agent.NewTraceReader(f)
+			if err != nil {
+				return fmt.Errorf("failed to read trace: %w", err)
+			}
+
+			stats, err := agent.ReplayToStats(reader)
+			if err != nil {
+				return fmt.Errorf("failed to compute stats: %w", err)
+			}
+
+			if jsonOutput {
+				enc := json.NewEncoder(out)
+				enc.SetIndent("", "  ")
+				return enc.Encode(stats)
+			}
+
+			// Human-readable output
+			fmt.Fprintf(out, "Run Statistics: %s\n", stats.RunID)
+			fmt.Fprintln(out, strings.Repeat("-", 40))
+
+			// Timing
+			fmt.Fprintln(out, "Timing:")
+			fmt.Fprintf(out, "  Wall time:    %v\n", stats.WallTime)
+			fmt.Fprintf(out, "  Model time:   %v\n", stats.ModelWallTime)
+			fmt.Fprintf(out, "  Tool time:    %v\n", stats.ToolWallTime)
+			fmt.Fprintln(out)
+
+			// Counts
+			fmt.Fprintln(out, "Counts:")
+			fmt.Fprintf(out, "  Turns:        %d\n", stats.Turns)
+			fmt.Fprintf(out, "  Iterations:   %d\n", stats.Iters)
+			fmt.Fprintf(out, "  Tool calls:   %d\n", stats.ToolCalls)
+			fmt.Fprintln(out)
+
+			// Tokens
+			fmt.Fprintln(out, "Tokens:")
+			fmt.Fprintf(out, "  Input:        %d\n", stats.InputTokens)
+			fmt.Fprintf(out, "  Output:       %d\n", stats.OutputTokens)
+			fmt.Fprintln(out)
+
+			// Errors
+			if stats.Errors > 0 {
+				fmt.Fprintf(out, "Errors: %d\n", stats.Errors)
+			}
+
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output statistics as JSON")
+	return cmd
+}
+
+// buildTraceReplayCmd creates the "trace replay" subcommand.
+func buildTraceReplayCmd() *cobra.Command {
+	var (
+		speed    float64
+		fromSeq  uint64
+		toSeq    uint64
+		filter   string
+		showTime bool
+	)
+
+	cmd := &cobra.Command{
+		Use:   "replay <file>",
+		Short: "Replay trace events to stdout",
+		Long: `Replay events from a JSONL trace file to stdout.
+
+Use for:
+- Watching agent behavior unfold
+- Debugging specific sequences
+- Filtering to specific event types
+
+Speed control:
+  --speed 0     Instant (default)
+  --speed 1     Real-time
+  --speed 2     2x speed
+  --speed 0.5   Half speed`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			filePath := args[0]
+			out := cmd.OutOrStdout()
+
+			f, err := os.Open(filePath)
+			if err != nil {
+				return fmt.Errorf("failed to open trace file: %w", err)
+			}
+			defer f.Close()
+
+			reader, err := agent.NewTraceReader(f)
+			if err != nil {
+				return fmt.Errorf("failed to read trace: %w", err)
+			}
+
+			// Create a callback sink that prints events
+			printSink := agent.NewCallbackSink(func(_ context.Context, e models.AgentEvent) {
+				// Apply filter
+				if filter != "" && !strings.Contains(string(e.Type), filter) {
+					return
+				}
+
+				// Format output
+				var prefix string
+				if showTime {
+					prefix = fmt.Sprintf("[%s] ", e.Time.Format("15:04:05.000"))
+				}
+
+				switch e.Type {
+				case models.AgentEventRunStarted:
+					fmt.Fprintf(out, "%s▶ Run started (run_id=%s)\n", prefix, e.RunID)
+
+				case models.AgentEventRunFinished:
+					fmt.Fprintf(out, "%s■ Run finished\n", prefix)
+					if e.Stats != nil && e.Stats.Run != nil {
+						fmt.Fprintf(out, "  wall=%v iters=%d tools=%d\n",
+							e.Stats.Run.WallTime, e.Stats.Run.Iters, e.Stats.Run.ToolCalls)
+					}
+
+				case models.AgentEventRunError:
+					if e.Error != nil {
+						fmt.Fprintf(out, "%s✗ Error: %s\n", prefix, e.Error.Message)
+					}
+
+				case models.AgentEventIterStarted:
+					fmt.Fprintf(out, "%s→ Iteration %d started\n", prefix, e.IterIndex)
+
+				case models.AgentEventIterFinished:
+					fmt.Fprintf(out, "%s← Iteration %d finished\n", prefix, e.IterIndex)
+
+				case models.AgentEventToolStarted:
+					if e.Tool != nil {
+						fmt.Fprintf(out, "%s⚙ Tool: %s (call_id=%s)\n", prefix, e.Tool.Name, e.Tool.CallID)
+					}
+
+				case models.AgentEventToolFinished:
+					if e.Tool != nil {
+						status := "✓"
+						if !e.Tool.Success {
+							status = "✗"
+						}
+						fmt.Fprintf(out, "%s  %s %s completed (%v)\n", prefix, status, e.Tool.Name, e.Tool.Elapsed)
+					}
+
+				case models.AgentEventModelDelta:
+					if e.Stream != nil && e.Stream.Delta != "" {
+						// Print streaming text without newline for natural flow
+						fmt.Fprint(out, e.Stream.Delta)
+					}
+
+				case models.AgentEventModelCompleted:
+					fmt.Fprintln(out) // End the streaming line
+					if e.Stream != nil {
+						fmt.Fprintf(out, "%s  [tokens: in=%d out=%d]\n",
+							prefix, e.Stream.InputTokens, e.Stream.OutputTokens)
+					}
+
+				default:
+					// Other events - print type for debugging
+					fmt.Fprintf(out, "%s  [%s] seq=%d\n", prefix, e.Type, e.Sequence)
+				}
+			})
+
+			// Build replay options
+			var opts []agent.ReplayOption
+			if speed > 0 {
+				opts = append(opts, agent.WithSpeed(speed))
+			}
+			if fromSeq > 0 || toSeq > 0 {
+				opts = append(opts, agent.WithSequenceRange(fromSeq, toSeq))
+			}
+
+			replayer := agent.NewTraceReplayer(reader, printSink, opts...)
+
+			fmt.Fprintf(out, "Replaying: %s\n", filePath)
+			fmt.Fprintf(out, "Run ID: %s\n", reader.Header().RunID)
+			fmt.Fprintln(out, strings.Repeat("-", 40))
+
+			stats, err := replayer.Replay(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("replay failed: %w", err)
+			}
+
+			fmt.Fprintln(out, strings.Repeat("-", 40))
+			fmt.Fprintf(out, "Replayed %d events\n", stats.EventCount)
+
+			if !stats.Valid() {
+				fmt.Fprintln(out, "Warnings:")
+				for _, e := range stats.Errors {
+					fmt.Fprintf(out, "  - %s\n", e)
+				}
+			}
+
+			return nil
+		},
+	}
+
+	cmd.Flags().Float64Var(&speed, "speed", 0, "Replay speed (0=instant, 1=real-time, 2=2x)")
+	cmd.Flags().Uint64Var(&fromSeq, "from", 0, "Start from sequence number")
+	cmd.Flags().Uint64Var(&toSeq, "to", 0, "Stop at sequence number")
+	cmd.Flags().StringVar(&filter, "filter", "", "Filter events by type substring (e.g., 'tool', 'model')")
+	cmd.Flags().BoolVar(&showTime, "time", false, "Show timestamps for each event")
 
 	return cmd
 }

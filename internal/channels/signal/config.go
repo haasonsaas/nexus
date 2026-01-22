@@ -2,8 +2,7 @@
 package signal
 
 import (
-	"fmt"
-
+	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/channels/personal"
 )
 
@@ -48,11 +47,11 @@ func (c *Config) Validate() error {
 	}
 
 	if c.Account == "" {
-		return fmt.Errorf("signal: account (phone number) is required")
+		return channels.ErrConfig("signal: account (phone number) is required", nil)
 	}
 
 	if c.SignalCLIPath == "" {
-		return fmt.Errorf("signal: signal_cli_path is required")
+		return channels.ErrConfig("signal: signal_cli_path is required", nil)
 	}
 
 	return nil

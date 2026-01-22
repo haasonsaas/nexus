@@ -53,7 +53,7 @@ func New(cfg *Config, logger *slog.Logger) (*Adapter, error) {
 	// Expand session path
 	sessionPath := expandPath(cfg.SessionPath)
 	if err := os.MkdirAll(filepath.Dir(sessionPath), 0755); err != nil {
-		return nil, fmt.Errorf("failed to create session directory: %w", err)
+		return nil, channels.ErrConfig("failed to create session directory", err)
 	}
 
 	// Initialize SQLite store
@@ -62,7 +62,7 @@ func New(cfg *Config, logger *slog.Logger) (*Adapter, error) {
 		fmt.Sprintf("file:%s?_foreign_keys=on", sessionPath),
 		dbLog)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create store: %w", err)
+		return nil, channels.ErrConnection("failed to create store", err)
 	}
 
 	adapter := &Adapter{
@@ -83,7 +83,7 @@ func (a *Adapter) Start(ctx context.Context) error {
 	// Get or create device
 	device, err := a.store.GetFirstDevice(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get device: %w", err)
+		return channels.ErrConnection("failed to get device", err)
 	}
 	a.device = device
 
@@ -97,10 +97,10 @@ func (a *Adapter) Start(ctx context.Context) error {
 		// Not logged in - need QR code
 		qrChan, err := a.client.GetQRChannel(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to get QR channel: %w", err)
+			return channels.ErrAuthentication("failed to get QR channel", err)
 		}
 		if err := a.client.Connect(); err != nil {
-			return fmt.Errorf("failed to connect: %w", err)
+			return channels.ErrConnection("failed to connect", err)
 		}
 
 		// Handle QR code events with context cancellation
@@ -129,7 +129,7 @@ func (a *Adapter) Start(ctx context.Context) error {
 	} else {
 		// Already logged in
 		if err := a.client.Connect(); err != nil {
-			return fmt.Errorf("failed to connect: %w", err)
+			return channels.ErrConnection("failed to connect", err)
 		}
 	}
 
@@ -167,17 +167,17 @@ func (a *Adapter) Stop(ctx context.Context) error {
 // Send sends a message through WhatsApp.
 func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	if !a.isConnected() {
-		return fmt.Errorf("not connected to WhatsApp")
+		return channels.ErrUnavailable("not connected to WhatsApp", nil)
 	}
 
 	peerID, ok := msg.Metadata["peer_id"].(string)
 	if !ok || peerID == "" {
-		return fmt.Errorf("missing peer_id in message metadata")
+		return channels.ErrInvalidInput("missing peer_id in message metadata", nil)
 	}
 
 	jid, err := types.ParseJID(peerID)
 	if err != nil {
-		return fmt.Errorf("invalid peer ID %q: %w", peerID, err)
+		return channels.ErrInvalidInput(fmt.Sprintf("invalid peer ID %q", peerID), err)
 	}
 
 	// Send text message
@@ -188,7 +188,7 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 		_, err = a.client.SendMessage(ctx, jid, waMsg)
 		if err != nil {
 			a.IncrementErrors()
-			return fmt.Errorf("failed to send message: %w", err)
+			return channels.ErrConnection("failed to send message", err)
 		}
 		a.IncrementSent()
 	}
@@ -259,7 +259,7 @@ func (a *Adapter) Presence() personal.PresenceManager {
 func (a *Adapter) GetConversation(ctx context.Context, peerID string) (*personal.Conversation, error) {
 	jid, err := types.ParseJID(peerID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid peer ID: %w", err)
+		return nil, channels.ErrInvalidInput("invalid peer ID", err)
 	}
 
 	convType := personal.ConversationDM
@@ -397,7 +397,10 @@ func (a *Adapter) handlePresence(evt *events.Presence) {
 
 // getContactName retrieves a contact's display name.
 func (a *Adapter) getContactName(jid types.JID) string {
-	ctx := context.Background()
+	// Use a timeout context to prevent indefinite blocking during shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	contact, err := a.client.Store.Contacts.GetContact(ctx, jid)
 	if err == nil && contact.FullName != "" {
 		return contact.FullName
@@ -410,7 +413,10 @@ func (a *Adapter) getContactName(jid types.JID) string {
 
 // getGroupName retrieves a group's name.
 func (a *Adapter) getGroupName(jid types.JID) string {
-	ctx := context.Background()
+	// Use a timeout context to prevent indefinite blocking during shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	group, err := a.client.GetGroupInfo(ctx, jid)
 	if err == nil && group.Name != "" {
 		return group.Name
@@ -430,7 +436,7 @@ func (a *Adapter) sendAttachment(ctx context.Context, jid types.JID, att models.
 	// Download attachment data
 	data, err := downloadURL(att.URL)
 	if err != nil {
-		return fmt.Errorf("failed to download attachment: %w", err)
+		return channels.ErrConnection("failed to download attachment", err)
 	}
 
 	mimeType := att.MimeType
@@ -454,7 +460,7 @@ func (a *Adapter) sendAttachment(ctx context.Context, jid types.JID, att models.
 	// Upload to WhatsApp
 	uploaded, err := a.client.Upload(ctx, data, uploadType)
 	if err != nil {
-		return fmt.Errorf("failed to upload: %w", err)
+		return channels.ErrConnection("failed to upload", err)
 	}
 
 	// Create and send message based on type
@@ -518,7 +524,7 @@ func (a *Adapter) sendAttachment(ctx context.Context, jid types.JID, att models.
 
 	_, err = a.client.SendMessage(ctx, jid, waMsg)
 	if err != nil {
-		return fmt.Errorf("failed to send attachment message: %w", err)
+		return channels.ErrConnection("failed to send attachment message", err)
 	}
 
 	a.IncrementSent()
@@ -532,7 +538,10 @@ func (a *Adapter) downloadImage(evt *events.Message) *personal.RawAttachment {
 		return nil
 	}
 
-	ctx := context.Background()
+	// Use a timeout context for media downloads (30 seconds max)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	data, err := a.client.Download(ctx, img)
 	if err != nil {
 		a.Logger().Error("failed to download image", "error", err)
@@ -553,7 +562,10 @@ func (a *Adapter) downloadDocument(evt *events.Message) *personal.RawAttachment 
 		return nil
 	}
 
-	ctx := context.Background()
+	// Use a timeout context for media downloads (30 seconds max)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	data, err := a.client.Download(ctx, doc)
 	if err != nil {
 		a.Logger().Error("failed to download document", "error", err)
@@ -575,7 +587,10 @@ func (a *Adapter) downloadAudio(evt *events.Message) *personal.RawAttachment {
 		return nil
 	}
 
-	ctx := context.Background()
+	// Use a timeout context for media downloads (30 seconds max)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	data, err := a.client.Download(ctx, audio)
 	if err != nil {
 		a.Logger().Error("failed to download audio", "error", err)
@@ -596,7 +611,10 @@ func (a *Adapter) downloadVideo(evt *events.Message) *personal.RawAttachment {
 		return nil
 	}
 
-	ctx := context.Background()
+	// Use a timeout context for media downloads (30 seconds max)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	data, err := a.client.Download(ctx, video)
 	if err != nil {
 		a.Logger().Error("failed to download video", "error", err)

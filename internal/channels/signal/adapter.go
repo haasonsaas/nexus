@@ -46,12 +46,12 @@ func New(cfg *Config, logger *slog.Logger) (*Adapter, error) {
 	}
 
 	if cfg.Account == "" {
-		return nil, fmt.Errorf("signal account (phone number) is required")
+		return nil, channels.ErrConfig("signal account (phone number) is required", nil)
 	}
 
 	// Verify signal-cli is available
 	if _, err := exec.LookPath(cfg.SignalCLIPath); err != nil {
-		return nil, fmt.Errorf("signal-cli not found at %q: %w", cfg.SignalCLIPath, err)
+		return nil, channels.ErrNotFound(fmt.Sprintf("signal-cli not found at %q", cfg.SignalCLIPath), err)
 	}
 
 	adapter := &Adapter{
@@ -87,22 +87,22 @@ func (a *Adapter) Start(ctx context.Context) error {
 	var err error
 	a.stdin, err = a.process.StdinPipe()
 	if err != nil {
-		return fmt.Errorf("failed to create stdin pipe: %w", err)
+		return channels.ErrConnection("failed to create stdin pipe", err)
 	}
 
 	a.stdout, err = a.process.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("failed to create stdout pipe: %w", err)
+		return channels.ErrConnection("failed to create stdout pipe", err)
 	}
 
 	a.stderr, err = a.process.StderrPipe()
 	if err != nil {
-		return fmt.Errorf("failed to create stderr pipe: %w", err)
+		return channels.ErrConnection("failed to create stderr pipe", err)
 	}
 
 	// Start the process
 	if err := a.process.Start(); err != nil {
-		return fmt.Errorf("failed to start signal-cli: %w", err)
+		return channels.ErrConnection("failed to start signal-cli", err)
 	}
 
 	a.SetStatus(true, "")
@@ -143,7 +143,7 @@ func (a *Adapter) Stop(ctx context.Context) error {
 func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	peerID, ok := msg.Metadata["peer_id"].(string)
 	if !ok || peerID == "" {
-		return fmt.Errorf("missing peer_id in message metadata")
+		return channels.ErrInvalidInput("missing peer_id in message metadata", nil)
 	}
 
 	// Build send request
@@ -194,7 +194,7 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	_, err := a.call(ctx, req)
 	if err != nil {
 		a.IncrementErrors()
-		return fmt.Errorf("failed to send message: %w", err)
+		return channels.ErrConnection("failed to send message", err)
 	}
 
 	a.IncrementSent()
@@ -408,11 +408,11 @@ func (a *Adapter) call(ctx context.Context, req map[string]any) (json.RawMessage
 	// Send request
 	data, err := json.Marshal(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
+		return nil, channels.ErrInternal("failed to marshal request", err)
 	}
 
 	if _, err := fmt.Fprintf(a.stdin, "%s\n", data); err != nil {
-		return nil, fmt.Errorf("failed to write request: %w", err)
+		return nil, channels.ErrConnection("failed to write request", err)
 	}
 
 	// Wait for response
@@ -422,7 +422,7 @@ func (a *Adapter) call(ctx context.Context, req map[string]any) (json.RawMessage
 	case result := <-ch:
 		return result, nil
 	case <-time.After(30 * time.Second):
-		return nil, fmt.Errorf("request timeout")
+		return nil, channels.ErrTimeout("request timeout", nil)
 	}
 }
 

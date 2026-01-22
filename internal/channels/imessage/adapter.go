@@ -69,19 +69,19 @@ func (a *Adapter) Start(ctx context.Context) error {
 
 	// Check if database exists
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		return fmt.Errorf("iMessage database not found at %q", dbPath)
+		return channels.ErrNotFound(fmt.Sprintf("iMessage database not found at %q", dbPath), nil)
 	}
 
 	// Open database in read-only mode
 	db, err := sql.Open("sqlite", fmt.Sprintf("file:%s?mode=ro", dbPath))
 	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
+		return channels.ErrConnection("failed to open database", err)
 	}
 	a.db = db
 
 	// Test connection
 	if err := db.PingContext(ctx); err != nil {
-		return fmt.Errorf("failed to ping database: %w", err)
+		return channels.ErrConnection("failed to ping database", err)
 	}
 
 	// Get the last message ID to avoid processing old messages
@@ -125,7 +125,7 @@ func (a *Adapter) Stop(ctx context.Context) error {
 func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	peerID, ok := msg.Metadata["peer_id"].(string)
 	if !ok || peerID == "" {
-		return fmt.Errorf("missing peer_id in message metadata")
+		return channels.ErrInvalidInput("missing peer_id in message metadata", nil)
 	}
 
 	// Build AppleScript
@@ -140,7 +140,7 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	cmd := exec.CommandContext(ctx, "osascript", "-e", script)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		a.IncrementErrors()
-		return fmt.Errorf("failed to send message via AppleScript: %w (output: %s)", err, output)
+		return channels.ErrConnection(fmt.Sprintf("failed to send message via AppleScript (output: %s)", output), err)
 	}
 
 	a.IncrementSent()
@@ -210,7 +210,7 @@ func (a *Adapter) GetConversation(ctx context.Context, peerID string) (*personal
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to query conversation: %w", err)
+		return nil, channels.ErrInternal("failed to query conversation", err)
 	}
 
 	convType := personal.ConversationDM
@@ -241,7 +241,7 @@ func (a *Adapter) ListConversations(ctx context.Context, opts personal.ListOptio
 
 	rows, err := a.db.QueryContext(ctx, query, limit)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query conversations: %w", err)
+		return nil, channels.ErrInternal("failed to query conversations", err)
 	}
 	defer rows.Close()
 

@@ -6,8 +6,8 @@ package imessage
 
 import (
 	"context"
-	"fmt"
 
+	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/channels/personal"
 )
 
@@ -64,7 +64,7 @@ func (c *contactManager) Search(ctx context.Context, query string) ([]*personal.
 
 	rows, err := c.adapter.db.QueryContext(ctx, sqlQuery, "%"+query+"%")
 	if err != nil {
-		return nil, fmt.Errorf("failed to search contacts: %w", err)
+		return nil, channels.ErrInternal("failed to search contacts", err)
 	}
 	defer rows.Close()
 
@@ -93,7 +93,7 @@ func (c *contactManager) Sync(ctx context.Context) error {
 
 	rows, err := c.adapter.db.QueryContext(ctx, query)
 	if err != nil {
-		return fmt.Errorf("failed to list handles: %w", err)
+		return channels.ErrInternal("failed to list handles", err)
 	}
 	defer rows.Close()
 

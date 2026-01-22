@@ -2,8 +2,7 @@
 package whatsapp
 
 import (
-	"fmt"
-
+	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/channels/personal"
 )
 
@@ -50,7 +49,7 @@ func (c *Config) Validate() error {
 	}
 
 	if c.SessionPath == "" {
-		return fmt.Errorf("whatsapp: session_path is required")
+		return channels.ErrConfig("whatsapp: session_path is required", nil)
 	}
 
 	return nil

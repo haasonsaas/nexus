@@ -5,9 +5,9 @@
 package imessage
 
 import (
-	"fmt"
 	"time"
 
+	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/channels/personal"
 )
 
@@ -50,12 +50,12 @@ func (c *Config) Validate() error {
 	}
 
 	if c.DatabasePath == "" {
-		return fmt.Errorf("imessage: database_path is required")
+		return channels.ErrConfig("imessage: database_path is required", nil)
 	}
 
 	if c.PollInterval != "" {
 		if _, err := time.ParseDuration(c.PollInterval); err != nil {
-			return fmt.Errorf("imessage: invalid poll_interval %q: %w", c.PollInterval, err)
+			return channels.ErrConfig("imessage: invalid poll_interval", err)
 		}
 	}
 

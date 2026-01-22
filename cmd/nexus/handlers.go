@@ -2409,4 +2409,3 @@ func runEdgeRevoke(cmd *cobra.Command, configPath string, edgeID string) error {
 	fmt.Fprintln(cmd.OutOrStdout(), "No approved edge found with that ID.")
 	return nil
 }
-

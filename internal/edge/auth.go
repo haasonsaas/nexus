@@ -13,11 +13,11 @@ import (
 
 // Common authentication errors.
 var (
-	ErrInvalidToken     = errors.New("invalid authentication token")
-	ErrEdgeNotAllowed   = errors.New("edge not in allowed list")
-	ErrEdgeIDConflict   = errors.New("edge ID already in use")
-	ErrTOFUPending      = errors.New("TOFU approval pending")
-	ErrTOFURejected     = errors.New("TOFU request rejected")
+	ErrInvalidToken   = errors.New("invalid authentication token")
+	ErrEdgeNotAllowed = errors.New("edge not in allowed list")
+	ErrEdgeIDConflict = errors.New("edge ID already in use")
+	ErrTOFUPending    = errors.New("TOFU approval pending")
+	ErrTOFURejected   = errors.New("TOFU request rejected")
 )
 
 // TokenAuthenticator validates edges using pre-shared tokens.

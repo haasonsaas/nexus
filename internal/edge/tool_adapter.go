@@ -13,8 +13,8 @@ import (
 // ToolAdapter wraps an edge tool to implement the agent.Tool interface.
 // This allows edge tools to be used seamlessly with the agent runtime.
 type ToolAdapter struct {
-	tool    *EdgeTool
-	manager *Manager
+	tool     *EdgeTool
+	manager  *Manager
 	identity naming.ToolIdentity
 }
 

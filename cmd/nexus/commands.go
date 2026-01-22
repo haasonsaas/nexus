@@ -1452,8 +1452,8 @@ func buildEdgeRevokeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "revoke [edge-id]",
 		Short: "Revoke an approved edge",
-		Long: `Revoke an approved edge, disconnecting it and preventing reconnection.`,
-		Args: cobra.ExactArgs(1),
+		Long:  `Revoke an approved edge, disconnecting it and preventing reconnection.`,
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runEdgeRevoke(cmd, configPath, args[0])
 		},

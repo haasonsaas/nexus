@@ -15,11 +15,11 @@ func TestTokenAuthenticator(t *testing.T) {
 	auth := NewTokenAuthenticator(tokens)
 
 	tests := []struct {
-		name      string
-		edgeID    string
-		token     string
-		wantErr   bool
-		wantEdge  string
+		name     string
+		edgeID   string
+		token    string
+		wantErr  bool
+		wantEdge string
 	}{
 		{"valid edge1", "edge1", "secret1", false, "edge1"},
 		{"valid edge2", "edge2", "secret2", false, "edge2"},
@@ -164,8 +164,8 @@ func TestTOFUAuthenticatorLists(t *testing.T) {
 func TestCompositeAuthenticator(t *testing.T) {
 	// First auth rejects, second accepts
 	tokens := map[string]string{"edge2": "secret2"}
-	auth1 := NewTokenAuthenticator(nil)         // Rejects all
-	auth2 := NewTokenAuthenticator(tokens)      // Accepts edge2
+	auth1 := NewTokenAuthenticator(nil)    // Rejects all
+	auth2 := NewTokenAuthenticator(tokens) // Accepts edge2
 
 	composite := NewCompositeAuthenticator(auth1, auth2)
 

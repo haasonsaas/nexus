@@ -165,11 +165,11 @@ type EventStore interface {
 
 // MemoryEventStore is an in-memory implementation of EventStore.
 type MemoryEventStore struct {
-	mu       sync.RWMutex
-	events   map[string]*Event
-	byRunID  map[string][]string // runID -> eventIDs
+	mu        sync.RWMutex
+	events    map[string]*Event
+	byRunID   map[string][]string // runID -> eventIDs
 	bySession map[string][]string // sessionID -> eventIDs
-	maxSize  int
+	maxSize   int
 }
 
 // NewMemoryEventStore creates a new in-memory event store.
@@ -389,19 +389,19 @@ func NewEventRecorder(store EventStore, logger *Logger) *EventRecorder {
 // Record records an event, extracting correlation IDs from context.
 func (r *EventRecorder) Record(ctx context.Context, eventType EventType, name string, data map[string]interface{}) error {
 	event := &Event{
-		ID:          generateEventID(),
-		Type:        eventType,
-		Timestamp:   time.Now(),
-		RunID:       GetRunID(ctx),
-		SessionID:   GetSessionID(ctx),
-		ToolCallID:  GetToolCallID(ctx),
-		EdgeID:      GetEdgeID(ctx),
-		AgentID:     GetAgentID(ctx),
-		MessageID:   GetMessageID(ctx),
-		Name:        name,
-		Data:        data,
-		TraceID:     GetTraceID(ctx),
-		SpanID:      GetSpanID(ctx),
+		ID:         generateEventID(),
+		Type:       eventType,
+		Timestamp:  time.Now(),
+		RunID:      GetRunID(ctx),
+		SessionID:  GetSessionID(ctx),
+		ToolCallID: GetToolCallID(ctx),
+		EdgeID:     GetEdgeID(ctx),
+		AgentID:    GetAgentID(ctx),
+		MessageID:  GetMessageID(ctx),
+		Name:       name,
+		Data:       data,
+		TraceID:    GetTraceID(ctx),
+		SpanID:     GetSpanID(ctx),
 	}
 
 	if r.logger != nil {
@@ -423,20 +423,20 @@ func (r *EventRecorder) RecordError(ctx context.Context, eventType EventType, na
 	data["error"] = err.Error()
 
 	event := &Event{
-		ID:          generateEventID(),
-		Type:        eventType,
-		Timestamp:   time.Now(),
-		RunID:       GetRunID(ctx),
-		SessionID:   GetSessionID(ctx),
-		ToolCallID:  GetToolCallID(ctx),
-		EdgeID:      GetEdgeID(ctx),
-		AgentID:     GetAgentID(ctx),
-		MessageID:   GetMessageID(ctx),
-		Name:        name,
-		Data:        data,
-		Error:       err.Error(),
-		TraceID:     GetTraceID(ctx),
-		SpanID:      GetSpanID(ctx),
+		ID:         generateEventID(),
+		Type:       eventType,
+		Timestamp:  time.Now(),
+		RunID:      GetRunID(ctx),
+		SessionID:  GetSessionID(ctx),
+		ToolCallID: GetToolCallID(ctx),
+		EdgeID:     GetEdgeID(ctx),
+		AgentID:    GetAgentID(ctx),
+		MessageID:  GetMessageID(ctx),
+		Name:       name,
+		Data:       data,
+		Error:      err.Error(),
+		TraceID:    GetTraceID(ctx),
+		SpanID:     GetSpanID(ctx),
 	}
 
 	if r.logger != nil {
@@ -513,12 +513,12 @@ func (r *EventRecorder) RecordEdgeEvent(ctx context.Context, eventType EventType
 
 // Timeline represents a sequence of events for display.
 type Timeline struct {
-	RunID     string   `json:"run_id"`
-	SessionID string   `json:"session_id"`
-	StartTime time.Time `json:"start_time"`
-	EndTime   time.Time `json:"end_time"`
-	Duration  time.Duration `json:"duration"`
-	Events    []*Event `json:"events"`
+	RunID     string           `json:"run_id"`
+	SessionID string           `json:"session_id"`
+	StartTime time.Time        `json:"start_time"`
+	EndTime   time.Time        `json:"end_time"`
+	Duration  time.Duration    `json:"duration"`
+	Events    []*Event         `json:"events"`
 	Summary   *TimelineSummary `json:"summary"`
 }
 

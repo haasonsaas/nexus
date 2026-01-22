@@ -5,7 +5,11 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/haasonsaas/nexus/pkg/pluginsdk"
 )
@@ -15,10 +19,29 @@ type ManifestInfo struct {
 	Path     string
 }
 
+type manifestCacheEntry struct {
+	expires   time.Time
+	manifests map[string]ManifestInfo
+}
+
+var manifestCache = struct {
+	mu      sync.Mutex
+	entries map[string]manifestCacheEntry
+}{
+	entries: make(map[string]manifestCacheEntry),
+}
+
+const defaultManifestCacheTTL = 2 * time.Second
+
 // DiscoverManifests scans directories for plugin manifests.
 func DiscoverManifests(paths []string) (map[string]ManifestInfo, error) {
+	normalized := normalizeManifestPaths(paths)
+	if cached, ok := cachedManifests(normalized); ok {
+		return cached, nil
+	}
+
 	manifests := make(map[string]ManifestInfo)
-	for _, root := range paths {
+	for _, root := range normalized {
 		if strings.TrimSpace(root) == "" {
 			continue
 		}
@@ -62,6 +85,7 @@ func DiscoverManifests(paths []string) (map[string]ManifestInfo, error) {
 			return nil, fmt.Errorf("walk plugin path: %w", err)
 		}
 	}
+	storeManifestCache(normalized, manifests)
 	return manifests, nil
 }
 
@@ -129,4 +153,109 @@ func registerManifest(manifests map[string]ManifestInfo, entry ManifestInfo) err
 	}
 	manifests[id] = entry
 	return nil
+}
+
+func normalizeManifestPaths(paths []string) []string {
+	seen := make(map[string]struct{})
+	normalized := make([]string, 0, len(paths))
+	for _, path := range paths {
+		trimmed := strings.TrimSpace(path)
+		if trimmed == "" {
+			continue
+		}
+		cleaned := filepath.Clean(trimmed)
+		if _, ok := seen[cleaned]; ok {
+			continue
+		}
+		seen[cleaned] = struct{}{}
+		normalized = append(normalized, cleaned)
+	}
+	sort.Strings(normalized)
+	return normalized
+}
+
+func cachedManifests(paths []string) (map[string]ManifestInfo, bool) {
+	ttl := manifestCacheTTL()
+	if ttl <= 0 || len(paths) == 0 || manifestCacheDisabled() {
+		return nil, false
+	}
+	key := manifestCacheKey(paths)
+	if key == "" {
+		return nil, false
+	}
+
+	now := time.Now()
+	manifestCache.mu.Lock()
+	entry, ok := manifestCache.entries[key]
+	if ok && now.Before(entry.expires) {
+		manifests := cloneManifestMap(entry.manifests)
+		manifestCache.mu.Unlock()
+		return manifests, true
+	}
+	if ok {
+		delete(manifestCache.entries, key)
+	}
+	manifestCache.mu.Unlock()
+	return nil, false
+}
+
+func storeManifestCache(paths []string, manifests map[string]ManifestInfo) {
+	ttl := manifestCacheTTL()
+	if ttl <= 0 || len(paths) == 0 || manifestCacheDisabled() {
+		return
+	}
+	key := manifestCacheKey(paths)
+	if key == "" {
+		return
+	}
+
+	manifestCache.mu.Lock()
+	manifestCache.entries[key] = manifestCacheEntry{
+		expires:   time.Now().Add(ttl),
+		manifests: cloneManifestMap(manifests),
+	}
+	manifestCache.mu.Unlock()
+}
+
+func manifestCacheKey(paths []string) string {
+	if len(paths) == 0 {
+		return ""
+	}
+	return strings.Join(paths, "\n")
+}
+
+func cloneManifestMap(src map[string]ManifestInfo) map[string]ManifestInfo {
+	dst := make(map[string]ManifestInfo, len(src))
+	for key, info := range src {
+		dst[key] = info
+	}
+	return dst
+}
+
+func manifestCacheTTL() time.Duration {
+	value := strings.TrimSpace(os.Getenv("NEXUS_PLUGIN_MANIFEST_CACHE_MS"))
+	if value == "" {
+		return defaultManifestCacheTTL
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return defaultManifestCacheTTL
+	}
+	if parsed <= 0 {
+		return 0
+	}
+	return time.Duration(parsed) * time.Millisecond
+}
+
+func manifestCacheDisabled() bool {
+	return envBool(os.Getenv("NEXUS_DISABLE_PLUGIN_MANIFEST_CACHE"))
+}
+
+func envBool(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "y", "on":
+		return true
+	default:
+		return false
+	}
 }

@@ -1339,6 +1339,15 @@ func runDoctor(cmd *cobra.Command, configPath string, repair, probe, audit bool)
 				}
 			}
 		}
+		security := doctor.AuditSecurity(cfg, configPath)
+		if len(security.Findings) == 0 {
+			fmt.Fprintln(out, "Security audit: no issues detected")
+		} else {
+			fmt.Fprintln(out, "Security audit:")
+			for _, finding := range security.Findings {
+				fmt.Fprintf(out, "  - [%s] %s\n", strings.ToUpper(string(finding.Severity)), finding.Message)
+			}
+		}
 	}
 
 	fmt.Fprintf(out, "Config OK (provider: %s)\n", cfg.LLM.DefaultProvider)

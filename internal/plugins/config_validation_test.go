@@ -23,12 +23,13 @@ llm:
 `)
 
 	parsed, err := config.Load(cfg)
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
+	if err == nil {
+		t.Fatalf("expected load error")
 	}
-	if err := ValidateConfig(parsed); err == nil {
-		t.Fatalf("expected validation error")
+	if !strings.Contains(err.Error(), "plugins.entries.voice-call missing manifest") {
+		t.Fatalf("unexpected error: %v", err)
 	}
+	_ = parsed
 }
 
 func TestValidateConfigSchema(t *testing.T) {
@@ -61,12 +62,13 @@ llm:
 `)
 
 	parsed, err := config.Load(cfg)
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
+	if err == nil {
+		t.Fatalf("expected load error")
 	}
-	if err := ValidateConfig(parsed); err == nil {
-		t.Fatalf("expected schema validation error")
+	if !strings.Contains(err.Error(), "plugins.entries.voice-call config invalid") {
+		t.Fatalf("unexpected error: %v", err)
 	}
+	_ = parsed
 }
 
 func TestValidateConfigAcceptsPluginConfig(t *testing.T) {

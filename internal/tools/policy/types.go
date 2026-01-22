@@ -36,6 +36,11 @@ type Policy struct {
 
 	// Deny explicitly denies these tools (overrides allow).
 	Deny []string `json:"deny,omitempty" yaml:"deny"`
+
+	// ByProvider applies additional policy rules scoped to a tool provider.
+	// For MCP tools, the provider key is "mcp:<server>".
+	// For built-in tools, the provider key is "nexus".
+	ByProvider map[string]*Policy `json:"by_provider,omitempty" yaml:"by_provider,omitempty"`
 }
 
 // ToolGroup defines a named group of tools for convenient bulk permissions.

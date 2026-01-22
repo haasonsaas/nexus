@@ -56,6 +56,9 @@ type AgentDefinition struct {
 	// Provider specifies the LLM provider (optional, falls back to default).
 	Provider string `json:"provider,omitempty" yaml:"provider"`
 
+	// AgentDir is the state directory for this agent (optional).
+	AgentDir string `json:"agent_dir,omitempty" yaml:"agent_dir"`
+
 	// Tools lists the tools this agent has access to.
 	Tools []string `json:"tools,omitempty" yaml:"tools"`
 

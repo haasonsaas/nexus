@@ -3,6 +3,7 @@ package multiagent
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -766,5 +767,44 @@ Name: Router
 
 	if !rule.ReturnToSender {
 		t.Error("expected ReturnToSender to be true")
+	}
+}
+
+func TestValidateConfigDetectsAgentDirCollisions(t *testing.T) {
+	cfg := &MultiAgentConfig{
+		Agents: []AgentDefinition{
+			{ID: "agent-a", AgentDir: "./state"},
+			{ID: "agent-b", AgentDir: "state"},
+		},
+	}
+
+	errs := ValidateConfig(cfg)
+	if len(errs) == 0 {
+		t.Fatal("expected validation errors")
+	}
+
+	found := false
+	for _, err := range errs {
+		if strings.Contains(err.Error(), "duplicate agent_dir") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected duplicate agent_dir error, got: %v", errs)
+	}
+}
+
+func TestValidateConfigAllowsEmptyAgentDir(t *testing.T) {
+	cfg := &MultiAgentConfig{
+		Agents: []AgentDefinition{
+			{ID: "agent-a"},
+			{ID: "agent-b"},
+		},
+	}
+
+	errs := ValidateConfig(cfg)
+	if len(errs) != 0 {
+		t.Fatalf("expected no validation errors, got: %v", errs)
 	}
 }

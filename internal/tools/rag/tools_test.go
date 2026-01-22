@@ -3,6 +3,7 @@ package rag
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/haasonsaas/nexus/internal/agent"
@@ -59,11 +60,13 @@ var _ embeddings.Provider = errorEmbedder{}
 type recordingStore struct {
 	lastSearch *models.DocumentSearchRequest
 	lastDoc    *models.Document
+	addErr     error
+	searchErr  error
 }
 
 func (s *recordingStore) AddDocument(ctx context.Context, doc *models.Document, chunks []*models.DocumentChunk) error {
 	s.lastDoc = doc
-	return nil
+	return s.addErr
 }
 
 func (s *recordingStore) GetDocument(ctx context.Context, id string) (*models.Document, error) {
@@ -89,6 +92,9 @@ func (s *recordingStore) GetChunksByDocument(ctx context.Context, documentID str
 func (s *recordingStore) Search(ctx context.Context, req *models.DocumentSearchRequest, embedding []float32) (*models.DocumentSearchResponse, error) {
 	copyReq := *req
 	s.lastSearch = &copyReq
+	if s.searchErr != nil {
+		return nil, s.searchErr
+	}
 	return &models.DocumentSearchResponse{}, nil
 }
 
@@ -164,7 +170,40 @@ func TestSearchToolEmbedderError(t *testing.T) {
 		t.Fatalf("Execute error: %v", err)
 	}
 	if !result.IsError {
-		t.Fatalf("expected error result")
+		t.Fatalf("expected error result, got: %s", result.Content)
+	}
+}
+
+func TestSearchToolClampsLimit(t *testing.T) {
+	store := &recordingStore{}
+	manager := index.NewManager(store, stubEmbedder{dim: 3}, nil)
+	tool := NewSearchTool(manager, &SearchToolConfig{DefaultLimit: 2, MaxLimit: 3})
+
+	params := json.RawMessage(`{"query":"limit","limit":99}`)
+	_, err := tool.Execute(context.Background(), params)
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if store.lastSearch == nil {
+		t.Fatal("expected search request")
+	}
+	if store.lastSearch.Limit != 3 {
+		t.Fatalf("expected limit 3, got %d", store.lastSearch.Limit)
+	}
+}
+
+func TestSearchToolStoreError(t *testing.T) {
+	store := &recordingStore{searchErr: context.DeadlineExceeded}
+	manager := index.NewManager(store, stubEmbedder{dim: 3}, nil)
+	tool := NewSearchTool(manager, nil)
+
+	params := json.RawMessage(`{"query":"timeout"}`)
+	result, err := tool.Execute(context.Background(), params)
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatalf("expected error result, got: %s", result.Content)
 	}
 }
 
@@ -215,5 +254,64 @@ func TestUploadToolRejectsLargeContent(t *testing.T) {
 	}
 	if store.lastDoc != nil {
 		t.Fatalf("expected no document stored")
+	}
+}
+
+func TestUploadToolRejectsContentType(t *testing.T) {
+	store := &recordingStore{}
+	manager := index.NewManager(store, stubEmbedder{dim: 3}, nil)
+	tool := NewUploadTool(manager, &UploadToolConfig{AllowedContentTypes: []string{"text/plain"}})
+
+	params := json.RawMessage(`{"name":"Doc","content":"hello","content_type":"text/markdown"}`)
+	result, err := tool.Execute(context.Background(), params)
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatalf("expected error result")
+	}
+	if store.lastDoc != nil {
+		t.Fatalf("expected no document stored")
+	}
+}
+
+func TestUploadToolStoreError(t *testing.T) {
+	store := &recordingStore{addErr: context.DeadlineExceeded}
+	manager := index.NewManager(store, stubEmbedder{dim: 3}, nil)
+	tool := NewUploadTool(manager, nil)
+
+	params := json.RawMessage(`{"name":"Doc","content":"hello","content_type":"text/plain"}`)
+	result, err := tool.Execute(context.Background(), params)
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatalf("expected error result")
+	}
+}
+
+func TestUploadToolEmbedderError(t *testing.T) {
+	store := &recordingStore{}
+	manager := index.NewManager(store, errorEmbedder{err: context.Canceled}, nil)
+	tool := NewUploadTool(manager, nil)
+
+	payload, err := json.Marshal(map[string]any{
+		"name":         "Doc",
+		"content":      strings.Repeat("a", 120),
+		"content_type": "text/plain",
+	})
+	if err != nil {
+		t.Fatalf("marshal params: %v", err)
+	}
+	params := json.RawMessage(payload)
+	result, err := tool.Execute(context.Background(), params)
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatalf("expected error result, got: %s", result.Content)
+	}
+	if store.lastDoc != nil {
+		t.Fatalf("expected no document stored on embedder error")
 	}
 }

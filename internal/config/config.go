@@ -1161,6 +1161,10 @@ func validateConfig(cfg *Config) error {
 		}
 	}
 
+	if pluginIssues := pluginValidationIssues(cfg); len(pluginIssues) > 0 {
+		issues = append(issues, pluginIssues...)
+	}
+
 	if len(issues) > 0 {
 		return &ConfigValidationError{Issues: issues}
 	}

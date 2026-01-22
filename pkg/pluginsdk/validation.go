@@ -3,6 +3,7 @@ package pluginsdk
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
@@ -13,7 +14,7 @@ func (m *Manifest) ValidateConfig(config any) error {
 		return err
 	}
 
-	schema, err := jsonschema.CompileString("plugin.schema.json", string(m.ConfigSchema))
+	schema, err := compileSchema(m.ConfigSchema)
 	if err != nil {
 		return fmt.Errorf("compile plugin schema: %w", err)
 	}
@@ -33,4 +34,22 @@ func (m *Manifest) ValidateConfig(config any) error {
 	}
 
 	return nil
+}
+
+var schemaCache sync.Map
+
+func compileSchema(schema []byte) (*jsonschema.Schema, error) {
+	key := string(schema)
+	if cached, ok := schemaCache.Load(key); ok {
+		if compiled, ok := cached.(*jsonschema.Schema); ok {
+			return compiled, nil
+		}
+	}
+
+	compiled, err := jsonschema.CompileString("plugin.schema.json", key)
+	if err != nil {
+		return nil, err
+	}
+	schemaCache.Store(key, compiled)
+	return compiled, nil
 }

@@ -181,6 +181,8 @@ func ParseAgentsMarkdown(content string, source string) (*AgentManifest, error) 
 					currentAgent.Model = value
 				case "provider":
 					currentAgent.Provider = value
+				case "agent_dir", "agentdir":
+					currentAgent.AgentDir = value
 				case "can_receive_handoffs", "canreceivehandoffs":
 					currentAgent.CanReceiveHandoffs = strings.ToLower(value) == "true" || value == "yes"
 				case "max_iterations", "maxiterations":
@@ -408,6 +410,20 @@ func ValidateConfig(config *MultiAgentConfig) []error {
 		agentIDs[agent.ID] = true
 	}
 
+	// Check for duplicate agent state directories
+	agentDirs := make(map[string]string)
+	for _, agent := range config.Agents {
+		dir := normalizeAgentDir(agent.AgentDir)
+		if dir == "" {
+			continue
+		}
+		if existing, ok := agentDirs[dir]; ok {
+			errors = append(errors, fmt.Errorf("duplicate agent_dir %q for agents %s and %s", dir, existing, agent.ID))
+			continue
+		}
+		agentDirs[dir] = agent.ID
+	}
+
 	// Validate default agent exists
 	if config.DefaultAgentID != "" && !agentIDs[config.DefaultAgentID] {
 		errors = append(errors, fmt.Errorf("default agent not found: %s", config.DefaultAgentID))
@@ -437,6 +453,14 @@ func ValidateConfig(config *MultiAgentConfig) []error {
 	}
 
 	return errors
+}
+
+func normalizeAgentDir(dir string) string {
+	trimmed := strings.TrimSpace(dir)
+	if trimmed == "" {
+		return ""
+	}
+	return filepath.Clean(trimmed)
 }
 
 // ExampleAgentsMD returns an example AGENTS.md content.

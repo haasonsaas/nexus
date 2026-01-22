@@ -124,6 +124,12 @@ func (r *Resolver) Decide(policy *Policy, toolName string) Decision {
 		return decision
 	}
 
+	policy = r.effectivePolicyForTool(policy, normalized)
+	if policy == nil {
+		decision.Reason = "no policy configured"
+		return decision
+	}
+
 	// Build effective allow list
 	var allowed []string
 
@@ -176,6 +182,45 @@ func (r *Resolver) Decide(policy *Policy, toolName string) Decision {
 	}
 
 	return decision
+}
+
+func (r *Resolver) effectivePolicyForTool(policy *Policy, toolName string) *Policy {
+	if policy == nil {
+		return nil
+	}
+	if len(policy.ByProvider) == 0 {
+		return policy
+	}
+	providerKey := toolProviderKey(toolName)
+	if providerKey == "" {
+		return policy
+	}
+	providerPolicy, ok := policy.ByProvider[providerKey]
+	if !ok || providerPolicy == nil {
+		return policy
+	}
+
+	base := *policy
+	base.ByProvider = nil
+	override := *providerPolicy
+	override.ByProvider = nil
+	return Merge(&base, &override)
+}
+
+func toolProviderKey(toolName string) string {
+	normalized := NormalizeTool(toolName)
+	if strings.HasPrefix(normalized, "mcp:") {
+		trimmed := strings.TrimPrefix(normalized, "mcp:")
+		if trimmed == "" {
+			return "mcp"
+		}
+		parts := strings.SplitN(trimmed, ".", 2)
+		if len(parts) > 0 && parts[0] != "" {
+			return "mcp:" + parts[0]
+		}
+		return "mcp"
+	}
+	return "nexus"
 }
 
 // matchMCPPattern checks if a pattern matches an MCP tool name.
@@ -253,6 +298,16 @@ func Merge(policies ...*Policy) *Policy {
 
 		// Accumulate denies
 		result.Deny = append(result.Deny, p.Deny...)
+
+		// Merge provider-specific policies (later wins).
+		if len(p.ByProvider) > 0 {
+			if result.ByProvider == nil {
+				result.ByProvider = make(map[string]*Policy)
+			}
+			for key, policy := range p.ByProvider {
+				result.ByProvider[key] = policy
+			}
+		}
 	}
 
 	return result

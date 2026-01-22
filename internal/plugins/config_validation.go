@@ -10,6 +10,22 @@ import (
 
 // ValidateConfig validates plugin configuration and manifests.
 func ValidateConfig(cfg *config.Config) error {
+	issues := ValidationIssues(cfg)
+	if len(issues) > 0 {
+		return &config.ConfigValidationError{Issues: issues}
+	}
+	return nil
+}
+
+func validateManifest(manifest *pluginsdk.Manifest) error {
+	if manifest == nil {
+		return fmt.Errorf("manifest is nil")
+	}
+	return manifest.Validate()
+}
+
+// ValidationIssues returns plugin validation issues for config validation hooks.
+func ValidationIssues(cfg *config.Config) []string {
 	if cfg == nil || len(cfg.Plugins.Entries) == 0 {
 		return nil
 	}
@@ -23,7 +39,7 @@ func ValidateConfig(cfg *config.Config) error {
 
 	manifestIndex, err := DiscoverManifests(paths)
 	if err != nil {
-		return fmt.Errorf("plugin manifest discovery failed: %w", err)
+		return []string{fmt.Sprintf("plugin manifest discovery failed: %v", err)}
 	}
 
 	var issues []string
@@ -63,15 +79,5 @@ func ValidateConfig(cfg *config.Config) error {
 		}
 	}
 
-	if len(issues) > 0 {
-		return &config.ConfigValidationError{Issues: issues}
-	}
-	return nil
-}
-
-func validateManifest(manifest *pluginsdk.Manifest) error {
-	if manifest == nil {
-		return fmt.Errorf("manifest is nil")
-	}
-	return manifest.Validate()
+	return issues
 }

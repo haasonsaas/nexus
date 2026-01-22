@@ -26,6 +26,10 @@ func NewEventTimelinePlugin(recorder *observability.EventRecorder) *EventTimelin
 
 // OnEvent converts an AgentEvent to an observability Event and records it.
 // This implements the agent.Plugin interface.
+// Event recording errors are intentionally ignored - these are best-effort records
+// and should not block or fail the agent execution.
+//
+//nolint:errcheck // Best-effort event recording - errors should not block agent execution
 func (p *EventTimelinePlugin) OnEvent(ctx context.Context, e models.AgentEvent) {
 	if p.recorder == nil {
 		return

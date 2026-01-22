@@ -37,7 +37,10 @@ import (
 	"github.com/haasonsaas/nexus/internal/workspace"
 	"github.com/haasonsaas/nexus/pkg/models"
 	"github.com/haasonsaas/nexus/pkg/pluginsdk"
+	pb "github.com/haasonsaas/nexus/pkg/proto"
 	"github.com/spf13/cobra"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // =============================================================================
@@ -2432,52 +2435,245 @@ func printSystemStatus(out io.Writer, jsonOutput bool) {
 
 // runEdgeStatus shows the status of edge daemons.
 func runEdgeStatus(cmd *cobra.Command, configPath string, edgeID string) error {
-	fmt.Fprintln(cmd.OutOrStdout(), "Edge Status")
-	fmt.Fprintln(cmd.OutOrStdout(), "===========")
-	fmt.Fprintln(cmd.OutOrStdout())
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
+	// Connect to the running Nexus server
+	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.GRPCPort)
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		fmt.Fprintln(cmd.OutOrStdout(), "Edge Status")
+		fmt.Fprintln(cmd.OutOrStdout(), "===========")
+		fmt.Fprintln(cmd.OutOrStdout())
+		fmt.Fprintf(cmd.OutOrStdout(), "Cannot connect to Nexus server at %s\n", addr)
+		fmt.Fprintln(cmd.OutOrStdout(), "Ensure the server is running with 'nexus serve'")
+		return nil
+	}
+	defer conn.Close()
+
+	client := pb.NewEdgeServiceClient(conn)
+	ctx, cancel := context.WithTimeout(cmd.Context(), 5*time.Second)
+	defer cancel()
+
+	out := cmd.OutOrStdout()
+	fmt.Fprintln(out, "Edge Status")
+	fmt.Fprintln(out, "===========")
+	fmt.Fprintln(out)
 
 	if edgeID == "" {
-		// Show summary of all edges
-		fmt.Fprintln(cmd.OutOrStdout(), "Connected Edges: 0")
-		fmt.Fprintln(cmd.OutOrStdout())
-		fmt.Fprintln(cmd.OutOrStdout(), "No edges currently connected.")
-		fmt.Fprintln(cmd.OutOrStdout(), "Run 'nexus-edge --core-url <url> --edge-id <id>' to connect an edge daemon.")
+		// List all edges
+		resp, err := client.ListEdges(ctx, &pb.ListEdgesRequest{})
+		if err != nil {
+			fmt.Fprintf(out, "Error querying edges: %v\n", err)
+			return nil
+		}
+
+		if len(resp.Edges) == 0 {
+			fmt.Fprintln(out, "No edges currently connected.")
+			fmt.Fprintln(out, "Run 'nexus-edge --core-url <url> --edge-id <id>' to connect an edge daemon.")
+		} else {
+			fmt.Fprintf(out, "Connected Edges: %d\n\n", len(resp.Edges))
+			fmt.Fprintln(out, "ID            Status       Tools  Last Heartbeat")
+			fmt.Fprintln(out, "------------  -----------  -----  ---------------")
+			for _, edge := range resp.Edges {
+				status := connectionStatusString(edge.ConnectionStatus)
+				heartbeat := "never"
+				if edge.LastHeartbeat != nil {
+					heartbeat = time.Since(edge.LastHeartbeat.AsTime()).Round(time.Second).String() + " ago"
+				}
+				fmt.Fprintf(out, "%-12s  %-11s  %5d  %s\n",
+					truncate(edge.EdgeId, 12),
+					status,
+					len(edge.Tools),
+					heartbeat)
+			}
+		}
 	} else {
-		// Show specific edge
-		fmt.Fprintf(cmd.OutOrStdout(), "Edge ID: %s\n", edgeID)
-		fmt.Fprintln(cmd.OutOrStdout(), "Status: Not connected")
+		// Get specific edge
+		resp, err := client.GetEdgeStatus(ctx, &pb.GetEdgeStatusRequest{EdgeId: edgeID})
+		if err != nil {
+			fmt.Fprintf(out, "Edge '%s' not found or not connected\n", edgeID)
+			return nil
+		}
+
+		edge := resp.Status
+		fmt.Fprintf(out, "Edge ID:     %s\n", edge.EdgeId)
+		fmt.Fprintf(out, "Name:        %s\n", edge.Name)
+		fmt.Fprintf(out, "Status:      %s\n", connectionStatusString(edge.ConnectionStatus))
+		if edge.ConnectedAt != nil {
+			fmt.Fprintf(out, "Connected:   %s\n", edge.ConnectedAt.AsTime().Format(time.RFC3339))
+		}
+		if edge.LastHeartbeat != nil {
+			fmt.Fprintf(out, "Heartbeat:   %s ago\n", time.Since(edge.LastHeartbeat.AsTime()).Round(time.Second))
+		}
+		fmt.Fprintf(out, "Tools:       %d\n", len(edge.Tools))
+		if len(edge.Tools) > 0 {
+			fmt.Fprintln(out, "\nRegistered Tools:")
+			for _, tool := range edge.Tools {
+				fmt.Fprintf(out, "  - %s\n", tool)
+			}
+		}
 	}
 	return nil
 }
 
+// connectionStatusString converts EdgeConnectionStatus to a display string.
+func connectionStatusString(status pb.EdgeConnectionStatus) string {
+	switch status {
+	case pb.EdgeConnectionStatus_EDGE_CONNECTION_STATUS_CONNECTED:
+		return "Connected"
+	case pb.EdgeConnectionStatus_EDGE_CONNECTION_STATUS_DISCONNECTED:
+		return "Disconnected"
+	case pb.EdgeConnectionStatus_EDGE_CONNECTION_STATUS_RECONNECTING:
+		return "Reconnecting"
+	default:
+		return "Unknown"
+	}
+}
+
+// truncate shortens a string to maxLen with ellipsis.
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-3] + "..."
+}
+
 // runEdgeList lists connected edge daemons.
 func runEdgeList(cmd *cobra.Command, configPath string, showTools bool) error {
-	fmt.Fprintln(cmd.OutOrStdout(), "Connected Edge Daemons")
-	fmt.Fprintln(cmd.OutOrStdout(), "======================")
-	fmt.Fprintln(cmd.OutOrStdout())
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
 
-	fmt.Fprintln(cmd.OutOrStdout(), "ID            Name          Status       Tools  Last Heartbeat")
-	fmt.Fprintln(cmd.OutOrStdout(), "------------  ------------  -----------  -----  ---------------")
-	fmt.Fprintln(cmd.OutOrStdout())
-	fmt.Fprintln(cmd.OutOrStdout(), "No edges currently connected.")
+	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.GRPCPort)
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		fmt.Fprintln(cmd.OutOrStdout(), "Cannot connect to Nexus server")
+		fmt.Fprintf(cmd.OutOrStdout(), "Ensure the server is running at %s\n", addr)
+		return nil
+	}
+	defer conn.Close()
+
+	client := pb.NewEdgeServiceClient(conn)
+	ctx, cancel := context.WithTimeout(cmd.Context(), 5*time.Second)
+	defer cancel()
+
+	resp, err := client.ListEdges(ctx, &pb.ListEdgesRequest{})
+	if err != nil {
+		fmt.Fprintf(cmd.OutOrStdout(), "Error querying edges: %v\n", err)
+		return nil
+	}
+
+	out := cmd.OutOrStdout()
+	fmt.Fprintln(out, "Connected Edge Daemons")
+	fmt.Fprintln(out, "======================")
+	fmt.Fprintln(out)
+
+	if len(resp.Edges) == 0 {
+		fmt.Fprintln(out, "No edges currently connected.")
+		return nil
+	}
+
+	fmt.Fprintln(out, "ID            Name          Status       Tools  Last Heartbeat")
+	fmt.Fprintln(out, "------------  ------------  -----------  -----  ---------------")
+	for _, edge := range resp.Edges {
+		status := connectionStatusString(edge.ConnectionStatus)
+		heartbeat := "never"
+		if edge.LastHeartbeat != nil {
+			heartbeat = time.Since(edge.LastHeartbeat.AsTime()).Round(time.Second).String() + " ago"
+		}
+		name := edge.Name
+		if name == "" {
+			name = "-"
+		}
+		fmt.Fprintf(out, "%-12s  %-12s  %-11s  %5d  %s\n",
+			truncate(edge.EdgeId, 12),
+			truncate(name, 12),
+			status,
+			len(edge.Tools),
+			heartbeat)
+
+		if showTools && len(edge.Tools) > 0 {
+			for _, tool := range edge.Tools {
+				fmt.Fprintf(out, "              └─ %s\n", tool)
+			}
+		}
+	}
 	return nil
 }
 
 // runEdgeTools lists tools from connected edges.
 func runEdgeTools(cmd *cobra.Command, configPath string, edgeID string) error {
-	fmt.Fprintln(cmd.OutOrStdout(), "Edge Tools")
-	fmt.Fprintln(cmd.OutOrStdout(), "==========")
-	fmt.Fprintln(cmd.OutOrStdout())
-
-	if edgeID != "" {
-		fmt.Fprintf(cmd.OutOrStdout(), "Filtering by edge: %s\n", edgeID)
-		fmt.Fprintln(cmd.OutOrStdout())
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
 	}
 
-	fmt.Fprintln(cmd.OutOrStdout(), "Canonical Name                    Description                    Approval")
-	fmt.Fprintln(cmd.OutOrStdout(), "--------------------------------  -----------------------------  --------")
-	fmt.Fprintln(cmd.OutOrStdout())
-	fmt.Fprintln(cmd.OutOrStdout(), "No edge tools available. Connect an edge daemon first.")
+	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.GRPCPort)
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		fmt.Fprintln(cmd.OutOrStdout(), "Cannot connect to Nexus server")
+		fmt.Fprintf(cmd.OutOrStdout(), "Ensure the server is running at %s\n", addr)
+		return nil
+	}
+	defer conn.Close()
+
+	client := pb.NewEdgeServiceClient(conn)
+	ctx, cancel := context.WithTimeout(cmd.Context(), 5*time.Second)
+	defer cancel()
+
+	out := cmd.OutOrStdout()
+	fmt.Fprintln(out, "Edge Tools")
+	fmt.Fprintln(out, "==========")
+	fmt.Fprintln(out)
+
+	if edgeID != "" {
+		// Get tools for specific edge
+		resp, err := client.GetEdgeStatus(ctx, &pb.GetEdgeStatusRequest{EdgeId: edgeID})
+		if err != nil {
+			fmt.Fprintf(out, "Edge '%s' not found or not connected\n", edgeID)
+			return nil
+		}
+		edge := resp.Status
+		if len(edge.Tools) == 0 {
+			fmt.Fprintf(out, "No tools registered by edge '%s'\n", edgeID)
+			return nil
+		}
+		fmt.Fprintf(out, "Tools from edge '%s':\n\n", edgeID)
+		for _, tool := range edge.Tools {
+			fmt.Fprintf(out, "  edge:%s.%s\n", edgeID, tool)
+		}
+	} else {
+		// List tools from all edges
+		resp, err := client.ListEdges(ctx, &pb.ListEdgesRequest{})
+		if err != nil {
+			fmt.Fprintf(out, "Error querying edges: %v\n", err)
+			return nil
+		}
+
+		if len(resp.Edges) == 0 {
+			fmt.Fprintln(out, "No edge tools available. Connect an edge daemon first.")
+			return nil
+		}
+
+		totalTools := 0
+		for _, edge := range resp.Edges {
+			if len(edge.Tools) > 0 {
+				fmt.Fprintf(out, "Edge: %s\n", edge.EdgeId)
+				for _, tool := range edge.Tools {
+					fmt.Fprintf(out, "  edge:%s.%s\n", edge.EdgeId, tool)
+					totalTools++
+				}
+				fmt.Fprintln(out)
+			}
+		}
+		if totalTools == 0 {
+			fmt.Fprintln(out, "No tools registered by any connected edge.")
+		}
+	}
 	return nil
 }
 

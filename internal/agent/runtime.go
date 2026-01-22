@@ -1010,15 +1010,15 @@ func (r *Runtime) executeToolsWithEvents(ctx context.Context, toolExec *ToolExec
 //	    }
 //	}
 func (r *Runtime) ProcessStream(ctx context.Context, session *models.Session, msg *models.Message) (<-chan models.AgentEvent, error) {
-	eventCh := make(chan models.AgentEvent, processBufferSize)
+	// Create backpressure sink with two-lane priority
+	bpSink, eventCh := NewBackpressureSink(DefaultBackpressureConfig())
 
 	go func() {
-		defer close(eventCh)
+		defer bpSink.Close()
 
-		// Create multi-sink that sends to both the event channel and plugins
-		eventSink := NewChanSink(eventCh)
+		// Create multi-sink that sends to both the backpressure sink and plugins
 		pluginSink := NewPluginSink(r.plugins)
-		sink := NewMultiSink(eventSink, pluginSink)
+		sink := NewMultiSink(bpSink, pluginSink)
 
 		// Create emitter with the multi-sink
 		runID := session.ID + "-" + msg.ID
@@ -1038,9 +1038,12 @@ func (r *Runtime) ProcessStream(ctx context.Context, session *models.Session, ms
 		// Run the core agentic loop
 		_ = r.run(ctx, session, msg, emitter)
 
-		// Emit run finished with accumulated stats
+		// Get accumulated stats and add dropped events count
 		stats := statsCollector.Stats()
-		emitter.RunFinished(ctx, stats)
+		stats.DroppedEvents = int(bpSink.DroppedCount())
+
+		// Emit run finished with stats (using background context for terminal event)
+		emitter.RunFinished(context.Background(), stats)
 	}()
 
 	return eventCh, nil

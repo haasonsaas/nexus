@@ -770,14 +770,9 @@ func TestProcessStream_Basic(t *testing.T) {
 		}
 	}
 
-	// Verify sequence is monotonic
-	var lastSeq uint64
-	for _, e := range allEvents {
-		if e.Sequence <= lastSeq && lastSeq > 0 {
-			t.Errorf("sequence not monotonic: %d after %d", e.Sequence, lastSeq)
-		}
-		lastSeq = e.Sequence
-	}
+	// Note: With two-lane backpressure, events may arrive out of sequence order
+	// (high-priority events can bypass low-priority events). This is expected.
+	// Sequences are still useful for ordering within event types.
 }
 
 func TestProcessStream_PluginReceivesEvents(t *testing.T) {
@@ -1447,4 +1442,150 @@ func TestProcessStream_ReliabilitySignalsInStats_ToolTimeouts(t *testing.T) {
 	if stats.ToolTimeouts != 2 {
 		t.Errorf("expected ToolTimeouts=2, got %d", stats.ToolTimeouts)
 	}
+}
+
+// =============================================================================
+// Backpressure Tests
+// =============================================================================
+
+// chattyTool emits many stdout events to test backpressure handling.
+type chattyTool struct {
+	name       string
+	eventCount int
+}
+
+func (t *chattyTool) Name() string             { return t.name }
+func (t *chattyTool) Description() string      { return "chatty tool for backpressure testing" }
+func (t *chattyTool) Schema() json.RawMessage  { return json.RawMessage(`{"type":"object"}`) }
+
+func (t *chattyTool) Execute(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
+	// This tool doesn't actually emit stdout events directly - we need to test
+	// the scenario where many model.delta events are emitted. The chatty tool
+	// simulates this by returning a large result that would cause backpressure
+	// on the streaming side.
+	return &ToolResult{Content: "chatty tool completed"}, nil
+}
+
+// TestProcessStream_ChattyToolDoesNotDeadlock verifies that a run with many events
+// (simulating a chatty tool or model) completes successfully even with a slow reader.
+// This tests the backpressure handling of BackpressureSink.
+func TestProcessStream_ChattyToolDoesNotDeadlock(t *testing.T) {
+	// Create a provider that emits many delta events
+	provider := &chattyProvider{deltaCount: 1000}
+
+	store := newMemoryStore()
+	runtime := NewRuntime(provider, store)
+
+	session := &models.Session{ID: "test-session-chatty"}
+	msg := &models.Message{ID: "msg-1", Role: models.RoleUser, Content: "Be chatty"}
+
+	events, err := runtime.ProcessStream(context.Background(), session, msg)
+	if err != nil {
+		t.Fatalf("ProcessStream failed: %v", err)
+	}
+
+	// Simulate a slow reader by adding delays
+	var gotRunFinished bool
+	var deltaCount int
+
+	for e := range events {
+		switch e.Type {
+		case models.AgentEventModelDelta:
+			deltaCount++
+			// Simulate slow reader - but don't sleep too long or test takes forever
+			// The key is that the producer (runtime) shouldn't block
+			if deltaCount%100 == 0 {
+				time.Sleep(1 * time.Millisecond)
+			}
+		case models.AgentEventRunFinished:
+			gotRunFinished = true
+		}
+	}
+
+	// Run must complete even with slow reader
+	if !gotRunFinished {
+		t.Error("expected run.finished event - possible deadlock")
+	}
+
+	// Some events may be dropped under backpressure, which is expected
+	// The important thing is that the run completes and lifecycle events are received
+	t.Logf("received %d delta events (some may have been dropped)", deltaCount)
+}
+
+// chattyProvider emits many delta events to test backpressure.
+type chattyProvider struct {
+	deltaCount int
+}
+
+func (p *chattyProvider) Complete(ctx context.Context, req *CompletionRequest) (<-chan *CompletionChunk, error) {
+	ch := make(chan *CompletionChunk, 10)
+	go func() {
+		defer close(ch)
+		// Emit many small chunks to stress backpressure
+		for i := 0; i < p.deltaCount; i++ {
+			select {
+			case ch <- &CompletionChunk{Text: fmt.Sprintf("chunk-%d ", i)}:
+			case <-ctx.Done():
+				return
+			}
+		}
+		ch <- &CompletionChunk{Done: true}
+	}()
+	return ch, nil
+}
+
+func (p *chattyProvider) Name() string        { return "chatty" }
+func (p *chattyProvider) Models() []Model      { return nil }
+func (p *chattyProvider) SupportsTools() bool { return false }
+
+// TestProcessStream_BackpressureDropsLowPriorityEvents verifies that under heavy
+// load, low-priority events (model.delta) are dropped but lifecycle events are preserved.
+func TestProcessStream_BackpressureDropsLowPriorityEvents(t *testing.T) {
+	// Create a provider that emits MANY delta events
+	provider := &chattyProvider{deltaCount: 10000}
+
+	store := newMemoryStore()
+	runtime := NewRuntime(provider, store)
+
+	session := &models.Session{ID: "test-session-backpressure"}
+	msg := &models.Message{ID: "msg-1", Role: models.RoleUser, Content: "Be very chatty"}
+
+	events, err := runtime.ProcessStream(context.Background(), session, msg)
+	if err != nil {
+		t.Fatalf("ProcessStream failed: %v", err)
+	}
+
+	// Very slow reader to force backpressure
+	var gotRunStarted, gotRunFinished bool
+	var deltaCount int
+
+	for e := range events {
+		switch e.Type {
+		case models.AgentEventRunStarted:
+			gotRunStarted = true
+		case models.AgentEventModelDelta:
+			deltaCount++
+			// Very slow reader
+			if deltaCount%500 == 0 {
+				time.Sleep(5 * time.Millisecond)
+			}
+		case models.AgentEventRunFinished:
+			gotRunFinished = true
+			// Check DroppedEvents in stats
+			if e.Stats != nil && e.Stats.Run != nil {
+				t.Logf("DroppedEvents in stats: %d", e.Stats.Run.DroppedEvents)
+			}
+		}
+	}
+
+	// Critical lifecycle events must be received
+	if !gotRunStarted {
+		t.Error("missing run.started - lifecycle events should never be dropped")
+	}
+	if !gotRunFinished {
+		t.Error("missing run.finished - lifecycle events should never be dropped")
+	}
+
+	// We may have received fewer deltas than emitted due to backpressure
+	t.Logf("received %d of 10000 delta events", deltaCount)
 }

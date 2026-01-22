@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"sync/atomic"
 
 	"github.com/haasonsaas/nexus/pkg/models"
 )
@@ -98,6 +99,156 @@ type NopSink struct{}
 
 // Emit does nothing.
 func (NopSink) Emit(ctx context.Context, e models.AgentEvent) {}
+
+// BackpressureConfig configures the backpressure sink behavior.
+type BackpressureConfig struct {
+	// HighPriBuffer is the buffer size for non-droppable events.
+	// Default: 32.
+	HighPriBuffer int
+
+	// LowPriBuffer is the buffer size for droppable events.
+	// Default: 256.
+	LowPriBuffer int
+}
+
+// DefaultBackpressureConfig returns sensible defaults.
+func DefaultBackpressureConfig() BackpressureConfig {
+	return BackpressureConfig{
+		HighPriBuffer: 32,
+		LowPriBuffer:  256,
+	}
+}
+
+// BackpressureSink implements two-lane backpressure for event streaming.
+// High-priority events (run lifecycle, tool lifecycle, completions) are never dropped.
+// Low-priority events (model deltas, stdout/stderr) are dropped when buffer is full.
+type BackpressureSink struct {
+	highPri chan models.AgentEvent // Never dropped - blocks if full
+	lowPri  chan models.AgentEvent // Dropped when full
+	merged  chan models.AgentEvent // Output channel that prioritizes highPri
+	dropped uint64                 // Atomic counter for dropped events
+}
+
+// NewBackpressureSink creates a backpressure-aware sink with merged output channel.
+// The returned channel should be consumed by the caller.
+func NewBackpressureSink(config BackpressureConfig) (*BackpressureSink, <-chan models.AgentEvent) {
+	if config.HighPriBuffer <= 0 {
+		config.HighPriBuffer = 32
+	}
+	if config.LowPriBuffer <= 0 {
+		config.LowPriBuffer = 256
+	}
+
+	s := &BackpressureSink{
+		highPri: make(chan models.AgentEvent, config.HighPriBuffer),
+		lowPri:  make(chan models.AgentEvent, config.LowPriBuffer),
+		merged:  make(chan models.AgentEvent, config.HighPriBuffer), // Merged output
+	}
+
+	// Start merge goroutine that prioritizes high-priority events
+	go s.mergeLoop()
+
+	return s, s.merged
+}
+
+// mergeLoop reads from both channels, prioritizing high-priority events.
+func (s *BackpressureSink) mergeLoop() {
+	defer close(s.merged)
+
+	for {
+		// Always check high-priority first (non-blocking)
+		select {
+		case e, ok := <-s.highPri:
+			if ok {
+				s.merged <- e
+				continue
+			}
+			// High-pri closed, drain low-pri and exit
+			for e := range s.lowPri {
+				s.merged <- e
+			}
+			return
+		default:
+		}
+
+		// No high-pri event available, check both channels
+		select {
+		case e, ok := <-s.highPri:
+			if ok {
+				s.merged <- e
+			} else {
+				// High-pri closed, drain low-pri and exit
+				for e := range s.lowPri {
+					s.merged <- e
+				}
+				return
+			}
+		case e, ok := <-s.lowPri:
+			if ok {
+				s.merged <- e
+			}
+			// If lowPri is closed, just continue - highPri will close eventually
+		}
+	}
+}
+
+// Emit sends an event through the appropriate lane.
+// Non-droppable events block if buffer is full; droppable events are dropped.
+func (s *BackpressureSink) Emit(ctx context.Context, e models.AgentEvent) {
+	if isDroppableEvent(e.Type) {
+		// Low-priority: drop if buffer is full
+		select {
+		case s.lowPri <- e:
+			// Sent successfully
+		default:
+			// Buffer full, drop and count
+			atomic.AddUint64(&s.dropped, 1)
+		}
+	} else {
+		// High-priority: block until space available or context cancelled
+		select {
+		case s.highPri <- e:
+			// Sent successfully
+		case <-ctx.Done():
+			// Context cancelled, still try to send (for terminal events)
+			select {
+			case s.highPri <- e:
+			default:
+				// Last resort: drop (shouldn't happen with proper buffer sizing)
+				atomic.AddUint64(&s.dropped, 1)
+			}
+		}
+	}
+}
+
+// DroppedCount returns the number of events dropped due to backpressure.
+func (s *BackpressureSink) DroppedCount() uint64 {
+	return atomic.LoadUint64(&s.dropped)
+}
+
+// Close signals the sink to stop and closes the output channel.
+// After Close, no more events should be emitted.
+func (s *BackpressureSink) Close() {
+	// Close highPri first - this triggers mergeLoop to drain lowPri and exit
+	close(s.highPri)
+	// Close lowPri after so mergeLoop can drain it
+	close(s.lowPri)
+}
+
+// isDroppableEvent returns true for event types that can be dropped under backpressure.
+// Non-droppable events include all lifecycle events that must be delivered for correctness.
+func isDroppableEvent(t models.AgentEventType) bool {
+	switch t {
+	case models.AgentEventModelDelta,
+		models.AgentEventToolStdout,
+		models.AgentEventToolStderr:
+		return true
+	default:
+		// All other events are non-droppable:
+		// run.*, iter.*, tool.started/finished/timed_out, model.completed, context.packed
+		return false
+	}
+}
 
 // ChunkAdapterSink converts AgentEvents to ResponseChunks and sends to a channel.
 // This provides backwards compatibility for consumers expecting ResponseChunks.

@@ -305,6 +305,21 @@ func eventToChunk(e models.AgentEvent) *ResponseChunk {
 			}
 		}
 
+	case models.AgentEventToolTimedOut:
+		if e.Tool != nil {
+			content := "tool execution timed out"
+			if e.Error != nil && e.Error.Message != "" {
+				content = e.Error.Message
+			}
+			return &ResponseChunk{
+				ToolResult: &models.ToolResult{
+					ToolCallID: e.Tool.CallID,
+					Content:    content,
+					IsError:    true,
+				},
+			}
+		}
+
 	case models.AgentEventRunError, models.AgentEventRunCancelled, models.AgentEventRunTimedOut:
 		if e.Error != nil {
 			// Prefer original error if available (preserves error type for errors.Is)

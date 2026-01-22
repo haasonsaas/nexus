@@ -22,6 +22,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/cron"
+	"github.com/haasonsaas/nexus/internal/jobs"
 	"github.com/haasonsaas/nexus/internal/mcp"
 	"github.com/haasonsaas/nexus/internal/memory"
 	"github.com/haasonsaas/nexus/internal/plugins"
@@ -29,6 +30,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/skills"
 	"github.com/haasonsaas/nexus/internal/storage"
 	"github.com/haasonsaas/nexus/internal/tools/browser"
+	jobtools "github.com/haasonsaas/nexus/internal/tools/jobs"
 	"github.com/haasonsaas/nexus/internal/tools/memorysearch"
 	"github.com/haasonsaas/nexus/internal/tools/policy"
 	"github.com/haasonsaas/nexus/internal/tools/sandbox"
@@ -68,6 +70,7 @@ type Server struct {
 	toolPolicyResolver *policy.Resolver
 	llmProvider        agent.LLMProvider
 	defaultModel       string
+	jobStore           jobs.Store
 }
 
 // NewServer creates a new gateway server.
@@ -120,8 +123,13 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	}
 	// Discover skills (non-blocking, errors logged)
 	go func() {
-		if err := skillsMgr.Discover(context.Background()); err != nil {
+		ctx := context.Background()
+		if err := skillsMgr.Discover(ctx); err != nil {
 			logger.Error("skill discovery failed", "error", err)
+			return
+		}
+		if err := skillsMgr.StartWatching(ctx); err != nil {
+			logger.Error("skill watcher failed", "error", err)
 		}
 	}()
 
@@ -132,6 +140,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	}
 	mcpManager := mcp.NewManager(&cfg.MCP, logger)
 	toolPolicyResolver := policy.NewResolver()
+	jobStore := jobs.NewMemoryStore()
 
 	stores, err := initStorageStores(cfg)
 	if err != nil {
@@ -164,6 +173,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		cronScheduler:      cronScheduler,
 		mcpManager:         mcpManager,
 		toolPolicyResolver: toolPolicyResolver,
+		jobStore:           jobStore,
 	}
 	grpcSvc := newGRPCService(server)
 	proto.RegisterNexusGatewayServer(grpcServer, grpcSvc)
@@ -252,6 +262,11 @@ func (s *Server) Stop(ctx context.Context) error {
 	if s.vectorMemory != nil {
 		if err := s.vectorMemory.Close(); err != nil {
 			s.logger.Error("error closing vector memory", "error", err)
+		}
+	}
+	if s.skillsManager != nil {
+		if err := s.skillsManager.Close(); err != nil {
+			s.logger.Error("error closing skills manager", "error", err)
 		}
 	}
 	if s.cronScheduler != nil {
@@ -343,8 +358,8 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		msg.CreatedAt = time.Now()
 	}
 
-	// Note: The runtime handles message persistence for both inbound and outbound
-	// messages. Gateway only logs to memory if enabled.
+	// Note: inbound message persistence is handled by runtime.Process()
+	// to avoid double-persisting the same message.
 	if s.memoryLogger != nil {
 		if err := s.memoryLogger.Append(msg); err != nil {
 			s.logger.Error("failed to write memory log", "error", err)
@@ -408,7 +423,8 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		return
 	}
 
-	// Note: The runtime handles message persistence. Gateway only logs to memory if enabled.
+	// Note: assistant message persistence is handled by runtime.Process()
+	// The runtime persists the full message with tool calls during the agentic loop.
 	if s.memoryLogger != nil {
 		if err := s.memoryLogger.Append(outbound); err != nil {
 			s.logger.Error("failed to write memory log", "error", err)
@@ -508,6 +524,19 @@ func (s *Server) ensureRuntime(ctx context.Context) (*agent.Runtime, error) {
 	if system := buildSystemPrompt(s.config, SystemPromptOptions{}); system != "" {
 		runtime.SetSystemPrompt(system)
 	}
+	runtime.SetOptions(agent.RuntimeOptions{
+		MaxIterations:     s.config.Tools.Execution.MaxIterations,
+		ToolParallelism:   s.config.Tools.Execution.Parallelism,
+		ToolTimeout:       s.config.Tools.Execution.Timeout,
+		ToolMaxAttempts:   s.config.Tools.Execution.MaxAttempts,
+		ToolRetryBackoff:  s.config.Tools.Execution.RetryBackoff,
+		DisableToolEvents: s.config.Tools.Execution.DisableEvents,
+		MaxToolCalls:      s.config.Tools.Execution.MaxToolCalls,
+		RequireApproval:   s.config.Tools.Execution.RequireApproval,
+		AsyncTools:        s.config.Tools.Execution.Async,
+		JobStore:          s.jobStore,
+		Logger:            s.logger,
+	})
 	if err := s.registerTools(runtime); err != nil {
 		return nil, err
 	}
@@ -643,6 +672,10 @@ func (s *Server) registerTools(runtime *agent.Runtime) error {
 			},
 		}
 		runtime.RegisterTool(memorysearch.NewMemorySearchTool(searchConfig))
+	}
+
+	if s.jobStore != nil {
+		runtime.RegisterTool(jobtools.NewStatusTool(s.jobStore))
 	}
 
 	if s.config.MCP.Enabled && s.mcpManager != nil {

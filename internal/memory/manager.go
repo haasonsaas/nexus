@@ -24,7 +24,6 @@ type Manager struct {
 	embedder embeddings.Provider
 	config   *Config
 	cache    *embeddingCache
-	mu       sync.RWMutex
 }
 
 // Config contains configuration for the memory manager.

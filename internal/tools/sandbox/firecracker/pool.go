@@ -105,19 +105,18 @@ type languageVMPool struct {
 	available chan *MicroVM
 	creating  int32 // atomic
 	total     int32 // atomic
-	mu        sync.Mutex
 	config    *PoolConfig
 }
 
 // PoolStats contains statistics about the VM pool.
 type PoolStats struct {
-	TotalVMs       int64 `json:"total_vms"`
-	IdleVMs        int64 `json:"idle_vms"`
-	ActiveVMs      int64 `json:"active_vms"`
-	TotalCreated   int64 `json:"total_created"`
-	TotalDestroyed int64 `json:"total_destroyed"`
+	TotalVMs        int64 `json:"total_vms"`
+	IdleVMs         int64 `json:"idle_vms"`
+	ActiveVMs       int64 `json:"active_vms"`
+	TotalCreated    int64 `json:"total_created"`
+	TotalDestroyed  int64 `json:"total_destroyed"`
 	TotalExecutions int64 `json:"total_executions"`
-	CreationErrors int64 `json:"creation_errors"`
+	CreationErrors  int64 `json:"creation_errors"`
 }
 
 // NewVMPool creates a new VM pool.
@@ -515,13 +514,13 @@ func (p *VMPool) createVM(ctx context.Context, language string) (*MicroVM, error
 // Stats returns current pool statistics.
 func (p *VMPool) Stats() PoolStats {
 	return PoolStats{
-		TotalVMs:       atomic.LoadInt64(&p.stats.TotalVMs),
-		IdleVMs:        atomic.LoadInt64(&p.stats.IdleVMs),
-		ActiveVMs:      atomic.LoadInt64(&p.stats.ActiveVMs),
-		TotalCreated:   atomic.LoadInt64(&p.stats.TotalCreated),
-		TotalDestroyed: atomic.LoadInt64(&p.stats.TotalDestroyed),
+		TotalVMs:        atomic.LoadInt64(&p.stats.TotalVMs),
+		IdleVMs:         atomic.LoadInt64(&p.stats.IdleVMs),
+		ActiveVMs:       atomic.LoadInt64(&p.stats.ActiveVMs),
+		TotalCreated:    atomic.LoadInt64(&p.stats.TotalCreated),
+		TotalDestroyed:  atomic.LoadInt64(&p.stats.TotalDestroyed),
 		TotalExecutions: atomic.LoadInt64(&p.stats.TotalExecutions),
-		CreationErrors: atomic.LoadInt64(&p.stats.CreationErrors),
+		CreationErrors:  atomic.LoadInt64(&p.stats.CreationErrors),
 	}
 }
 

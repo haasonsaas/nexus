@@ -175,15 +175,9 @@ func (p *DefaultProcessor) download(url string, opts ProcessingOptions) ([]byte,
 
 func (p *DefaultProcessor) processImage(data []byte, mimeType string, opts ProcessingOptions) (*Content, error) {
 	// Decode image
-	img, format, err := image.Decode(bytes.NewReader(data))
+	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return nil, fmt.Errorf("decode image: %w", err)
-	}
-
-	// Determine output format
-	outputMime := mimeType
-	if outputMime == "" {
-		outputMime = "image/" + format
 	}
 
 	// Resize if needed

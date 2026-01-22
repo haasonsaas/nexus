@@ -98,6 +98,13 @@ func (h *HandoffTool) Schema() json.RawMessage {
 		},
 		"required": []string{"target_agent", "reason"},
 	}
+	if len(agentIDs) > 0 {
+		if props, ok := schema["properties"].(map[string]any); ok {
+			if target, ok := props["target_agent"].(map[string]any); ok {
+				target["enum"] = agentIDs
+			}
+		}
+	}
 
 	data, _ := json.Marshal(schema)
 	return data

@@ -6,6 +6,9 @@ import (
 	"regexp"
 	"strings"
 	"text/template"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // VariableEngine handles variable substitution in templates.
@@ -102,11 +105,12 @@ func (e *VariableEngine) ExtractVariables(tmplStr string) []string {
 
 // defaultFuncMap returns the default template function map.
 func defaultFuncMap() template.FuncMap {
+	titleCase := cases.Title(language.Und)
 	return template.FuncMap{
 		// String functions
 		"upper":      strings.ToUpper,
 		"lower":      strings.ToLower,
-		"title":      strings.Title,
+		"title":      titleCase.String,
 		"trim":       strings.TrimSpace,
 		"trimPrefix": strings.TrimPrefix,
 		"trimSuffix": strings.TrimSuffix,

@@ -78,6 +78,7 @@ func New(cfg Config) (*Backend, error) {
 	// Load existing data
 	if err := b.load(); err != nil {
 		// Non-fatal, start with empty data
+		_ = err
 	}
 
 	return b, nil

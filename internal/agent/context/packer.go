@@ -235,14 +235,6 @@ func (p *Packer) PackWithDiagnostics(history []*models.Message, incoming *models
 		messages = append(messages, incoming)
 	}
 
-	included := len(selected)
-	if summaryUsed {
-		included++
-	}
-	if incoming != nil {
-		included++
-	}
-
 	return &PackResult{
 		Messages: messages,
 		Diagnostics: &models.ContextEventPayload{

@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/pkg/models"
@@ -70,10 +69,10 @@ func DefaultLoopConfig() *LoopConfig {
 //	│                                                              │
 //	└──────────────────────────────────────────────────────────────┘
 type AgenticLoop struct {
-	provider  LLMProvider
-	executor  *Executor
-	sessions  sessions.Store
-	config    *LoopConfig
+	provider LLMProvider
+	executor *Executor
+	sessions sessions.Store
+	config   *LoopConfig
 
 	defaultModel  string
 	defaultSystem string
@@ -377,7 +376,6 @@ func (l *AgenticLoop) continuePhase(state *LoopState, toolCalls []models.ToolCal
 // AgenticRuntime wraps the AgenticLoop with the Runtime interface for compatibility.
 type AgenticRuntime struct {
 	loop *AgenticLoop
-	mu   sync.RWMutex
 }
 
 // NewAgenticRuntime creates a new agentic runtime.

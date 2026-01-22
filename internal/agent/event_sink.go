@@ -277,6 +277,15 @@ func (s *ChunkAdapterSink) Emit(ctx context.Context, e models.AgentEvent) {
 	}
 
 	// Channel was full, check context before retrying
+	if chunk.Error != nil {
+		// Never drop terminal errors; block until delivered or context is done.
+		select {
+		case s.ch <- chunk:
+		case <-ctx.Done():
+		}
+		return
+	}
+
 	select {
 	case s.ch <- chunk:
 	case <-ctx.Done():

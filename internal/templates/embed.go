@@ -1,6 +1,7 @@
 package templates
 
 import (
+	"context"
 	"embed"
 	"io/fs"
 )
@@ -51,7 +52,7 @@ func IsBuiltinTemplate(name string) bool {
 // LoadBuiltinTemplate loads a specific builtin template by name.
 func LoadBuiltinTemplate(name string) (*AgentTemplate, error) {
 	source := NewBuiltinSource()
-	templates, err := source.Discover(nil)
+	templates, err := source.Discover(context.TODO())
 	if err != nil {
 		return nil, err
 	}

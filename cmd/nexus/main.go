@@ -1720,28 +1720,6 @@ func promptBool(reader *bufio.Reader, label string, defaultValue bool) bool {
 	return answer == "y" || answer == "yes"
 }
 
-func setPluginEnabled(raw map[string]any, id string, enabled bool) {
-	if raw == nil {
-		return
-	}
-	pluginsSection, ok := raw["plugins"].(map[string]any)
-	if !ok {
-		pluginsSection = map[string]any{}
-		raw["plugins"] = pluginsSection
-	}
-	entries, ok := pluginsSection["entries"].(map[string]any)
-	if !ok {
-		entries = map[string]any{}
-		pluginsSection["entries"] = entries
-	}
-	entry, ok := entries[id].(map[string]any)
-	if !ok {
-		entry = map[string]any{}
-		entries[id] = entry
-	}
-	entry["enabled"] = enabled
-}
-
 // buildServeCmd creates the "serve" command that starts the gateway server.
 // This is the primary command for running Nexus in production.
 func buildServeCmd() *cobra.Command {

@@ -66,6 +66,7 @@ func (r *PluginRegistry) Emit(ctx context.Context, e models.AgentEvent) {
 				if rec := recover(); rec != nil {
 					// Plugin panicked - log and continue
 					// In production, you'd log this properly
+					_ = rec
 				}
 			}()
 			p.OnEvent(ctx, e)

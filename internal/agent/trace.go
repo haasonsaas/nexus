@@ -25,11 +25,11 @@ type TracePlugin struct {
 
 // TraceHeader contains metadata written as the first line of a trace file.
 type TraceHeader struct {
-	Version     int       `json:"version"`      // Schema version (1)
-	RunID       string    `json:"run_id"`       // Unique run identifier
-	StartedAt   time.Time `json:"started_at"`   // When the trace started
-	AppVersion  string    `json:"app_version"`  // Application version (optional)
-	Environment string    `json:"environment"`  // Environment name (optional)
+	Version     int       `json:"version"`     // Schema version (1)
+	RunID       string    `json:"run_id"`      // Unique run identifier
+	StartedAt   time.Time `json:"started_at"`  // When the trace started
+	AppVersion  string    `json:"app_version"` // Application version (optional)
+	Environment string    `json:"environment"` // Environment name (optional)
 }
 
 // Redactor is an optional function to redact sensitive data from events.
@@ -230,6 +230,7 @@ func DefaultRedactor(e *models.AgentEvent) {
 	if e.Stream != nil && e.Stream.Delta != "" {
 		// Don't redact streaming text by default - it's the main output
 		// Callers can provide a custom redactor if needed
+		return
 	}
 }
 

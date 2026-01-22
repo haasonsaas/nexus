@@ -258,12 +258,11 @@ func (s *Scheduler) executeWebhook(ctx context.Context, job *Job) error {
 	if client == nil {
 		client = http.DefaultClient
 	}
-	requestCtx := ctx
 	if cfg.Timeout > 0 {
 		var cancel context.CancelFunc
-		requestCtx, cancel = context.WithTimeout(ctx, cfg.Timeout)
+		ctx, cancel = context.WithTimeout(ctx, cfg.Timeout)
 		defer cancel()
-		req = req.WithContext(requestCtx)
+		req = req.WithContext(ctx)
 	}
 
 	resp, err := client.Do(req)

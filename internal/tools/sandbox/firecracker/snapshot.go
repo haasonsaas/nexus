@@ -26,14 +26,14 @@ const (
 
 // Snapshot represents a VM snapshot.
 type Snapshot struct {
-	ID           string       `json:"id"`
-	Type         SnapshotType `json:"type"`
-	Language     string       `json:"language"`
-	MemoryPath   string       `json:"memory_path"`
-	StatePath    string       `json:"state_path"`
-	CreatedAt    time.Time    `json:"created_at"`
-	Size         int64        `json:"size"`
-	ParentID     string       `json:"parent_id,omitempty"`
+	ID         string       `json:"id"`
+	Type       SnapshotType `json:"type"`
+	Language   string       `json:"language"`
+	MemoryPath string       `json:"memory_path"`
+	StatePath  string       `json:"state_path"`
+	CreatedAt  time.Time    `json:"created_at"`
+	Size       int64        `json:"size"`
+	ParentID   string       `json:"parent_id,omitempty"`
 }
 
 // OverlayManager manages copy-on-write overlays for rootfs images.
@@ -46,16 +46,16 @@ type OverlayManager struct {
 
 // Overlay represents a copy-on-write overlay filesystem.
 type Overlay struct {
-	ID         string
-	BasePath   string
+	ID          string
+	BasePath    string
 	OverlayPath string
-	MergedPath string
-	UpperPath  string
-	WorkPath   string
-	Language   string
-	CreatedAt  time.Time
-	InUse      bool
-	mu         sync.Mutex
+	MergedPath  string
+	UpperPath   string
+	WorkPath    string
+	Language    string
+	CreatedAt   time.Time
+	InUse       bool
+	mu          sync.Mutex
 }
 
 // NewOverlayManager creates a new overlay manager.
@@ -211,6 +211,7 @@ func (o *Overlay) Reset() error {
 func (o *Overlay) Destroy() error {
 	if err := o.Unmount(); err != nil {
 		// Continue with cleanup even if unmount fails
+		_ = err
 	}
 
 	return os.RemoveAll(o.OverlayPath)
@@ -496,11 +497,11 @@ func (sm *SnapshotManager) Close() error {
 
 // DeviceMapperSnapshot manages device-mapper based copy-on-write snapshots.
 type DeviceMapperSnapshot struct {
-	name       string
-	basePath   string
+	name         string
+	basePath     string
 	snapshotPath string
-	sectorSize int64
-	size       int64
+	sectorSize   int64
+	size         int64
 }
 
 // NewDeviceMapperSnapshot creates a new device-mapper snapshot.

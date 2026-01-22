@@ -1188,17 +1188,14 @@ func (r *Runtime) ProcessStream(ctx context.Context, session *models.Session, ms
 		pluginSink := NewPluginSink(r.plugins)
 		sink := NewMultiSink(bpSink, pluginSink)
 
-		// Create emitter with the multi-sink
-		runID := session.ID + "-" + msg.ID
-		emitter := NewEventEmitter(runID, sink)
-
 		// Create stats collector as a plugin to track metrics
+		runID := session.ID + "-" + msg.ID
 		statsCollector := NewStatsCollector(runID)
 		statsSink := NewCallbackSink(statsCollector.OnEvent)
 
 		// Wrap emitter to also collect stats
 		combinedSink := NewMultiSink(sink, statsSink)
-		emitter = NewEventEmitter(runID, combinedSink)
+		emitter := NewEventEmitter(runID, combinedSink)
 
 		// Emit run started
 		emitter.RunStarted(ctx)

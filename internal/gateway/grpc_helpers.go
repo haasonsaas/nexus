@@ -81,21 +81,6 @@ func connectionStatusToProto(status models.ConnectionStatus) proto.ConnectionSta
 	}
 }
 
-func connectionStatusFromProto(status proto.ConnectionStatus) models.ConnectionStatus {
-	switch status {
-	case proto.ConnectionStatus_CONNECTION_STATUS_CONNECTED:
-		return models.ConnectionStatusConnected
-	case proto.ConnectionStatus_CONNECTION_STATUS_DISCONNECTED:
-		return models.ConnectionStatusDisconnected
-	case proto.ConnectionStatus_CONNECTION_STATUS_ERROR:
-		return models.ConnectionStatusError
-	case proto.ConnectionStatus_CONNECTION_STATUS_CONNECTING:
-		return models.ConnectionStatusConnecting
-	default:
-		return models.ConnectionStatusUnspecified
-	}
-}
-
 func metadataToProto(metadata map[string]any) map[string]string {
 	if metadata == nil {
 		return nil

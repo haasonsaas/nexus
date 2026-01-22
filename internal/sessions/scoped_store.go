@@ -62,8 +62,8 @@ func (s *ScopedStore) GetOrCreateScoped(
 		if s.expiry.CheckExpiry(session, channel, convType) {
 			// Delete the expired session and create a new one
 			if delErr := s.store.Delete(ctx, session.ID); delErr != nil {
-				// Log error but continue to create new session
-				// In production, you might want to handle this differently
+				// Best-effort cleanup; creation continues even if deletion fails.
+				_ = delErr
 			}
 			return s.createNewSession(ctx, key, agentID, channel, peerID)
 		}

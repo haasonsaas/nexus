@@ -276,13 +276,13 @@ func (r *RuntimeRegistry) LoadFullPlugins(cfg *config.Config, api *PluginAPIBuil
 
 // PluginAPIBuilder helps construct PluginAPI instances for plugins.
 type PluginAPIBuilder struct {
-	Channels        *channels.Registry
-	Tools           *agent.Runtime
-	RootCmd         *cobra.Command
-	ServiceManager  *ServiceManager
-	HookRegistry    *hooks.Registry
-	Logger          *slog.Logger
-	WorkspaceDir    string
+	Channels       *channels.Registry
+	Tools          *agent.Runtime
+	RootCmd        *cobra.Command
+	ServiceManager *ServiceManager
+	HookRegistry   *hooks.Registry
+	Logger         *slog.Logger
+	WorkspaceDir   string
 }
 
 // Build creates a PluginAPI for a specific plugin.

@@ -14,8 +14,8 @@ type BatchProcessor[T any, R any] struct {
 	config BatchConfig
 
 	// Current batch state
-	items     []batchItem[T, R]
-	timer     *time.Timer
+	items      []batchItem[T, R]
+	timer      *time.Timer
 	processing bool
 
 	// The batch processing function
@@ -210,8 +210,8 @@ type SimpleBatchProcessor[T any] struct {
 	config BatchConfig
 
 	// Current batch state
-	items     []T
-	timer     *time.Timer
+	items      []T
+	timer      *time.Timer
 	processing bool
 
 	// The batch processing function

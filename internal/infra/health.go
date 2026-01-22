@@ -335,7 +335,7 @@ func (r *HealthCheckRegistry) Names() []string {
 
 // HealthReport is a complete health report.
 type HealthReport struct {
-	Status    ServiceHealth        `json:"status"`
+	Status    ServiceHealth       `json:"status"`
 	Timestamp time.Time           `json:"timestamp"`
 	Checks    []HealthCheckResult `json:"checks"`
 }

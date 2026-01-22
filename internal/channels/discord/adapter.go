@@ -851,13 +851,13 @@ func (a *Adapter) Capabilities() channels.Capabilities {
 		Edit:              true,
 		Delete:            true,
 		React:             true,
-		Reply:             true,  // Discord supports threaded replies
+		Reply:             true, // Discord supports threaded replies
 		Pin:               true,
 		Typing:            true,
 		Attachments:       true,
-		RichText:          true,  // Discord supports markdown
+		RichText:          true, // Discord supports markdown
 		Threads:           true,
-		MaxMessageLength:  2000,  // Discord's message length limit
+		MaxMessageLength:  2000,    // Discord's message length limit
 		MaxAttachmentSize: 8 << 20, // 8MB for regular users
 	}
 }

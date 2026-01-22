@@ -294,7 +294,7 @@ func TestCommandQueue_WaitCallback(t *testing.T) {
 	<-started
 
 	var callbackCalled atomic.Bool
-	var waitedDuration time.Duration
+	var waitedDuration atomic.Int64
 
 	go func() {
 		_, _ = q.Enqueue(context.Background(), func(ctx context.Context) (any, error) {
@@ -303,7 +303,7 @@ func TestCommandQueue_WaitCallback(t *testing.T) {
 			WarnAfter: 10 * time.Millisecond,
 			OnWait: func(waited time.Duration, queueLen int) {
 				callbackCalled.Store(true)
-				waitedDuration = waited
+				waitedDuration.Store(int64(waited))
 			},
 		})
 	}()
@@ -318,8 +318,8 @@ func TestCommandQueue_WaitCallback(t *testing.T) {
 	if !callbackCalled.Load() {
 		t.Error("expected wait callback to be called")
 	}
-	if waitedDuration < 10*time.Millisecond {
-		t.Errorf("expected waited duration >= 10ms, got %v", waitedDuration)
+	if time.Duration(waitedDuration.Load()) < 10*time.Millisecond {
+		t.Errorf("expected waited duration >= 10ms, got %v", time.Duration(waitedDuration.Load()))
 	}
 }
 

@@ -464,8 +464,8 @@ func (r *Registry) ProviderIDs() []string {
 
 type noopLogger struct{}
 
-func (l *noopLogger) Info(_ string, _ ...any) {}
-func (l *noopLogger) Warn(_ string, _ ...any) {}
+func (l *noopLogger) Info(_ string, _ ...any)  {}
+func (l *noopLogger) Warn(_ string, _ ...any)  {}
 func (l *noopLogger) Error(_ string, _ ...any) {}
 
 // DefaultRegistry is the global plugin registry.

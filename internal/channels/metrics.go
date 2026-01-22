@@ -31,10 +31,10 @@ type Metrics struct {
 	reconnectAttempts atomic.Uint64
 
 	// Message action counters
-	actionsByType   map[MessageAction]*atomic.Uint64
-	actionsFailed   map[MessageAction]*atomic.Uint64
-	actionsLatency  map[MessageAction]*LatencyHistogram
-	actionsMu       sync.RWMutex
+	actionsByType  map[MessageAction]*atomic.Uint64
+	actionsFailed  map[MessageAction]*atomic.Uint64
+	actionsLatency map[MessageAction]*LatencyHistogram
+	actionsMu      sync.RWMutex
 
 	// Channel metadata
 	channelType models.ChannelType
@@ -198,9 +198,9 @@ type MetricsSnapshot struct {
 	Uptime            time.Duration
 
 	// Message action metrics
-	ActionsByType   map[MessageAction]uint64
-	ActionsFailed   map[MessageAction]uint64
-	ActionsLatency  map[MessageAction]LatencySnapshot
+	ActionsByType  map[MessageAction]uint64
+	ActionsFailed  map[MessageAction]uint64
+	ActionsLatency map[MessageAction]LatencySnapshot
 }
 
 // LatencyHistogram tracks latency measurements using a simple bucketing approach.

@@ -41,11 +41,11 @@ type CircuitBreakerConfig struct {
 type CircuitBreaker struct {
 	config CircuitBreakerConfig
 
-	mu             sync.RWMutex
-	state          string
-	failures       int
-	successes      int
-	lastFailure    time.Time
+	mu              sync.RWMutex
+	state           string
+	failures        int
+	successes       int
+	lastFailure     time.Time
 	lastStateChange time.Time
 }
 

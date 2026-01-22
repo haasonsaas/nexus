@@ -85,10 +85,10 @@ func TestUTF16Length(t *testing.T) {
 	}{
 		{"empty", "", 0},
 		{"ascii", "hello", 5},
-		{"emoji", "😀", 2},        // Surrogate pair = 2 units
-		{"mixed", "hi😀", 4},      // 2 ascii + 2 for emoji
+		{"emoji", "😀", 2},           // Surrogate pair = 2 units
+		{"mixed", "hi😀", 4},         // 2 ascii + 2 for emoji
 		{"multiple emoji", "😀😁", 4}, // 2 * 2 = 4
-		{"japanese", "日本語", 3},   // BMP characters = 1 each
+		{"japanese", "日本語", 3},      // BMP characters = 1 each
 	}
 
 	for _, tt := range tests {
@@ -135,7 +135,7 @@ func TestTruncateBytes(t *testing.T) {
 		{"empty", "", 5, ""},
 		{"no truncation", "hello", 10, "hello"},
 		{"truncate ascii", "hello world", 5, "hello"},
-		{"truncate mid-utf8", "日本語", 4, "日"},       // 日 = 3 bytes, so 4 bytes only fits 1
+		{"truncate mid-utf8", "日本語", 4, "日"}, // 日 = 3 bytes, so 4 bytes only fits 1
 		{"zero", "hello", 0, ""},
 		{"negative", "hello", -1, ""},
 	}

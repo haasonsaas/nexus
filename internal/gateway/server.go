@@ -140,7 +140,21 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	}
 	mcpManager := mcp.NewManager(&cfg.MCP, logger)
 	toolPolicyResolver := policy.NewResolver()
-	jobStore := jobs.NewMemoryStore()
+
+	// Create job store (prefer DB when available)
+	var jobStore jobs.Store
+	if cfg.Database.URL != "" {
+		dbJobStore, err := jobs.NewCockroachStoreFromDSN(cfg.Database.URL, nil)
+		if err != nil {
+			logger.Warn("job store falling back to memory", "error", err)
+			jobStore = jobs.NewMemoryStore()
+		} else {
+			jobStore = dbJobStore
+			logger.Info("using database-backed job store")
+		}
+	} else {
+		jobStore = jobs.NewMemoryStore()
+	}
 
 	stores, err := initStorageStores(cfg)
 	if err != nil {
@@ -216,6 +230,9 @@ func (s *Server) Start(ctx context.Context) error {
 	// Start message processing
 	s.startProcessing(ctx)
 
+	// Start job pruning background task
+	s.startJobPruning(ctx)
+
 	// Start gRPC server
 	addr := fmt.Sprintf("%s:%d", s.config.Server.Host, s.config.Server.GRPCPort)
 	lis, err := net.Listen("tcp", addr)
@@ -282,6 +299,11 @@ func (s *Server) Stop(ctx context.Context) error {
 	if err := s.stores.Close(); err != nil {
 		s.logger.Error("error closing storage stores", "error", err)
 	}
+	if closer, ok := s.jobStore.(interface{ Close() error }); ok {
+		if err := closer.Close(); err != nil {
+			s.logger.Error("error closing job store", "error", err)
+		}
+	}
 
 	return nil
 }
@@ -291,6 +313,39 @@ func (s *Server) startProcessing(ctx context.Context) {
 	s.cancel = cancel
 	s.wg.Add(1)
 	go s.processMessages(processCtx)
+}
+
+// startJobPruning starts a background goroutine that prunes old jobs.
+func (s *Server) startJobPruning(ctx context.Context) {
+	if s.jobStore == nil {
+		return
+	}
+	retention := s.config.Tools.Jobs.Retention
+	interval := s.config.Tools.Jobs.PruneInterval
+	if retention <= 0 || interval <= 0 {
+		return
+	}
+
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				pruned, err := s.jobStore.Prune(ctx, retention)
+				if err != nil {
+					s.logger.Error("job pruning failed", "error", err)
+				} else if pruned > 0 {
+					s.logger.Info("pruned old jobs", "count", pruned)
+				}
+			}
+		}
+	}()
 }
 
 // processMessages handles incoming messages from all channels.

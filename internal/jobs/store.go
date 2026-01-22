@@ -29,6 +29,9 @@ type Job struct {
 	FinishedAt time.Time          `json:"finished_at,omitempty"`
 	Result     *models.ToolResult `json:"result,omitempty"`
 	Error      string             `json:"error,omitempty"`
+
+	// cancelFunc is set when the job starts and can be called to cancel execution.
+	cancelFunc context.CancelFunc `json:"-"`
 }
 
 // Store persists job records.
@@ -37,6 +40,10 @@ type Store interface {
 	Update(ctx context.Context, job *Job) error
 	Get(ctx context.Context, id string) (*Job, error)
 	List(ctx context.Context, limit, offset int) ([]*Job, error)
+	// Prune removes jobs older than the given duration. Returns count of pruned jobs.
+	Prune(ctx context.Context, olderThan time.Duration) (int64, error)
+	// Cancel marks a running job as failed with a cancellation error.
+	Cancel(ctx context.Context, id string) error
 }
 
 // MemoryStore keeps jobs in memory.
@@ -113,6 +120,62 @@ func (s *MemoryStore) List(ctx context.Context, limit, offset int) ([]*Job, erro
 		}
 	}
 	return result, nil
+}
+
+// Prune removes jobs older than the given duration.
+func (s *MemoryStore) Prune(ctx context.Context, olderThan time.Duration) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	cutoff := time.Now().Add(-olderThan)
+	var pruned int64
+	var newKeys []string
+
+	for _, id := range s.keys {
+		job, ok := s.jobs[id]
+		if !ok {
+			continue
+		}
+		if job.CreatedAt.Before(cutoff) {
+			delete(s.jobs, id)
+			pruned++
+		} else {
+			newKeys = append(newKeys, id)
+		}
+	}
+	s.keys = newKeys
+	return pruned, nil
+}
+
+// Cancel marks a running job as failed with a cancellation error.
+func (s *MemoryStore) Cancel(ctx context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	job, ok := s.jobs[id]
+	if !ok {
+		return nil
+	}
+	if job.Status == StatusRunning || job.Status == StatusQueued {
+		// Call the cancel function if set
+		if job.cancelFunc != nil {
+			job.cancelFunc()
+		}
+		job.Status = StatusFailed
+		job.Error = "job cancelled"
+		job.FinishedAt = time.Now()
+	}
+	return nil
+}
+
+// SetCancelFunc sets the cancel function for a running job.
+func (s *MemoryStore) SetCancelFunc(id string, cancel context.CancelFunc) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if job, ok := s.jobs[id]; ok {
+		job.cancelFunc = cancel
+	}
 }
 
 func cloneJob(job *Job) *Job {

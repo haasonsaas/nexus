@@ -86,6 +86,21 @@ import (
 
 type systemPromptKey struct{}
 type chunksChanKey struct{}
+type sessionKey struct{}
+
+// WithSession stores a session in the context.
+func WithSession(ctx context.Context, session *models.Session) context.Context {
+	if session == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, sessionKey{}, session)
+}
+
+// SessionFromContext retrieves the session from context.
+func SessionFromContext(ctx context.Context) *models.Session {
+	session, _ := ctx.Value(sessionKey{}).(*models.Session)
+	return session
+}
 
 // WithSystemPrompt stores a request-scoped system prompt override in the context.
 func WithSystemPrompt(ctx context.Context, prompt string) context.Context {

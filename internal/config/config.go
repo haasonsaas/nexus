@@ -239,6 +239,15 @@ type ToolsConfig struct {
 	Notes        string              `yaml:"notes"`
 	NotesFile    string              `yaml:"notes_file"`
 	Execution    ToolExecutionConfig `yaml:"execution"`
+	Jobs         ToolJobsConfig      `yaml:"jobs"`
+}
+
+// ToolJobsConfig controls async tool job persistence.
+type ToolJobsConfig struct {
+	// Retention is how long to keep completed jobs. Default: 24h.
+	Retention time.Duration `yaml:"retention"`
+	// PruneInterval is how often to prune old jobs. Default: 1h.
+	PruneInterval time.Duration `yaml:"prune_interval"`
 }
 
 // ToolExecutionConfig controls runtime tool execution behavior.
@@ -252,6 +261,32 @@ type ToolExecutionConfig struct {
 	MaxToolCalls    int           `yaml:"max_tool_calls"`
 	RequireApproval []string      `yaml:"require_approval"`
 	Async           []string      `yaml:"async"`
+	Approval        ApprovalConfig `yaml:"approval"`
+}
+
+// ApprovalConfig controls tool approval behavior.
+type ApprovalConfig struct {
+	// Allowlist contains tools that are always allowed (no approval needed).
+	// Supports patterns like "mcp:*", "read_*", "*" (all).
+	Allowlist []string `yaml:"allowlist"`
+
+	// Denylist contains tools that are always denied.
+	Denylist []string `yaml:"denylist"`
+
+	// SafeBins are stdin-only tools that are safe to auto-allow.
+	SafeBins []string `yaml:"safe_bins"`
+
+	// SkillAllowlist auto-allows tools defined by enabled skills.
+	SkillAllowlist bool `yaml:"skill_allowlist"`
+
+	// AskFallback queues approval when UI is unavailable instead of denying.
+	AskFallback bool `yaml:"ask_fallback"`
+
+	// DefaultDecision when no rule matches: "allowed", "denied", or "pending".
+	DefaultDecision string `yaml:"default_decision"`
+
+	// RequestTTL is how long approval requests remain valid.
+	RequestTTL time.Duration `yaml:"request_ttl"`
 }
 
 type SandboxConfig struct {
@@ -523,6 +558,13 @@ func applyToolsDefaults(cfg *Config) {
 		cfg.Tools.MemorySearch.MemoryFile = cfg.Workspace.MemoryFile
 	}
 	applyMemorySearchEmbeddingsDefaults(&cfg.Tools.MemorySearch.Embeddings)
+	// Job persistence defaults
+	if cfg.Tools.Jobs.Retention == 0 {
+		cfg.Tools.Jobs.Retention = 24 * time.Hour
+	}
+	if cfg.Tools.Jobs.PruneInterval == 0 {
+		cfg.Tools.Jobs.PruneInterval = 1 * time.Hour
+	}
 }
 
 func applyMemorySearchEmbeddingsDefaults(cfg *MemorySearchEmbeddingsConfig) {

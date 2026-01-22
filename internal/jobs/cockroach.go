@@ -262,3 +262,35 @@ func nullTime(value time.Time) sql.NullTime {
 	}
 	return sql.NullTime{Time: value, Valid: true}
 }
+
+// Prune removes jobs older than the given duration.
+func (s *CockroachStore) Prune(ctx context.Context, olderThan time.Duration) (int64, error) {
+	cutoff := time.Now().Add(-olderThan)
+	result, err := s.db.ExecContext(ctx, `
+		DELETE FROM tool_jobs WHERE created_at < $1
+	`, cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("prune jobs: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("get rows affected: %w", err)
+	}
+	return affected, nil
+}
+
+// Cancel marks a running job as failed with a cancellation error.
+func (s *CockroachStore) Cancel(ctx context.Context, id string) error {
+	if id == "" {
+		return nil
+	}
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE tool_jobs
+		SET status = $2, error_message = $3, finished_at = $4
+		WHERE id = $1 AND status IN ('queued', 'running')
+	`, id, string(StatusFailed), "job cancelled", time.Now())
+	if err != nil {
+		return fmt.Errorf("cancel job: %w", err)
+	}
+	return nil
+}

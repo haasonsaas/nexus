@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/haasonsaas/nexus/internal/mcp"
 	"github.com/haasonsaas/nexus/internal/memory"
 	"github.com/haasonsaas/nexus/internal/skills"
 	"gopkg.in/yaml.v3"
@@ -26,6 +27,7 @@ type Config struct {
 	Plugins      PluginsConfig       `yaml:"plugins"`
 	Skills       skills.SkillsConfig `yaml:"skills"`
 	VectorMemory memory.Config       `yaml:"vector_memory"`
+	MCP          mcp.Config          `yaml:"mcp"`
 	Channels     ChannelsConfig      `yaml:"channels"`
 	LLM          LLMConfig           `yaml:"llm"`
 	Tools        ToolsConfig         `yaml:"tools"`

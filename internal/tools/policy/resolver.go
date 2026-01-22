@@ -6,14 +6,13 @@ import (
 )
 
 // Resolver resolves tool access based on policies by evaluating profiles,
-// groups, allow lists, and deny lists. It supports MCP server tool registration,
-// edge daemon tool registration, and custom tool aliases.
+// groups, allow lists, and deny lists. It supports MCP server tool registration
+// and custom tool aliases.
 type Resolver struct {
-	mu          sync.RWMutex
-	groups      map[string][]string
-	mcpServers  map[string][]string // serverID -> tool names
-	edgeServers map[string][]string // edgeID -> tool names
-	aliases     map[string]string   // alias -> canonical tool name
+	mu         sync.RWMutex
+	groups     map[string][]string
+	mcpServers map[string][]string // serverID -> tool names
+	aliases    map[string]string   // alias -> canonical tool name
 }
 
 // Decision explains why a tool was allowed or denied, providing
@@ -27,10 +26,9 @@ type Decision struct {
 // NewResolver creates a new policy resolver with default groups initialized.
 func NewResolver() *Resolver {
 	return &Resolver{
-		groups:      DefaultGroups,
-		mcpServers:  make(map[string][]string),
-		edgeServers: make(map[string][]string),
-		aliases:     make(map[string]string),
+		groups:     DefaultGroups,
+		mcpServers: make(map[string][]string),
+		aliases:    make(map[string]string),
 	}
 }
 
@@ -49,24 +47,6 @@ func (r *Resolver) RegisterMCPServer(serverID string, tools []string) {
 	r.mcpServers[serverID] = tools
 	// Also add as a group
 	r.groups["mcp:"+serverID] = tools
-}
-
-// RegisterEdgeServer registers tools from an edge daemon, making them available
-// for policy rules and creating a group "edge:edgeID" for convenience.
-func (r *Resolver) RegisterEdgeServer(edgeID string, tools []string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.edgeServers[edgeID] = tools
-	// Also add as a group
-	r.groups["edge:"+edgeID] = tools
-}
-
-// UnregisterEdgeServer removes tools from an edge daemon.
-func (r *Resolver) UnregisterEdgeServer(edgeID string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	delete(r.edgeServers, edgeID)
-	delete(r.groups, "edge:"+edgeID)
 }
 
 // RegisterAlias registers an alias that resolves to a canonical tool name,
@@ -98,8 +78,8 @@ func (r *Resolver) canonicalNameLocked(name string) string {
 	return normalized
 }
 
-// ExpandGroups expands group references (e.g., "group:fs") and wildcards
-// (e.g., "mcp:server.*", "edge:device.*") in a tool list to their constituent tools.
+// ExpandGroups expands group references (e.g., "group:fs") and MCP wildcards
+// (e.g., "mcp:server.*") in a tool list to their constituent tools.
 func (r *Resolver) ExpandGroups(items []string) []string {
 	var result []string
 	seen := make(map[string]bool)
@@ -127,21 +107,6 @@ func (r *Resolver) ExpandGroups(items []string) []string {
 			if tools, ok := r.mcpServers[serverID]; ok {
 				for _, tool := range tools {
 					fullName := "mcp:" + serverID + "." + tool
-					if !seen[fullName] {
-						seen[fullName] = true
-						result = append(result, fullName)
-					}
-				}
-			}
-			continue
-		}
-
-		// Check for edge wildcard (edge:device.*)
-		if strings.HasPrefix(normalized, "edge:") && strings.HasSuffix(normalized, ".*") {
-			edgeID := strings.TrimSuffix(strings.TrimPrefix(normalized, "edge:"), ".*")
-			if tools, ok := r.edgeServers[edgeID]; ok {
-				for _, tool := range tools {
-					fullName := "edge:" + edgeID + "." + tool
 					if !seen[fullName] {
 						seen[fullName] = true
 						result = append(result, fullName)
@@ -207,7 +172,7 @@ func (r *Resolver) Decide(policy *Policy, toolName string) Decision {
 			decision.Reason = "denied by rule: " + d
 			return decision
 		}
-		if matchToolPattern(d, normalized) {
+		if strings.HasPrefix(normalized, "mcp:") && matchMCPPattern(d, normalized) {
 			decision.Reason = "denied by rule: " + d
 			return decision
 		}
@@ -227,7 +192,7 @@ func (r *Resolver) Decide(policy *Policy, toolName string) Decision {
 			decision.Reason = "allowed by rule: " + a
 			return decision
 		}
-		if matchToolPattern(a, normalized) {
+		if strings.HasPrefix(normalized, "mcp:") && matchMCPPattern(a, normalized) {
 			decision.Allowed = true
 			decision.Reason = "allowed by rule: " + a
 			return decision
@@ -273,57 +238,25 @@ func toolProviderKey(toolName string) string {
 		}
 		return "mcp"
 	}
-	if strings.HasPrefix(normalized, "edge:") {
-		trimmed := strings.TrimPrefix(normalized, "edge:")
-		if trimmed == "" {
-			return "edge"
-		}
-		parts := strings.SplitN(trimmed, ".", 2)
-		if len(parts) > 0 && parts[0] != "" {
-			return "edge:" + parts[0]
-		}
-		return "edge"
-	}
 	return "nexus"
 }
 
-// matchToolPattern checks if a pattern matches a tool name.
-// Supports patterns for MCP, edge, and core tools:
-//   - "mcp:*" or "edge:*" or "core.*" - all tools from source
-//   - "mcp:server.*" or "edge:device.*" - all tools from server/device
-//   - "mcp:server.tool" or "edge:device.tool" - exact match
-//   - "*" - matches any tool
-func matchToolPattern(pattern, toolName string) bool {
-	// Universal wildcard
-	if pattern == "*" {
-		return true
-	}
-
-	// Source wildcards
+// matchMCPPattern checks if a pattern matches an MCP tool name.
+// Pattern can be:
+//   - "mcp:server.tool" - exact match
+//   - "mcp:server.*" - all tools from server
+//   - "mcp:*" - all MCP tools
+func matchMCPPattern(pattern, toolName string) bool {
 	if pattern == "mcp:*" {
 		return strings.HasPrefix(toolName, "mcp:")
 	}
-	if pattern == "edge:*" {
-		return strings.HasPrefix(toolName, "edge:")
-	}
-	if pattern == "core.*" {
-		return strings.HasPrefix(toolName, "core.") || !strings.Contains(toolName, ":")
-	}
 
-	// Namespace wildcards (e.g., "mcp:server.*", "edge:device.*")
 	if strings.HasSuffix(pattern, ".*") {
 		prefix := strings.TrimSuffix(pattern, "*")
 		return strings.HasPrefix(toolName, prefix)
 	}
 
-	// Exact match
 	return pattern == toolName
-}
-
-// matchMCPPattern is kept for backwards compatibility.
-// Deprecated: Use matchToolPattern instead.
-func matchMCPPattern(pattern, toolName string) bool {
-	return matchToolPattern(pattern, toolName)
 }
 
 // FilterAllowed filters a list of tools to only those allowed by the policy,

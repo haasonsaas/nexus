@@ -857,3 +857,24 @@ enum EdgeConnectionStatus {
   EDGE_CONNECTION_STATUS_DISCONNECTED = 2;
   EDGE_CONNECTION_STATUS_RECONNECTING = 3;
 }
+
+// RiskLevel indicates the risk level of a tool operation.
+enum RiskLevel {
+  RISK_LEVEL_UNSPECIFIED = 0;
+  RISK_LEVEL_LOW = 1;       // Read-only, no side effects
+  RISK_LEVEL_MEDIUM = 2;    // May have side effects, reversible
+  RISK_LEVEL_HIGH = 3;      // Significant side effects
+  RISK_LEVEL_CRITICAL = 4;  // Destructive or security-sensitive
+}
+
+// ToolCategory categorizes tools for policy and display.
+enum ToolCategory {
+  TOOL_CATEGORY_UNSPECIFIED = 0;
+  TOOL_CATEGORY_SYSTEM = 1;       // System access (files, processes)
+  TOOL_CATEGORY_HARDWARE = 2;     // Hardware access (camera, sensors)
+  TOOL_CATEGORY_NETWORK = 3;      // Network operations
+  TOOL_CATEGORY_COMMUNICATION = 4; // Messaging, notifications
+  TOOL_CATEGORY_DATA = 5;         // Data processing
+  TOOL_CATEGORY_AUTOMATION = 6;   // Scripts, workflows
+  TOOL_CATEGORY_CUSTOM = 7;       // User-defined
+}

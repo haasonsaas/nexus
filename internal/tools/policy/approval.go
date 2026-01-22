@@ -482,3 +482,17 @@ func generateApprovalID() string {
 	approvalIDCounter++
 	return fmt.Sprintf("apr_%d_%d", time.Now().UnixNano(), approvalIDCounter)
 }
+
+// matchToolPattern checks if a pattern matches a tool name.
+// Supports * as a wildcard (e.g., "edge:*" matches "edge:device.tool").
+func matchToolPattern(pattern, toolName string) bool {
+	if pattern == toolName {
+		return true
+	}
+	// Simple wildcard matching
+	if len(pattern) > 0 && pattern[len(pattern)-1] == '*' {
+		prefix := pattern[:len(pattern)-1]
+		return len(toolName) >= len(prefix) && toolName[:len(prefix)] == prefix
+	}
+	return false
+}

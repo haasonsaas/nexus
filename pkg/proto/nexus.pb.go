@@ -573,6 +573,127 @@ func (EdgeConnectionStatus) EnumDescriptor() ([]byte, []int) {
 	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{9}
 }
 
+// RiskLevel indicates the risk level of a tool operation.
+type RiskLevel int32
+
+const (
+	RiskLevel_RISK_LEVEL_UNSPECIFIED RiskLevel = 0
+	RiskLevel_RISK_LEVEL_LOW         RiskLevel = 1 // Read-only, no side effects
+	RiskLevel_RISK_LEVEL_MEDIUM      RiskLevel = 2 // May have side effects, reversible
+	RiskLevel_RISK_LEVEL_HIGH        RiskLevel = 3 // Significant side effects
+	RiskLevel_RISK_LEVEL_CRITICAL    RiskLevel = 4 // Destructive or security-sensitive
+)
+
+// Enum value maps for RiskLevel.
+var (
+	RiskLevel_name = map[int32]string{
+		0: "RISK_LEVEL_UNSPECIFIED",
+		1: "RISK_LEVEL_LOW",
+		2: "RISK_LEVEL_MEDIUM",
+		3: "RISK_LEVEL_HIGH",
+		4: "RISK_LEVEL_CRITICAL",
+	}
+	RiskLevel_value = map[string]int32{
+		"RISK_LEVEL_UNSPECIFIED": 0,
+		"RISK_LEVEL_LOW":         1,
+		"RISK_LEVEL_MEDIUM":      2,
+		"RISK_LEVEL_HIGH":        3,
+		"RISK_LEVEL_CRITICAL":    4,
+	}
+)
+
+func (x RiskLevel) Enum() *RiskLevel {
+	p := new(RiskLevel)
+	*p = x
+	return p
+}
+
+func (x RiskLevel) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (RiskLevel) Descriptor() protoreflect.EnumDescriptor {
+	return file_pkg_proto_nexus_proto_enumTypes[10].Descriptor()
+}
+
+func (RiskLevel) Type() protoreflect.EnumType {
+	return &file_pkg_proto_nexus_proto_enumTypes[10]
+}
+
+func (x RiskLevel) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use RiskLevel.Descriptor instead.
+func (RiskLevel) EnumDescriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{10}
+}
+
+// ToolCategory categorizes tools for policy and display.
+type ToolCategory int32
+
+const (
+	ToolCategory_TOOL_CATEGORY_UNSPECIFIED   ToolCategory = 0
+	ToolCategory_TOOL_CATEGORY_SYSTEM        ToolCategory = 1 // System access (files, processes)
+	ToolCategory_TOOL_CATEGORY_HARDWARE      ToolCategory = 2 // Hardware access (camera, sensors)
+	ToolCategory_TOOL_CATEGORY_NETWORK       ToolCategory = 3 // Network operations
+	ToolCategory_TOOL_CATEGORY_COMMUNICATION ToolCategory = 4 // Messaging, notifications
+	ToolCategory_TOOL_CATEGORY_DATA          ToolCategory = 5 // Data processing
+	ToolCategory_TOOL_CATEGORY_AUTOMATION    ToolCategory = 6 // Scripts, workflows
+	ToolCategory_TOOL_CATEGORY_CUSTOM        ToolCategory = 7 // User-defined
+)
+
+// Enum value maps for ToolCategory.
+var (
+	ToolCategory_name = map[int32]string{
+		0: "TOOL_CATEGORY_UNSPECIFIED",
+		1: "TOOL_CATEGORY_SYSTEM",
+		2: "TOOL_CATEGORY_HARDWARE",
+		3: "TOOL_CATEGORY_NETWORK",
+		4: "TOOL_CATEGORY_COMMUNICATION",
+		5: "TOOL_CATEGORY_DATA",
+		6: "TOOL_CATEGORY_AUTOMATION",
+		7: "TOOL_CATEGORY_CUSTOM",
+	}
+	ToolCategory_value = map[string]int32{
+		"TOOL_CATEGORY_UNSPECIFIED":   0,
+		"TOOL_CATEGORY_SYSTEM":        1,
+		"TOOL_CATEGORY_HARDWARE":      2,
+		"TOOL_CATEGORY_NETWORK":       3,
+		"TOOL_CATEGORY_COMMUNICATION": 4,
+		"TOOL_CATEGORY_DATA":          5,
+		"TOOL_CATEGORY_AUTOMATION":    6,
+		"TOOL_CATEGORY_CUSTOM":        7,
+	}
+)
+
+func (x ToolCategory) Enum() *ToolCategory {
+	p := new(ToolCategory)
+	*p = x
+	return p
+}
+
+func (x ToolCategory) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ToolCategory) Descriptor() protoreflect.EnumDescriptor {
+	return file_pkg_proto_nexus_proto_enumTypes[11].Descriptor()
+}
+
+func (ToolCategory) Type() protoreflect.EnumType {
+	return &file_pkg_proto_nexus_proto_enumTypes[11]
+}
+
+func (x ToolCategory) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ToolCategory.Descriptor instead.
+func (ToolCategory) EnumDescriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{11}
+}
+
 // ClientMessage represents messages sent from client to server.
 type ClientMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -6020,7 +6141,22 @@ const file_pkg_proto_nexus_proto_rawDesc = "" +
 	"\"EDGE_CONNECTION_STATUS_UNSPECIFIED\x10\x00\x12$\n" +
 	" EDGE_CONNECTION_STATUS_CONNECTED\x10\x01\x12'\n" +
 	"#EDGE_CONNECTION_STATUS_DISCONNECTED\x10\x02\x12'\n" +
-	"#EDGE_CONNECTION_STATUS_RECONNECTING\x10\x032N\n" +
+	"#EDGE_CONNECTION_STATUS_RECONNECTING\x10\x03*\x80\x01\n" +
+	"\tRiskLevel\x12\x1a\n" +
+	"\x16RISK_LEVEL_UNSPECIFIED\x10\x00\x12\x12\n" +
+	"\x0eRISK_LEVEL_LOW\x10\x01\x12\x15\n" +
+	"\x11RISK_LEVEL_MEDIUM\x10\x02\x12\x13\n" +
+	"\x0fRISK_LEVEL_HIGH\x10\x03\x12\x17\n" +
+	"\x13RISK_LEVEL_CRITICAL\x10\x04*\xef\x01\n" +
+	"\fToolCategory\x12\x1d\n" +
+	"\x19TOOL_CATEGORY_UNSPECIFIED\x10\x00\x12\x18\n" +
+	"\x14TOOL_CATEGORY_SYSTEM\x10\x01\x12\x1a\n" +
+	"\x16TOOL_CATEGORY_HARDWARE\x10\x02\x12\x19\n" +
+	"\x15TOOL_CATEGORY_NETWORK\x10\x03\x12\x1f\n" +
+	"\x1bTOOL_CATEGORY_COMMUNICATION\x10\x04\x12\x16\n" +
+	"\x12TOOL_CATEGORY_DATA\x10\x05\x12\x1c\n" +
+	"\x18TOOL_CATEGORY_AUTOMATION\x10\x06\x12\x18\n" +
+	"\x14TOOL_CATEGORY_CUSTOM\x10\a2N\n" +
 	"\fNexusGateway\x12>\n" +
 	"\x06Stream\x12\x17.nexus.v1.ClientMessage\x1a\x17.nexus.v1.ServerMessage(\x010\x012\x9e\x03\n" +
 	"\x0eSessionService\x12P\n" +
@@ -6062,7 +6198,7 @@ func file_pkg_proto_nexus_proto_rawDescGZIP() []byte {
 	return file_pkg_proto_nexus_proto_rawDescData
 }
 
-var file_pkg_proto_nexus_proto_enumTypes = make([]protoimpl.EnumInfo, 10)
+var file_pkg_proto_nexus_proto_enumTypes = make([]protoimpl.EnumInfo, 12)
 var file_pkg_proto_nexus_proto_msgTypes = make([]protoimpl.MessageInfo, 86)
 var file_pkg_proto_nexus_proto_goTypes = []any{
 	(ChunkType)(0),                    // 0: nexus.v1.ChunkType
@@ -6075,236 +6211,238 @@ var file_pkg_proto_nexus_proto_goTypes = []any{
 	(EdgeEventType)(0),                // 7: nexus.v1.EdgeEventType
 	(CoreEventType)(0),                // 8: nexus.v1.CoreEventType
 	(EdgeConnectionStatus)(0),         // 9: nexus.v1.EdgeConnectionStatus
-	(*ClientMessage)(nil),             // 10: nexus.v1.ClientMessage
-	(*ServerMessage)(nil),             // 11: nexus.v1.ServerMessage
-	(*SendMessageRequest)(nil),        // 12: nexus.v1.SendMessageRequest
-	(*MessageChunk)(nil),              // 13: nexus.v1.MessageChunk
-	(*MessageComplete)(nil),           // 14: nexus.v1.MessageComplete
-	(*ToolCallRequest)(nil),           // 15: nexus.v1.ToolCallRequest
-	(*SessionEvent)(nil),              // 16: nexus.v1.SessionEvent
-	(*SessionEventNotification)(nil),  // 17: nexus.v1.SessionEventNotification
-	(*SubscribeRequest)(nil),          // 18: nexus.v1.SubscribeRequest
-	(*UnsubscribeRequest)(nil),        // 19: nexus.v1.UnsubscribeRequest
-	(*PingRequest)(nil),               // 20: nexus.v1.PingRequest
-	(*PongResponse)(nil),              // 21: nexus.v1.PongResponse
-	(*ErrorNotification)(nil),         // 22: nexus.v1.ErrorNotification
-	(*Message)(nil),                   // 23: nexus.v1.Message
-	(*Attachment)(nil),                // 24: nexus.v1.Attachment
-	(*ToolCall)(nil),                  // 25: nexus.v1.ToolCall
-	(*ToolResult)(nil),                // 26: nexus.v1.ToolResult
-	(*Session)(nil),                   // 27: nexus.v1.Session
-	(*Agent)(nil),                     // 28: nexus.v1.Agent
-	(*User)(nil),                      // 29: nexus.v1.User
-	(*APIKey)(nil),                    // 30: nexus.v1.APIKey
-	(*CreateSessionRequest)(nil),      // 31: nexus.v1.CreateSessionRequest
-	(*CreateSessionResponse)(nil),     // 32: nexus.v1.CreateSessionResponse
-	(*GetSessionRequest)(nil),         // 33: nexus.v1.GetSessionRequest
-	(*GetSessionResponse)(nil),        // 34: nexus.v1.GetSessionResponse
-	(*ListSessionsRequest)(nil),       // 35: nexus.v1.ListSessionsRequest
-	(*ListSessionsResponse)(nil),      // 36: nexus.v1.ListSessionsResponse
-	(*DeleteSessionRequest)(nil),      // 37: nexus.v1.DeleteSessionRequest
-	(*DeleteSessionResponse)(nil),     // 38: nexus.v1.DeleteSessionResponse
-	(*UpdateSessionRequest)(nil),      // 39: nexus.v1.UpdateSessionRequest
-	(*UpdateSessionResponse)(nil),     // 40: nexus.v1.UpdateSessionResponse
-	(*CreateAgentRequest)(nil),        // 41: nexus.v1.CreateAgentRequest
-	(*CreateAgentResponse)(nil),       // 42: nexus.v1.CreateAgentResponse
-	(*GetAgentRequest)(nil),           // 43: nexus.v1.GetAgentRequest
-	(*GetAgentResponse)(nil),          // 44: nexus.v1.GetAgentResponse
-	(*ListAgentsRequest)(nil),         // 45: nexus.v1.ListAgentsRequest
-	(*ListAgentsResponse)(nil),        // 46: nexus.v1.ListAgentsResponse
-	(*UpdateAgentRequest)(nil),        // 47: nexus.v1.UpdateAgentRequest
-	(*UpdateAgentResponse)(nil),       // 48: nexus.v1.UpdateAgentResponse
-	(*DeleteAgentRequest)(nil),        // 49: nexus.v1.DeleteAgentRequest
-	(*DeleteAgentResponse)(nil),       // 50: nexus.v1.DeleteAgentResponse
-	(*ConnectChannelRequest)(nil),     // 51: nexus.v1.ConnectChannelRequest
-	(*ConnectChannelResponse)(nil),    // 52: nexus.v1.ConnectChannelResponse
-	(*DisconnectChannelRequest)(nil),  // 53: nexus.v1.DisconnectChannelRequest
-	(*DisconnectChannelResponse)(nil), // 54: nexus.v1.DisconnectChannelResponse
-	(*GetChannelStatusRequest)(nil),   // 55: nexus.v1.GetChannelStatusRequest
-	(*GetChannelStatusResponse)(nil),  // 56: nexus.v1.GetChannelStatusResponse
-	(*ListChannelsRequest)(nil),       // 57: nexus.v1.ListChannelsRequest
-	(*ListChannelsResponse)(nil),      // 58: nexus.v1.ListChannelsResponse
-	(*ChannelConnection)(nil),         // 59: nexus.v1.ChannelConnection
-	(*HealthCheckRequest)(nil),        // 60: nexus.v1.HealthCheckRequest
-	(*HealthCheckResponse)(nil),       // 61: nexus.v1.HealthCheckResponse
-	(*EdgeMessage)(nil),               // 62: nexus.v1.EdgeMessage
-	(*CoreMessage)(nil),               // 63: nexus.v1.CoreMessage
-	(*EdgeRegister)(nil),              // 64: nexus.v1.EdgeRegister
-	(*EdgeToolDefinition)(nil),        // 65: nexus.v1.EdgeToolDefinition
-	(*EdgeCapabilities)(nil),          // 66: nexus.v1.EdgeCapabilities
-	(*EdgeRegistered)(nil),            // 67: nexus.v1.EdgeRegistered
-	(*EdgeHeartbeat)(nil),             // 68: nexus.v1.EdgeHeartbeat
-	(*EdgeMetrics)(nil),               // 69: nexus.v1.EdgeMetrics
-	(*ToolExecutionRequest)(nil),      // 70: nexus.v1.ToolExecutionRequest
-	(*ToolExecutionResult)(nil),       // 71: nexus.v1.ToolExecutionResult
-	(*Artifact)(nil),                  // 72: nexus.v1.Artifact
-	(*ToolCancellation)(nil),          // 73: nexus.v1.ToolCancellation
-	(*EdgeEvent)(nil),                 // 74: nexus.v1.EdgeEvent
-	(*CoreEvent)(nil),                 // 75: nexus.v1.CoreEvent
-	(*GetEdgeStatusRequest)(nil),      // 76: nexus.v1.GetEdgeStatusRequest
-	(*GetEdgeStatusResponse)(nil),     // 77: nexus.v1.GetEdgeStatusResponse
-	(*ListEdgesRequest)(nil),          // 78: nexus.v1.ListEdgesRequest
-	(*ListEdgesResponse)(nil),         // 79: nexus.v1.ListEdgesResponse
-	(*EdgeStatus)(nil),                // 80: nexus.v1.EdgeStatus
-	nil,                               // 81: nexus.v1.SendMessageRequest.MetadataEntry
-	nil,                               // 82: nexus.v1.Message.MetadataEntry
-	nil,                               // 83: nexus.v1.Session.MetadataEntry
-	nil,                               // 84: nexus.v1.Agent.ConfigEntry
-	nil,                               // 85: nexus.v1.CreateSessionRequest.MetadataEntry
-	nil,                               // 86: nexus.v1.UpdateSessionRequest.MetadataEntry
-	nil,                               // 87: nexus.v1.CreateAgentRequest.ConfigEntry
-	nil,                               // 88: nexus.v1.UpdateAgentRequest.ConfigEntry
-	nil,                               // 89: nexus.v1.ConnectChannelRequest.CredentialsEntry
-	nil,                               // 90: nexus.v1.ConnectChannelRequest.ConfigEntry
-	nil,                               // 91: nexus.v1.ChannelConnection.ConfigEntry
-	nil,                               // 92: nexus.v1.HealthCheckResponse.MetadataEntry
-	nil,                               // 93: nexus.v1.EdgeRegister.MetadataEntry
-	nil,                               // 94: nexus.v1.ToolExecutionRequest.MetadataEntry
-	nil,                               // 95: nexus.v1.EdgeStatus.MetadataEntry
-	(*structpb.Struct)(nil),           // 96: google.protobuf.Struct
-	(*timestamppb.Timestamp)(nil),     // 97: google.protobuf.Timestamp
+	(RiskLevel)(0),                    // 10: nexus.v1.RiskLevel
+	(ToolCategory)(0),                 // 11: nexus.v1.ToolCategory
+	(*ClientMessage)(nil),             // 12: nexus.v1.ClientMessage
+	(*ServerMessage)(nil),             // 13: nexus.v1.ServerMessage
+	(*SendMessageRequest)(nil),        // 14: nexus.v1.SendMessageRequest
+	(*MessageChunk)(nil),              // 15: nexus.v1.MessageChunk
+	(*MessageComplete)(nil),           // 16: nexus.v1.MessageComplete
+	(*ToolCallRequest)(nil),           // 17: nexus.v1.ToolCallRequest
+	(*SessionEvent)(nil),              // 18: nexus.v1.SessionEvent
+	(*SessionEventNotification)(nil),  // 19: nexus.v1.SessionEventNotification
+	(*SubscribeRequest)(nil),          // 20: nexus.v1.SubscribeRequest
+	(*UnsubscribeRequest)(nil),        // 21: nexus.v1.UnsubscribeRequest
+	(*PingRequest)(nil),               // 22: nexus.v1.PingRequest
+	(*PongResponse)(nil),              // 23: nexus.v1.PongResponse
+	(*ErrorNotification)(nil),         // 24: nexus.v1.ErrorNotification
+	(*Message)(nil),                   // 25: nexus.v1.Message
+	(*Attachment)(nil),                // 26: nexus.v1.Attachment
+	(*ToolCall)(nil),                  // 27: nexus.v1.ToolCall
+	(*ToolResult)(nil),                // 28: nexus.v1.ToolResult
+	(*Session)(nil),                   // 29: nexus.v1.Session
+	(*Agent)(nil),                     // 30: nexus.v1.Agent
+	(*User)(nil),                      // 31: nexus.v1.User
+	(*APIKey)(nil),                    // 32: nexus.v1.APIKey
+	(*CreateSessionRequest)(nil),      // 33: nexus.v1.CreateSessionRequest
+	(*CreateSessionResponse)(nil),     // 34: nexus.v1.CreateSessionResponse
+	(*GetSessionRequest)(nil),         // 35: nexus.v1.GetSessionRequest
+	(*GetSessionResponse)(nil),        // 36: nexus.v1.GetSessionResponse
+	(*ListSessionsRequest)(nil),       // 37: nexus.v1.ListSessionsRequest
+	(*ListSessionsResponse)(nil),      // 38: nexus.v1.ListSessionsResponse
+	(*DeleteSessionRequest)(nil),      // 39: nexus.v1.DeleteSessionRequest
+	(*DeleteSessionResponse)(nil),     // 40: nexus.v1.DeleteSessionResponse
+	(*UpdateSessionRequest)(nil),      // 41: nexus.v1.UpdateSessionRequest
+	(*UpdateSessionResponse)(nil),     // 42: nexus.v1.UpdateSessionResponse
+	(*CreateAgentRequest)(nil),        // 43: nexus.v1.CreateAgentRequest
+	(*CreateAgentResponse)(nil),       // 44: nexus.v1.CreateAgentResponse
+	(*GetAgentRequest)(nil),           // 45: nexus.v1.GetAgentRequest
+	(*GetAgentResponse)(nil),          // 46: nexus.v1.GetAgentResponse
+	(*ListAgentsRequest)(nil),         // 47: nexus.v1.ListAgentsRequest
+	(*ListAgentsResponse)(nil),        // 48: nexus.v1.ListAgentsResponse
+	(*UpdateAgentRequest)(nil),        // 49: nexus.v1.UpdateAgentRequest
+	(*UpdateAgentResponse)(nil),       // 50: nexus.v1.UpdateAgentResponse
+	(*DeleteAgentRequest)(nil),        // 51: nexus.v1.DeleteAgentRequest
+	(*DeleteAgentResponse)(nil),       // 52: nexus.v1.DeleteAgentResponse
+	(*ConnectChannelRequest)(nil),     // 53: nexus.v1.ConnectChannelRequest
+	(*ConnectChannelResponse)(nil),    // 54: nexus.v1.ConnectChannelResponse
+	(*DisconnectChannelRequest)(nil),  // 55: nexus.v1.DisconnectChannelRequest
+	(*DisconnectChannelResponse)(nil), // 56: nexus.v1.DisconnectChannelResponse
+	(*GetChannelStatusRequest)(nil),   // 57: nexus.v1.GetChannelStatusRequest
+	(*GetChannelStatusResponse)(nil),  // 58: nexus.v1.GetChannelStatusResponse
+	(*ListChannelsRequest)(nil),       // 59: nexus.v1.ListChannelsRequest
+	(*ListChannelsResponse)(nil),      // 60: nexus.v1.ListChannelsResponse
+	(*ChannelConnection)(nil),         // 61: nexus.v1.ChannelConnection
+	(*HealthCheckRequest)(nil),        // 62: nexus.v1.HealthCheckRequest
+	(*HealthCheckResponse)(nil),       // 63: nexus.v1.HealthCheckResponse
+	(*EdgeMessage)(nil),               // 64: nexus.v1.EdgeMessage
+	(*CoreMessage)(nil),               // 65: nexus.v1.CoreMessage
+	(*EdgeRegister)(nil),              // 66: nexus.v1.EdgeRegister
+	(*EdgeToolDefinition)(nil),        // 67: nexus.v1.EdgeToolDefinition
+	(*EdgeCapabilities)(nil),          // 68: nexus.v1.EdgeCapabilities
+	(*EdgeRegistered)(nil),            // 69: nexus.v1.EdgeRegistered
+	(*EdgeHeartbeat)(nil),             // 70: nexus.v1.EdgeHeartbeat
+	(*EdgeMetrics)(nil),               // 71: nexus.v1.EdgeMetrics
+	(*ToolExecutionRequest)(nil),      // 72: nexus.v1.ToolExecutionRequest
+	(*ToolExecutionResult)(nil),       // 73: nexus.v1.ToolExecutionResult
+	(*Artifact)(nil),                  // 74: nexus.v1.Artifact
+	(*ToolCancellation)(nil),          // 75: nexus.v1.ToolCancellation
+	(*EdgeEvent)(nil),                 // 76: nexus.v1.EdgeEvent
+	(*CoreEvent)(nil),                 // 77: nexus.v1.CoreEvent
+	(*GetEdgeStatusRequest)(nil),      // 78: nexus.v1.GetEdgeStatusRequest
+	(*GetEdgeStatusResponse)(nil),     // 79: nexus.v1.GetEdgeStatusResponse
+	(*ListEdgesRequest)(nil),          // 80: nexus.v1.ListEdgesRequest
+	(*ListEdgesResponse)(nil),         // 81: nexus.v1.ListEdgesResponse
+	(*EdgeStatus)(nil),                // 82: nexus.v1.EdgeStatus
+	nil,                               // 83: nexus.v1.SendMessageRequest.MetadataEntry
+	nil,                               // 84: nexus.v1.Message.MetadataEntry
+	nil,                               // 85: nexus.v1.Session.MetadataEntry
+	nil,                               // 86: nexus.v1.Agent.ConfigEntry
+	nil,                               // 87: nexus.v1.CreateSessionRequest.MetadataEntry
+	nil,                               // 88: nexus.v1.UpdateSessionRequest.MetadataEntry
+	nil,                               // 89: nexus.v1.CreateAgentRequest.ConfigEntry
+	nil,                               // 90: nexus.v1.UpdateAgentRequest.ConfigEntry
+	nil,                               // 91: nexus.v1.ConnectChannelRequest.CredentialsEntry
+	nil,                               // 92: nexus.v1.ConnectChannelRequest.ConfigEntry
+	nil,                               // 93: nexus.v1.ChannelConnection.ConfigEntry
+	nil,                               // 94: nexus.v1.HealthCheckResponse.MetadataEntry
+	nil,                               // 95: nexus.v1.EdgeRegister.MetadataEntry
+	nil,                               // 96: nexus.v1.ToolExecutionRequest.MetadataEntry
+	nil,                               // 97: nexus.v1.EdgeStatus.MetadataEntry
+	(*structpb.Struct)(nil),           // 98: google.protobuf.Struct
+	(*timestamppb.Timestamp)(nil),     // 99: google.protobuf.Timestamp
 }
 var file_pkg_proto_nexus_proto_depIdxs = []int32{
-	12,  // 0: nexus.v1.ClientMessage.send_message:type_name -> nexus.v1.SendMessageRequest
-	16,  // 1: nexus.v1.ClientMessage.session_event:type_name -> nexus.v1.SessionEvent
-	18,  // 2: nexus.v1.ClientMessage.subscribe:type_name -> nexus.v1.SubscribeRequest
-	19,  // 3: nexus.v1.ClientMessage.unsubscribe:type_name -> nexus.v1.UnsubscribeRequest
-	20,  // 4: nexus.v1.ClientMessage.ping:type_name -> nexus.v1.PingRequest
-	13,  // 5: nexus.v1.ServerMessage.message_chunk:type_name -> nexus.v1.MessageChunk
-	14,  // 6: nexus.v1.ServerMessage.message_complete:type_name -> nexus.v1.MessageComplete
-	15,  // 7: nexus.v1.ServerMessage.tool_call_request:type_name -> nexus.v1.ToolCallRequest
-	17,  // 8: nexus.v1.ServerMessage.session_event_notification:type_name -> nexus.v1.SessionEventNotification
-	22,  // 9: nexus.v1.ServerMessage.error_notification:type_name -> nexus.v1.ErrorNotification
-	21,  // 10: nexus.v1.ServerMessage.pong:type_name -> nexus.v1.PongResponse
-	24,  // 11: nexus.v1.SendMessageRequest.attachments:type_name -> nexus.v1.Attachment
-	81,  // 12: nexus.v1.SendMessageRequest.metadata:type_name -> nexus.v1.SendMessageRequest.MetadataEntry
+	14,  // 0: nexus.v1.ClientMessage.send_message:type_name -> nexus.v1.SendMessageRequest
+	18,  // 1: nexus.v1.ClientMessage.session_event:type_name -> nexus.v1.SessionEvent
+	20,  // 2: nexus.v1.ClientMessage.subscribe:type_name -> nexus.v1.SubscribeRequest
+	21,  // 3: nexus.v1.ClientMessage.unsubscribe:type_name -> nexus.v1.UnsubscribeRequest
+	22,  // 4: nexus.v1.ClientMessage.ping:type_name -> nexus.v1.PingRequest
+	15,  // 5: nexus.v1.ServerMessage.message_chunk:type_name -> nexus.v1.MessageChunk
+	16,  // 6: nexus.v1.ServerMessage.message_complete:type_name -> nexus.v1.MessageComplete
+	17,  // 7: nexus.v1.ServerMessage.tool_call_request:type_name -> nexus.v1.ToolCallRequest
+	19,  // 8: nexus.v1.ServerMessage.session_event_notification:type_name -> nexus.v1.SessionEventNotification
+	24,  // 9: nexus.v1.ServerMessage.error_notification:type_name -> nexus.v1.ErrorNotification
+	23,  // 10: nexus.v1.ServerMessage.pong:type_name -> nexus.v1.PongResponse
+	26,  // 11: nexus.v1.SendMessageRequest.attachments:type_name -> nexus.v1.Attachment
+	83,  // 12: nexus.v1.SendMessageRequest.metadata:type_name -> nexus.v1.SendMessageRequest.MetadataEntry
 	0,   // 13: nexus.v1.MessageChunk.type:type_name -> nexus.v1.ChunkType
-	23,  // 14: nexus.v1.MessageComplete.message:type_name -> nexus.v1.Message
-	25,  // 15: nexus.v1.ToolCallRequest.tool_calls:type_name -> nexus.v1.ToolCall
+	25,  // 14: nexus.v1.MessageComplete.message:type_name -> nexus.v1.Message
+	27,  // 15: nexus.v1.ToolCallRequest.tool_calls:type_name -> nexus.v1.ToolCall
 	1,   // 16: nexus.v1.SessionEvent.event_type:type_name -> nexus.v1.EventType
-	96,  // 17: nexus.v1.SessionEvent.data:type_name -> google.protobuf.Struct
+	98,  // 17: nexus.v1.SessionEvent.data:type_name -> google.protobuf.Struct
 	1,   // 18: nexus.v1.SessionEventNotification.event_type:type_name -> nexus.v1.EventType
-	96,  // 19: nexus.v1.SessionEventNotification.data:type_name -> google.protobuf.Struct
-	97,  // 20: nexus.v1.SessionEventNotification.timestamp:type_name -> google.protobuf.Timestamp
-	97,  // 21: nexus.v1.PingRequest.timestamp:type_name -> google.protobuf.Timestamp
-	97,  // 22: nexus.v1.PongResponse.timestamp:type_name -> google.protobuf.Timestamp
-	96,  // 23: nexus.v1.ErrorNotification.details:type_name -> google.protobuf.Struct
+	98,  // 19: nexus.v1.SessionEventNotification.data:type_name -> google.protobuf.Struct
+	99,  // 20: nexus.v1.SessionEventNotification.timestamp:type_name -> google.protobuf.Timestamp
+	99,  // 21: nexus.v1.PingRequest.timestamp:type_name -> google.protobuf.Timestamp
+	99,  // 22: nexus.v1.PongResponse.timestamp:type_name -> google.protobuf.Timestamp
+	98,  // 23: nexus.v1.ErrorNotification.details:type_name -> google.protobuf.Struct
 	2,   // 24: nexus.v1.Message.channel:type_name -> nexus.v1.ChannelType
 	3,   // 25: nexus.v1.Message.direction:type_name -> nexus.v1.Direction
 	4,   // 26: nexus.v1.Message.role:type_name -> nexus.v1.Role
-	24,  // 27: nexus.v1.Message.attachments:type_name -> nexus.v1.Attachment
-	25,  // 28: nexus.v1.Message.tool_calls:type_name -> nexus.v1.ToolCall
-	26,  // 29: nexus.v1.Message.tool_results:type_name -> nexus.v1.ToolResult
-	82,  // 30: nexus.v1.Message.metadata:type_name -> nexus.v1.Message.MetadataEntry
-	97,  // 31: nexus.v1.Message.created_at:type_name -> google.protobuf.Timestamp
+	26,  // 27: nexus.v1.Message.attachments:type_name -> nexus.v1.Attachment
+	27,  // 28: nexus.v1.Message.tool_calls:type_name -> nexus.v1.ToolCall
+	28,  // 29: nexus.v1.Message.tool_results:type_name -> nexus.v1.ToolResult
+	84,  // 30: nexus.v1.Message.metadata:type_name -> nexus.v1.Message.MetadataEntry
+	99,  // 31: nexus.v1.Message.created_at:type_name -> google.protobuf.Timestamp
 	2,   // 32: nexus.v1.Session.channel:type_name -> nexus.v1.ChannelType
-	83,  // 33: nexus.v1.Session.metadata:type_name -> nexus.v1.Session.MetadataEntry
-	97,  // 34: nexus.v1.Session.created_at:type_name -> google.protobuf.Timestamp
-	97,  // 35: nexus.v1.Session.updated_at:type_name -> google.protobuf.Timestamp
-	84,  // 36: nexus.v1.Agent.config:type_name -> nexus.v1.Agent.ConfigEntry
-	97,  // 37: nexus.v1.Agent.created_at:type_name -> google.protobuf.Timestamp
-	97,  // 38: nexus.v1.Agent.updated_at:type_name -> google.protobuf.Timestamp
-	97,  // 39: nexus.v1.User.created_at:type_name -> google.protobuf.Timestamp
-	97,  // 40: nexus.v1.User.updated_at:type_name -> google.protobuf.Timestamp
-	97,  // 41: nexus.v1.APIKey.last_used_at:type_name -> google.protobuf.Timestamp
-	97,  // 42: nexus.v1.APIKey.expires_at:type_name -> google.protobuf.Timestamp
-	97,  // 43: nexus.v1.APIKey.created_at:type_name -> google.protobuf.Timestamp
+	85,  // 33: nexus.v1.Session.metadata:type_name -> nexus.v1.Session.MetadataEntry
+	99,  // 34: nexus.v1.Session.created_at:type_name -> google.protobuf.Timestamp
+	99,  // 35: nexus.v1.Session.updated_at:type_name -> google.protobuf.Timestamp
+	86,  // 36: nexus.v1.Agent.config:type_name -> nexus.v1.Agent.ConfigEntry
+	99,  // 37: nexus.v1.Agent.created_at:type_name -> google.protobuf.Timestamp
+	99,  // 38: nexus.v1.Agent.updated_at:type_name -> google.protobuf.Timestamp
+	99,  // 39: nexus.v1.User.created_at:type_name -> google.protobuf.Timestamp
+	99,  // 40: nexus.v1.User.updated_at:type_name -> google.protobuf.Timestamp
+	99,  // 41: nexus.v1.APIKey.last_used_at:type_name -> google.protobuf.Timestamp
+	99,  // 42: nexus.v1.APIKey.expires_at:type_name -> google.protobuf.Timestamp
+	99,  // 43: nexus.v1.APIKey.created_at:type_name -> google.protobuf.Timestamp
 	2,   // 44: nexus.v1.CreateSessionRequest.channel:type_name -> nexus.v1.ChannelType
-	85,  // 45: nexus.v1.CreateSessionRequest.metadata:type_name -> nexus.v1.CreateSessionRequest.MetadataEntry
-	27,  // 46: nexus.v1.CreateSessionResponse.session:type_name -> nexus.v1.Session
-	27,  // 47: nexus.v1.GetSessionResponse.session:type_name -> nexus.v1.Session
+	87,  // 45: nexus.v1.CreateSessionRequest.metadata:type_name -> nexus.v1.CreateSessionRequest.MetadataEntry
+	29,  // 46: nexus.v1.CreateSessionResponse.session:type_name -> nexus.v1.Session
+	29,  // 47: nexus.v1.GetSessionResponse.session:type_name -> nexus.v1.Session
 	2,   // 48: nexus.v1.ListSessionsRequest.channel:type_name -> nexus.v1.ChannelType
-	27,  // 49: nexus.v1.ListSessionsResponse.sessions:type_name -> nexus.v1.Session
-	86,  // 50: nexus.v1.UpdateSessionRequest.metadata:type_name -> nexus.v1.UpdateSessionRequest.MetadataEntry
-	27,  // 51: nexus.v1.UpdateSessionResponse.session:type_name -> nexus.v1.Session
-	87,  // 52: nexus.v1.CreateAgentRequest.config:type_name -> nexus.v1.CreateAgentRequest.ConfigEntry
-	28,  // 53: nexus.v1.CreateAgentResponse.agent:type_name -> nexus.v1.Agent
-	28,  // 54: nexus.v1.GetAgentResponse.agent:type_name -> nexus.v1.Agent
-	28,  // 55: nexus.v1.ListAgentsResponse.agents:type_name -> nexus.v1.Agent
-	88,  // 56: nexus.v1.UpdateAgentRequest.config:type_name -> nexus.v1.UpdateAgentRequest.ConfigEntry
-	28,  // 57: nexus.v1.UpdateAgentResponse.agent:type_name -> nexus.v1.Agent
+	29,  // 49: nexus.v1.ListSessionsResponse.sessions:type_name -> nexus.v1.Session
+	88,  // 50: nexus.v1.UpdateSessionRequest.metadata:type_name -> nexus.v1.UpdateSessionRequest.MetadataEntry
+	29,  // 51: nexus.v1.UpdateSessionResponse.session:type_name -> nexus.v1.Session
+	89,  // 52: nexus.v1.CreateAgentRequest.config:type_name -> nexus.v1.CreateAgentRequest.ConfigEntry
+	30,  // 53: nexus.v1.CreateAgentResponse.agent:type_name -> nexus.v1.Agent
+	30,  // 54: nexus.v1.GetAgentResponse.agent:type_name -> nexus.v1.Agent
+	30,  // 55: nexus.v1.ListAgentsResponse.agents:type_name -> nexus.v1.Agent
+	90,  // 56: nexus.v1.UpdateAgentRequest.config:type_name -> nexus.v1.UpdateAgentRequest.ConfigEntry
+	30,  // 57: nexus.v1.UpdateAgentResponse.agent:type_name -> nexus.v1.Agent
 	2,   // 58: nexus.v1.ConnectChannelRequest.channel_type:type_name -> nexus.v1.ChannelType
-	89,  // 59: nexus.v1.ConnectChannelRequest.credentials:type_name -> nexus.v1.ConnectChannelRequest.CredentialsEntry
-	90,  // 60: nexus.v1.ConnectChannelRequest.config:type_name -> nexus.v1.ConnectChannelRequest.ConfigEntry
-	59,  // 61: nexus.v1.ConnectChannelResponse.connection:type_name -> nexus.v1.ChannelConnection
-	59,  // 62: nexus.v1.GetChannelStatusResponse.connection:type_name -> nexus.v1.ChannelConnection
-	59,  // 63: nexus.v1.ListChannelsResponse.connections:type_name -> nexus.v1.ChannelConnection
+	91,  // 59: nexus.v1.ConnectChannelRequest.credentials:type_name -> nexus.v1.ConnectChannelRequest.CredentialsEntry
+	92,  // 60: nexus.v1.ConnectChannelRequest.config:type_name -> nexus.v1.ConnectChannelRequest.ConfigEntry
+	61,  // 61: nexus.v1.ConnectChannelResponse.connection:type_name -> nexus.v1.ChannelConnection
+	61,  // 62: nexus.v1.GetChannelStatusResponse.connection:type_name -> nexus.v1.ChannelConnection
+	61,  // 63: nexus.v1.ListChannelsResponse.connections:type_name -> nexus.v1.ChannelConnection
 	2,   // 64: nexus.v1.ChannelConnection.channel_type:type_name -> nexus.v1.ChannelType
 	5,   // 65: nexus.v1.ChannelConnection.status:type_name -> nexus.v1.ConnectionStatus
-	91,  // 66: nexus.v1.ChannelConnection.config:type_name -> nexus.v1.ChannelConnection.ConfigEntry
-	97,  // 67: nexus.v1.ChannelConnection.connected_at:type_name -> google.protobuf.Timestamp
-	97,  // 68: nexus.v1.ChannelConnection.last_activity_at:type_name -> google.protobuf.Timestamp
+	93,  // 66: nexus.v1.ChannelConnection.config:type_name -> nexus.v1.ChannelConnection.ConfigEntry
+	99,  // 67: nexus.v1.ChannelConnection.connected_at:type_name -> google.protobuf.Timestamp
+	99,  // 68: nexus.v1.ChannelConnection.last_activity_at:type_name -> google.protobuf.Timestamp
 	6,   // 69: nexus.v1.HealthCheckResponse.status:type_name -> nexus.v1.ServingStatus
-	92,  // 70: nexus.v1.HealthCheckResponse.metadata:type_name -> nexus.v1.HealthCheckResponse.MetadataEntry
-	97,  // 71: nexus.v1.HealthCheckResponse.timestamp:type_name -> google.protobuf.Timestamp
-	64,  // 72: nexus.v1.EdgeMessage.register:type_name -> nexus.v1.EdgeRegister
-	68,  // 73: nexus.v1.EdgeMessage.heartbeat:type_name -> nexus.v1.EdgeHeartbeat
-	71,  // 74: nexus.v1.EdgeMessage.tool_result:type_name -> nexus.v1.ToolExecutionResult
-	74,  // 75: nexus.v1.EdgeMessage.event:type_name -> nexus.v1.EdgeEvent
-	67,  // 76: nexus.v1.CoreMessage.registered:type_name -> nexus.v1.EdgeRegistered
-	70,  // 77: nexus.v1.CoreMessage.tool_request:type_name -> nexus.v1.ToolExecutionRequest
-	73,  // 78: nexus.v1.CoreMessage.tool_cancel:type_name -> nexus.v1.ToolCancellation
-	75,  // 79: nexus.v1.CoreMessage.event:type_name -> nexus.v1.CoreEvent
-	65,  // 80: nexus.v1.EdgeRegister.tools:type_name -> nexus.v1.EdgeToolDefinition
-	66,  // 81: nexus.v1.EdgeRegister.capabilities:type_name -> nexus.v1.EdgeCapabilities
-	93,  // 82: nexus.v1.EdgeRegister.metadata:type_name -> nexus.v1.EdgeRegister.MetadataEntry
-	97,  // 83: nexus.v1.EdgeHeartbeat.timestamp:type_name -> google.protobuf.Timestamp
-	69,  // 84: nexus.v1.EdgeHeartbeat.metrics:type_name -> nexus.v1.EdgeMetrics
-	94,  // 85: nexus.v1.ToolExecutionRequest.metadata:type_name -> nexus.v1.ToolExecutionRequest.MetadataEntry
-	72,  // 86: nexus.v1.ToolExecutionResult.artifacts:type_name -> nexus.v1.Artifact
+	94,  // 70: nexus.v1.HealthCheckResponse.metadata:type_name -> nexus.v1.HealthCheckResponse.MetadataEntry
+	99,  // 71: nexus.v1.HealthCheckResponse.timestamp:type_name -> google.protobuf.Timestamp
+	66,  // 72: nexus.v1.EdgeMessage.register:type_name -> nexus.v1.EdgeRegister
+	70,  // 73: nexus.v1.EdgeMessage.heartbeat:type_name -> nexus.v1.EdgeHeartbeat
+	73,  // 74: nexus.v1.EdgeMessage.tool_result:type_name -> nexus.v1.ToolExecutionResult
+	76,  // 75: nexus.v1.EdgeMessage.event:type_name -> nexus.v1.EdgeEvent
+	69,  // 76: nexus.v1.CoreMessage.registered:type_name -> nexus.v1.EdgeRegistered
+	72,  // 77: nexus.v1.CoreMessage.tool_request:type_name -> nexus.v1.ToolExecutionRequest
+	75,  // 78: nexus.v1.CoreMessage.tool_cancel:type_name -> nexus.v1.ToolCancellation
+	77,  // 79: nexus.v1.CoreMessage.event:type_name -> nexus.v1.CoreEvent
+	67,  // 80: nexus.v1.EdgeRegister.tools:type_name -> nexus.v1.EdgeToolDefinition
+	68,  // 81: nexus.v1.EdgeRegister.capabilities:type_name -> nexus.v1.EdgeCapabilities
+	95,  // 82: nexus.v1.EdgeRegister.metadata:type_name -> nexus.v1.EdgeRegister.MetadataEntry
+	99,  // 83: nexus.v1.EdgeHeartbeat.timestamp:type_name -> google.protobuf.Timestamp
+	71,  // 84: nexus.v1.EdgeHeartbeat.metrics:type_name -> nexus.v1.EdgeMetrics
+	96,  // 85: nexus.v1.ToolExecutionRequest.metadata:type_name -> nexus.v1.ToolExecutionRequest.MetadataEntry
+	74,  // 86: nexus.v1.ToolExecutionResult.artifacts:type_name -> nexus.v1.Artifact
 	7,   // 87: nexus.v1.EdgeEvent.type:type_name -> nexus.v1.EdgeEventType
-	97,  // 88: nexus.v1.EdgeEvent.timestamp:type_name -> google.protobuf.Timestamp
-	96,  // 89: nexus.v1.EdgeEvent.data:type_name -> google.protobuf.Struct
+	99,  // 88: nexus.v1.EdgeEvent.timestamp:type_name -> google.protobuf.Timestamp
+	98,  // 89: nexus.v1.EdgeEvent.data:type_name -> google.protobuf.Struct
 	8,   // 90: nexus.v1.CoreEvent.type:type_name -> nexus.v1.CoreEventType
-	97,  // 91: nexus.v1.CoreEvent.timestamp:type_name -> google.protobuf.Timestamp
-	96,  // 92: nexus.v1.CoreEvent.data:type_name -> google.protobuf.Struct
-	80,  // 93: nexus.v1.GetEdgeStatusResponse.status:type_name -> nexus.v1.EdgeStatus
-	80,  // 94: nexus.v1.ListEdgesResponse.edges:type_name -> nexus.v1.EdgeStatus
+	99,  // 91: nexus.v1.CoreEvent.timestamp:type_name -> google.protobuf.Timestamp
+	98,  // 92: nexus.v1.CoreEvent.data:type_name -> google.protobuf.Struct
+	82,  // 93: nexus.v1.GetEdgeStatusResponse.status:type_name -> nexus.v1.EdgeStatus
+	82,  // 94: nexus.v1.ListEdgesResponse.edges:type_name -> nexus.v1.EdgeStatus
 	9,   // 95: nexus.v1.EdgeStatus.connection_status:type_name -> nexus.v1.EdgeConnectionStatus
-	97,  // 96: nexus.v1.EdgeStatus.connected_at:type_name -> google.protobuf.Timestamp
-	97,  // 97: nexus.v1.EdgeStatus.last_heartbeat:type_name -> google.protobuf.Timestamp
-	69,  // 98: nexus.v1.EdgeStatus.metrics:type_name -> nexus.v1.EdgeMetrics
-	95,  // 99: nexus.v1.EdgeStatus.metadata:type_name -> nexus.v1.EdgeStatus.MetadataEntry
-	10,  // 100: nexus.v1.NexusGateway.Stream:input_type -> nexus.v1.ClientMessage
-	31,  // 101: nexus.v1.SessionService.CreateSession:input_type -> nexus.v1.CreateSessionRequest
-	33,  // 102: nexus.v1.SessionService.GetSession:input_type -> nexus.v1.GetSessionRequest
-	35,  // 103: nexus.v1.SessionService.ListSessions:input_type -> nexus.v1.ListSessionsRequest
-	37,  // 104: nexus.v1.SessionService.DeleteSession:input_type -> nexus.v1.DeleteSessionRequest
-	39,  // 105: nexus.v1.SessionService.UpdateSession:input_type -> nexus.v1.UpdateSessionRequest
-	41,  // 106: nexus.v1.AgentService.CreateAgent:input_type -> nexus.v1.CreateAgentRequest
-	43,  // 107: nexus.v1.AgentService.GetAgent:input_type -> nexus.v1.GetAgentRequest
-	45,  // 108: nexus.v1.AgentService.ListAgents:input_type -> nexus.v1.ListAgentsRequest
-	47,  // 109: nexus.v1.AgentService.UpdateAgent:input_type -> nexus.v1.UpdateAgentRequest
-	49,  // 110: nexus.v1.AgentService.DeleteAgent:input_type -> nexus.v1.DeleteAgentRequest
-	51,  // 111: nexus.v1.ChannelService.ConnectChannel:input_type -> nexus.v1.ConnectChannelRequest
-	53,  // 112: nexus.v1.ChannelService.DisconnectChannel:input_type -> nexus.v1.DisconnectChannelRequest
-	55,  // 113: nexus.v1.ChannelService.GetChannelStatus:input_type -> nexus.v1.GetChannelStatusRequest
-	57,  // 114: nexus.v1.ChannelService.ListChannels:input_type -> nexus.v1.ListChannelsRequest
-	60,  // 115: nexus.v1.HealthService.Check:input_type -> nexus.v1.HealthCheckRequest
-	60,  // 116: nexus.v1.HealthService.Watch:input_type -> nexus.v1.HealthCheckRequest
-	62,  // 117: nexus.v1.EdgeService.Connect:input_type -> nexus.v1.EdgeMessage
-	76,  // 118: nexus.v1.EdgeService.GetEdgeStatus:input_type -> nexus.v1.GetEdgeStatusRequest
-	78,  // 119: nexus.v1.EdgeService.ListEdges:input_type -> nexus.v1.ListEdgesRequest
-	11,  // 120: nexus.v1.NexusGateway.Stream:output_type -> nexus.v1.ServerMessage
-	32,  // 121: nexus.v1.SessionService.CreateSession:output_type -> nexus.v1.CreateSessionResponse
-	34,  // 122: nexus.v1.SessionService.GetSession:output_type -> nexus.v1.GetSessionResponse
-	36,  // 123: nexus.v1.SessionService.ListSessions:output_type -> nexus.v1.ListSessionsResponse
-	38,  // 124: nexus.v1.SessionService.DeleteSession:output_type -> nexus.v1.DeleteSessionResponse
-	40,  // 125: nexus.v1.SessionService.UpdateSession:output_type -> nexus.v1.UpdateSessionResponse
-	42,  // 126: nexus.v1.AgentService.CreateAgent:output_type -> nexus.v1.CreateAgentResponse
-	44,  // 127: nexus.v1.AgentService.GetAgent:output_type -> nexus.v1.GetAgentResponse
-	46,  // 128: nexus.v1.AgentService.ListAgents:output_type -> nexus.v1.ListAgentsResponse
-	48,  // 129: nexus.v1.AgentService.UpdateAgent:output_type -> nexus.v1.UpdateAgentResponse
-	50,  // 130: nexus.v1.AgentService.DeleteAgent:output_type -> nexus.v1.DeleteAgentResponse
-	52,  // 131: nexus.v1.ChannelService.ConnectChannel:output_type -> nexus.v1.ConnectChannelResponse
-	54,  // 132: nexus.v1.ChannelService.DisconnectChannel:output_type -> nexus.v1.DisconnectChannelResponse
-	56,  // 133: nexus.v1.ChannelService.GetChannelStatus:output_type -> nexus.v1.GetChannelStatusResponse
-	58,  // 134: nexus.v1.ChannelService.ListChannels:output_type -> nexus.v1.ListChannelsResponse
-	61,  // 135: nexus.v1.HealthService.Check:output_type -> nexus.v1.HealthCheckResponse
-	61,  // 136: nexus.v1.HealthService.Watch:output_type -> nexus.v1.HealthCheckResponse
-	63,  // 137: nexus.v1.EdgeService.Connect:output_type -> nexus.v1.CoreMessage
-	77,  // 138: nexus.v1.EdgeService.GetEdgeStatus:output_type -> nexus.v1.GetEdgeStatusResponse
-	79,  // 139: nexus.v1.EdgeService.ListEdges:output_type -> nexus.v1.ListEdgesResponse
+	99,  // 96: nexus.v1.EdgeStatus.connected_at:type_name -> google.protobuf.Timestamp
+	99,  // 97: nexus.v1.EdgeStatus.last_heartbeat:type_name -> google.protobuf.Timestamp
+	71,  // 98: nexus.v1.EdgeStatus.metrics:type_name -> nexus.v1.EdgeMetrics
+	97,  // 99: nexus.v1.EdgeStatus.metadata:type_name -> nexus.v1.EdgeStatus.MetadataEntry
+	12,  // 100: nexus.v1.NexusGateway.Stream:input_type -> nexus.v1.ClientMessage
+	33,  // 101: nexus.v1.SessionService.CreateSession:input_type -> nexus.v1.CreateSessionRequest
+	35,  // 102: nexus.v1.SessionService.GetSession:input_type -> nexus.v1.GetSessionRequest
+	37,  // 103: nexus.v1.SessionService.ListSessions:input_type -> nexus.v1.ListSessionsRequest
+	39,  // 104: nexus.v1.SessionService.DeleteSession:input_type -> nexus.v1.DeleteSessionRequest
+	41,  // 105: nexus.v1.SessionService.UpdateSession:input_type -> nexus.v1.UpdateSessionRequest
+	43,  // 106: nexus.v1.AgentService.CreateAgent:input_type -> nexus.v1.CreateAgentRequest
+	45,  // 107: nexus.v1.AgentService.GetAgent:input_type -> nexus.v1.GetAgentRequest
+	47,  // 108: nexus.v1.AgentService.ListAgents:input_type -> nexus.v1.ListAgentsRequest
+	49,  // 109: nexus.v1.AgentService.UpdateAgent:input_type -> nexus.v1.UpdateAgentRequest
+	51,  // 110: nexus.v1.AgentService.DeleteAgent:input_type -> nexus.v1.DeleteAgentRequest
+	53,  // 111: nexus.v1.ChannelService.ConnectChannel:input_type -> nexus.v1.ConnectChannelRequest
+	55,  // 112: nexus.v1.ChannelService.DisconnectChannel:input_type -> nexus.v1.DisconnectChannelRequest
+	57,  // 113: nexus.v1.ChannelService.GetChannelStatus:input_type -> nexus.v1.GetChannelStatusRequest
+	59,  // 114: nexus.v1.ChannelService.ListChannels:input_type -> nexus.v1.ListChannelsRequest
+	62,  // 115: nexus.v1.HealthService.Check:input_type -> nexus.v1.HealthCheckRequest
+	62,  // 116: nexus.v1.HealthService.Watch:input_type -> nexus.v1.HealthCheckRequest
+	64,  // 117: nexus.v1.EdgeService.Connect:input_type -> nexus.v1.EdgeMessage
+	78,  // 118: nexus.v1.EdgeService.GetEdgeStatus:input_type -> nexus.v1.GetEdgeStatusRequest
+	80,  // 119: nexus.v1.EdgeService.ListEdges:input_type -> nexus.v1.ListEdgesRequest
+	13,  // 120: nexus.v1.NexusGateway.Stream:output_type -> nexus.v1.ServerMessage
+	34,  // 121: nexus.v1.SessionService.CreateSession:output_type -> nexus.v1.CreateSessionResponse
+	36,  // 122: nexus.v1.SessionService.GetSession:output_type -> nexus.v1.GetSessionResponse
+	38,  // 123: nexus.v1.SessionService.ListSessions:output_type -> nexus.v1.ListSessionsResponse
+	40,  // 124: nexus.v1.SessionService.DeleteSession:output_type -> nexus.v1.DeleteSessionResponse
+	42,  // 125: nexus.v1.SessionService.UpdateSession:output_type -> nexus.v1.UpdateSessionResponse
+	44,  // 126: nexus.v1.AgentService.CreateAgent:output_type -> nexus.v1.CreateAgentResponse
+	46,  // 127: nexus.v1.AgentService.GetAgent:output_type -> nexus.v1.GetAgentResponse
+	48,  // 128: nexus.v1.AgentService.ListAgents:output_type -> nexus.v1.ListAgentsResponse
+	50,  // 129: nexus.v1.AgentService.UpdateAgent:output_type -> nexus.v1.UpdateAgentResponse
+	52,  // 130: nexus.v1.AgentService.DeleteAgent:output_type -> nexus.v1.DeleteAgentResponse
+	54,  // 131: nexus.v1.ChannelService.ConnectChannel:output_type -> nexus.v1.ConnectChannelResponse
+	56,  // 132: nexus.v1.ChannelService.DisconnectChannel:output_type -> nexus.v1.DisconnectChannelResponse
+	58,  // 133: nexus.v1.ChannelService.GetChannelStatus:output_type -> nexus.v1.GetChannelStatusResponse
+	60,  // 134: nexus.v1.ChannelService.ListChannels:output_type -> nexus.v1.ListChannelsResponse
+	63,  // 135: nexus.v1.HealthService.Check:output_type -> nexus.v1.HealthCheckResponse
+	63,  // 136: nexus.v1.HealthService.Watch:output_type -> nexus.v1.HealthCheckResponse
+	65,  // 137: nexus.v1.EdgeService.Connect:output_type -> nexus.v1.CoreMessage
+	79,  // 138: nexus.v1.EdgeService.GetEdgeStatus:output_type -> nexus.v1.GetEdgeStatusResponse
+	81,  // 139: nexus.v1.EdgeService.ListEdges:output_type -> nexus.v1.ListEdgesResponse
 	120, // [120:140] is the sub-list for method output_type
 	100, // [100:120] is the sub-list for method input_type
 	100, // [100:100] is the sub-list for extension type_name
@@ -6349,7 +6487,7 @@ func file_pkg_proto_nexus_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pkg_proto_nexus_proto_rawDesc), len(file_pkg_proto_nexus_proto_rawDesc)),
-			NumEnums:      10,
+			NumEnums:      12,
 			NumMessages:   86,
 			NumExtensions: 0,
 			NumServices:   6,

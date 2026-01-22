@@ -70,6 +70,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -398,6 +399,9 @@ type Runtime struct {
 	// maxIterations limits the agentic loop iterations (default 5)
 	maxIterations int
 
+	// maxWallTime limits the total run duration (0 = no limit)
+	maxWallTime time.Duration
+
 	// toolExec configures tool execution behavior (timeouts, concurrency)
 	toolExec ToolExecConfig
 
@@ -455,6 +459,12 @@ func (r *Runtime) SetToolEventStore(store ToolEventStore) {
 // SetMaxIterations configures the maximum agentic loop iterations (default 5).
 func (r *Runtime) SetMaxIterations(max int) {
 	r.maxIterations = max
+}
+
+// SetMaxWallTime configures the maximum total run duration.
+// A value of 0 (default) means no limit.
+func (r *Runtime) SetMaxWallTime(d time.Duration) {
+	r.maxWallTime = d
 }
 
 // SetToolExecConfig configures tool execution behavior (timeouts, concurrency).
@@ -608,6 +618,14 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 // The emitter dispatches events to whatever sink(s) are configured.
 // Returns nil on success, error on fatal failures.
 func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.Message, emitter *EventEmitter) error {
+	// Apply wall time limit if configured
+	var cancel context.CancelFunc
+	wallTimeLimit := r.maxWallTime
+	if wallTimeLimit > 0 {
+		ctx, cancel = context.WithTimeout(ctx, wallTimeLimit)
+		defer cancel()
+	}
+
 	// 1) Load history (pre-incoming message)
 	history, err := r.sessions.GetHistory(ctx, session.ID, 50)
 	if err != nil {
@@ -747,8 +765,7 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 	for iter := 0; iter < maxIters; iter++ {
 		select {
 		case <-ctx.Done():
-			emitter.RunError(ctx, ctx.Err(), false)
-			return ctx.Err()
+			return r.handleContextDone(ctx, emitter, wallTimeLimit)
 		default:
 		}
 
@@ -789,6 +806,11 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 					_ = r.toolEvents.AddToolCall(ctx, session.ID, assistantMsgID, &tc)
 				}
 			}
+		}
+
+		// Check if context was cancelled during stream processing
+		if ctx.Err() != nil {
+			return r.handleContextDone(ctx, emitter, wallTimeLimit)
 		}
 
 		// Persist assistant message
@@ -904,6 +926,29 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 	maxIterErr := fmt.Errorf("max iterations (%d) reached", maxIters)
 	emitter.RunError(ctx, maxIterErr, false)
 	return maxIterErr
+}
+
+// handleContextDone emits the appropriate event for context cancellation.
+// It distinguishes between explicit cancellation and wall time timeout.
+func (r *Runtime) handleContextDone(ctx context.Context, emitter *EventEmitter, wallTimeLimit time.Duration) error {
+	err := ctx.Err()
+	if err == nil {
+		return nil
+	}
+
+	// Use background context for emitting terminal events since the request context is cancelled.
+	// Terminal events must be delivered regardless of context state.
+	bgCtx := context.Background()
+
+	// Check if this was a deadline exceeded (timeout) vs explicit cancellation
+	if errors.Is(err, context.DeadlineExceeded) && wallTimeLimit > 0 {
+		emitter.RunTimedOut(bgCtx, wallTimeLimit)
+		return ErrContextCancelled // Return a consistent error type
+	}
+
+	// Explicit cancellation
+	emitter.RunCancelled(bgCtx)
+	return ErrContextCancelled
 }
 
 // executeToolsWithEvents executes tools concurrently and emits tool lifecycle events.

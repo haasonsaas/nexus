@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -98,6 +99,29 @@ func (e *EventEmitter) RunError(ctx context.Context, err error, retriable bool) 
 		Message:   err.Error(),
 		Retriable: retriable,
 		Err:       err, // Preserve original error for errors.Is/errors.As
+	}
+	e.emit(ctx, event)
+	return event
+}
+
+// RunCancelled emits a run.cancelled event when context is explicitly cancelled.
+func (e *EventEmitter) RunCancelled(ctx context.Context) models.AgentEvent {
+	event := e.base(models.AgentEventRunCancelled)
+	event.Error = &models.ErrorEventPayload{
+		Message:   "run cancelled",
+		Retriable: true,
+		Err:       ErrContextCancelled,
+	}
+	e.emit(ctx, event)
+	return event
+}
+
+// RunTimedOut emits a run.timed_out event when wall time limit is exceeded.
+func (e *EventEmitter) RunTimedOut(ctx context.Context, limit time.Duration) models.AgentEvent {
+	event := e.base(models.AgentEventRunTimedOut)
+	event.Error = &models.ErrorEventPayload{
+		Message:   fmt.Sprintf("run timed out after %v", limit),
+		Retriable: true,
 	}
 	e.emit(ctx, event)
 	return event

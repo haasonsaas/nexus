@@ -48,9 +48,11 @@ type AgentEventType string
 
 const (
 	// Run lifecycle
-	AgentEventRunStarted  AgentEventType = "run.started"
-	AgentEventRunFinished AgentEventType = "run.finished"
-	AgentEventRunError    AgentEventType = "run.error"
+	AgentEventRunStarted   AgentEventType = "run.started"
+	AgentEventRunFinished  AgentEventType = "run.finished"
+	AgentEventRunError     AgentEventType = "run.error"
+	AgentEventRunCancelled AgentEventType = "run.cancelled" // Explicit context cancellation
+	AgentEventRunTimedOut  AgentEventType = "run.timed_out" // Run wall time exceeded
 
 	// Turn/iteration lifecycle
 	AgentEventTurnStarted  AgentEventType = "turn.started"

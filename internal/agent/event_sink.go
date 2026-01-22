@@ -154,7 +154,7 @@ func eventToChunk(e models.AgentEvent) *ResponseChunk {
 			}
 		}
 
-	case models.AgentEventRunError:
+	case models.AgentEventRunError, models.AgentEventRunCancelled, models.AgentEventRunTimedOut:
 		if e.Error != nil {
 			// Prefer original error if available (preserves error type for errors.Is)
 			var err error

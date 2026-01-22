@@ -1051,3 +1051,189 @@ func TestProcessAndProcessStream_Equivalence(t *testing.T) {
 		}
 	}
 }
+
+// =============================================================================
+// Cancellation and Timeout Tests
+// =============================================================================
+
+// slowProvider simulates an LLM that takes time to respond.
+type slowProvider struct {
+	delay time.Duration
+}
+
+func (p *slowProvider) Complete(ctx context.Context, req *CompletionRequest) (<-chan *CompletionChunk, error) {
+	ch := make(chan *CompletionChunk, 10)
+	go func() {
+		defer close(ch)
+		select {
+		case <-time.After(p.delay):
+			ch <- &CompletionChunk{Text: "slow response"}
+			ch <- &CompletionChunk{Done: true}
+		case <-ctx.Done():
+			// Context cancelled, return immediately
+		}
+	}()
+	return ch, nil
+}
+
+func (p *slowProvider) Name() string { return "slow" }
+
+func (p *slowProvider) Models() []Model { return nil }
+
+func (p *slowProvider) SupportsTools() bool { return false }
+
+func TestProcessStream_EmitsCancelledOnContextCancel(t *testing.T) {
+	provider := &slowProvider{delay: 5 * time.Second}
+	store := newMemoryStore()
+	runtime := NewRuntime(provider, store)
+
+	session := &models.Session{ID: "test-session-cancel"}
+	msg := &models.Message{
+		ID:      "msg-1",
+		Role:    models.RoleUser,
+		Content: "Hello",
+	}
+
+	// Create a context that we'll cancel quickly
+	ctx, cancel := context.WithCancel(context.Background())
+
+	events, err := runtime.ProcessStream(ctx, session, msg)
+	if err != nil {
+		t.Fatalf("ProcessStream failed: %v", err)
+	}
+
+	// Wait a bit then cancel
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+
+	// Collect all events
+	var gotCancelled bool
+	var gotRunError bool
+	for e := range events {
+		switch e.Type {
+		case models.AgentEventRunCancelled:
+			gotCancelled = true
+		case models.AgentEventRunError:
+			gotRunError = true
+		}
+	}
+
+	if !gotCancelled {
+		t.Error("expected run.cancelled event")
+	}
+	if gotRunError {
+		t.Error("should emit run.cancelled, not run.error, for context cancellation")
+	}
+}
+
+func TestProcessStream_EmitsTimedOutOnWallTimeExceeded(t *testing.T) {
+	provider := &slowProvider{delay: 5 * time.Second}
+	store := newMemoryStore()
+	runtime := NewRuntime(provider, store)
+	runtime.SetMaxWallTime(100 * time.Millisecond) // Very short wall time
+
+	session := &models.Session{ID: "test-session-timeout"}
+	msg := &models.Message{
+		ID:      "msg-1",
+		Role:    models.RoleUser,
+		Content: "Hello",
+	}
+
+	ctx := context.Background()
+	events, err := runtime.ProcessStream(ctx, session, msg)
+	if err != nil {
+		t.Fatalf("ProcessStream failed: %v", err)
+	}
+
+	// Collect all events
+	var gotTimedOut bool
+	var gotCancelled bool
+	for e := range events {
+		switch e.Type {
+		case models.AgentEventRunTimedOut:
+			gotTimedOut = true
+		case models.AgentEventRunCancelled:
+			gotCancelled = true
+		}
+	}
+
+	if !gotTimedOut {
+		t.Error("expected run.timed_out event")
+	}
+	if gotCancelled {
+		t.Error("should emit run.timed_out, not run.cancelled, for wall time exceeded")
+	}
+}
+
+func TestProcessStream_TerminatesQuicklyOnCancel(t *testing.T) {
+	provider := &slowProvider{delay: 10 * time.Second}
+	store := newMemoryStore()
+	runtime := NewRuntime(provider, store)
+
+	session := &models.Session{ID: "test-session-quick"}
+	msg := &models.Message{
+		ID:      "msg-1",
+		Role:    models.RoleUser,
+		Content: "Hello",
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	events, err := runtime.ProcessStream(ctx, session, msg)
+	if err != nil {
+		t.Fatalf("ProcessStream failed: %v", err)
+	}
+
+	// Wait a bit then cancel
+	time.Sleep(50 * time.Millisecond)
+	start := time.Now()
+	cancel()
+
+	// Drain all events
+	for range events {
+		// Just consume
+	}
+
+	elapsed := time.Since(start)
+	// Should terminate quickly (within 500ms), not wait 10 seconds
+	if elapsed > 500*time.Millisecond {
+		t.Errorf("took too long to terminate after cancel: %v (expected < 500ms)", elapsed)
+	}
+}
+
+func TestProcess_EmitsCancelledOnContextCancel(t *testing.T) {
+	provider := &slowProvider{delay: 5 * time.Second}
+	store := newMemoryStore()
+	runtime := NewRuntime(provider, store)
+
+	session := &models.Session{ID: "test-session-process-cancel"}
+	msg := &models.Message{
+		ID:      "msg-1",
+		Role:    models.RoleUser,
+		Content: "Hello",
+	}
+
+	// Create a context that we'll cancel quickly
+	ctx, cancel := context.WithCancel(context.Background())
+
+	chunks, err := runtime.Process(ctx, session, msg)
+	if err != nil {
+		t.Fatalf("Process failed: %v", err)
+	}
+
+	// Wait a bit then cancel
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+
+	// Collect all chunks - should get an error chunk
+	var gotError bool
+	for chunk := range chunks {
+		if chunk.Error != nil {
+			gotError = true
+		}
+	}
+
+	if !gotError {
+		t.Error("expected error chunk on context cancellation")
+	}
+}

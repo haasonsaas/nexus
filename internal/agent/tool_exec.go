@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -209,7 +210,10 @@ func (e *ToolExecutor) executeWithTimeout(ctx context.Context, call models.ToolC
 		select {
 		case resultChan <- execResult{result: result, err: err}:
 		default:
-			// Channel is full or nobody is listening; result is discarded
+			// Context cancelled/timed out before execution completed - log for observability
+			slog.Warn("tool execution completed after timeout, result discarded",
+				"tool", call.Name,
+				"tool_call_id", call.ID)
 		}
 	}()
 

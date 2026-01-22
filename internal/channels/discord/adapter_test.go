@@ -253,14 +253,12 @@ func TestNewAdapterSimple(t *testing.T) {
 	}
 }
 
-func TestNewAdapterSimple_Panic(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("NewAdapterSimple with empty token should panic")
-		}
-	}()
-
-	_ = NewAdapterSimple("")
+func TestNewAdapterSimple_InvalidToken(t *testing.T) {
+	// NewAdapterSimple returns nil on invalid config (empty token)
+	adapter := NewAdapterSimple("")
+	if adapter != nil {
+		t.Error("NewAdapterSimple with empty token should return nil")
+	}
 }
 
 // =============================================================================

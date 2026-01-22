@@ -389,7 +389,9 @@ func (l *Logger) LogMiddleware(next func(w io.Writer, r io.Reader) error) func(w
 func MustNewLogger(config LogConfig) *Logger {
 	logger := NewLogger(config)
 	if logger == nil {
-		panic("failed to create logger")
+		// Fallback to default logger instead of panicking
+		slog.Warn("failed to create configured logger, using default")
+		return NewLogger(LogConfig{})
 	}
 	return logger
 }

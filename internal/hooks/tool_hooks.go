@@ -419,6 +419,9 @@ func (w *ApprovalWorkflow) RequestApproval(ctx context.Context, req *ApprovalReq
 
 	// Wait for response or timeout
 	timeout := time.Until(req.ExpiresAt)
+	if timeout < 0 {
+		timeout = 0 // Clamp to prevent negative duration
+	}
 	select {
 	case response := <-responseChan:
 		w.cleanup(req.ID)
@@ -540,10 +543,10 @@ func (w *ApprovalWorkflow) cleanup(requestID string) {
 	defer w.pendingMu.Unlock()
 
 	delete(w.pending, requestID)
-	if ch, ok := w.responseChans[requestID]; ok {
-		close(ch)
-		delete(w.responseChans, requestID)
-	}
+	// Don't close the channel - just remove from map
+	// This prevents panic if Respond() tries to send to a closed channel
+	// The channel will be garbage collected when no longer referenced
+	delete(w.responseChans, requestID)
 }
 
 // contains checks if a slice contains a value.

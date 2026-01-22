@@ -72,6 +72,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -130,6 +131,10 @@ const (
 // MaxResponseTextSize is the maximum size of accumulated response text (1MB).
 // This prevents memory exhaustion from malicious or buggy model responses.
 const MaxResponseTextSize = 1 << 20 // 1MB
+
+// MaxToolCallsPerIteration is the maximum number of tool calls allowed in a single iteration.
+// This prevents DOS attacks where the model returns excessive tool calls.
+const MaxToolCallsPerIteration = 100
 
 // ParseElevatedMode normalizes a user-facing directive to an ElevatedMode.
 func ParseElevatedMode(value string) (ElevatedMode, bool) {
@@ -514,6 +519,9 @@ type Runtime struct {
 
 	// plugins holds registered plugins for event hooks
 	plugins *PluginRegistry
+
+	// jobSem limits concurrent async job goroutines to prevent unbounded growth
+	jobSem chan struct{}
 }
 
 // NewRuntime creates a new agent runtime with the given provider and session store.
@@ -537,6 +545,9 @@ func NewRuntime(provider LLMProvider, sessions sessions.Store) *Runtime {
 	return NewRuntimeWithOptions(provider, sessions, DefaultRuntimeOptions())
 }
 
+// maxConcurrentJobs limits the number of concurrent async tool jobs
+const maxConcurrentJobs = 50
+
 // NewRuntimeWithOptions creates a runtime with custom options.
 func NewRuntimeWithOptions(provider LLMProvider, sessions sessions.Store, opts RuntimeOptions) *Runtime {
 	opts = mergeRuntimeOptions(DefaultRuntimeOptions(), opts)
@@ -546,6 +557,7 @@ func NewRuntimeWithOptions(provider LLMProvider, sessions sessions.Store, opts R
 		sessions: sessions,
 		opts:     opts,
 		plugins:  NewPluginRegistry(),
+		jobSem:   make(chan struct{}, maxConcurrentJobs),
 	}
 	if opts.MaxIterations > 0 {
 		runtime.maxIterations = opts.MaxIterations
@@ -764,7 +776,7 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 		// Run the core agentic loop
 		// Errors are emitted as run.error events which ChunkAdapterSink converts to ResponseChunk.Error
 		if err := r.run(runCtx, session, msg, emitter); err != nil {
-			_ = err
+			slog.Debug("agentic loop completed with error", "error", err, "session_id", session.ID)
 		}
 	}()
 
@@ -1014,13 +1026,19 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 				emitter.ModelDelta(ctx, chunk.Text)
 			}
 			if chunk.ToolCall != nil {
+				// Check tool call limit to prevent DOS
+				if len(toolCalls) >= MaxToolCallsPerIteration {
+					emitter.RunError(ctx, fmt.Errorf("too many tool calls in single iteration (max %d)", MaxToolCallsPerIteration), true)
+					return fmt.Errorf("tool calls exceed maximum of %d per iteration", MaxToolCallsPerIteration)
+				}
+
 				tc := *chunk.ToolCall
 				toolCalls = append(toolCalls, tc)
 
 				// Persist tool call event immediately (best-effort)
 				if r.toolEvents != nil {
 					if err := r.toolEvents.AddToolCall(ctx, session.ID, assistantMsgID, &tc); err != nil {
-						_ = err
+						slog.Debug("failed to persist tool call event", "error", err, "tool", tc.Name, "session_id", session.ID)
 					}
 				}
 			}
@@ -1089,7 +1107,7 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 				// Persist (best-effort)
 				if r.toolEvents != nil {
 					if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res); err != nil {
-						_ = err
+						slog.Debug("failed to persist tool result event", "error", err, "tool", tc.Name, "session_id", session.ID)
 					}
 				}
 				continue
@@ -1115,7 +1133,7 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 					emitter.ToolFinished(ctx, tc.ID, tc.Name, false, []byte(res.Content), 0)
 					if r.toolEvents != nil {
 						if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res); err != nil {
-							_ = err
+							slog.Debug("failed to persist tool result event", "error", err, "tool", tc.Name, "session_id", session.ID)
 						}
 					}
 					continue
@@ -1152,7 +1170,7 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 
 					if r.toolEvents != nil {
 						if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res); err != nil {
-							_ = err
+							slog.Debug("failed to persist tool result event", "error", err, "tool", tc.Name, "session_id", session.ID)
 						}
 					}
 					continue
@@ -1184,7 +1202,7 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 
 					if r.toolEvents != nil {
 						if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res); err != nil {
-							_ = err
+							slog.Debug("failed to persist tool result event", "error", err, "tool", tc.Name, "session_id", session.ID)
 						}
 					}
 					continue
@@ -1201,7 +1219,7 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 					CreatedAt:  time.Now(),
 				}
 				if err := runOpts.JobStore.Create(context.Background(), job); err != nil {
-					_ = err
+					slog.Warn("failed to create async job", "error", err, "job_id", job.ID, "tool", tc.Name)
 				}
 
 				payload, err := json.Marshal(map[string]any{
@@ -1228,11 +1246,21 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 
 				if r.toolEvents != nil {
 					if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res); err != nil {
-						_ = err
+						slog.Debug("failed to persist tool result event", "error", err, "tool", tc.Name, "session_id", session.ID)
 					}
 				}
 
-				go r.runToolJob(tc, job, toolExec, runOpts.JobStore)
+				// Spawn async job with semaphore to limit concurrent goroutines
+				select {
+				case r.jobSem <- struct{}{}:
+					go func() {
+						defer func() { <-r.jobSem }()
+						r.runToolJob(tc, job, toolExec, runOpts.JobStore)
+					}()
+				default:
+					slog.Warn("async job queue full, running synchronously", "tool", tc.Name, "job_id", job.ID)
+					r.runToolJob(tc, job, toolExec, runOpts.JobStore)
+				}
 				continue
 			}
 
@@ -1256,7 +1284,7 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 				tc := toolCalls[origIdx]
 				res := results[origIdx]
 				if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res); err != nil {
-					_ = err
+					slog.Debug("failed to persist tool result event", "error", err, "tool", tc.Name, "session_id", session.ID)
 				}
 			}
 		}
@@ -1402,7 +1430,7 @@ func (r *Runtime) ProcessStream(ctx context.Context, session *models.Session, ms
 
 		// Run the core agentic loop
 		if err := r.run(ctx, session, msg, emitter); err != nil {
-			_ = err
+			slog.Debug("agentic loop completed with error", "error", err, "session_id", session.ID)
 		}
 
 		// Get accumulated stats and add dropped events count
@@ -1594,7 +1622,7 @@ func (r *Runtime) runToolJob(tc models.ToolCall, job *jobs.Job, toolExec *ToolEx
 	job.Status = jobs.StatusRunning
 	job.StartedAt = time.Now()
 	if err := jobStore.Update(ctx, job); err != nil {
-		_ = err
+		slog.Warn("failed to update job status to running", "error", err, "job_id", job.ID)
 	}
 
 	var result models.ToolResult
@@ -1632,7 +1660,7 @@ func (r *Runtime) runToolJob(tc models.ToolCall, job *jobs.Job, toolExec *ToolEx
 	}
 	job.FinishedAt = time.Now()
 	if err := jobStore.Update(ctx, job); err != nil {
-		_ = err
+		slog.Warn("failed to update job status on completion", "error", err, "job_id", job.ID, "status", job.Status)
 	}
 }
 

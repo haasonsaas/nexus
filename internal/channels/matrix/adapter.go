@@ -31,6 +31,9 @@ type Adapter struct {
 	mu      sync.RWMutex
 	running bool
 	stopCh  chan struct{}
+
+	statusMu sync.RWMutex
+	status   channels.Status
 }
 
 // NewAdapter creates a new Matrix adapter.
@@ -112,6 +115,14 @@ func (a *Adapter) Start(ctx context.Context) error {
 
 	// Start sync in background
 	go a.syncLoop(ctx)
+
+	// Set initial status as connected
+	a.statusMu.Lock()
+	a.status = channels.Status{
+		Connected: true,
+		LastPing:  time.Now().Unix(),
+	}
+	a.statusMu.Unlock()
 
 	a.logger.Info("matrix adapter started",
 		"homeserver", a.config.Homeserver,
@@ -248,18 +259,11 @@ func (a *Adapter) HealthCheck(ctx context.Context) channels.HealthStatus {
 	}
 }
 
-// Status returns adapter status information.
-func (a *Adapter) Status() map[string]any {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
-	return map[string]any{
-		"running":    a.running,
-		"homeserver": a.config.Homeserver,
-		"user_id":    a.config.UserID,
-		"device_id":  a.client.DeviceID,
-		"metrics":    a.metrics.Snapshot(),
-	}
+// Status returns the current connection status.
+func (a *Adapter) Status() channels.Status {
+	a.statusMu.RLock()
+	defer a.statusMu.RUnlock()
+	return a.status
 }
 
 func (a *Adapter) syncLoop(ctx context.Context) {
@@ -273,6 +277,16 @@ func (a *Adapter) syncLoop(ctx context.Context) {
 			err := a.client.SyncWithContext(ctx)
 			if err != nil {
 				a.logger.Error("sync error", "error", err)
+
+				// Update status to reflect error
+				a.statusMu.Lock()
+				a.status = channels.Status{
+					Connected: false,
+					Error:     err.Error(),
+					LastPing:  time.Now().Unix(),
+				}
+				a.statusMu.Unlock()
+
 				select {
 				case a.errors <- err:
 				default:
@@ -286,6 +300,14 @@ func (a *Adapter) syncLoop(ctx context.Context) {
 				case <-ctx.Done():
 					return
 				}
+			} else {
+				// Sync successful, update status
+				a.statusMu.Lock()
+				a.status = channels.Status{
+					Connected: true,
+					LastPing:  time.Now().Unix(),
+				}
+				a.statusMu.Unlock()
 			}
 		}
 	}

@@ -190,18 +190,10 @@ func TestAdapterStatus(t *testing.T) {
 	}
 
 	status := adapter.Status()
-	if status == nil {
-		t.Fatal("Status() returned nil")
-	}
 
-	if status["running"] != false {
-		t.Errorf("expected running=false, got %v", status["running"])
-	}
-	if status["homeserver"] != "https://matrix.org" {
-		t.Errorf("expected homeserver=https://matrix.org, got %v", status["homeserver"])
-	}
-	if status["user_id"] != "@bot:matrix.org" {
-		t.Errorf("expected user_id=@bot:matrix.org, got %v", status["user_id"])
+	// Before Start(), status should show not connected
+	if status.Connected {
+		t.Errorf("expected Connected=false before Start(), got %v", status.Connected)
 	}
 }
 

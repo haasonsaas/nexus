@@ -265,7 +265,7 @@ func (o *Overlay) Reset() error {
 func (o *Overlay) Destroy() error {
 	// Unmount may fail if already unmounted or if path doesn't exist.
 	// We intentionally ignore the error and continue with cleanup.
-	_ = o.Unmount()
+	_ = o.Unmount() //nolint:errcheck // intentionally ignoring unmount errors during cleanup
 
 	return os.RemoveAll(o.OverlayPath)
 }

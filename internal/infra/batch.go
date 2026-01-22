@@ -317,7 +317,7 @@ func (bp *SimpleBatchProcessor[T]) processBatch(items []T) {
 		bp.mu.Unlock()
 	}()
 
-	_ = bp.processFn(context.Background(), items)
+	_ = bp.processFn(context.Background(), items) //nolint:errcheck // batch processing errors are handled internally
 }
 
 // Pending returns the number of pending items.

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/channels/personal"
 )
 
@@ -29,12 +30,12 @@ func (c *contactManager) Resolve(ctx context.Context, identifier string) (*perso
 
 	result, err := c.adapter.call(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list contacts: %w", err)
+		return nil, channels.ErrConnection("failed to list contacts", err)
 	}
 
 	var contacts []signalContact
 	if err := json.Unmarshal(result, &contacts); err != nil {
-		return nil, fmt.Errorf("failed to parse contacts: %w", err)
+		return nil, channels.ErrInternal("failed to parse contacts", err)
 	}
 
 	for _, sc := range contacts {
@@ -64,12 +65,12 @@ func (c *contactManager) Sync(ctx context.Context) error {
 
 	result, err := c.adapter.call(ctx, req)
 	if err != nil {
-		return fmt.Errorf("failed to list contacts: %w", err)
+		return channels.ErrConnection("failed to list contacts", err)
 	}
 
 	var contacts []signalContact
 	if err := json.Unmarshal(result, &contacts); err != nil {
-		return fmt.Errorf("failed to parse contacts: %w", err)
+		return channels.ErrInternal("failed to parse contacts", err)
 	}
 
 	for _, sc := range contacts {
@@ -163,7 +164,7 @@ func downloadURL(url string) ([]byte, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return nil, channels.ErrConnection(fmt.Sprintf("unexpected status code: %d", resp.StatusCode), nil)
 	}
 
 	return io.ReadAll(resp.Body)

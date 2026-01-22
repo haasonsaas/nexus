@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/channels/personal"
 
 	"go.mau.fi/whatsmeow/types"
@@ -31,7 +32,7 @@ func (c *contactManager) Resolve(ctx context.Context, identifier string) (*perso
 
 	contact, err := c.adapter.client.Store.Contacts.GetContact(ctx, jid)
 	if err != nil {
-		return nil, fmt.Errorf("contact not found: %w", err)
+		return nil, channels.ErrNotFound("contact not found", err)
 	}
 
 	result := &personal.Contact{
@@ -58,7 +59,7 @@ func (c *contactManager) Sync(ctx context.Context) error {
 	// Sync contacts from WhatsApp
 	contacts, err := c.adapter.client.Store.Contacts.GetAllContacts(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get contacts: %w", err)
+		return channels.ErrConnection("failed to get contacts", err)
 	}
 
 	for jid, contact := range contacts {
@@ -84,17 +85,17 @@ type mediaHandler struct {
 func (m *mediaHandler) Download(ctx context.Context, mediaID string) ([]byte, string, error) {
 	// WhatsApp media download requires the full media message
 	// This is a simplified stub - real implementation would need message history
-	return nil, "", fmt.Errorf("media download not implemented")
+	return nil, "", channels.ErrUnavailable("media download not implemented", nil)
 }
 
 func (m *mediaHandler) Upload(ctx context.Context, data []byte, mimeType string, filename string) (string, error) {
 	// WhatsApp media upload is done inline with sending
 	// This is a simplified stub
-	return "", fmt.Errorf("standalone media upload not supported")
+	return "", channels.ErrUnavailable("standalone media upload not supported", nil)
 }
 
 func (m *mediaHandler) GetURL(ctx context.Context, mediaID string) (string, error) {
-	return "", fmt.Errorf("media URL not available")
+	return "", channels.ErrUnavailable("media URL not available", nil)
 }
 
 // presenceManager implements personal.PresenceManager for WhatsApp.
@@ -109,7 +110,7 @@ func (p *presenceManager) SetTyping(ctx context.Context, peerID string, typing b
 
 	jid, err := types.ParseJID(peerID)
 	if err != nil {
-		return fmt.Errorf("invalid peer ID: %w", err)
+		return channels.ErrInvalidInput("invalid peer ID", err)
 	}
 
 	var presence types.ChatPresence
@@ -140,11 +141,11 @@ func (p *presenceManager) SetOnline(ctx context.Context, online bool) error {
 func (p *presenceManager) Subscribe(ctx context.Context, peerID string) (<-chan personal.PresenceEvent, error) {
 	jid, err := types.ParseJID(peerID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid peer ID: %w", err)
+		return nil, channels.ErrInvalidInput("invalid peer ID", err)
 	}
 
 	if err := p.adapter.client.SubscribePresence(ctx, jid); err != nil {
-		return nil, fmt.Errorf("failed to subscribe: %w", err)
+		return nil, channels.ErrConnection("failed to subscribe", err)
 	}
 
 	// Note: Events will come through the main event handler
@@ -160,7 +161,7 @@ func (p *presenceManager) MarkRead(ctx context.Context, peerID string, messageID
 
 	jid, err := types.ParseJID(peerID)
 	if err != nil {
-		return fmt.Errorf("invalid peer ID: %w", err)
+		return channels.ErrInvalidInput("invalid peer ID", err)
 	}
 
 	return p.adapter.client.MarkRead(ctx, []types.MessageID{types.MessageID(messageID)}, time.Now(), jid, jid)
@@ -179,7 +180,7 @@ func downloadURL(url string) ([]byte, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return nil, channels.ErrConnection(fmt.Sprintf("unexpected status code: %d", resp.StatusCode), nil)
 	}
 
 	return io.ReadAll(resp.Body)

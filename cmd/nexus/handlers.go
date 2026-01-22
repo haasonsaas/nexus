@@ -2518,9 +2518,9 @@ func runEventsList(cmd *cobra.Command, configPath string, limit int, eventType s
 }
 
 type traceTimeline struct {
-	Header *agent.TraceHeader   `json:"header"`
-	Stats  *models.RunStats     `json:"stats,omitempty"`
-	Events []models.AgentEvent  `json:"events"`
+	Header *agent.TraceHeader  `json:"header"`
+	Stats  *models.RunStats    `json:"stats,omitempty"`
+	Events []models.AgentEvent `json:"events"`
 }
 
 func loadTraceTimeline(traceDir, runID string) (*traceTimeline, error) {

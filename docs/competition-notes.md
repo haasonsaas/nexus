@@ -8,6 +8,7 @@
 - Clawdbot memory sources: `src/memory/embeddings-openai.ts`, embedding batch tests, vector cache tables.
 - GitHub API snapshot (2026-01-22): stars, issues, topics, recent updates.
 - GitHub API docs (2026-01-22): exec approvals, sub-agents, skills config.
+- GitHub API docs (2026-01-22): plugin manifest schema + per-agent sandbox/tool policy docs.
 
 ## Clawd workspace patterns (what they do)
 - Workspace = agent home. Standard files seed behavior, persona, user profile, tool notes, and heartbeat checklist.
@@ -28,6 +29,7 @@
 - **Profiles**: profile-derived paths for daemon/service configs (`CLAWDBOT_PROFILE`) and auth profiles file protections.
 - **Multi-agent sandboxing**: per-agent sandbox overrides + per-agent tool allow/deny lists.
 - **Per-agent auth isolation**: each agent reads its own `auth-profiles.json` under `~/.clawdbot/agents/<agentId>/agent/`.
+- **Plugin manifests**: required JSON schema even for empty config; manifest missing/invalid blocks config validation.
 
 ## Nexus adoption status (high-level)
 - Implemented: strict config validation, doctor CLI, system prompt assembly, heartbeat + tool-notes injection, memory log recall, runtime plugin loader.

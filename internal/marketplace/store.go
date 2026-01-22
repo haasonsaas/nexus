@@ -110,7 +110,13 @@ func (s *Store) loadIndex() error {
 
 	var index pluginsdk.PluginIndex
 	if err := json.Unmarshal(data, &index); err != nil {
-		// Corrupted index, create new one
+		// Corrupted index, back it up before recreating
+		corruptPath := fmt.Sprintf("%s.corrupt-%s", indexPath, time.Now().Format("20060102-150405"))
+		if renameErr := os.Rename(indexPath, corruptPath); renameErr != nil {
+			s.logger.Warn("failed to back up corrupted index", "error", renameErr)
+		} else {
+			s.logger.Warn("backed up corrupted index", "path", corruptPath)
+		}
 		s.logger.Warn("corrupted index, creating new one", "error", err)
 		s.index = pluginsdk.NewPluginIndex()
 		return nil

@@ -112,16 +112,26 @@ func (i *Installer) Install(ctx context.Context, id string, opts pluginsdk.Insta
 	}
 
 	// Extract and install
+	wasInstalled := false
+	var previousVersion string
+	if existing, ok := i.store.Get(id); ok {
+		wasInstalled = true
+		previousVersion = existing.Version
+	}
+
 	installPath, binaryPath, err := i.extractArtifact(id, data, artifact)
 	if err != nil {
 		return nil, fmt.Errorf("extract artifact: %w", err)
 	}
 
-	// Check for previous version
-	var previousVersion string
-	if existing, ok := i.store.Get(id); ok {
-		previousVersion = existing.Version
-	}
+	cleanup := !wasInstalled
+	defer func() {
+		if cleanup {
+			if err := i.store.RemovePluginDir(id); err != nil {
+				i.logger.Warn("failed to clean up plugin dir after install error", "id", id, "error", err)
+			}
+		}
+	}()
 
 	// Create installed plugin entry
 	installed := &pluginsdk.InstalledPlugin{
@@ -154,6 +164,7 @@ func (i *Installer) Install(ctx context.Context, id string, opts pluginsdk.Insta
 	if err := i.store.Add(installed); err != nil {
 		return nil, fmt.Errorf("save to store: %w", err)
 	}
+	cleanup = false
 
 	i.logger.Info("plugin installed",
 		"id", id,

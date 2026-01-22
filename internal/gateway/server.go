@@ -113,6 +113,12 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 
 	// Create startup context for background discovery goroutines
 	startupCtx, startupCancel := context.WithCancel(context.Background())
+	startupCancelUsed := false
+	defer func() {
+		if !startupCancelUsed {
+			startupCancel()
+		}
+	}()
 
 	// Create gRPC server with interceptors
 	apiKeys := make([]auth.APIKeyConfig, 0, len(cfg.Auth.APIKeys))
@@ -286,6 +292,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		}
 	}()
 
+	startupCancelUsed = true
 	server := &Server{
 		config:             cfg,
 		grpc:               grpcServer,

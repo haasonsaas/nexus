@@ -123,13 +123,13 @@ func containsShellMetachars(s string) bool {
 	// Only flag the most dangerous patterns that suggest command chaining
 	// We allow spaces, quotes, etc. since they're common in legitimate args
 	dangerousPatterns := []string{
-		"$(", "${",   // Command substitution
-		"`",          // Backtick substitution
-		"&&", "||",   // Command chaining
-		";",          // Command separator
-		"|",          // Pipe
-		">", "<",     // Redirection
-		"\n", "\r",   // Newlines
+		"$(", "${", // Command substitution
+		"`",        // Backtick substitution
+		"&&", "||", // Command chaining
+		";",      // Command separator
+		"|",      // Pipe
+		">", "<", // Redirection
+		"\n", "\r", // Newlines
 	}
 	for _, pattern := range dangerousPatterns {
 		if strings.Contains(s, pattern) {

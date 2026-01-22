@@ -166,6 +166,18 @@ func (s *Server) newProvider() (agent.LLMProvider, string, error) {
 			BaseURL: providerCfg.BaseURL,
 		})
 		return provider, providerCfg.DefaultModel, nil
+	case "google", "gemini":
+		if providerCfg.APIKey == "" {
+			return nil, "", errors.New("google api key is required")
+		}
+		provider, err := providers.NewGoogleProvider(providers.GoogleConfig{
+			APIKey:       providerCfg.APIKey,
+			DefaultModel: providerCfg.DefaultModel,
+		})
+		if err != nil {
+			return nil, "", err
+		}
+		return provider, providerCfg.DefaultModel, nil
 	default:
 		return nil, "", fmt.Errorf("unsupported provider %q", providerID)
 	}

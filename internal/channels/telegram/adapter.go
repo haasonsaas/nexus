@@ -103,6 +103,7 @@ func (c *Config) Validate() error {
 type Adapter struct {
 	config      Config
 	bot         *bot.Bot
+	botClient   BotClient // Interface for testability
 	messages    chan *nexusmodels.Message
 	status      channels.Status
 	statusMu    sync.RWMutex
@@ -136,6 +137,12 @@ func NewAdapter(config Config) (*Adapter, error) {
 	return a, nil
 }
 
+// SetBotClient sets a custom BotClient implementation.
+// This is primarily used for testing with mocks.
+func (a *Adapter) SetBotClient(client BotClient) {
+	a.botClient = client
+}
+
 // Start begins listening for messages from Telegram.
 // It establishes the bot connection and starts the message receiving loop.
 func (a *Adapter) Start(ctx context.Context) error {
@@ -156,6 +163,7 @@ func (a *Adapter) Start(ctx context.Context) error {
 	}
 
 	a.bot = b
+	a.botClient = newRealBotClient(b)
 	a.metrics.RecordConnectionOpened()
 
 	// Start message handler
@@ -242,10 +250,10 @@ func (a *Adapter) runLongPolling(ctx context.Context) error {
 	a.logger.Info("starting long polling mode")
 
 	// Register message handler
-	a.bot.RegisterHandler(bot.HandlerTypeMessageText, "", bot.MatchTypePrefix, a.handleMessage)
+	a.botClient.RegisterHandler(bot.HandlerTypeMessageText, "", bot.MatchTypePrefix, a.handleMessage)
 
 	// Start bot (this blocks until context is cancelled)
-	a.bot.Start(ctx)
+	a.botClient.Start(ctx)
 
 	return nil
 }
@@ -255,7 +263,7 @@ func (a *Adapter) runWebhook(ctx context.Context) error {
 	a.logger.Info("starting webhook mode", "url", a.config.WebhookURL)
 
 	// Set webhook
-	_, err := a.bot.SetWebhook(ctx, &bot.SetWebhookParams{
+	_, err := a.botClient.SetWebhook(ctx, &bot.SetWebhookParams{
 		URL: a.config.WebhookURL,
 	})
 	if err != nil {
@@ -264,10 +272,10 @@ func (a *Adapter) runWebhook(ctx context.Context) error {
 	}
 
 	// Register message handler
-	a.bot.RegisterHandler(bot.HandlerTypeMessageText, "", bot.MatchTypePrefix, a.handleMessage)
+	a.botClient.RegisterHandler(bot.HandlerTypeMessageText, "", bot.MatchTypePrefix, a.handleMessage)
 
 	// Start webhook server
-	go a.bot.StartWebhook(ctx)
+	go a.botClient.StartWebhook(ctx)
 
 	// Wait for context cancellation
 	<-ctx.Done()
@@ -350,7 +358,7 @@ func (a *Adapter) Send(ctx context.Context, msg *nexusmodels.Message) error {
 	}
 
 	// Check if bot is initialized
-	if a.bot == nil {
+	if a.botClient == nil {
 		a.metrics.RecordMessageFailed()
 		a.metrics.RecordError(channels.ErrCodeInternal)
 		return channels.ErrInternal("bot not initialized", nil)
@@ -390,7 +398,7 @@ func (a *Adapter) Send(ctx context.Context, msg *nexusmodels.Message) error {
 	}
 
 	// Send the message
-	sentMsg, err := a.bot.SendMessage(ctx, params)
+	sentMsg, err := a.botClient.SendMessage(ctx, params)
 	if err != nil {
 		a.logger.Error("failed to send message",
 			"error", err,
@@ -432,7 +440,7 @@ func (a *Adapter) Send(ctx context.Context, msg *nexusmodels.Message) error {
 
 // DownloadAttachment fetches attachment bytes from Telegram without exposing the bot token.
 func (a *Adapter) DownloadAttachment(ctx context.Context, msg *nexusmodels.Message, attachment *nexusmodels.Attachment) ([]byte, string, string, error) {
-	if a.bot == nil {
+	if a.botClient == nil {
 		return nil, "", "", fmt.Errorf("telegram bot not initialized")
 	}
 	if attachment == nil {
@@ -449,7 +457,7 @@ func (a *Adapter) DownloadAttachment(ctx context.Context, msg *nexusmodels.Messa
 		return nil, "", "", fmt.Errorf("missing telegram file id")
 	}
 
-	file, err := a.bot.GetFile(ctx, &bot.GetFileParams{FileID: fileID})
+	file, err := a.botClient.GetFile(ctx, &bot.GetFileParams{FileID: fileID})
 	if err != nil {
 		return nil, "", "", fmt.Errorf("telegram getFile failed: %w", err)
 	}
@@ -519,7 +527,7 @@ func (a *Adapter) sendAttachments(ctx context.Context, chatID int64, attachments
 
 // sendPhoto sends a photo attachment.
 func (a *Adapter) sendPhoto(ctx context.Context, chatID int64, attachment nexusmodels.Attachment) error {
-	_, err := a.bot.SendPhoto(ctx, &bot.SendPhotoParams{
+	_, err := a.botClient.SendPhoto(ctx, &bot.SendPhotoParams{
 		ChatID: chatID,
 		Photo: &models.InputFileString{
 			Data: attachment.URL,
@@ -533,7 +541,7 @@ func (a *Adapter) sendPhoto(ctx context.Context, chatID int64, attachment nexusm
 
 // sendDocument sends a document attachment.
 func (a *Adapter) sendDocument(ctx context.Context, chatID int64, attachment nexusmodels.Attachment) error {
-	_, err := a.bot.SendDocument(ctx, &bot.SendDocumentParams{
+	_, err := a.botClient.SendDocument(ctx, &bot.SendDocumentParams{
 		ChatID: chatID,
 		Document: &models.InputFileString{
 			Data: attachment.URL,
@@ -547,7 +555,7 @@ func (a *Adapter) sendDocument(ctx context.Context, chatID int64, attachment nex
 
 // sendAudio sends an audio attachment.
 func (a *Adapter) sendAudio(ctx context.Context, chatID int64, attachment nexusmodels.Attachment) error {
-	_, err := a.bot.SendAudio(ctx, &bot.SendAudioParams{
+	_, err := a.botClient.SendAudio(ctx, &bot.SendAudioParams{
 		ChatID: chatID,
 		Audio: &models.InputFileString{
 			Data: attachment.URL,
@@ -613,7 +621,7 @@ func (a *Adapter) HealthCheck(ctx context.Context) channels.HealthStatus {
 	}
 
 	// Check if bot is initialized
-	if a.bot == nil {
+	if a.botClient == nil {
 		health.Message = "bot not initialized"
 		health.Latency = time.Since(startTime)
 		return health
@@ -621,7 +629,7 @@ func (a *Adapter) HealthCheck(ctx context.Context) channels.HealthStatus {
 
 	// Call getMe to verify connectivity
 	// This is a lightweight operation that verifies authentication
-	_, err := a.bot.GetMe(ctx)
+	_, err := a.botClient.GetMe(ctx)
 	health.Latency = time.Since(startTime)
 
 	if err != nil {

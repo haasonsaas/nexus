@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"testing"
 	"time"
 
@@ -793,6 +794,10 @@ func TestAdapter_StopNotStarted(t *testing.T) {
 
 func TestAdapter_StartConnectionError(t *testing.T) {
 	adapter := NewAdapterSimple("test-token")
+	// Reduce retry settings for faster test
+	adapter.config.MaxReconnectAttempts = 2
+	adapter.config.ReconnectBackoff = 10 * time.Millisecond
+
 	mock := &mockDiscordSession{
 		openErr: errors.New("connection refused"),
 	}
@@ -1170,4 +1175,1426 @@ func (m *mockDiscordSession) AddHandler(handler interface{}) func() {
 
 func (m *mockDiscordSession) ApplicationCommandBulkOverwrite(appID, guildID string, commands []*discordgo.ApplicationCommand, options ...discordgo.RequestOption) ([]*discordgo.ApplicationCommand, error) {
 	return commands, nil
+}
+
+// =============================================================================
+// Extended Mock Session for Enhanced Testing
+// =============================================================================
+
+type extendedMockDiscordSession struct {
+	mockDiscordSession
+
+	// Track method calls for verification
+	channelMessageSendCalls        []channelMessageSendCall
+	channelMessageSendComplexCalls []channelMessageSendComplexCall
+	reactionCalls                  []reactionCall
+	threadStartCalls               []threadStartCall
+
+	// Error injection
+	channelMessageSendComplexFn func(channelID string, data *discordgo.MessageSend) (*discordgo.Message, error)
+
+	// Mutex for concurrent access
+	mu sync.Mutex
+}
+
+type channelMessageSendCall struct {
+	ChannelID string
+	Content   string
+}
+
+type channelMessageSendComplexCall struct {
+	ChannelID string
+	Data      *discordgo.MessageSend
+}
+
+type reactionCall struct {
+	ChannelID string
+	MessageID string
+	Emoji     string
+}
+
+type threadStartCall struct {
+	ChannelID       string
+	Name            string
+	ArchiveDuration int
+}
+
+func (m *extendedMockDiscordSession) ChannelMessageSend(channelID string, content string, options ...discordgo.RequestOption) (*discordgo.Message, error) {
+	m.mu.Lock()
+	m.channelMessageSendCalls = append(m.channelMessageSendCalls, channelMessageSendCall{
+		ChannelID: channelID,
+		Content:   content,
+	})
+	m.mu.Unlock()
+
+	if m.channelMessageSendFn != nil {
+		return m.channelMessageSendFn(channelID, content, options...)
+	}
+	return &discordgo.Message{
+		ID:        "test-msg-id",
+		ChannelID: channelID,
+		Content:   content,
+	}, nil
+}
+
+func (m *extendedMockDiscordSession) ChannelMessageSendComplex(channelID string, data *discordgo.MessageSend, options ...discordgo.RequestOption) (*discordgo.Message, error) {
+	m.mu.Lock()
+	m.channelMessageSendComplexCalls = append(m.channelMessageSendComplexCalls, channelMessageSendComplexCall{
+		ChannelID: channelID,
+		Data:      data,
+	})
+	m.mu.Unlock()
+
+	if m.channelMessageSendComplexFn != nil {
+		return m.channelMessageSendComplexFn(channelID, data)
+	}
+	return &discordgo.Message{
+		ID:        "test-msg-id",
+		ChannelID: channelID,
+		Content:   data.Content,
+		Embeds:    data.Embeds,
+	}, nil
+}
+
+func (m *extendedMockDiscordSession) MessageReactionAdd(channelID, messageID, emoji string, options ...discordgo.RequestOption) error {
+	m.mu.Lock()
+	m.reactionCalls = append(m.reactionCalls, reactionCall{
+		ChannelID: channelID,
+		MessageID: messageID,
+		Emoji:     emoji,
+	})
+	m.mu.Unlock()
+
+	if m.messageReactionAddFn != nil {
+		return m.messageReactionAddFn(channelID, messageID, emoji)
+	}
+	return nil
+}
+
+func (m *extendedMockDiscordSession) ThreadStart(channelID, name string, typ discordgo.ChannelType, archiveDuration int, options ...discordgo.RequestOption) (*discordgo.Channel, error) {
+	m.mu.Lock()
+	m.threadStartCalls = append(m.threadStartCalls, threadStartCall{
+		ChannelID:       channelID,
+		Name:            name,
+		ArchiveDuration: archiveDuration,
+	})
+	m.mu.Unlock()
+
+	if m.threadStartFn != nil {
+		return m.threadStartFn(channelID, name, archiveDuration)
+	}
+	return &discordgo.Channel{
+		ID:   "test-thread-id",
+		Name: name,
+		Type: discordgo.ChannelTypeGuildPublicThread,
+	}, nil
+}
+
+// =============================================================================
+// Message Handler Tests
+// =============================================================================
+
+func TestAdapter_HandleMessageCreate_BotMessage(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &mockDiscordSession{}
+	adapter.session = mock
+
+	ctx, cancel := context.WithCancel(context.Background())
+	adapter.ctx = ctx
+	adapter.cancel = cancel
+	adapter.status.Connected = true
+
+	// Create a bot message (should be ignored)
+	botMsg := &discordgo.MessageCreate{
+		Message: &discordgo.Message{
+			ID:        "bot-msg-123",
+			ChannelID: "channel-456",
+			Content:   "Bot message",
+			Author: &discordgo.User{
+				ID:       "bot-user-789",
+				Username: "TestBot",
+				Bot:      true,
+			},
+		},
+	}
+
+	// Call the handler directly
+	adapter.handleMessageCreate(nil, botMsg)
+
+	// Bot messages should be ignored - no message in channel
+	select {
+	case msg := <-adapter.messages:
+		t.Errorf("Expected bot message to be ignored, but got: %v", msg)
+	default:
+		// Expected behavior - message was ignored
+	}
+}
+
+func TestAdapter_HandleMessageCreate_UserMessage(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &mockDiscordSession{}
+	adapter.session = mock
+
+	ctx, cancel := context.WithCancel(context.Background())
+	adapter.ctx = ctx
+	adapter.cancel = cancel
+	adapter.status.Connected = true
+
+	// Create a user message
+	userMsg := &discordgo.MessageCreate{
+		Message: &discordgo.Message{
+			ID:        "user-msg-123",
+			ChannelID: "channel-456",
+			Content:   "Hello from user",
+			Author: &discordgo.User{
+				ID:       "user-789",
+				Username: "TestUser",
+				Bot:      false,
+			},
+			Timestamp: time.Now(),
+		},
+	}
+
+	// Call the handler
+	adapter.handleMessageCreate(nil, userMsg)
+
+	// Should receive the message
+	select {
+	case msg := <-adapter.messages:
+		if msg.Content != "Hello from user" {
+			t.Errorf("Expected content 'Hello from user', got %q", msg.Content)
+		}
+		if msg.Metadata["discord_user_id"] != "user-789" {
+			t.Errorf("Expected user ID 'user-789', got %v", msg.Metadata["discord_user_id"])
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Error("Expected to receive user message, but timed out")
+	}
+}
+
+func TestAdapter_HandleMessageCreate_ChannelFull(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &mockDiscordSession{}
+	adapter.session = mock
+
+	ctx, cancel := context.WithCancel(context.Background())
+	adapter.ctx = ctx
+	adapter.cancel = cancel
+	adapter.status.Connected = true
+
+	// Fill the messages channel
+	for i := 0; i < 100; i++ {
+		adapter.messages <- &models.Message{Content: fmt.Sprintf("fill-%d", i)}
+	}
+
+	// Create a user message
+	userMsg := &discordgo.MessageCreate{
+		Message: &discordgo.Message{
+			ID:        "user-msg-overflow",
+			ChannelID: "channel-456",
+			Content:   "This should be dropped",
+			Author: &discordgo.User{
+				ID:       "user-789",
+				Username: "TestUser",
+				Bot:      false,
+			},
+			Timestamp: time.Now(),
+		},
+	}
+
+	// Call the handler - should not block
+	done := make(chan struct{})
+	go func() {
+		adapter.handleMessageCreate(nil, userMsg)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Good - handler didn't block
+	case <-time.After(100 * time.Millisecond):
+		t.Error("handleMessageCreate blocked when channel was full")
+	}
+}
+
+func TestAdapter_HandleMessageCreate_ContextCancelled(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &mockDiscordSession{}
+	adapter.session = mock
+
+	ctx, cancel := context.WithCancel(context.Background())
+	adapter.ctx = ctx
+	adapter.cancel = cancel
+	adapter.status.Connected = true
+
+	// Cancel context before sending message
+	cancel()
+
+	// Fill the channel so the message would block
+	for i := 0; i < 100; i++ {
+		adapter.messages <- &models.Message{Content: fmt.Sprintf("fill-%d", i)}
+	}
+
+	userMsg := &discordgo.MessageCreate{
+		Message: &discordgo.Message{
+			ID:        "user-msg-123",
+			ChannelID: "channel-456",
+			Content:   "Test",
+			Author: &discordgo.User{
+				ID:       "user-789",
+				Username: "TestUser",
+				Bot:      false,
+			},
+			Timestamp: time.Now(),
+		},
+	}
+
+	// Should not block due to cancelled context
+	done := make(chan struct{})
+	go func() {
+		adapter.handleMessageCreate(nil, userMsg)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Good
+	case <-time.After(100 * time.Millisecond):
+		t.Error("handleMessageCreate blocked with cancelled context")
+	}
+}
+
+func TestAdapter_HandleInteractionCreate_SlashCommand(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &mockDiscordSession{}
+	adapter.session = mock
+
+	ctx, cancel := context.WithCancel(context.Background())
+	adapter.ctx = ctx
+	adapter.cancel = cancel
+	adapter.status.Connected = true
+
+	// Create a slash command interaction
+	interaction := &discordgo.InteractionCreate{
+		Interaction: &discordgo.Interaction{
+			ID:        "interaction-123",
+			Type:      discordgo.InteractionApplicationCommand,
+			ChannelID: "channel-456",
+			Member: &discordgo.Member{
+				User: &discordgo.User{
+					ID:       "user-789",
+					Username: "TestUser",
+				},
+			},
+			Data: discordgo.ApplicationCommandInteractionData{
+				Name: "help",
+				Options: []*discordgo.ApplicationCommandInteractionDataOption{
+					{
+						Name:  "topic",
+						Value: "commands",
+					},
+				},
+			},
+		},
+	}
+
+	adapter.handleInteractionCreate(nil, interaction)
+
+	select {
+	case msg := <-adapter.messages:
+		if msg.Metadata["discord_command_name"] != "help" {
+			t.Errorf("Expected command name 'help', got %v", msg.Metadata["discord_command_name"])
+		}
+		if msg.Content != "/help topic:commands" {
+			t.Errorf("Expected content '/help topic:commands', got %q", msg.Content)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Error("Expected to receive interaction message")
+	}
+}
+
+func TestAdapter_HandleInteractionCreate_NonCommand(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &mockDiscordSession{}
+	adapter.session = mock
+
+	ctx, cancel := context.WithCancel(context.Background())
+	adapter.ctx = ctx
+	adapter.cancel = cancel
+	adapter.status.Connected = true
+
+	// Create a non-command interaction (should be ignored)
+	interaction := &discordgo.InteractionCreate{
+		Interaction: &discordgo.Interaction{
+			ID:   "interaction-123",
+			Type: discordgo.InteractionMessageComponent, // Not a command
+		},
+	}
+
+	adapter.handleInteractionCreate(nil, interaction)
+
+	// Should be ignored
+	select {
+	case msg := <-adapter.messages:
+		t.Errorf("Expected non-command interaction to be ignored, got: %v", msg)
+	default:
+		// Expected
+	}
+}
+
+func TestAdapter_HandleReady(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &mockDiscordSession{}
+	adapter.session = mock
+	adapter.status.Connected = false
+	adapter.reconnectCount = 5
+	adapter.setDegraded(true)
+
+	readyEvent := &discordgo.Ready{
+		User: &discordgo.User{
+			ID:       "bot-123",
+			Username: "TestBot",
+		},
+		Guilds: []*discordgo.Guild{
+			{ID: "guild-1"},
+			{ID: "guild-2"},
+		},
+	}
+
+	adapter.handleReady(nil, readyEvent)
+
+	if !adapter.status.Connected {
+		t.Error("Expected status.Connected to be true after handleReady")
+	}
+	if adapter.status.Error != "" {
+		t.Errorf("Expected status.Error to be empty, got %q", adapter.status.Error)
+	}
+	if adapter.reconnectCount != 0 {
+		t.Errorf("Expected reconnectCount to be 0, got %d", adapter.reconnectCount)
+	}
+	if adapter.isDegraded() {
+		t.Error("Expected degraded to be false after handleReady")
+	}
+}
+
+func TestAdapter_HandleDisconnect(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &mockDiscordSession{}
+	adapter.session = mock
+	adapter.status.Connected = true
+
+	ctx, cancel := context.WithCancel(context.Background())
+	adapter.ctx = ctx
+	adapter.cancel = cancel
+
+	disconnectEvent := &discordgo.Disconnect{}
+
+	// Cancel context to prevent actual reconnection attempt
+	cancel()
+
+	adapter.handleDisconnect(nil, disconnectEvent)
+
+	if adapter.status.Connected {
+		t.Error("Expected status.Connected to be false after handleDisconnect")
+	}
+	if adapter.status.Error != "disconnected from Discord" {
+		t.Errorf("Expected status.Error 'disconnected from Discord', got %q", adapter.status.Error)
+	}
+}
+
+// =============================================================================
+// Concurrency Tests
+// =============================================================================
+
+func TestAdapter_ConcurrentSends(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &extendedMockDiscordSession{}
+	adapter.session = mock
+	adapter.status.Connected = true
+
+	ctx := context.Background()
+	var wg sync.WaitGroup
+	numGoroutines := 50
+
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			msg := &models.Message{
+				Content: fmt.Sprintf("Message %d", n),
+				Metadata: map[string]any{
+					"discord_channel_id": "channel-123",
+				},
+			}
+			_ = adapter.Send(ctx, msg)
+		}(i)
+	}
+
+	wg.Wait()
+
+	// Verify all messages were sent
+	mock.mu.Lock()
+	callCount := len(mock.channelMessageSendCalls)
+	mock.mu.Unlock()
+
+	if callCount != numGoroutines {
+		t.Errorf("Expected %d sends, got %d", numGoroutines, callCount)
+	}
+}
+
+func TestAdapter_ConcurrentStatusReads(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &mockDiscordSession{}
+	adapter.session = mock
+	adapter.status.Connected = true
+
+	var wg sync.WaitGroup
+	numReaders := 100
+
+	for i := 0; i < numReaders; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			status := adapter.Status()
+			_ = status.Connected
+		}()
+	}
+
+	wg.Wait()
+	// Test passes if no race condition panics
+}
+
+func TestAdapter_ConcurrentDegradedAccess(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+
+	var wg sync.WaitGroup
+	numOps := 100
+
+	// Concurrent writers
+	for i := 0; i < numOps; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			adapter.setDegraded(n%2 == 0)
+		}(i)
+	}
+
+	// Concurrent readers
+	for i := 0; i < numOps; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = adapter.isDegraded()
+		}()
+	}
+
+	wg.Wait()
+	// Test passes if no race condition
+}
+
+func TestAdapter_ConcurrentHealthChecks(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &mockDiscordSession{}
+	adapter.session = mock
+	adapter.status.Connected = true
+
+	ctx := context.Background()
+	var wg sync.WaitGroup
+	numChecks := 50
+
+	for i := 0; i < numChecks; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			health := adapter.HealthCheck(ctx)
+			_ = health.Healthy
+		}()
+	}
+
+	wg.Wait()
+}
+
+// =============================================================================
+// Embed/Attachment Tests
+// =============================================================================
+
+func TestAdapter_SendEmbed_TitleOnly(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &extendedMockDiscordSession{}
+	adapter.session = mock
+	adapter.status.Connected = true
+
+	msg := &models.Message{
+		Content: "Fallback content",
+		Metadata: map[string]any{
+			"discord_channel_id":  "channel-123",
+			"discord_embed_title": "Important Notice",
+		},
+	}
+
+	ctx := context.Background()
+	err := adapter.Send(ctx, msg)
+	if err != nil {
+		t.Fatalf("Send failed: %v", err)
+	}
+
+	mock.mu.Lock()
+	calls := mock.channelMessageSendComplexCalls
+	mock.mu.Unlock()
+
+	if len(calls) != 1 {
+		t.Fatalf("Expected 1 complex send call, got %d", len(calls))
+	}
+
+	if len(calls[0].Data.Embeds) != 1 {
+		t.Fatalf("Expected 1 embed, got %d", len(calls[0].Data.Embeds))
+	}
+
+	embed := calls[0].Data.Embeds[0]
+	if embed.Title != "Important Notice" {
+		t.Errorf("Expected embed title 'Important Notice', got %q", embed.Title)
+	}
+	if embed.Description != "Fallback content" {
+		t.Errorf("Expected embed description to fallback to content, got %q", embed.Description)
+	}
+}
+
+func TestAdapter_SendEmbed_ColorOnly(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &extendedMockDiscordSession{}
+	adapter.session = mock
+	adapter.status.Connected = true
+
+	msg := &models.Message{
+		Content: "Colored message",
+		Metadata: map[string]any{
+			"discord_channel_id":  "channel-123",
+			"discord_embed_color": 0xFF5500,
+		},
+	}
+
+	ctx := context.Background()
+	err := adapter.Send(ctx, msg)
+	if err != nil {
+		t.Fatalf("Send failed: %v", err)
+	}
+
+	mock.mu.Lock()
+	calls := mock.channelMessageSendComplexCalls
+	mock.mu.Unlock()
+
+	if len(calls) != 1 {
+		t.Fatalf("Expected 1 complex send call, got %d", len(calls))
+	}
+
+	embed := calls[0].Data.Embeds[0]
+	if embed.Color != 0xFF5500 {
+		t.Errorf("Expected embed color 0xFF5500, got 0x%X", embed.Color)
+	}
+}
+
+func TestAdapter_SendEmbed_DescriptionOverridesContent(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &extendedMockDiscordSession{}
+	adapter.session = mock
+	adapter.status.Connected = true
+
+	msg := &models.Message{
+		Content: "This should be ignored",
+		Metadata: map[string]any{
+			"discord_channel_id":        "channel-123",
+			"discord_embed_title":       "Title",
+			"discord_embed_description": "Custom description",
+		},
+	}
+
+	ctx := context.Background()
+	err := adapter.Send(ctx, msg)
+	if err != nil {
+		t.Fatalf("Send failed: %v", err)
+	}
+
+	mock.mu.Lock()
+	calls := mock.channelMessageSendComplexCalls
+	mock.mu.Unlock()
+
+	embed := calls[0].Data.Embeds[0]
+	if embed.Description != "Custom description" {
+		t.Errorf("Expected embed description 'Custom description', got %q", embed.Description)
+	}
+}
+
+func TestAdapter_SendEmbed_ComplexError(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &extendedMockDiscordSession{
+		channelMessageSendComplexFn: func(channelID string, data *discordgo.MessageSend) (*discordgo.Message, error) {
+			return nil, errors.New("embed send failed")
+		},
+	}
+	adapter.session = mock
+	adapter.status.Connected = true
+
+	msg := &models.Message{
+		Content: "Test",
+		Metadata: map[string]any{
+			"discord_channel_id":  "channel-123",
+			"discord_embed_title": "Title",
+		},
+	}
+
+	ctx := context.Background()
+	err := adapter.Send(ctx, msg)
+
+	if err == nil {
+		t.Error("Expected error when embed send fails")
+	}
+}
+
+func TestAdapter_SendNoContent(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &extendedMockDiscordSession{}
+	adapter.session = mock
+	adapter.status.Connected = true
+
+	// Message with empty content and no embed
+	msg := &models.Message{
+		Content: "",
+		Metadata: map[string]any{
+			"discord_channel_id": "channel-123",
+		},
+	}
+
+	ctx := context.Background()
+	err := adapter.Send(ctx, msg)
+
+	// Should succeed but not send anything
+	if err != nil {
+		t.Errorf("Expected no error for empty message, got: %v", err)
+	}
+
+	mock.mu.Lock()
+	simpleCalls := len(mock.channelMessageSendCalls)
+	complexCalls := len(mock.channelMessageSendComplexCalls)
+	mock.mu.Unlock()
+
+	if simpleCalls != 0 || complexCalls != 0 {
+		t.Errorf("Expected no sends for empty content, got simple=%d complex=%d", simpleCalls, complexCalls)
+	}
+}
+
+// =============================================================================
+// Thread Tests
+// =============================================================================
+
+func TestAdapter_SendThreadCreate_Error(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &extendedMockDiscordSession{}
+	mock.threadStartFn = func(channelID, name string, archiveDuration int) (*discordgo.Channel, error) {
+		return nil, errors.New("thread creation failed")
+	}
+	adapter.session = mock
+	adapter.status.Connected = true
+
+	msg := &models.Message{
+		Content: "Thread message",
+		Metadata: map[string]any{
+			"discord_channel_id":    "channel-123",
+			"discord_create_thread": true,
+			"discord_thread_name":   "Test Thread",
+		},
+	}
+
+	ctx := context.Background()
+	err := adapter.Send(ctx, msg)
+
+	if err == nil {
+		t.Error("Expected error when thread creation fails")
+	}
+
+	var chErr *channels.Error
+	if errors.As(err, &chErr) {
+		if chErr.Code != channels.ErrCodeInternal {
+			t.Errorf("Expected ErrCodeInternal, got %v", chErr.Code)
+		}
+	}
+}
+
+func TestAdapter_SendThreadCreate_DefaultName(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &extendedMockDiscordSession{}
+	adapter.session = mock
+	adapter.status.Connected = true
+
+	msg := &models.Message{
+		Content: "Thread message",
+		Metadata: map[string]any{
+			"discord_channel_id":    "channel-123",
+			"discord_create_thread": true,
+			// No thread name - should default to "Discussion"
+		},
+	}
+
+	ctx := context.Background()
+	err := adapter.Send(ctx, msg)
+	if err != nil {
+		t.Fatalf("Send failed: %v", err)
+	}
+
+	mock.mu.Lock()
+	threadCalls := mock.threadStartCalls
+	mock.mu.Unlock()
+
+	if len(threadCalls) != 1 {
+		t.Fatalf("Expected 1 thread start call, got %d", len(threadCalls))
+	}
+
+	if threadCalls[0].Name != "Discussion" {
+		t.Errorf("Expected default thread name 'Discussion', got %q", threadCalls[0].Name)
+	}
+}
+
+func TestAdapter_SendThreadCreate_EmptyName(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &extendedMockDiscordSession{}
+	adapter.session = mock
+	adapter.status.Connected = true
+
+	msg := &models.Message{
+		Content: "Thread message",
+		Metadata: map[string]any{
+			"discord_channel_id":    "channel-123",
+			"discord_create_thread": true,
+			"discord_thread_name":   "", // Empty should default
+		},
+	}
+
+	ctx := context.Background()
+	err := adapter.Send(ctx, msg)
+	if err != nil {
+		t.Fatalf("Send failed: %v", err)
+	}
+
+	mock.mu.Lock()
+	threadCalls := mock.threadStartCalls
+	mock.mu.Unlock()
+
+	if threadCalls[0].Name != "Discussion" {
+		t.Errorf("Expected default thread name 'Discussion', got %q", threadCalls[0].Name)
+	}
+}
+
+// =============================================================================
+// Reaction Tests
+// =============================================================================
+
+func TestAdapter_SendReaction_Success(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &extendedMockDiscordSession{}
+	adapter.session = mock
+	adapter.status.Connected = true
+
+	msg := &models.Message{
+		Content: "",
+		Metadata: map[string]any{
+			"discord_channel_id":      "channel-123",
+			"discord_reaction_emoji":  "thumbsup",
+			"discord_reaction_msg_id": "target-msg-456",
+		},
+	}
+
+	ctx := context.Background()
+	err := adapter.Send(ctx, msg)
+	if err != nil {
+		t.Fatalf("Send failed: %v", err)
+	}
+
+	mock.mu.Lock()
+	reactionCalls := mock.reactionCalls
+	mock.mu.Unlock()
+
+	if len(reactionCalls) != 1 {
+		t.Fatalf("Expected 1 reaction call, got %d", len(reactionCalls))
+	}
+
+	if reactionCalls[0].ChannelID != "channel-123" {
+		t.Errorf("Expected channel 'channel-123', got %q", reactionCalls[0].ChannelID)
+	}
+	if reactionCalls[0].MessageID != "target-msg-456" {
+		t.Errorf("Expected message ID 'target-msg-456', got %q", reactionCalls[0].MessageID)
+	}
+	if reactionCalls[0].Emoji != "thumbsup" {
+		t.Errorf("Expected emoji 'thumbsup', got %q", reactionCalls[0].Emoji)
+	}
+}
+
+func TestAdapter_SendReaction_MissingMessageID(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &extendedMockDiscordSession{}
+	adapter.session = mock
+	adapter.status.Connected = true
+
+	// Has emoji but no message ID
+	msg := &models.Message{
+		Content: "Some content",
+		Metadata: map[string]any{
+			"discord_channel_id":     "channel-123",
+			"discord_reaction_emoji": "thumbsup",
+			// Missing discord_reaction_msg_id
+		},
+	}
+
+	ctx := context.Background()
+	err := adapter.Send(ctx, msg)
+	if err != nil {
+		t.Fatalf("Send failed: %v", err)
+	}
+
+	// Should fall through to regular message send
+	mock.mu.Lock()
+	reactionCalls := len(mock.reactionCalls)
+	messageCalls := len(mock.channelMessageSendCalls)
+	mock.mu.Unlock()
+
+	if reactionCalls != 0 {
+		t.Errorf("Expected no reaction calls, got %d", reactionCalls)
+	}
+	if messageCalls != 1 {
+		t.Errorf("Expected 1 message call, got %d", messageCalls)
+	}
+}
+
+// =============================================================================
+// Error Recovery Tests
+// =============================================================================
+
+func TestAdapter_ConnectWithRetry_Success(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+
+	attemptCount := 0
+	mock := &mockDiscordSession{
+		openErr: nil,
+	}
+	// First attempt succeeds
+	mock.openErr = nil
+	adapter.session = mock
+
+	ctx := context.Background()
+	err := adapter.connectWithRetry(ctx)
+
+	if err != nil {
+		t.Errorf("Expected successful connection, got error: %v", err)
+	}
+	if !mock.openCalled {
+		t.Error("Expected Open to be called")
+	}
+
+	_ = attemptCount
+}
+
+func TestAdapter_ConnectWithRetry_FailsThenSucceeds(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	adapter.config.MaxReconnectAttempts = 5
+	adapter.config.ReconnectBackoff = 10 * time.Millisecond
+
+	attemptCount := 0
+	mock := &retryMockDiscordSession{
+		failUntilAttempt: 3,
+		attemptCount:     &attemptCount,
+	}
+	adapter.session = mock
+
+	ctx := context.Background()
+	err := adapter.connectWithRetry(ctx)
+
+	if err != nil {
+		t.Errorf("Expected successful connection after retries, got: %v", err)
+	}
+	if attemptCount != 3 {
+		t.Errorf("Expected 3 attempts, got %d", attemptCount)
+	}
+}
+
+// retryMockDiscordSession is a mock that fails until a certain attempt count
+type retryMockDiscordSession struct {
+	mockDiscordSession
+	failUntilAttempt int
+	attemptCount     *int
+}
+
+func (m *retryMockDiscordSession) Open() error {
+	*m.attemptCount++
+	if *m.attemptCount < m.failUntilAttempt {
+		return errors.New("connection failed")
+	}
+	return nil
+}
+
+func TestAdapter_ConnectWithRetry_AllAttemptsFail(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	adapter.config.MaxReconnectAttempts = 2
+	adapter.config.ReconnectBackoff = 50 * time.Millisecond
+
+	mock := &mockDiscordSession{
+		openErr: errors.New("persistent connection failure"),
+	}
+	adapter.session = mock
+
+	ctx := context.Background()
+	err := adapter.connectWithRetry(ctx)
+
+	if err == nil {
+		t.Error("Expected error when all connection attempts fail")
+	}
+
+	var chErr *channels.Error
+	if errors.As(err, &chErr) {
+		if chErr.Code != channels.ErrCodeConnection {
+			t.Errorf("Expected ErrCodeConnection, got %v", chErr.Code)
+		}
+	}
+}
+
+func TestAdapter_ConnectWithRetry_ContextCancelled(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	adapter.config.MaxReconnectAttempts = 5
+	adapter.config.ReconnectBackoff = 5 * time.Second
+
+	mock := &mockDiscordSession{
+		openErr: errors.New("connection failed"),
+	}
+	adapter.session = mock
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Cancel after a short delay
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	err := adapter.connectWithRetry(ctx)
+
+	if err != context.Canceled {
+		t.Errorf("Expected context.Canceled, got: %v", err)
+	}
+}
+
+func TestAdapter_Reconnect_ContextCancelled(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &mockDiscordSession{}
+	adapter.session = mock
+
+	ctx, cancel := context.WithCancel(context.Background())
+	adapter.ctx = ctx
+	adapter.cancel = cancel
+
+	// Cancel immediately
+	cancel()
+
+	// Reconnect should return early
+	adapter.wg.Add(1)
+	go adapter.reconnect()
+	adapter.wg.Wait()
+	// Test passes if it doesn't hang
+}
+
+func TestAdapter_Reconnect_Success(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &mockDiscordSession{}
+	adapter.session = mock
+	adapter.config.ReconnectBackoff = 10 * time.Millisecond
+
+	ctx, cancel := context.WithCancel(context.Background())
+	adapter.ctx = ctx
+	adapter.cancel = cancel
+	adapter.status.Connected = false
+	adapter.setDegraded(true)
+
+	adapter.wg.Add(1)
+	go adapter.reconnect()
+	adapter.wg.Wait()
+
+	if !adapter.status.Connected {
+		t.Error("Expected status.Connected to be true after successful reconnect")
+	}
+	if adapter.isDegraded() {
+		t.Error("Expected degraded to be false after successful reconnect")
+	}
+	if adapter.reconnectCount != 0 {
+		t.Errorf("Expected reconnectCount to be 0, got %d", adapter.reconnectCount)
+	}
+}
+
+func TestAdapter_Reconnect_Failure(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &mockDiscordSession{
+		openErr: errors.New("reconnect failed"),
+	}
+	adapter.session = mock
+	adapter.config.ReconnectBackoff = 10 * time.Millisecond
+
+	ctx, cancel := context.WithCancel(context.Background())
+	adapter.ctx = ctx
+	adapter.cancel = cancel
+	adapter.status.Connected = false
+
+	adapter.wg.Add(1)
+	go adapter.reconnect()
+	adapter.wg.Wait()
+
+	if adapter.status.Connected {
+		t.Error("Expected status.Connected to be false after failed reconnect")
+	}
+	if adapter.status.Error == "" {
+		t.Error("Expected status.Error to be set after failed reconnect")
+	}
+}
+
+// =============================================================================
+// Rate Limit Tests
+// =============================================================================
+
+func TestAdapter_Send_RateLimiterContextCancelled(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &mockDiscordSession{}
+	adapter.session = mock
+	adapter.status.Connected = true
+
+	// Create a very restrictive rate limiter
+	adapter.rateLimiter = channels.NewRateLimiter(0.001, 1) // Very slow
+
+	// Use up the burst
+	ctx1 := context.Background()
+	msg1 := &models.Message{
+		Content: "First",
+		Metadata: map[string]any{
+			"discord_channel_id": "channel-123",
+		},
+	}
+	_ = adapter.Send(ctx1, msg1)
+
+	// Now cancel the context for the second send
+	ctx2, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+	defer cancel()
+
+	msg2 := &models.Message{
+		Content: "Second",
+		Metadata: map[string]any{
+			"discord_channel_id": "channel-123",
+		},
+	}
+
+	err := adapter.Send(ctx2, msg2)
+
+	if err == nil {
+		t.Error("Expected error when rate limiter wait is cancelled")
+	}
+
+	var chErr *channels.Error
+	if errors.As(err, &chErr) {
+		if chErr.Code != channels.ErrCodeTimeout {
+			t.Errorf("Expected ErrCodeTimeout, got %v", chErr.Code)
+		}
+	}
+}
+
+// =============================================================================
+// Stop Tests
+// =============================================================================
+
+func TestAdapter_Stop_CloseError(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &mockDiscordSession{
+		closeErr: errors.New("close failed"),
+	}
+	adapter.session = mock
+
+	ctx := context.Background()
+
+	// Start first
+	err := adapter.Start(ctx)
+	if err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	// Stop should return error
+	err = adapter.Stop(ctx)
+	if err == nil {
+		t.Error("Expected error when Close fails")
+	}
+
+	var chErr *channels.Error
+	if errors.As(err, &chErr) {
+		if chErr.Code != channels.ErrCodeConnection {
+			t.Errorf("Expected ErrCodeConnection, got %v", chErr.Code)
+		}
+	}
+}
+
+func TestAdapter_Stop_Timeout(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &mockDiscordSession{}
+	adapter.session = mock
+
+	ctx := context.Background()
+	err := adapter.Start(ctx)
+	if err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	// Add a goroutine that will block
+	adapter.wg.Add(1)
+	go func() {
+		time.Sleep(5 * time.Second) // Long sleep
+		adapter.wg.Done()
+	}()
+
+	// Stop with short timeout
+	stopCtx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	// Should not block forever
+	done := make(chan error)
+	go func() {
+		done <- adapter.Stop(stopCtx)
+	}()
+
+	select {
+	case <-done:
+		// Good - Stop returned
+	case <-time.After(1 * time.Second):
+		t.Error("Stop blocked for too long")
+	}
+}
+
+// =============================================================================
+// Metrics Tests
+// =============================================================================
+
+func TestAdapter_MetricsAfterOperations(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &mockDiscordSession{}
+	adapter.session = mock
+
+	ctx := context.Background()
+	err := adapter.Start(ctx)
+	if err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	// Send a message
+	msg := &models.Message{
+		Content: "Test",
+		Metadata: map[string]any{
+			"discord_channel_id": "channel-123",
+		},
+	}
+	_ = adapter.Send(ctx, msg)
+
+	metrics := adapter.Metrics()
+
+	if metrics.MessagesSent == 0 {
+		t.Error("Expected MessagesSent > 0")
+	}
+	if metrics.ConnectionsOpened == 0 {
+		t.Error("Expected ConnectionsOpened > 0")
+	}
+}
+
+// =============================================================================
+// Edge Case Tests
+// =============================================================================
+
+func TestAdapter_SendWithNilMetadata(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &mockDiscordSession{}
+	adapter.session = mock
+	adapter.status.Connected = true
+
+	msg := &models.Message{
+		Content:  "Test",
+		Metadata: nil,
+	}
+
+	ctx := context.Background()
+	err := adapter.Send(ctx, msg)
+
+	// Should fail because discord_channel_id is missing
+	if err == nil {
+		t.Error("Expected error when metadata is nil")
+	}
+}
+
+func TestAdapter_SendWithWrongChannelIDType(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &mockDiscordSession{}
+	adapter.session = mock
+	adapter.status.Connected = true
+
+	msg := &models.Message{
+		Content: "Test",
+		Metadata: map[string]any{
+			"discord_channel_id": 12345, // Wrong type - should be string
+		},
+	}
+
+	ctx := context.Background()
+	err := adapter.Send(ctx, msg)
+
+	if err == nil {
+		t.Error("Expected error when channel ID is wrong type")
+	}
+
+	var chErr *channels.Error
+	if errors.As(err, &chErr) {
+		if chErr.Code != channels.ErrCodeInvalidInput {
+			t.Errorf("Expected ErrCodeInvalidInput, got %v", chErr.Code)
+		}
+	}
+}
+
+func TestAdapter_HandleInteractionCreate_ChannelFull(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &mockDiscordSession{}
+	adapter.session = mock
+
+	ctx, cancel := context.WithCancel(context.Background())
+	adapter.ctx = ctx
+	adapter.cancel = cancel
+	adapter.status.Connected = true
+
+	// Fill the messages channel
+	for i := 0; i < 100; i++ {
+		adapter.messages <- &models.Message{Content: fmt.Sprintf("fill-%d", i)}
+	}
+
+	interaction := &discordgo.InteractionCreate{
+		Interaction: &discordgo.Interaction{
+			ID:        "interaction-123",
+			Type:      discordgo.InteractionApplicationCommand,
+			ChannelID: "channel-456",
+			Member: &discordgo.Member{
+				User: &discordgo.User{
+					ID:       "user-789",
+					Username: "TestUser",
+				},
+			},
+			Data: discordgo.ApplicationCommandInteractionData{
+				Name: "test",
+			},
+		},
+	}
+
+	// Should not block
+	done := make(chan struct{})
+	go func() {
+		adapter.handleInteractionCreate(nil, interaction)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Good
+	case <-time.After(100 * time.Millisecond):
+		t.Error("handleInteractionCreate blocked when channel was full")
+	}
+}
+
+func TestAdapter_HandleInteractionCreate_ContextCancelled(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &mockDiscordSession{}
+	adapter.session = mock
+
+	ctx, cancel := context.WithCancel(context.Background())
+	adapter.ctx = ctx
+	adapter.cancel = cancel
+	adapter.status.Connected = true
+
+	// Cancel context
+	cancel()
+
+	// Fill the channel
+	for i := 0; i < 100; i++ {
+		adapter.messages <- &models.Message{Content: fmt.Sprintf("fill-%d", i)}
+	}
+
+	interaction := &discordgo.InteractionCreate{
+		Interaction: &discordgo.Interaction{
+			ID:        "interaction-123",
+			Type:      discordgo.InteractionApplicationCommand,
+			ChannelID: "channel-456",
+			Member: &discordgo.Member{
+				User: &discordgo.User{
+					ID:       "user-789",
+					Username: "TestUser",
+				},
+			},
+			Data: discordgo.ApplicationCommandInteractionData{
+				Name: "test",
+			},
+		},
+	}
+
+	// Should not block
+	done := make(chan struct{})
+	go func() {
+		adapter.handleInteractionCreate(nil, interaction)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Good
+	case <-time.After(100 * time.Millisecond):
+		t.Error("handleInteractionCreate blocked with cancelled context")
+	}
+}
+
+// =============================================================================
+// Multiple Command Options Test
+// =============================================================================
+
+func TestAdapter_HandleInteractionCreate_MultipleOptions(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	mock := &mockDiscordSession{}
+	adapter.session = mock
+
+	ctx, cancel := context.WithCancel(context.Background())
+	adapter.ctx = ctx
+	adapter.cancel = cancel
+	adapter.status.Connected = true
+
+	interaction := &discordgo.InteractionCreate{
+		Interaction: &discordgo.Interaction{
+			ID:        "interaction-123",
+			Type:      discordgo.InteractionApplicationCommand,
+			ChannelID: "channel-456",
+			Member: &discordgo.Member{
+				User: &discordgo.User{
+					ID:       "user-789",
+					Username: "TestUser",
+				},
+			},
+			Data: discordgo.ApplicationCommandInteractionData{
+				Name: "search",
+				Options: []*discordgo.ApplicationCommandInteractionDataOption{
+					{Name: "query", Value: "hello world"},
+					{Name: "limit", Value: 10},
+					{Name: "sort", Value: "date"},
+				},
+			},
+		},
+	}
+
+	adapter.handleInteractionCreate(nil, interaction)
+
+	select {
+	case msg := <-adapter.messages:
+		expectedContent := "/search query:hello world limit:10 sort:date"
+		if msg.Content != expectedContent {
+			t.Errorf("Expected content %q, got %q", expectedContent, msg.Content)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Error("Expected to receive interaction message")
+	}
 }

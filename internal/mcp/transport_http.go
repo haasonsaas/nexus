@@ -28,6 +28,7 @@ type HTTPTransport struct {
 	connected atomic.Bool
 	stopChan  chan struct{}
 	wg        sync.WaitGroup
+	closeOnce sync.Once
 }
 
 // NewHTTPTransport creates a new HTTP transport.
@@ -69,11 +70,13 @@ func (t *HTTPTransport) Connect(ctx context.Context) error {
 	return nil
 }
 
-// Close closes the HTTP connection.
+// Close closes the HTTP connection. Safe to call multiple times.
 func (t *HTTPTransport) Close() error {
-	t.connected.Store(false)
-	close(t.stopChan)
-	t.wg.Wait()
+	t.closeOnce.Do(func() {
+		t.connected.Store(false)
+		close(t.stopChan)
+		t.wg.Wait()
+	})
 	return nil
 }
 
@@ -243,9 +246,17 @@ func (t *HTTPTransport) sseLoop() {
 
 	// Create a context that's cancelled when stopChan closes
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel() // Ensure context is cancelled when sseLoop exits
+
+	// Start a helper goroutine to cancel context when stop is signaled
+	// This goroutine exits when either stopChan closes OR ctx is cancelled (via defer)
 	go func() {
-		<-t.stopChan
-		cancel()
+		select {
+		case <-t.stopChan:
+			cancel()
+		case <-ctx.Done():
+			// sseLoop exited, context already cancelled via defer
+		}
 	}()
 
 	// Build SSE endpoint URL

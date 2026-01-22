@@ -3,6 +3,9 @@ package mcp
 
 import (
 	"encoding/json"
+	"fmt"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -33,6 +36,107 @@ type ServerConfig struct {
 	// Common options
 	Timeout   time.Duration `yaml:"timeout" json:"timeout,omitempty"`
 	AutoStart bool          `yaml:"auto_start" json:"auto_start,omitempty"`
+}
+
+// Validate checks the server configuration for security issues.
+func (c *ServerConfig) Validate() error {
+	if c.ID == "" {
+		return fmt.Errorf("server ID is required")
+	}
+
+	if c.Transport == TransportStdio {
+		if err := c.validateStdioConfig(); err != nil {
+			return fmt.Errorf("stdio config for %s: %w", c.ID, err)
+		}
+	}
+
+	if c.Transport == TransportHTTP {
+		if err := c.validateHTTPConfig(); err != nil {
+			return fmt.Errorf("http config for %s: %w", c.ID, err)
+		}
+	}
+
+	return nil
+}
+
+// validateStdioConfig validates stdio transport configuration.
+func (c *ServerConfig) validateStdioConfig() error {
+	if c.Command == "" {
+		return fmt.Errorf("command is required")
+	}
+
+	// Check for path traversal in command
+	if err := validatePath(c.Command, "command"); err != nil {
+		return err
+	}
+
+	// Check for path traversal in work directory
+	if c.WorkDir != "" {
+		if err := validatePath(c.WorkDir, "workdir"); err != nil {
+			return err
+		}
+	}
+
+	// Check for suspicious shell metacharacters in args
+	for i, arg := range c.Args {
+		if containsShellMetachars(arg) {
+			return fmt.Errorf("arg[%d] contains suspicious shell metacharacters: %q", i, arg)
+		}
+	}
+
+	return nil
+}
+
+// validateHTTPConfig validates HTTP transport configuration.
+func (c *ServerConfig) validateHTTPConfig() error {
+	if c.URL == "" {
+		return fmt.Errorf("URL is required")
+	}
+
+	// Basic URL validation - must start with http:// or https://
+	if !strings.HasPrefix(c.URL, "http://") && !strings.HasPrefix(c.URL, "https://") {
+		return fmt.Errorf("URL must start with http:// or https://")
+	}
+
+	return nil
+}
+
+// validatePath checks a path for traversal attacks.
+func validatePath(path, fieldName string) error {
+	if path == "" {
+		return nil
+	}
+
+	// Clean the path
+	cleaned := filepath.Clean(path)
+
+	// Check for path traversal after cleaning
+	if strings.Contains(cleaned, "..") {
+		return fmt.Errorf("%s contains path traversal: %q", fieldName, path)
+	}
+
+	return nil
+}
+
+// containsShellMetachars checks for shell metacharacters that could indicate injection.
+func containsShellMetachars(s string) bool {
+	// Only flag the most dangerous patterns that suggest command chaining
+	// We allow spaces, quotes, etc. since they're common in legitimate args
+	dangerousPatterns := []string{
+		"$(", "${",   // Command substitution
+		"`",          // Backtick substitution
+		"&&", "||",   // Command chaining
+		";",          // Command separator
+		"|",          // Pipe
+		">", "<",     // Redirection
+		"\n", "\r",   // Newlines
+	}
+	for _, pattern := range dangerousPatterns {
+		if strings.Contains(s, pattern) {
+			return true
+		}
+	}
+	return false
 }
 
 // MCPTool represents a tool exposed by an MCP server.

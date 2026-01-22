@@ -15,9 +15,16 @@ func loadRuntimePlugin(path string) (pluginsdk.RuntimePlugin, error) {
 	if path == "" {
 		return nil, fmt.Errorf("plugin path is empty")
 	}
-	plug, err := plugin.Open(path)
+
+	// Validate path to prevent traversal attacks (defense in depth)
+	validatedPath, err := ValidatePluginPath(path)
 	if err != nil {
-		return nil, fmt.Errorf("open plugin %s: %w", path, err)
+		return nil, fmt.Errorf("invalid plugin path: %w", err)
+	}
+
+	plug, err := plugin.Open(validatedPath)
+	if err != nil {
+		return nil, fmt.Errorf("open plugin %s: %w", validatedPath, err)
 	}
 	symbol, err := plug.Lookup(runtimePluginSymbol)
 	if err != nil {

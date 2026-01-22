@@ -676,10 +676,12 @@ func TestCockroachStore_AppendMessage(t *testing.T) {
 			},
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectPrepare("INSERT INTO messages")
+				mock.ExpectBegin()
 				mock.ExpectExec("INSERT INTO messages").
 					WillReturnResult(sqlmock.NewResult(1, 1))
 				mock.ExpectExec("UPDATE sessions").
 					WillReturnResult(sqlmock.NewResult(0, 1))
+				mock.ExpectCommit()
 			},
 			wantErr: false,
 		},
@@ -707,8 +709,10 @@ func TestCockroachStore_AppendMessage(t *testing.T) {
 			},
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectPrepare("INSERT INTO messages")
+				mock.ExpectBegin()
 				mock.ExpectExec("INSERT INTO messages").
 					WillReturnError(errors.New("database error"))
+				mock.ExpectRollback()
 			},
 			wantErr:     true,
 			errContains: "failed to append message",
@@ -727,10 +731,12 @@ func TestCockroachStore_AppendMessage(t *testing.T) {
 			},
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectPrepare("INSERT INTO messages")
+				mock.ExpectBegin()
 				mock.ExpectExec("INSERT INTO messages").
 					WillReturnResult(sqlmock.NewResult(1, 1))
 				mock.ExpectExec("UPDATE sessions").
 					WillReturnResult(sqlmock.NewResult(0, 1))
+				mock.ExpectCommit()
 			},
 			wantErr: false,
 		},
@@ -747,10 +753,12 @@ func TestCockroachStore_AppendMessage(t *testing.T) {
 			},
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectPrepare("INSERT INTO messages")
+				mock.ExpectBegin()
 				mock.ExpectExec("INSERT INTO messages").
 					WillReturnResult(sqlmock.NewResult(1, 1))
 				mock.ExpectExec("UPDATE sessions").
 					WillReturnResult(sqlmock.NewResult(0, 1))
+				mock.ExpectCommit()
 			},
 			wantErr: false,
 		},

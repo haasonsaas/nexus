@@ -439,24 +439,19 @@ func (s *cockroachUserStore) FindOrCreate(ctx context.Context, info *auth.UserIn
 	}
 	provider := normalizeProvider(info.Provider)
 	providerID := strings.TrimSpace(info.ID)
-	if provider != "" && providerID != "" {
-		if user, err := s.getByProvider(ctx, provider, providerID); err != nil {
-			return nil, err
-		} else if user != nil {
-			return s.updateFromInfo(ctx, user, info, provider, providerID)
-		}
-	}
-	if email := strings.TrimSpace(info.Email); email != "" {
-		if user, err := s.getByEmail(ctx, email); err != nil {
-			return nil, err
-		} else if user != nil {
-			return s.updateFromInfo(ctx, user, info, provider, providerID)
-		}
+	email := strings.TrimSpace(info.Email)
+
+	// First attempt: try to find existing user
+	if user, err := s.findExisting(ctx, provider, providerID, email); err != nil {
+		return nil, err
+	} else if user != nil {
+		return s.updateFromInfo(ctx, user, info, provider, providerID)
 	}
 
+	// Try to insert new user
 	user := &models.User{
 		ID:         uuid.NewString(),
-		Email:      strings.TrimSpace(info.Email),
+		Email:      email,
 		Name:       info.Name,
 		AvatarURL:  info.AvatarURL,
 		Provider:   provider,
@@ -465,9 +460,40 @@ func (s *cockroachUserStore) FindOrCreate(ctx context.Context, info *auth.UserIn
 		UpdatedAt:  time.Now(),
 	}
 	if err := s.insert(ctx, user); err != nil {
+		// Handle race condition: if insert fails due to duplicate,
+		// another request created the user between our lookup and insert.
+		// Retry the lookup to find the concurrently-created user.
+		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "23505") {
+			if existing, retryErr := s.findExisting(ctx, provider, providerID, email); retryErr != nil {
+				return nil, retryErr
+			} else if existing != nil {
+				return s.updateFromInfo(ctx, existing, info, provider, providerID)
+			}
+			// User still not found after conflict - unexpected state
+			return nil, fmt.Errorf("user conflict but not found on retry: %w", err)
+		}
 		return nil, err
 	}
 	return user, nil
+}
+
+// findExisting looks up a user by provider+providerID or email.
+func (s *cockroachUserStore) findExisting(ctx context.Context, provider, providerID, email string) (*models.User, error) {
+	if provider != "" && providerID != "" {
+		if user, err := s.getByProvider(ctx, provider, providerID); err != nil {
+			return nil, err
+		} else if user != nil {
+			return user, nil
+		}
+	}
+	if email != "" {
+		if user, err := s.getByEmail(ctx, email); err != nil {
+			return nil, err
+		} else if user != nil {
+			return user, nil
+		}
+	}
+	return nil, nil
 }
 
 func (s *cockroachUserStore) Get(ctx context.Context, id string) (*models.User, error) {

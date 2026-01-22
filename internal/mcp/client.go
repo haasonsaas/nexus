@@ -109,16 +109,18 @@ func (c *Client) Connected() bool {
 }
 
 // RefreshCapabilities refreshes the cached tools, resources, and prompts.
+// Network calls are made without holding the lock to reduce contention.
 func (c *Client) RefreshCapabilities(ctx context.Context) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	// Fetch all capabilities without holding the lock
+	var newTools []*MCPTool
+	var newResources []*MCPResource
+	var newPrompts []*MCPPrompt
 
 	// List tools
 	if result, err := c.transport.Call(ctx, "tools/list", nil); err == nil {
 		var resp ListToolsResult
 		if json.Unmarshal(result, &resp) == nil {
-			c.tools = resp.Tools
-			c.logger.Debug("refreshed tools", "count", len(c.tools))
+			newTools = resp.Tools
 		}
 	}
 
@@ -126,8 +128,7 @@ func (c *Client) RefreshCapabilities(ctx context.Context) error {
 	if result, err := c.transport.Call(ctx, "resources/list", nil); err == nil {
 		var resp ListResourcesResult
 		if json.Unmarshal(result, &resp) == nil {
-			c.resources = resp.Resources
-			c.logger.Debug("refreshed resources", "count", len(c.resources))
+			newResources = resp.Resources
 		}
 	}
 
@@ -135,9 +136,25 @@ func (c *Client) RefreshCapabilities(ctx context.Context) error {
 	if result, err := c.transport.Call(ctx, "prompts/list", nil); err == nil {
 		var resp ListPromptsResult
 		if json.Unmarshal(result, &resp) == nil {
-			c.prompts = resp.Prompts
-			c.logger.Debug("refreshed prompts", "count", len(c.prompts))
+			newPrompts = resp.Prompts
 		}
+	}
+
+	// Update cached values under lock
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if newTools != nil {
+		c.tools = newTools
+		c.logger.Debug("refreshed tools", "count", len(c.tools))
+	}
+	if newResources != nil {
+		c.resources = newResources
+		c.logger.Debug("refreshed resources", "count", len(c.resources))
+	}
+	if newPrompts != nil {
+		c.prompts = newPrompts
+		c.logger.Debug("refreshed prompts", "count", len(c.prompts))
 	}
 
 	return nil

@@ -913,6 +913,14 @@ func TestCockroachBranchStore_AppendMessageToBranch(t *testing.T) {
 				Content: "hello",
 			},
 			setupMock: func(mock sqlmock.Sqlmock) {
+				// Begin transaction
+				mock.ExpectBegin()
+
+				// Lock branch
+				mock.ExpectExec("SELECT 1 FROM branches WHERE id").
+					WithArgs("branch-1").
+					WillReturnResult(sqlmock.NewResult(0, 1))
+
 				// Get max sequence
 				mock.ExpectQuery("SELECT COALESCE.*MAX.*FROM messages").
 					WithArgs("branch-1").
@@ -926,6 +934,9 @@ func TestCockroachBranchStore_AppendMessageToBranch(t *testing.T) {
 				mock.ExpectExec("UPDATE branches SET updated_at").
 					WithArgs(sqlmock.AnyArg(), "branch-1").
 					WillReturnResult(sqlmock.NewResult(0, 1))
+
+				// Commit
+				mock.ExpectCommit()
 			},
 			wantErr: false,
 		},
@@ -950,6 +961,14 @@ func TestCockroachBranchStore_AppendMessageToBranch(t *testing.T) {
 					WithArgs("session-1").
 					WillReturnRows(rows)
 
+				// Begin transaction
+				mock.ExpectBegin()
+
+				// Lock branch
+				mock.ExpectExec("SELECT 1 FROM branches WHERE id").
+					WithArgs("primary-branch").
+					WillReturnResult(sqlmock.NewResult(0, 1))
+
 				// Get max sequence
 				mock.ExpectQuery("SELECT COALESCE.*MAX.*FROM messages").
 					WithArgs("primary-branch").
@@ -963,6 +982,9 @@ func TestCockroachBranchStore_AppendMessageToBranch(t *testing.T) {
 				mock.ExpectExec("UPDATE branches SET updated_at").
 					WithArgs(sqlmock.AnyArg(), "primary-branch").
 					WillReturnResult(sqlmock.NewResult(0, 1))
+
+				// Commit
+				mock.ExpectCommit()
 			},
 			wantErr: false,
 		},

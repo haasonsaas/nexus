@@ -180,6 +180,15 @@ func resolvePluginBinary(path string, id string) string {
 	if strings.TrimSpace(path) == "" {
 		return ""
 	}
+
+	// Validate path to prevent traversal attacks
+	validatedPath, err := ValidatePluginPath(path)
+	if err != nil {
+		// Return empty on invalid path - will fail later with clear error
+		return ""
+	}
+	path = validatedPath
+
 	ext := strings.ToLower(filepath.Ext(path))
 	if ext == ".so" {
 		return path

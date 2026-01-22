@@ -14,6 +14,39 @@ import (
 	"github.com/haasonsaas/nexus/pkg/pluginsdk"
 )
 
+// ErrPathTraversal indicates an attempted path traversal attack.
+var ErrPathTraversal = fmt.Errorf("path traversal detected")
+
+// ValidatePluginPath checks that a plugin path is safe and doesn't attempt
+// path traversal. Returns the cleaned absolute path or an error.
+func ValidatePluginPath(path string) (string, error) {
+	if path == "" {
+		return "", fmt.Errorf("plugin path is empty")
+	}
+
+	// Clean the path to normalize it
+	cleaned := filepath.Clean(path)
+
+	// Check for path traversal attempts
+	// After cleaning, ".." should not appear in a safe path
+	if strings.Contains(cleaned, "..") {
+		return "", fmt.Errorf("%w: path contains '..' after cleaning: %s", ErrPathTraversal, path)
+	}
+
+	// Convert to absolute path
+	absPath, err := filepath.Abs(cleaned)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve absolute path: %w", err)
+	}
+
+	// Re-check the absolute path for any remaining traversal
+	if strings.Contains(absPath, "..") {
+		return "", fmt.Errorf("%w: absolute path contains '..': %s", ErrPathTraversal, absPath)
+	}
+
+	return absPath, nil
+}
+
 type ManifestInfo struct {
 	Manifest *pluginsdk.Manifest
 	Path     string
@@ -103,7 +136,13 @@ func LoadManifestForPath(path string) (ManifestInfo, error) {
 }
 
 func loadManifestFromPath(path string) (*ManifestInfo, error) {
-	info, err := os.Stat(path)
+	// Validate path to prevent traversal attacks
+	validatedPath, err := ValidatePluginPath(path)
+	if err != nil {
+		return nil, err
+	}
+
+	info, err := os.Stat(validatedPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
@@ -111,15 +150,15 @@ func loadManifestFromPath(path string) (*ManifestInfo, error) {
 		return nil, fmt.Errorf("stat manifest path: %w", err)
 	}
 	if !info.IsDir() {
-		manifest, err := pluginsdk.DecodeManifestFile(path)
+		manifest, err := pluginsdk.DecodeManifestFile(validatedPath)
 		if err != nil {
-			return nil, fmt.Errorf("load manifest %s: %w", path, err)
+			return nil, fmt.Errorf("load manifest %s: %w", validatedPath, err)
 		}
-		return &ManifestInfo{Manifest: manifest, Path: path}, nil
+		return &ManifestInfo{Manifest: manifest, Path: validatedPath}, nil
 	}
 
 	for _, name := range []string{pluginsdk.ManifestFilename, pluginsdk.LegacyManifestFilename} {
-		manifestPath := filepath.Join(path, name)
+		manifestPath := filepath.Join(validatedPath, name)
 		if _, err := os.Stat(manifestPath); err != nil {
 			if os.IsNotExist(err) {
 				continue
@@ -163,12 +202,17 @@ func normalizeManifestPaths(paths []string) []string {
 		if trimmed == "" {
 			continue
 		}
-		cleaned := filepath.Clean(trimmed)
-		if _, ok := seen[cleaned]; ok {
+		// Validate path to prevent traversal attacks
+		validated, err := ValidatePluginPath(trimmed)
+		if err != nil {
+			// Skip invalid paths silently - they will fail later if used
 			continue
 		}
-		seen[cleaned] = struct{}{}
-		normalized = append(normalized, cleaned)
+		if _, ok := seen[validated]; ok {
+			continue
+		}
+		seen[validated] = struct{}{}
+		normalized = append(normalized, validated)
 	}
 	sort.Strings(normalized)
 	return normalized

@@ -34,6 +34,7 @@ type StdioTransport struct {
 	stopChan  chan struct{}
 	wg        sync.WaitGroup
 	writeMu   sync.Mutex
+	closeOnce sync.Once
 }
 
 // NewStdioTransport creates a new stdio transport.
@@ -52,6 +53,11 @@ func NewStdioTransport(cfg *ServerConfig) *StdioTransport {
 func (t *StdioTransport) Connect(ctx context.Context) error {
 	if t.config.Command == "" {
 		return fmt.Errorf("command is required for stdio transport")
+	}
+
+	// Validate configuration before executing
+	if err := t.config.Validate(); err != nil {
+		return fmt.Errorf("invalid config: %w", err)
 	}
 
 	// Build command
@@ -109,23 +115,26 @@ func (t *StdioTransport) Connect(ctx context.Context) error {
 	return nil
 }
 
-// Close stops the subprocess.
+// Close stops the subprocess. Safe to call multiple times.
 func (t *StdioTransport) Close() error {
-	t.connected.Store(false)
-	close(t.stopChan)
+	var closeErr error
+	t.closeOnce.Do(func() {
+		t.connected.Store(false)
+		close(t.stopChan)
 
-	if t.stdin != nil {
-		t.stdin.Close()
-	}
-
-	if t.process != nil && t.process.Process != nil {
-		if err := t.process.Process.Kill(); err != nil {
-			return err
+		if t.stdin != nil {
+			t.stdin.Close()
 		}
-	}
 
-	t.wg.Wait()
-	return nil
+		if t.process != nil && t.process.Process != nil {
+			if err := t.process.Process.Kill(); err != nil {
+				closeErr = err
+			}
+		}
+
+		t.wg.Wait()
+	})
+	return closeErr
 }
 
 // Call sends a request and waits for a response.

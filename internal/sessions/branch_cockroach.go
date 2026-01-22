@@ -530,6 +530,8 @@ func (s *CockroachBranchStore) CompareBranches(ctx context.Context, sourceBranch
 }
 
 // AppendMessageToBranch adds a message to a specific branch.
+// Uses a transaction with row locking to ensure atomic sequence allocation
+// and prevent race conditions between concurrent appends.
 func (s *CockroachBranchStore) AppendMessageToBranch(ctx context.Context, sessionID, branchID string, msg *models.Message) error {
 	if branchID == "" {
 		branch, err := s.GetPrimaryBranch(ctx, sessionID)
@@ -539,9 +541,26 @@ func (s *CockroachBranchStore) AppendMessageToBranch(ctx context.Context, sessio
 		branchID = branch.ID
 	}
 
-	// Get next sequence number
+	// Start transaction for atomic sequence allocation
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			_ = err
+		}
+	}()
+
+	// Lock the branch row to serialize sequence allocation across concurrent requests
+	_, err = tx.ExecContext(ctx, "SELECT 1 FROM branches WHERE id = $1 FOR UPDATE", branchID)
+	if err != nil {
+		return fmt.Errorf("failed to lock branch: %w", err)
+	}
+
+	// Get next sequence number (now safe from race conditions)
 	var maxSeq int64
-	err := s.db.QueryRowContext(ctx, "SELECT COALESCE(MAX(sequence_num), 0) FROM messages WHERE branch_id = $1", branchID).Scan(&maxSeq)
+	err = tx.QueryRowContext(ctx, "SELECT COALESCE(MAX(sequence_num), 0) FROM messages WHERE branch_id = $1", branchID).Scan(&maxSeq)
 	if err != nil {
 		return fmt.Errorf("failed to get max sequence: %w", err)
 	}
@@ -576,18 +595,19 @@ func (s *CockroachBranchStore) AppendMessageToBranch(ctx context.Context, sessio
 		INSERT INTO messages (id, session_id, branch_id, sequence_num, channel, channel_id, direction, role, content, attachments, tool_calls, tool_results, metadata, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 	`
-	_, err = s.db.ExecContext(ctx, query,
+	_, err = tx.ExecContext(ctx, query,
 		msg.ID, sessionID, branchID, msg.SequenceNum, msg.Channel, msg.ChannelID, msg.Direction, msg.Role,
 		msg.Content, attachments, toolCalls, toolResults, metadata, msg.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to append message: %w", err)
 	}
 
-	// Update branch timestamp
-	if _, err := s.db.ExecContext(ctx, "UPDATE branches SET updated_at = $1 WHERE id = $2", time.Now(), branchID); err != nil {
+	// Update branch timestamp within the same transaction
+	if _, err := tx.ExecContext(ctx, "UPDATE branches SET updated_at = $1 WHERE id = $2", time.Now(), branchID); err != nil {
 		return fmt.Errorf("failed to update branch timestamp: %w", err)
 	}
-	return nil
+
+	return tx.Commit()
 }
 
 // GetBranchHistory retrieves messages for a branch including inherited messages.

@@ -378,28 +378,42 @@ func (s *CockroachStore) GetByKey(ctx context.Context, key string) (*models.Sess
 	return session, nil
 }
 
-// GetOrCreate retrieves an existing session by key or creates a new one.
+// GetOrCreate retrieves an existing session by key or creates a new one atomically.
+// Uses INSERT ... ON CONFLICT to avoid race conditions between concurrent requests.
 func (s *CockroachStore) GetOrCreate(ctx context.Context, key string, agentID string, channel models.ChannelType, channelID string) (*models.Session, error) {
-	// Try to get existing session
-	session, err := s.GetByKey(ctx, key)
-	if err == nil {
-		return session, nil
-	}
-
-	// If not found, create new session
 	now := time.Now()
-	session = &models.Session{
-		ID:        generateID(),
-		AgentID:   agentID,
-		Channel:   channel,
-		ChannelID: channelID,
-		Key:       key,
-		CreatedAt: now,
-		UpdatedAt: now,
+	id := generateID()
+
+	// Use upsert to atomically insert or return existing
+	// ON CONFLICT DO UPDATE with key = key is a no-op that still returns the row
+	query := `
+		INSERT INTO sessions (id, agent_id, channel, channel_id, key, title, metadata, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, '', '{}', $6, $7)
+		ON CONFLICT (key) DO UPDATE SET key = sessions.key
+		RETURNING id, agent_id, channel, channel_id, key, title, metadata, created_at, updated_at
+	`
+
+	session := &models.Session{}
+	var metadataJSON []byte
+	err := s.db.QueryRowContext(ctx, query, id, agentID, channel, channelID, key, now, now).Scan(
+		&session.ID,
+		&session.AgentID,
+		&session.Channel,
+		&session.ChannelID,
+		&session.Key,
+		&session.Title,
+		&metadataJSON,
+		&session.CreatedAt,
+		&session.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get or create session: %w", err)
 	}
 
-	if err := s.Create(ctx, session); err != nil {
-		return nil, fmt.Errorf("failed to create session: %w", err)
+	if len(metadataJSON) > 0 {
+		if err := json.Unmarshal(metadataJSON, &session.Metadata); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal metadata: %w", err)
+		}
 	}
 
 	return session, nil
@@ -477,6 +491,8 @@ func (s *CockroachStore) List(ctx context.Context, agentID string, opts ListOpti
 }
 
 // AppendMessage adds a message to a session's history.
+// Wraps both the message insert and session timestamp update in a transaction
+// to ensure atomicity.
 func (s *CockroachStore) AppendMessage(ctx context.Context, sessionID string, msg *models.Message) error {
 	if msg.ID == "" {
 		return fmt.Errorf("message ID is required")
@@ -502,7 +518,16 @@ func (s *CockroachStore) AppendMessage(ctx context.Context, sessionID string, ms
 		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	_, err = s.stmtAppendMessage.ExecContext(ctx,
+	// Use transaction to ensure both operations succeed or fail together
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	_, err = tx.StmtContext(ctx, s.stmtAppendMessage).ExecContext(ctx,
 		msg.ID,
 		sessionID,
 		msg.Channel,
@@ -520,13 +545,13 @@ func (s *CockroachStore) AppendMessage(ctx context.Context, sessionID string, ms
 		return fmt.Errorf("failed to append message: %w", err)
 	}
 
-	// Update session's updated_at timestamp
-	_, err = s.db.ExecContext(ctx, "UPDATE sessions SET updated_at = $1 WHERE id = $2", time.Now(), sessionID)
+	// Update session's updated_at timestamp within the same transaction
+	_, err = tx.ExecContext(ctx, "UPDATE sessions SET updated_at = $1 WHERE id = $2", time.Now(), sessionID)
 	if err != nil {
 		return fmt.Errorf("failed to update session timestamp: %w", err)
 	}
 
-	return nil
+	return tx.Commit()
 }
 
 // GetHistory retrieves message history for a session.

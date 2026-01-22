@@ -108,7 +108,7 @@ func allowFromMatches(cfg config.ElevatedConfig, channel models.ChannelType, sen
 	if senderID == "" {
 		return false
 	}
-	if cfg.AllowFrom == nil || len(cfg.AllowFrom) == 0 {
+	if len(cfg.AllowFrom) == 0 {
 		return false
 	}
 	channelKey := strings.ToLower(string(channel))

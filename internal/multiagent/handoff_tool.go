@@ -106,7 +106,10 @@ func (h *HandoffTool) Schema() json.RawMessage {
 		}
 	}
 
-	data, _ := json.Marshal(schema)
+	data, err := json.Marshal(schema)
+	if err != nil {
+		return json.RawMessage("{}")
+	}
 	return data
 }
 
@@ -305,7 +308,10 @@ func (r *ReturnTool) Schema() json.RawMessage {
 		"required": []string{"summary"},
 	}
 
-	data, _ := json.Marshal(schema)
+	data, err := json.Marshal(schema)
+	if err != nil {
+		return json.RawMessage("{}")
+	}
 	return data
 }
 
@@ -402,7 +408,10 @@ func (l *ListAgentsTool) Schema() json.RawMessage {
 		"properties": map[string]any{},
 	}
 
-	data, _ := json.Marshal(schema)
+	data, err := json.Marshal(schema)
+	if err != nil {
+		return json.RawMessage("{}")
+	}
 	return data
 }
 

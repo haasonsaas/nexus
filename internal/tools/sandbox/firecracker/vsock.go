@@ -330,7 +330,9 @@ func (vc *VsockConnection) Shutdown(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
-	_, _ = vc.Send(ctx, req)
+	if _, err := vc.Send(ctx, req); err != nil {
+		return fmt.Errorf("shutdown request failed: %w", err)
+	}
 	return nil
 }
 

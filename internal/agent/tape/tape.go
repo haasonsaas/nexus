@@ -143,9 +143,22 @@ func Unmarshal(data []byte) (*Tape, error) {
 
 // Clone creates a deep copy of the tape.
 func (t *Tape) Clone() *Tape {
-	data, _ := t.Marshal()
-	clone, _ := Unmarshal(data)
-	return clone
+	data, err := t.Marshal()
+	if err == nil {
+		if clone, err := Unmarshal(data); err == nil {
+			return clone
+		}
+	}
+	clone := *t
+	if t.Metadata != nil {
+		clone.Metadata = make(map[string]any, len(t.Metadata))
+		for k, v := range t.Metadata {
+			clone.Metadata[k] = v
+		}
+	}
+	clone.Turns = append([]Turn(nil), t.Turns...)
+	clone.ToolRuns = append([]ToolRun(nil), t.ToolRuns...)
+	return &clone
 }
 
 // Summary returns a brief summary of the tape contents.

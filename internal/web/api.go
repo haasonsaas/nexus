@@ -306,7 +306,9 @@ func (h *Handler) jsonResponse(w http.ResponseWriter, data any) {
 func (h *Handler) jsonError(w http.ResponseWriter, message string, code int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(map[string]string{"error": message})
+	if err := json.NewEncoder(w).Encode(map[string]string{"error": message}); err != nil {
+		h.config.Logger.Error("json encode error", "error", err)
+	}
 }
 
 // userFromContext extracts the user from context if available.

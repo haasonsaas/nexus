@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -77,7 +78,10 @@ func (s *CockroachBranchStore) UpdateBranch(ctx context.Context, branch *models.
 	if err != nil {
 		return fmt.Errorf("failed to update branch: %w", err)
 	}
-	rows, _ := result.RowsAffected()
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
 	if rows == 0 {
 		return ErrBranchNotFound
 	}
@@ -98,7 +102,11 @@ func (s *CockroachBranchStore) DeleteBranch(ctx context.Context, branchID string
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			_ = err
+		}
+	}()
 
 	if deleteMessages {
 		_, err = tx.ExecContext(ctx, "DELETE FROM messages WHERE branch_id = $1", branchID)
@@ -301,7 +309,9 @@ func (s *CockroachBranchStore) scanBranch(row *sql.Row) (*models.Branch, error) 
 	}
 
 	if len(metadataJSON) > 0 {
-		json.Unmarshal(metadataJSON, &b.Metadata)
+		if err := json.Unmarshal(metadataJSON, &b.Metadata); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal branch metadata: %w", err)
+		}
 	}
 	if mergedAt.Valid {
 		b.MergedAt = &mergedAt.Time
@@ -323,7 +333,9 @@ func (s *CockroachBranchStore) scanBranches(rows *sql.Rows) ([]*models.Branch, e
 		}
 
 		if len(metadataJSON) > 0 {
-			json.Unmarshal(metadataJSON, &b.Metadata)
+			if err := json.Unmarshal(metadataJSON, &b.Metadata); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal branch metadata: %w", err)
+			}
 		}
 		if mergedAt.Valid {
 			b.MergedAt = &mergedAt.Time
@@ -372,7 +384,11 @@ func (s *CockroachBranchStore) MergeBranch(ctx context.Context, sourceBranchID, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			_ = err
+		}
+	}()
 
 	// Get source messages to merge
 	var maxSeq int64
@@ -394,7 +410,10 @@ func (s *CockroachBranchStore) MergeBranch(ctx context.Context, sourceBranchID, 
 		if err != nil {
 			return nil, fmt.Errorf("failed to copy messages: %w", err)
 		}
-		count, _ := result.RowsAffected()
+		count, err := result.RowsAffected()
+		if err != nil {
+			return nil, fmt.Errorf("failed to count copied messages: %w", err)
+		}
 		msgCount = int(count)
 	}
 
@@ -485,12 +504,20 @@ func (s *CockroachBranchStore) CompareBranches(ctx context.Context, sourceBranch
 	var ancestorID string
 	err = s.db.QueryRowContext(ctx, query, sourceBranchID, targetBranchID).Scan(&ancestorID)
 	if err == nil {
-		compare.CommonAncestor, _ = s.GetBranch(ctx, ancestorID)
+		branch, branchErr := s.GetBranch(ctx, ancestorID)
+		if branchErr != nil {
+			return nil, branchErr
+		}
+		compare.CommonAncestor = branch
 	}
 
 	// Count messages ahead
-	s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM messages WHERE branch_id = $1", sourceBranchID).Scan(&compare.SourceAhead)
-	s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM messages WHERE branch_id = $1", targetBranchID).Scan(&compare.TargetAhead)
+	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM messages WHERE branch_id = $1", sourceBranchID).Scan(&compare.SourceAhead); err != nil {
+		return nil, err
+	}
+	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM messages WHERE branch_id = $1", targetBranchID).Scan(&compare.TargetAhead); err != nil {
+		return nil, err
+	}
 
 	return compare, nil
 }
@@ -521,10 +548,22 @@ func (s *CockroachBranchStore) AppendMessageToBranch(ctx context.Context, sessio
 		msg.CreatedAt = time.Now()
 	}
 
-	attachments, _ := json.Marshal(msg.Attachments)
-	toolCalls, _ := json.Marshal(msg.ToolCalls)
-	toolResults, _ := json.Marshal(msg.ToolResults)
-	metadata, _ := json.Marshal(msg.Metadata)
+	attachments, err := json.Marshal(msg.Attachments)
+	if err != nil {
+		return fmt.Errorf("failed to marshal attachments: %w", err)
+	}
+	toolCalls, err := json.Marshal(msg.ToolCalls)
+	if err != nil {
+		return fmt.Errorf("failed to marshal tool calls: %w", err)
+	}
+	toolResults, err := json.Marshal(msg.ToolResults)
+	if err != nil {
+		return fmt.Errorf("failed to marshal tool results: %w", err)
+	}
+	metadata, err := json.Marshal(msg.Metadata)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metadata: %w", err)
+	}
 
 	query := `
 		INSERT INTO messages (id, session_id, branch_id, sequence_num, channel, channel_id, direction, role, content, attachments, tool_calls, tool_results, metadata, created_at)
@@ -538,7 +577,9 @@ func (s *CockroachBranchStore) AppendMessageToBranch(ctx context.Context, sessio
 	}
 
 	// Update branch timestamp
-	s.db.ExecContext(ctx, "UPDATE branches SET updated_at = $1 WHERE id = $2", time.Now(), branchID)
+	if _, err := s.db.ExecContext(ctx, "UPDATE branches SET updated_at = $1 WHERE id = $2", time.Now(), branchID); err != nil {
+		return fmt.Errorf("failed to update branch timestamp: %w", err)
+	}
 	return nil
 }
 
@@ -659,16 +700,24 @@ func (s *CockroachBranchStore) scanMessages(rows *sql.Rows) ([]*models.Message, 
 		}
 
 		if len(attachments) > 0 && string(attachments) != "null" {
-			json.Unmarshal(attachments, &msg.Attachments)
+			if err := json.Unmarshal(attachments, &msg.Attachments); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal attachments: %w", err)
+			}
 		}
 		if len(toolCalls) > 0 && string(toolCalls) != "null" {
-			json.Unmarshal(toolCalls, &msg.ToolCalls)
+			if err := json.Unmarshal(toolCalls, &msg.ToolCalls); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal tool calls: %w", err)
+			}
 		}
 		if len(toolResults) > 0 && string(toolResults) != "null" {
-			json.Unmarshal(toolResults, &msg.ToolResults)
+			if err := json.Unmarshal(toolResults, &msg.ToolResults); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal tool results: %w", err)
+			}
 		}
 		if len(metadata) > 0 && string(metadata) != "null" {
-			json.Unmarshal(metadata, &msg.Metadata)
+			if err := json.Unmarshal(metadata, &msg.Metadata); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal metadata: %w", err)
+			}
 		}
 		messages = append(messages, msg)
 	}

@@ -153,6 +153,16 @@ func NewVMPool(config *PoolConfig) (*VMPool, error) {
 	return pool, nil
 }
 
+func (p *VMPool) stopVM(ctx context.Context, vm *MicroVM) {
+	if vm == nil {
+		return
+	}
+	if err := vm.Stop(ctx); err != nil {
+		// Best-effort cleanup; nothing to do here without a logger.
+		_ = err
+	}
+}
+
 // Start initializes the pool and begins background maintenance.
 func (p *VMPool) Start(ctx context.Context) error {
 	// Pre-warm the pool
@@ -189,7 +199,7 @@ func (p *VMPool) warmup(ctx context.Context) error {
 					atomic.AddInt64(&p.stats.IdleVMs, 1)
 				default:
 					// Pool full, stop the VM
-					vm.Stop(ctx)
+					p.stopVM(ctx, vm)
 				}
 			}(lang, langPool)
 		}
@@ -263,7 +273,7 @@ func (p *VMPool) performMaintenance() {
 					case lp.available <- vm:
 						atomic.AddInt64(&p.stats.IdleVMs, 1)
 					default:
-						vm.Stop(ctx)
+						p.stopVM(ctx, vm)
 					}
 				}(lang, langPool)
 			}
@@ -292,7 +302,7 @@ func (p *VMPool) recycleOldVMs(ctx context.Context, langPool *languageVMPool) {
 
 			if shouldRecycle {
 				go func(v *MicroVM) {
-					v.Stop(ctx)
+					p.stopVM(ctx, v)
 					atomic.AddInt32(&langPool.total, -1)
 					atomic.AddInt64(&p.stats.TotalDestroyed, 1)
 					atomic.AddInt64(&p.stats.IdleVMs, -1)
@@ -377,7 +387,7 @@ func (p *VMPool) Put(vm *MicroVM) {
 	p.closedMu.RLock()
 	if p.closed {
 		p.closedMu.RUnlock()
-		vm.Stop(context.Background())
+		p.stopVM(context.Background(), vm)
 		return
 	}
 	p.closedMu.RUnlock()
@@ -398,7 +408,7 @@ func (p *VMPool) Put(vm *MicroVM) {
 
 	if shouldRecycle {
 		go func() {
-			vm.Stop(context.Background())
+			p.stopVM(context.Background(), vm)
 			atomic.AddInt64(&p.stats.TotalDestroyed, 1)
 
 			p.poolsMu.RLock()
@@ -414,7 +424,9 @@ func (p *VMPool) Put(vm *MicroVM) {
 	// Reset VM state before returning to pool
 	if vm.Vsock() != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		_ = vm.Vsock().Reset(ctx)
+		if err := vm.Vsock().Reset(ctx); err != nil {
+			_ = err
+		}
 		cancel()
 	}
 
@@ -423,7 +435,7 @@ func (p *VMPool) Put(vm *MicroVM) {
 	p.poolsMu.RUnlock()
 
 	if !ok {
-		vm.Stop(context.Background())
+		p.stopVM(context.Background(), vm)
 		return
 	}
 
@@ -434,7 +446,7 @@ func (p *VMPool) Put(vm *MicroVM) {
 	default:
 		// Pool is full, destroy the VM
 		go func() {
-			vm.Stop(context.Background())
+			p.stopVM(context.Background(), vm)
 			atomic.AddInt32(&langPool.total, -1)
 			atomic.AddInt64(&p.stats.TotalDestroyed, 1)
 		}()
@@ -475,7 +487,7 @@ func (p *VMPool) createVM(ctx context.Context, language string) (*MicroVM, error
 
 	// Start the VM
 	if err := vm.Start(ctx); err != nil {
-		vm.Stop(ctx)
+		p.stopVM(ctx, vm)
 		return nil, fmt.Errorf("failed to start microVM: %w", err)
 	}
 
@@ -490,7 +502,7 @@ func (p *VMPool) createVM(ctx context.Context, language string) (*MicroVM, error
 			}
 			select {
 			case <-healthCtx.Done():
-				vm.Stop(ctx)
+				p.stopVM(ctx, vm)
 				return nil, fmt.Errorf("guest agent health check timeout")
 			case <-time.After(time.Second):
 				continue
@@ -577,7 +589,7 @@ func (p *VMPool) Warmup(ctx context.Context, language string, count int) error {
 			case langPool.available <- vm:
 				atomic.AddInt64(&p.stats.IdleVMs, 1)
 			default:
-				vm.Stop(ctx)
+				p.stopVM(ctx, vm)
 			}
 		}()
 	}
@@ -608,7 +620,7 @@ func (p *VMPool) Shrink(language string, count int) error {
 		select {
 		case vm := <-langPool.available:
 			go func(v *MicroVM) {
-				v.Stop(ctx)
+				p.stopVM(ctx, v)
 				atomic.AddInt32(&langPool.total, -1)
 				atomic.AddInt64(&p.stats.TotalDestroyed, 1)
 				atomic.AddInt64(&p.stats.IdleVMs, -1)
@@ -645,7 +657,7 @@ func (p *VMPool) Close() error {
 	for _, langPool := range p.pools {
 		close(langPool.available)
 		for vm := range langPool.available {
-			vm.Stop(ctx)
+			p.stopVM(ctx, vm)
 		}
 	}
 

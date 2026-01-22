@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -183,7 +184,9 @@ func ParseAgentsMarkdown(content string, source string) (*AgentManifest, error) 
 				case "can_receive_handoffs", "canreceivehandoffs":
 					currentAgent.CanReceiveHandoffs = strings.ToLower(value) == "true" || value == "yes"
 				case "max_iterations", "maxiterations":
-					fmt.Sscanf(value, "%d", &currentAgent.MaxIterations)
+					if parsed, err := strconv.Atoi(value); err == nil {
+						currentAgent.MaxIterations = parsed
+					}
 				}
 				continue
 			}
@@ -246,7 +249,9 @@ func parseHandoffLine(line string, listItemRe, propertyRe *regexp.Regexp) *Hando
 				case "context":
 					rule.ContextMode = ContextSharingMode(value)
 				case "priority":
-					fmt.Sscanf(value, "%d", &rule.Priority)
+					if _, err := fmt.Sscanf(value, "%d", &rule.Priority); err != nil {
+						rule.Priority = 0
+					}
 				case "return":
 					rule.ReturnToSender = strings.ToLower(value) == "true" || value == "yes"
 				case "message":

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -45,7 +46,10 @@ func NewManager(cfg *SkillsConfig, workspacePath string, configValues map[string
 	}
 
 	// Build default sources
-	homeDir, _ := os.UserHomeDir()
+	homeDir, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(homeDir) == "" {
+		homeDir = "."
+	}
 	localPath := filepath.Join(homeDir, ".nexus", "skills")
 
 	var extraDirs []string
@@ -387,7 +391,9 @@ func (m *Manager) watchLoop(ctx context.Context, debounce time.Duration) {
 			if event.Op&(fsnotify.Create|fsnotify.Write|fsnotify.Remove|fsnotify.Rename) != 0 {
 				if event.Op&fsnotify.Create != 0 {
 					if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
-						_ = m.addWatchPath(event.Name)
+						if err := m.addWatchPath(event.Name); err != nil {
+							m.logger.Warn("failed to add skill watch path", "path", event.Name, "error", err)
+						}
 					}
 				}
 				scheduleRefresh()

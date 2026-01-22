@@ -14,3 +14,15 @@ linters:
     - typecheck
     - unused
     - gosimple
+    - errcheck
+    - misspell
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+  misspell:
+    locale: US
+    ignore-words:
+      - cancelled
+      - cancelling

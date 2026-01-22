@@ -287,7 +287,10 @@ func (r *ReplayToolRegistry) ToAgentTools() []agent.Tool {
 
 // ToolCall is a helper to build tool calls for testing.
 func ToolCall(id, name string, input any) models.ToolCall {
-	data, _ := json.Marshal(input)
+	data, err := json.Marshal(input)
+	if err != nil {
+		data = json.RawMessage("null")
+	}
 	return models.ToolCall{
 		ID:    id,
 		Name:  name,

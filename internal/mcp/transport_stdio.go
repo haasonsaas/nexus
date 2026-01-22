@@ -81,7 +81,10 @@ func (t *StdioTransport) Connect(ctx context.Context) error {
 	t.stdout = bufio.NewScanner(stdout)
 	t.stdout.Buffer(make([]byte, 1024*1024), 1024*1024) // 1MB buffer
 
-	t.stderr, _ = t.process.StderrPipe()
+	t.stderr, err = t.process.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("stderr pipe: %w", err)
+	}
 
 	// Start process
 	if err := t.process.Start(); err != nil {
@@ -116,7 +119,9 @@ func (t *StdioTransport) Close() error {
 	}
 
 	if t.process != nil && t.process.Process != nil {
-		t.process.Process.Kill()
+		if err := t.process.Process.Kill(); err != nil {
+			return err
+		}
 	}
 
 	t.wg.Wait()
@@ -158,9 +163,12 @@ func (t *StdioTransport) Call(ctx context.Context, method string, params any) (j
 	}()
 
 	// Send request
-	data, _ := json.Marshal(req)
+	data, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
 	t.writeMu.Lock()
-	_, err := t.stdin.Write(append(data, '\n'))
+	_, err = t.stdin.Write(append(data, '\n'))
 	t.writeMu.Unlock()
 	if err != nil {
 		return nil, fmt.Errorf("write request: %w", err)
@@ -206,9 +214,12 @@ func (t *StdioTransport) Notify(ctx context.Context, method string, params any) 
 		notif.Params = paramsJSON
 	}
 
-	data, _ := json.Marshal(notif)
+	data, err := json.Marshal(notif)
+	if err != nil {
+		return fmt.Errorf("marshal notification: %w", err)
+	}
 	t.writeMu.Lock()
-	_, err := t.stdin.Write(append(data, '\n'))
+	_, err = t.stdin.Write(append(data, '\n'))
 	t.writeMu.Unlock()
 	if err != nil {
 		return fmt.Errorf("write notification: %w", err)
@@ -244,9 +255,12 @@ func (t *StdioTransport) Respond(ctx context.Context, id any, result any, rpcErr
 		}
 		resp.Result = data
 	}
-	data, _ := json.Marshal(resp)
+	data, err := json.Marshal(resp)
+	if err != nil {
+		return fmt.Errorf("marshal response: %w", err)
+	}
 	t.writeMu.Lock()
-	_, err := t.stdin.Write(append(data, '\n'))
+	_, err = t.stdin.Write(append(data, '\n'))
 	t.writeMu.Unlock()
 	if err != nil {
 		return fmt.Errorf("write response: %w", err)

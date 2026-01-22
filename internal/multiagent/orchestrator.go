@@ -145,7 +145,9 @@ func NewOrchestrator(config *MultiAgentConfig, provider agent.LLMProvider, sessi
 
 	// Register configured agents
 	for i := range config.Agents {
-		orch.RegisterAgent(&config.Agents[i])
+		if err := orch.RegisterAgent(&config.Agents[i]); err != nil {
+			panic(fmt.Sprintf("failed to register agent %q: %v", config.Agents[i].ID, err))
+		}
 	}
 
 	return orch

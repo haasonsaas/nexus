@@ -67,11 +67,7 @@ func RestartUserService(ctx context.Context) ([]string, error) {
 		}
 		return steps, nil
 	case "darwin":
-		home, _ := os.UserHomeDir()
-		if strings.TrimSpace(home) == "" {
-			home = "."
-		}
-		plist := filepath.Join(home, "Library", "LaunchAgents", LaunchdLabel+".plist")
+		plist := filepath.Join(userHomeDir(), "Library", "LaunchAgents", LaunchdLabel+".plist")
 		steps := []string{
 			"launchctl unload " + plist,
 			"launchctl load -w " + plist,
@@ -101,11 +97,7 @@ func normalizeConfigPath(path string) string {
 func installSystemdUser(execPath, configPath string, overwrite bool) (InstallResult, error) {
 	base := os.Getenv("XDG_CONFIG_HOME")
 	if strings.TrimSpace(base) == "" {
-		home, _ := os.UserHomeDir()
-		if strings.TrimSpace(home) == "" {
-			home = "."
-		}
-		base = filepath.Join(home, ".config")
+		base = filepath.Join(userHomeDir(), ".config")
 	}
 
 	path := filepath.Join(base, "systemd", "user", SystemdUnitName)
@@ -136,11 +128,7 @@ func installSystemdUser(execPath, configPath string, overwrite bool) (InstallRes
 }
 
 func installLaunchdUser(execPath, configPath string, overwrite bool) (InstallResult, error) {
-	home, _ := os.UserHomeDir()
-	if strings.TrimSpace(home) == "" {
-		home = "."
-	}
-	path := filepath.Join(home, "Library", "LaunchAgents", LaunchdLabel+".plist")
+	path := filepath.Join(userHomeDir(), "Library", "LaunchAgents", LaunchdLabel+".plist")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return InstallResult{}, err
 	}
@@ -205,4 +193,12 @@ func GenerateLaunchdPlist(execPath, configPath string) string {
   </dict>
 </plist>
 `, LaunchdLabel, execPath, configPath)
+}
+
+func userHomeDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
+		return "."
+	}
+	return home
 }

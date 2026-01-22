@@ -121,12 +121,18 @@ func (p *TracePlugin) OnEvent(ctx context.Context, e models.AgentEvent) {
 	}
 
 	// Write as a single line, flush immediately
-	_, _ = p.writer.Write(data)
-	_, _ = p.writer.Write([]byte("\n"))
+	if _, err := p.writer.Write(data); err != nil {
+		return
+	}
+	if _, err := p.writer.Write([]byte("\n")); err != nil {
+		return
+	}
 
 	// Sync if we have a file handle
 	if p.file != nil {
-		_ = p.file.Sync()
+		if err := p.file.Sync(); err != nil {
+			return
+		}
 	}
 }
 
@@ -137,11 +143,17 @@ func (p *TracePlugin) writeHeader() {
 		return
 	}
 
-	_, _ = p.writer.Write(data)
-	_, _ = p.writer.Write([]byte("\n"))
+	if _, err := p.writer.Write(data); err != nil {
+		return
+	}
+	if _, err := p.writer.Write([]byte("\n")); err != nil {
+		return
+	}
 
 	if p.file != nil {
-		_ = p.file.Sync()
+		if err := p.file.Sync(); err != nil {
+			return
+		}
 	}
 }
 

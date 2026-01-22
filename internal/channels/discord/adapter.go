@@ -273,8 +273,8 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 
 	// Handle thread creation
 	if createThread, ok := msg.Metadata["discord_create_thread"].(bool); ok && createThread {
-		threadName, _ := msg.Metadata["discord_thread_name"].(string)
-		if threadName == "" {
+		threadName, ok := msg.Metadata["discord_thread_name"].(string)
+		if !ok || threadName == "" {
 			threadName = "Discussion"
 		}
 		thread, err := a.session.ThreadStart(channelID, threadName, discordgo.ChannelTypeGuildPublicThread, 1440)

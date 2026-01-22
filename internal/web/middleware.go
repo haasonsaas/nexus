@@ -108,21 +108,25 @@ func AuthMiddleware(service *auth.Service, logger *slog.Logger) func(http.Handle
 			if isHTMXRequest(r) || isAPIRequest(r) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)
-				w.Write([]byte(`{"error":"unauthorized"}`))
+				if _, err := w.Write([]byte(`{"error":"unauthorized"}`)); err != nil {
+					return
+				}
 				return
 			}
 
 			// For browser requests, show 401 page
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte(`<!DOCTYPE html>
+			if _, err := w.Write([]byte(`<!DOCTYPE html>
 <html>
 <head><title>Unauthorized</title></head>
 <body>
 <h1>401 Unauthorized</h1>
 <p>Authentication required to access this page.</p>
 </body>
-</html>`))
+</html>`)); err != nil {
+				return
+			}
 		})
 	}
 }

@@ -53,7 +53,9 @@ func (p *Parser) Parse(ctx context.Context, reader io.Reader, docMeta *models.Do
 	// Extract frontmatter if present
 	frontmatter, body := extractFrontmatter(content)
 	if frontmatter != "" {
-		extractedMeta, _ = parseFrontmatter(frontmatter)
+		if meta, err := parseFrontmatter(frontmatter); err == nil {
+			extractedMeta = meta
+		}
 	}
 	content = body
 

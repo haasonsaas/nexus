@@ -92,8 +92,12 @@ func NewHandler(cfg *Config) (*Handler, error) {
 // setupRoutes configures all HTTP routes.
 func (h *Handler) setupRoutes() {
 	// Static files
-	staticContent, _ := fs.Sub(staticFS, "static")
-	h.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticContent))))
+	staticContent, err := fs.Sub(staticFS, "static")
+	if err != nil {
+		h.mux.Handle("/static/", http.NotFoundHandler())
+	} else {
+		h.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticContent))))
+	}
 
 	// Page routes
 	h.mux.HandleFunc("/", h.handleIndex)

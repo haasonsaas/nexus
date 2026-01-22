@@ -32,8 +32,8 @@ type PortStatus struct {
 func AuditServices(cfg *config.Config) ServiceAudit {
 	audit := ServiceAudit{}
 
-	home, _ := os.UserHomeDir()
-	if home == "" {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
 		home = "."
 	}
 

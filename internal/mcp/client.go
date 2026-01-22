@@ -261,27 +261,33 @@ func (c *Client) handleSamplingRequest(req *JSONRPCRequest, handler SamplingHand
 	var params SamplingRequest
 	if len(req.Params) > 0 {
 		if err := json.Unmarshal(req.Params, &params); err != nil {
-			_ = c.transport.Respond(ctx, req.ID, nil, &JSONRPCError{
+			if respErr := c.transport.Respond(ctx, req.ID, nil, &JSONRPCError{
 				Code:    ErrCodeInvalidParams,
 				Message: "invalid sampling params",
-			})
+			}); respErr != nil {
+				c.logger.Warn("failed to respond to sampling request", "error", respErr)
+			}
 			return
 		}
 	}
 
 	response, err := handler(ctx, &params)
 	if err != nil {
-		_ = c.transport.Respond(ctx, req.ID, nil, &JSONRPCError{
+		if respErr := c.transport.Respond(ctx, req.ID, nil, &JSONRPCError{
 			Code:    ErrCodeInternalError,
 			Message: err.Error(),
-		})
+		}); respErr != nil {
+			c.logger.Warn("failed to respond to sampling request", "error", respErr)
+		}
 		return
 	}
 	if response == nil {
-		_ = c.transport.Respond(ctx, req.ID, nil, &JSONRPCError{
+		if respErr := c.transport.Respond(ctx, req.ID, nil, &JSONRPCError{
 			Code:    ErrCodeInternalError,
 			Message: "sampling handler returned nil response",
-		})
+		}); respErr != nil {
+			c.logger.Warn("failed to respond to sampling request", "error", respErr)
+		}
 		return
 	}
 

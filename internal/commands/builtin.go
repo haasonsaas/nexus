@@ -9,8 +9,14 @@ import (
 
 // RegisterBuiltins registers the built-in commands.
 func RegisterBuiltins(r *Registry) {
+	mustRegister := func(cmd *Command) {
+		if err := r.Register(cmd); err != nil {
+			panic(fmt.Sprintf("failed to register builtin command %q: %v", cmd.Name, err))
+		}
+	}
+
 	// Help command
-	r.Register(&Command{
+	mustRegister(&Command{
 		Name:        "help",
 		Aliases:     []string{"h", "?"},
 		Description: "Show available commands",
@@ -22,7 +28,7 @@ func RegisterBuiltins(r *Registry) {
 	})
 
 	// Status command
-	r.Register(&Command{
+	mustRegister(&Command{
 		Name:        "status",
 		Description: "Show current session status",
 		Category:    "system",
@@ -36,7 +42,7 @@ func RegisterBuiltins(r *Registry) {
 	})
 
 	// New session command
-	r.Register(&Command{
+	mustRegister(&Command{
 		Name:        "new",
 		Aliases:     []string{"reset", "clear"},
 		Description: "Start a new conversation",
@@ -53,7 +59,7 @@ func RegisterBuiltins(r *Registry) {
 	})
 
 	// Model command
-	r.Register(&Command{
+	mustRegister(&Command{
 		Name:        "model",
 		Description: "Show or change the current model",
 		Usage:       "/model [model_name]",
@@ -80,7 +86,7 @@ func RegisterBuiltins(r *Registry) {
 	})
 
 	// Stop/abort command
-	r.Register(&Command{
+	mustRegister(&Command{
 		Name:        "stop",
 		Aliases:     []string{"abort", "cancel"},
 		Description: "Stop the current operation",
@@ -97,7 +103,7 @@ func RegisterBuiltins(r *Registry) {
 	})
 
 	// Undo command
-	r.Register(&Command{
+	mustRegister(&Command{
 		Name:        "undo",
 		Description: "Undo the last message",
 		Category:    "session",
@@ -113,7 +119,7 @@ func RegisterBuiltins(r *Registry) {
 	})
 
 	// Memory command
-	r.Register(&Command{
+	mustRegister(&Command{
 		Name:        "memory",
 		Aliases:     []string{"mem"},
 		Description: "Search or manage memory",
@@ -138,7 +144,7 @@ func RegisterBuiltins(r *Registry) {
 	})
 
 	// Compact/summarize command
-	r.Register(&Command{
+	mustRegister(&Command{
 		Name:        "compact",
 		Aliases:     []string{"summarize"},
 		Description: "Summarize and compact the conversation",

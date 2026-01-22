@@ -40,7 +40,10 @@ func NewRegistry(cfg *TemplatesConfig, workspacePath string) (*Registry, error) 
 	}
 
 	// Build default sources
-	homeDir, _ := os.UserHomeDir()
+	homeDir, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(homeDir) == "" {
+		homeDir = "."
+	}
 	localPath := filepath.Join(homeDir, ".nexus", "templates")
 
 	var extraDirs []string
@@ -334,7 +337,9 @@ func (r *Registry) watchLoop(ctx context.Context, debounce time.Duration) {
 			if event.Op&(fsnotify.Create|fsnotify.Write|fsnotify.Remove|fsnotify.Rename) != 0 {
 				if event.Op&fsnotify.Create != 0 {
 					if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
-						_ = r.addWatchPath(event.Name)
+						if err := r.addWatchPath(event.Name); err != nil {
+							r.logger.Warn("failed to add template watch path", "path", event.Name, "error", err)
+						}
 					}
 				}
 				scheduleRefresh()

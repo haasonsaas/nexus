@@ -3,6 +3,7 @@ package tape
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
@@ -129,13 +130,24 @@ func (r *Recorder) RecordToolRun(turnIndex int, call interface{}, result *agent.
 	defer r.mu.Unlock()
 
 	// Convert call to models.ToolCall if needed
-	callData, _ := json.Marshal(call)
+	var convErr error
+	callData, marshalErr := json.Marshal(call)
+	if marshalErr != nil {
+		convErr = fmt.Errorf("marshal tool call: %w", marshalErr)
+		callData = nil
+	}
 	var toolCall struct {
 		ID    string          `json:"id"`
 		Name  string          `json:"name"`
 		Input json.RawMessage `json:"input"`
 	}
-	json.Unmarshal(callData, &toolCall)
+	if callData != nil {
+		if unmarshalErr := json.Unmarshal(callData, &toolCall); unmarshalErr != nil {
+			if convErr == nil {
+				convErr = fmt.Errorf("unmarshal tool call: %w", unmarshalErr)
+			}
+		}
+	}
 
 	run := ToolRun{
 		TurnIndex: turnIndex,
@@ -154,6 +166,13 @@ func (r *Recorder) RecordToolRun(turnIndex int, call interface{}, result *agent.
 
 	if err != nil {
 		run.Error = err.Error()
+	}
+	if convErr != nil {
+		if run.Error == "" {
+			run.Error = convErr.Error()
+		} else {
+			run.Error = fmt.Sprintf("%s; %s", run.Error, convErr.Error())
+		}
 	}
 
 	r.tape.AddToolRun(run)

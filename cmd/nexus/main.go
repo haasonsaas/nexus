@@ -292,7 +292,10 @@ func buildServiceStatusCmd() *cobra.Command {
 		Short: "Show service audit details",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			configPath = resolveConfigPath(configPath)
-			cfg, _ := config.Load(configPath)
+			cfg, err := config.Load(configPath)
+			if err != nil {
+				return err
+			}
 			report := doctor.AuditServices(cfg)
 			out := cmd.OutOrStdout()
 			fmt.Fprintln(out, "Service audit:")
@@ -340,7 +343,10 @@ func buildProfileListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			active, _ := profile.ReadActiveProfile()
+			active, err := profile.ReadActiveProfile()
+			if err != nil {
+				return err
+			}
 			out := cmd.OutOrStdout()
 			if len(profiles) == 0 {
 				fmt.Fprintln(out, "No profiles found.")
@@ -499,8 +505,11 @@ By default, only eligible skills are shown. Use --all to include ineligible skil
 
 				status := "eligible"
 				if all {
-					result, _ := mgr.CheckEligibility(skill.Name)
-					if result != nil && !result.Eligible {
+					result, err := mgr.CheckEligibility(skill.Name)
+					if err != nil {
+						fmt.Fprintf(cmd.ErrOrStderr(), "failed to check eligibility for %s: %v\n", skill.Name, err)
+						status = "unknown"
+					} else if result != nil && !result.Eligible {
 						status = "ineligible"
 					}
 				}
@@ -623,8 +632,11 @@ func buildSkillsShowCmd() *cobra.Command {
 			}
 
 			// Eligibility
-			result, _ := mgr.CheckEligibility(skill.Name)
-			if result != nil {
+			result, err := mgr.CheckEligibility(skill.Name)
+			if err != nil {
+				fmt.Fprintln(out)
+				fmt.Fprintf(out, "Status: Unknown (%v)\n", err)
+			} else if result != nil {
 				fmt.Fprintln(out)
 				if result.Eligible {
 					fmt.Fprintln(out, "Status: Eligible")
@@ -1057,7 +1069,11 @@ func buildMcpServersCmd() *cobra.Command {
 					return err
 				}
 			}
-			defer mgr.Stop()
+			defer func() {
+				if err := mgr.Stop(); err != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "failed to stop MCP manager: %v\n", err)
+				}
+			}()
 
 			out := cmd.OutOrStdout()
 			statuses := mgr.Status()
@@ -1094,7 +1110,11 @@ func buildMcpConnectCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer mgr.Stop()
+			defer func() {
+				if err := mgr.Stop(); err != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "failed to stop MCP manager: %v\n", err)
+				}
+			}()
 
 			if err := mgr.Connect(cmd.Context(), args[0]); err != nil {
 				return err
@@ -1120,7 +1140,11 @@ func buildMcpToolsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer mgr.Stop()
+			defer func() {
+				if err := mgr.Stop(); err != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "failed to stop MCP manager: %v\n", err)
+				}
+			}()
 
 			if serverID != "" {
 				if err := mgr.Connect(cmd.Context(), serverID); err != nil {
@@ -1182,7 +1206,11 @@ func buildMcpCallCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer mgr.Stop()
+			defer func() {
+				if err := mgr.Stop(); err != nil {
+					fmt.Fprintln(cmd.ErrOrStderr(), "failed to stop MCP manager:", err)
+				}
+			}()
 
 			if err := mgr.Connect(cmd.Context(), serverID); err != nil {
 				return err
@@ -1232,7 +1260,11 @@ func buildMcpResourcesCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer mgr.Stop()
+			defer func() {
+				if err := mgr.Stop(); err != nil {
+					fmt.Fprintln(cmd.ErrOrStderr(), "failed to stop MCP manager:", err)
+				}
+			}()
 
 			if serverID != "" {
 				if err := mgr.Connect(cmd.Context(), serverID); err != nil {
@@ -1287,7 +1319,11 @@ func buildMcpReadCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer mgr.Stop()
+			defer func() {
+				if err := mgr.Stop(); err != nil {
+					fmt.Fprintln(cmd.ErrOrStderr(), "failed to stop MCP manager:", err)
+				}
+			}()
 
 			serverID := args[0]
 			if err := mgr.Connect(cmd.Context(), serverID); err != nil {
@@ -1327,7 +1363,11 @@ func buildMcpPromptsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer mgr.Stop()
+			defer func() {
+				if err := mgr.Stop(); err != nil {
+					fmt.Fprintln(cmd.ErrOrStderr(), "failed to stop MCP manager:", err)
+				}
+			}()
 
 			if serverID != "" {
 				if err := mgr.Connect(cmd.Context(), serverID); err != nil {
@@ -1389,7 +1429,11 @@ func buildMcpPromptCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer mgr.Stop()
+			defer func() {
+				if err := mgr.Stop(); err != nil {
+					fmt.Fprintln(cmd.ErrOrStderr(), "failed to stop MCP manager:", err)
+				}
+			}()
 
 			if err := mgr.Connect(cmd.Context(), serverID); err != nil {
 				return err
@@ -1556,8 +1600,8 @@ func buildOnboardCmd() *cobra.Command {
 			if strings.TrimSpace(profileName) != "" {
 				opts.ConfigPath = profile.ProfileConfigPath(profileName)
 				if strings.TrimSpace(opts.WorkspacePath) == "" {
-					home, _ := os.UserHomeDir()
-					if strings.TrimSpace(home) == "" {
+					home, err := os.UserHomeDir()
+					if err != nil || strings.TrimSpace(home) == "" {
 						home = "."
 					}
 					opts.WorkspacePath = filepath.Join(home, "nexus-"+profileName)
@@ -1699,7 +1743,10 @@ func promptString(reader *bufio.Reader, label string, defaultValue string) strin
 	} else {
 		fmt.Printf("%s: ", label)
 	}
-	text, _ := reader.ReadString('\n')
+	text, err := reader.ReadString('\n')
+	if err != nil && text == "" {
+		return defaultValue
+	}
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return defaultValue
@@ -2323,7 +2370,9 @@ or selected via API for specific conversations.`,
 	cmd.Flags().StringVarP(&name, "name", "n", "", "Agent name (required)")
 	cmd.Flags().StringVarP(&provider, "provider", "p", "anthropic", "LLM provider")
 	cmd.Flags().StringVarP(&model, "model", "m", "", "Model identifier")
-	_ = cmd.MarkFlagRequired("name")
+	if err := cmd.MarkFlagRequired("name"); err != nil {
+		panic(fmt.Sprintf("failed to mark name as required: %v", err))
+	}
 
 	return cmd
 }

@@ -377,7 +377,10 @@ func AsJSON(input any) json.RawMessage {
 	case string:
 		return json.RawMessage(v)
 	default:
-		data, _ := json.Marshal(v)
+		data, err := json.Marshal(v)
+		if err != nil {
+			return json.RawMessage("null")
+		}
 		return data
 	}
 }

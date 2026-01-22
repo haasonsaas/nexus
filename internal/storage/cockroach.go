@@ -213,7 +213,11 @@ func (s *cockroachAgentStore) Update(ctx context.Context, agent *models.Agent) e
 	if err != nil {
 		return fmt.Errorf("update agent: %w", err)
 	}
-	if rows, _ := res.RowsAffected(); rows == 0 {
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("update agent rows affected: %w", err)
+	}
+	if rows == 0 {
 		return ErrNotFound
 	}
 	return nil
@@ -227,7 +231,11 @@ func (s *cockroachAgentStore) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("delete agent: %w", err)
 	}
-	if rows, _ := res.RowsAffected(); rows == 0 {
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("delete agent rows affected: %w", err)
+	}
+	if rows == 0 {
 		return ErrNotFound
 	}
 	return nil
@@ -393,7 +401,11 @@ func (s *cockroachChannelConnectionStore) Update(ctx context.Context, conn *mode
 	if err != nil {
 		return fmt.Errorf("update channel connection: %w", err)
 	}
-	if rows, _ := res.RowsAffected(); rows == 0 {
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("update channel connection rows affected: %w", err)
+	}
+	if rows == 0 {
 		return ErrNotFound
 	}
 	return nil
@@ -407,7 +419,11 @@ func (s *cockroachChannelConnectionStore) Delete(ctx context.Context, id string)
 	if err != nil {
 		return fmt.Errorf("delete channel connection: %w", err)
 	}
-	if rows, _ := res.RowsAffected(); rows == 0 {
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("delete channel connection rows affected: %w", err)
+	}
+	if rows == 0 {
 		return ErrNotFound
 	}
 	return nil
@@ -574,7 +590,11 @@ func (s *cockroachUserStore) updateFromInfo(ctx context.Context, user *models.Us
 	if err != nil {
 		return nil, fmt.Errorf("update user: %w", err)
 	}
-	if rows, _ := res.RowsAffected(); rows == 0 {
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return nil, fmt.Errorf("update user rows affected: %w", err)
+	}
+	if rows == 0 {
 		return nil, ErrNotFound
 	}
 	return user, nil

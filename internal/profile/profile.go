@@ -14,8 +14,8 @@ const (
 
 // ConfigDir returns the base directory for profile configs.
 func ConfigDir() string {
-	home, _ := os.UserHomeDir()
-	if strings.TrimSpace(home) == "" {
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
 		home = "."
 	}
 	return filepath.Join(home, ".nexus", "profiles")
@@ -23,8 +23,8 @@ func ConfigDir() string {
 
 // ActiveProfileFile returns the path to the active profile marker.
 func ActiveProfileFile() string {
-	home, _ := os.UserHomeDir()
-	if strings.TrimSpace(home) == "" {
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
 		home = "."
 	}
 	return filepath.Join(home, ".nexus", "active_profile")

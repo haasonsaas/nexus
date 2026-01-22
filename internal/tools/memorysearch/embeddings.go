@@ -97,7 +97,10 @@ func (e *remoteEmbedder) Embed(ctx context.Context, inputs []string) ([][]float6
 			vec := vectors[i]
 			results[idx] = vec
 			if e.cache != nil {
-				_ = e.cache.Set(cacheKey(e.cfg.Model, missingInputs[i]), vec)
+				if err := e.cache.Set(cacheKey(e.cfg.Model, missingInputs[i]), vec); err != nil {
+					// Best-effort cache population.
+					_ = err
+				}
 			}
 		}
 	}
@@ -143,7 +146,10 @@ func (e *remoteEmbedder) embedRemote(ctx context.Context, inputs []string) ([][]
 	defer resp.Body.Close()
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		data, _ := io.ReadAll(io.LimitReader(resp.Body, 8192))
+		data, readErr := io.ReadAll(io.LimitReader(resp.Body, 8192))
+		if readErr != nil {
+			return nil, fmt.Errorf("embeddings request failed with status %d and unreadable body: %w", resp.StatusCode, readErr)
+		}
 		return nil, fmt.Errorf("embeddings request failed: %s", strings.TrimSpace(string(data)))
 	}
 
@@ -271,8 +277,8 @@ func expandPath(path string) string {
 		return ""
 	}
 	if path == "~" || strings.HasPrefix(path, "~/") {
-		home, _ := os.UserHomeDir()
-		if strings.TrimSpace(home) == "" {
+		home, err := os.UserHomeDir()
+		if err != nil || strings.TrimSpace(home) == "" {
 			return path
 		}
 		if path == "~" {

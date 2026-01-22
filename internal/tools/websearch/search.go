@@ -550,7 +550,10 @@ func (t *WebSearchTool) searchBrave(ctx context.Context, params *SearchParams) (
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return nil, fmt.Errorf("Brave API returned status %d and failed to read body: %w", resp.StatusCode, readErr)
+		}
 		return nil, fmt.Errorf("Brave API returned status %d: %s", resp.StatusCode, string(body))
 	}
 

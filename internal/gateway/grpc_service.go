@@ -73,9 +73,11 @@ func (g *grpcService) Stream(stream proto.NexusGateway_StreamServer) error {
 				return err
 			}
 		case *proto.ClientMessage_Ping:
-			_ = stream.Send(&proto.ServerMessage{Message: &proto.ServerMessage_Pong{
+			if err := stream.Send(&proto.ServerMessage{Message: &proto.ServerMessage_Pong{
 				Pong: &proto.PongResponse{Timestamp: timestamppb.Now()},
-			}})
+			}}); err != nil {
+				return err
+			}
 		default:
 			continue
 		}
@@ -116,7 +118,9 @@ func (g *grpcService) handleSendMessage(ctx context.Context, stream proto.NexusG
 		return status.Errorf(codes.Internal, "failed to persist message: %v", err)
 	}
 	if g.server.memoryLogger != nil {
-		_ = g.server.memoryLogger.Append(msg)
+		if err := g.server.memoryLogger.Append(msg); err != nil && g.server.logger != nil {
+			g.server.logger.Warn("failed to append memory log", "error", err)
+		}
 	}
 
 	promptCtx := ctx
@@ -136,17 +140,19 @@ func (g *grpcService) handleSendMessage(ctx context.Context, stream proto.NexusG
 
 	for chunk := range chunks {
 		if chunk.Error != nil {
-			_ = stream.Send(&proto.ServerMessage{Message: &proto.ServerMessage_ErrorNotification{
+			if err := stream.Send(&proto.ServerMessage{Message: &proto.ServerMessage_ErrorNotification{
 				ErrorNotification: &proto.ErrorNotification{
 					Code:    "runtime_error",
 					Message: chunk.Error.Error(),
 				},
-			}})
+			}}); err != nil {
+				return err
+			}
 			return chunk.Error
 		}
 		if chunk.Text != "" {
 			response.WriteString(chunk.Text)
-			_ = stream.Send(&proto.ServerMessage{Message: &proto.ServerMessage_MessageChunk{
+			if err := stream.Send(&proto.ServerMessage{Message: &proto.ServerMessage_MessageChunk{
 				MessageChunk: &proto.MessageChunk{
 					MessageId: messageID,
 					SessionId: session.ID,
@@ -154,7 +160,9 @@ func (g *grpcService) handleSendMessage(ctx context.Context, stream proto.NexusG
 					Sequence:  sequence,
 					Type:      proto.ChunkType_CHUNK_TYPE_TEXT,
 				},
-			}})
+			}}); err != nil {
+				return err
+			}
 			sequence++
 		}
 		if chunk.ToolResult != nil {
@@ -178,13 +186,17 @@ func (g *grpcService) handleSendMessage(ctx context.Context, stream proto.NexusG
 		return status.Errorf(codes.Internal, "failed to persist response: %v", err)
 	}
 	if g.server.memoryLogger != nil {
-		_ = g.server.memoryLogger.Append(outbound)
+		if err := g.server.memoryLogger.Append(outbound); err != nil && g.server.logger != nil {
+			g.server.logger.Warn("failed to append memory log", "error", err)
+		}
 	}
 	if session.Metadata != nil {
 		if pending, ok := session.Metadata["memory_flush_pending"].(bool); ok && pending {
 			session.Metadata["memory_flush_pending"] = false
 			session.Metadata["memory_flush_confirmed_at"] = time.Now().Format(time.RFC3339)
-			_ = g.server.sessions.Update(ctx, session)
+			if err := g.server.sessions.Update(ctx, session); err != nil && g.server.logger != nil {
+				g.server.logger.Warn("failed to update session metadata", "error", err)
+			}
 		}
 	}
 
@@ -561,7 +573,10 @@ func (g *grpcService) Check(ctx context.Context, req *proto.HealthCheckRequest) 
 
 func (g *grpcService) Watch(req *proto.HealthCheckRequest, stream proto.HealthService_WatchServer) error {
 	for {
-		resp, _ := g.Check(stream.Context(), req)
+		resp, err := g.Check(stream.Context(), req)
+		if err != nil {
+			return err
+		}
 		if err := stream.Send(resp); err != nil {
 			return err
 		}

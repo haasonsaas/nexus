@@ -831,8 +831,8 @@ func applyMemorySearchEmbeddingsDefaults(cfg *MemorySearchEmbeddingsConfig) {
 		cfg.Timeout = 15 * time.Second
 	}
 	if strings.TrimSpace(cfg.CacheDir) == "" {
-		home, _ := os.UserHomeDir()
-		if strings.TrimSpace(home) == "" {
+		home, err := os.UserHomeDir()
+		if err != nil || strings.TrimSpace(home) == "" {
 			home = "."
 		}
 		cfg.CacheDir = filepath.Join(home, ".nexus", "cache", "embeddings")

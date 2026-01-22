@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 	"io/fs"
 	"sort"
@@ -89,11 +90,15 @@ func (m *Migrator) Up(ctx context.Context, steps int) ([]string, error) {
 			return appliedIDs, fmt.Errorf("begin migration %s: %w", migration.ID, err)
 		}
 		if _, err := tx.ExecContext(ctx, migration.UpSQL); err != nil {
-			_ = tx.Rollback()
+			if rbErr := tx.Rollback(); rbErr != nil && !errors.Is(rbErr, sql.ErrTxDone) {
+				_ = rbErr
+			}
 			return appliedIDs, fmt.Errorf("apply migration %s: %w", migration.ID, err)
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations (id) VALUES ($1)`, migration.ID); err != nil {
-			_ = tx.Rollback()
+			if rbErr := tx.Rollback(); rbErr != nil && !errors.Is(rbErr, sql.ErrTxDone) {
+				_ = rbErr
+			}
 			return appliedIDs, fmt.Errorf("record migration %s: %w", migration.ID, err)
 		}
 		if err := tx.Commit(); err != nil {
@@ -138,11 +143,15 @@ func (m *Migrator) Down(ctx context.Context, steps int) ([]string, error) {
 			return rolled, fmt.Errorf("begin rollback %s: %w", migration.ID, err)
 		}
 		if _, err := tx.ExecContext(ctx, migration.DownSQL); err != nil {
-			_ = tx.Rollback()
+			if rbErr := tx.Rollback(); rbErr != nil && !errors.Is(rbErr, sql.ErrTxDone) {
+				_ = rbErr
+			}
 			return rolled, fmt.Errorf("rollback migration %s: %w", migration.ID, err)
 		}
 		if _, err := tx.ExecContext(ctx, `DELETE FROM schema_migrations WHERE id = $1`, migration.ID); err != nil {
-			_ = tx.Rollback()
+			if rbErr := tx.Rollback(); rbErr != nil && !errors.Is(rbErr, sql.ErrTxDone) {
+				_ = rbErr
+			}
 			return rolled, fmt.Errorf("delete migration %s: %w", migration.ID, err)
 		}
 		if err := tx.Commit(); err != nil {

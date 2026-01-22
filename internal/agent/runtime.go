@@ -98,7 +98,10 @@ func WithSession(ctx context.Context, session *models.Session) context.Context {
 
 // SessionFromContext retrieves the session from context.
 func SessionFromContext(ctx context.Context) *models.Session {
-	session, _ := ctx.Value(sessionKey{}).(*models.Session)
+	session, ok := ctx.Value(sessionKey{}).(*models.Session)
+	if !ok {
+		return nil
+	}
 	return session
 }
 
@@ -670,7 +673,9 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 
 		// Run the core agentic loop
 		// Errors are emitted as run.error events which ChunkAdapterSink converts to ResponseChunk.Error
-		_ = r.run(runCtx, session, msg, emitter)
+		if err := r.run(runCtx, session, msg, emitter); err != nil {
+			_ = err
+		}
 	}()
 
 	return chunks, nil
@@ -903,7 +908,9 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 
 				// Persist tool call event immediately (best-effort)
 				if r.toolEvents != nil {
-					_ = r.toolEvents.AddToolCall(ctx, session.ID, assistantMsgID, &tc)
+					if err := r.toolEvents.AddToolCall(ctx, session.ID, assistantMsgID, &tc); err != nil {
+						_ = err
+					}
 				}
 			}
 		}
@@ -969,7 +976,9 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 
 				// Persist (best-effort)
 				if r.toolEvents != nil {
-					_ = r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res)
+					if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res); err != nil {
+						_ = err
+					}
 				}
 				continue
 			}
@@ -998,7 +1007,9 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 				}
 
 				if r.toolEvents != nil {
-					_ = r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res)
+					if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res); err != nil {
+						_ = err
+					}
 				}
 				continue
 			}
@@ -1012,17 +1023,24 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 					Status:     jobs.StatusQueued,
 					CreatedAt:  time.Now(),
 				}
-				_ = r.opts.JobStore.Create(context.Background(), job)
+				if err := r.opts.JobStore.Create(context.Background(), job); err != nil {
+					_ = err
+				}
 				go r.runToolJob(tc, job, toolExec)
 
-				payload, _ := json.Marshal(map[string]any{
+				payload, err := json.Marshal(map[string]any{
 					"job_id": job.ID,
 					"status": job.Status,
 				})
 				res := models.ToolResult{
 					ToolCallID: tc.ID,
-					Content:    string(payload),
 					IsError:    false,
+				}
+				if err != nil {
+					res.Content = fmt.Sprintf("failed to encode job payload: %v", err)
+					res.IsError = true
+				} else {
+					res.Content = string(payload)
 				}
 				results[i] = res
 				skipFinalEvent[i] = true
@@ -1033,7 +1051,9 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 				}
 
 				if r.toolEvents != nil {
-					_ = r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res)
+					if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res); err != nil {
+						_ = err
+					}
 				}
 				continue
 			}
@@ -1057,7 +1077,9 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 			if r.toolEvents != nil {
 				tc := toolCalls[origIdx]
 				res := results[origIdx]
-				_ = r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res)
+				if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res); err != nil {
+					_ = err
+				}
 			}
 		}
 
@@ -1201,7 +1223,9 @@ func (r *Runtime) ProcessStream(ctx context.Context, session *models.Session, ms
 		emitter.RunStarted(ctx)
 
 		// Run the core agentic loop
-		_ = r.run(ctx, session, msg, emitter)
+		if err := r.run(ctx, session, msg, emitter); err != nil {
+			_ = err
+		}
 
 		// Get accumulated stats and add dropped events count
 		stats := statsCollector.Stats()
@@ -1378,7 +1402,9 @@ func (r *Runtime) runToolJob(tc models.ToolCall, job *jobs.Job, toolExec *ToolEx
 	ctx := context.Background()
 	job.Status = jobs.StatusRunning
 	job.StartedAt = time.Now()
-	_ = r.opts.JobStore.Update(ctx, job)
+	if err := r.opts.JobStore.Update(ctx, job); err != nil {
+		_ = err
+	}
 
 	var result models.ToolResult
 	var execErr error
@@ -1414,7 +1440,9 @@ func (r *Runtime) runToolJob(tc models.ToolCall, job *jobs.Job, toolExec *ToolEx
 		job.Result = &result
 	}
 	job.FinishedAt = time.Now()
-	_ = r.opts.JobStore.Update(ctx, job)
+	if err := r.opts.JobStore.Update(ctx, job); err != nil {
+		_ = err
+	}
 }
 
 func normalizeToolName(name string, resolver *policy.Resolver) string {

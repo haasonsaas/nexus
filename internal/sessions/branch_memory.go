@@ -347,8 +347,14 @@ func (s *MemoryBranchStore) CompareBranches(ctx context.Context, sourceBranchID,
 	}
 
 	// Find common ancestor
-	sourcePath, _ := s.GetFullBranchPath(ctx, sourceBranchID)
-	targetPath, _ := s.GetFullBranchPath(ctx, targetBranchID)
+	sourcePath, err := s.GetFullBranchPath(ctx, sourceBranchID)
+	if err != nil {
+		return nil, err
+	}
+	targetPath, err := s.GetFullBranchPath(ctx, targetBranchID)
+	if err != nil {
+		return nil, err
+	}
 	if sourcePath != nil && targetPath != nil {
 		sourceSet := make(map[string]bool)
 		for _, id := range sourcePath.Path {
@@ -356,7 +362,11 @@ func (s *MemoryBranchStore) CompareBranches(ctx context.Context, sourceBranchID,
 		}
 		for _, id := range targetPath.Path {
 			if sourceSet[id] {
-				compare.CommonAncestor, _ = s.GetBranch(ctx, id)
+				commonAncestor, err := s.GetBranch(ctx, id)
+				if err != nil {
+					return nil, err
+				}
+				compare.CommonAncestor = commonAncestor
 				break
 			}
 		}

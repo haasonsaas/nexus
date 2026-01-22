@@ -276,7 +276,9 @@ func (vm *MicroVM) Stop(ctx context.Context) error {
 	if vm.cmd != nil && vm.cmd.Process != nil {
 		if err := vm.cmd.Process.Signal(syscall.SIGTERM); err != nil {
 			// Try SIGKILL if SIGTERM fails
-			vm.cmd.Process.Kill()
+			if err := vm.cmd.Process.Kill(); err != nil {
+				errs = append(errs, fmt.Errorf("kill firecracker process: %w", err))
+			}
 		}
 	}
 

@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -99,7 +100,11 @@ func (b *Backend) Index(ctx context.Context, entries []*models.MemoryEntry) erro
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			_ = err
+		}
+	}()
 
 	stmt, err := tx.PrepareContext(ctx, `
 		INSERT OR REPLACE INTO memories (id, session_id, channel_id, agent_id, content, metadata, embedding, created_at, updated_at)

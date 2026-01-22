@@ -979,7 +979,7 @@ func (p *AnthropicProvider) wrapError(err error, model string) error {
 			Cause:    err,
 			Reason:   FailoverUnknown,
 		}
-		providerErr.WithStatus(apiErr.StatusCode)
+		providerErr = providerErr.WithStatus(apiErr.StatusCode)
 
 		message := ""
 		code := ""
@@ -1002,15 +1002,15 @@ func (p *AnthropicProvider) wrapError(err error, model string) error {
 		}
 
 		if message != "" {
-			providerErr.WithMessage(message)
+			providerErr = providerErr.WithMessage(message)
 		} else if providerErr.Message == "" {
 			providerErr.Message = "anthropic request failed"
 		}
 		if code != "" {
-			providerErr.WithCode(code)
+			providerErr = providerErr.WithCode(code)
 		}
 		if requestID != "" {
-			providerErr.WithRequestID(requestID)
+			providerErr = providerErr.WithRequestID(requestID)
 		}
 		return providerErr
 	}

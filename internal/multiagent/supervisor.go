@@ -176,7 +176,10 @@ func (d *DelegateTool) Schema() json.RawMessage {
 		"required": []string{"specialist", "task"},
 	}
 
-	data, _ := json.Marshal(schema)
+	data, err := json.Marshal(schema)
+	if err != nil {
+		return json.RawMessage("{}")
+	}
 	return data
 }
 
@@ -312,7 +315,10 @@ func (r *ReportTool) Schema() json.RawMessage {
 		"required": []string{"summary", "status"},
 	}
 
-	data, _ := json.Marshal(schema)
+	data, err := json.Marshal(schema)
+	if err != nil {
+		return json.RawMessage("{}")
+	}
 	return data
 }
 

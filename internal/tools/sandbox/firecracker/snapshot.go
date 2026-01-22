@@ -366,7 +366,9 @@ func (sm *SnapshotManager) CreateSnapshot(ctx context.Context, vm *MicroVM, snap
 		}
 		defer func() {
 			if !wasPaused {
-				vm.Resume(ctx)
+				if err := vm.Resume(ctx); err != nil {
+					_ = err
+				}
 			}
 		}()
 	}
@@ -441,7 +443,9 @@ func (sm *SnapshotManager) LoadSnapshot(ctx context.Context, snapshotID string, 
 	// This would use Firecracker's load_snapshot API
 	// For now, just start the VM normally
 	if err := vm.Start(ctx); err != nil {
-		vm.Stop(ctx)
+		if stopErr := vm.Stop(ctx); stopErr != nil {
+			_ = stopErr
+		}
 		return nil, fmt.Errorf("failed to start VM from snapshot: %w", err)
 	}
 

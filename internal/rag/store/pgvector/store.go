@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"math"
@@ -140,12 +141,16 @@ func (s *Store) runMigrations(ctx context.Context) error {
 		}
 
 		if _, err := tx.ExecContext(ctx, m.UpSQL); err != nil {
-			_ = tx.Rollback()
+			if rbErr := tx.Rollback(); rbErr != nil && !errors.Is(rbErr, sql.ErrTxDone) {
+				_ = rbErr
+			}
 			return fmt.Errorf("apply migration %s: %w", m.ID, err)
 		}
 
 		if _, err := tx.ExecContext(ctx, `INSERT INTO rag_schema_migrations (id) VALUES ($1)`, m.ID); err != nil {
-			_ = tx.Rollback()
+			if rbErr := tx.Rollback(); rbErr != nil && !errors.Is(rbErr, sql.ErrTxDone) {
+				_ = rbErr
+			}
 			return fmt.Errorf("record migration %s: %w", m.ID, err)
 		}
 
@@ -204,7 +209,11 @@ func (s *Store) AddDocument(ctx context.Context, doc *models.Document, chunks []
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			_ = err
+		}
+	}()
 
 	// Upsert document
 	_, err = tx.ExecContext(ctx, `
@@ -595,7 +604,11 @@ func (s *Store) UpdateChunkEmbeddings(ctx context.Context, embeddings map[string
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			_ = err
+		}
+	}()
 
 	stmt, err := tx.PrepareContext(ctx, `UPDATE rag_document_chunks SET embedding = $1 WHERE id = $2`)
 	if err != nil {
@@ -698,7 +711,9 @@ func decodeEmbedding(s string) []float32 {
 	embedding := make([]float32, len(parts))
 	for i, p := range parts {
 		var f float64
-		fmt.Sscanf(strings.TrimSpace(p), "%f", &f)
+		if _, err := fmt.Sscanf(strings.TrimSpace(p), "%f", &f); err != nil {
+			return nil
+		}
 		embedding[i] = float32(f)
 	}
 

@@ -226,7 +226,9 @@ func (a *Agent) handleConnection(conn net.Conn) {
 		// Parse request
 		var req GuestRequest
 		if err := json.Unmarshal(body, &req); err != nil {
-			a.sendError(writer, 0, fmt.Sprintf("Invalid request: %v", err))
+			if sendErr := a.sendError(writer, 0, fmt.Sprintf("Invalid request: %v", err)); sendErr != nil {
+				fmt.Fprintf(os.Stderr, "Send error response failed: %v\n", sendErr)
+			}
 			continue
 		}
 
@@ -487,7 +489,9 @@ func (a *Agent) Shutdown() {
 
 	// Clean shutdown
 	syscall.Sync()
-	syscall.Reboot(syscall.LINUX_REBOOT_CMD_POWER_OFF)
+	if err := syscall.Reboot(syscall.LINUX_REBOOT_CMD_POWER_OFF); err != nil {
+		fmt.Fprintf(os.Stderr, "Reboot failed: %v\n", err)
+	}
 }
 
 // getMainFilename returns the filename for the code based on language.

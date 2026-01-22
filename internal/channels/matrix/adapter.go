@@ -93,7 +93,10 @@ func (a *Adapter) Start(ctx context.Context) error {
 	a.mu.Unlock()
 
 	// Register event handlers
-	syncer := a.client.Syncer.(*mautrix.DefaultSyncer)
+	syncer, ok := a.client.Syncer.(*mautrix.DefaultSyncer)
+	if !ok {
+		return fmt.Errorf("unexpected syncer type: %T", a.client.Syncer)
+	}
 
 	// Handle room messages
 	syncer.OnEventType(event.EventMessage, func(ctx context.Context, evt *event.Event) {

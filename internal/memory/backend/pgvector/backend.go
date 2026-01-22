@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"sort"
@@ -139,12 +140,16 @@ func (b *Backend) runMigrations(ctx context.Context) error {
 		}
 
 		if _, err := tx.ExecContext(ctx, m.UpSQL); err != nil {
-			_ = tx.Rollback()
+			if rbErr := tx.Rollback(); rbErr != nil && !errors.Is(rbErr, sql.ErrTxDone) {
+				_ = rbErr
+			}
 			return fmt.Errorf("apply migration %s: %w", m.ID, err)
 		}
 
 		if _, err := tx.ExecContext(ctx, `INSERT INTO memory_schema_migrations (id) VALUES ($1)`, m.ID); err != nil {
-			_ = tx.Rollback()
+			if rbErr := tx.Rollback(); rbErr != nil && !errors.Is(rbErr, sql.ErrTxDone) {
+				_ = rbErr
+			}
 			return fmt.Errorf("record migration %s: %w", m.ID, err)
 		}
 
@@ -187,7 +192,11 @@ func (b *Backend) Index(ctx context.Context, entries []*models.MemoryEntry) erro
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			_ = err
+		}
+	}()
 
 	stmt, err := tx.PrepareContext(ctx, `
 		INSERT INTO memories (id, session_id, channel_id, agent_id, content, metadata, embedding, created_at, updated_at)
@@ -464,7 +473,9 @@ func decodeEmbedding(s string) []float32 {
 	embedding := make([]float32, len(parts))
 	for i, p := range parts {
 		var f float64
-		fmt.Sscanf(strings.TrimSpace(p), "%f", &f)
+		if _, err := fmt.Sscanf(strings.TrimSpace(p), "%f", &f); err != nil {
+			return nil
+		}
 		embedding[i] = float32(f)
 	}
 

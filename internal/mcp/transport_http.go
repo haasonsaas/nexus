@@ -95,7 +95,10 @@ func (t *HTTPTransport) Call(ctx context.Context, method string, params any) (js
 		req.Params = paramsJSON
 	}
 
-	body, _ := json.Marshal(req)
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", t.config.URL, bytes.NewReader(body))
 	if err != nil {
@@ -114,7 +117,10 @@ func (t *HTTPTransport) Call(ctx context.Context, method string, params any) (js
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return nil, fmt.Errorf("HTTP %d with unreadable body: %w", resp.StatusCode, readErr)
+		}
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -149,7 +155,10 @@ func (t *HTTPTransport) Notify(ctx context.Context, method string, params any) e
 		notif.Params = paramsJSON
 	}
 
-	body, _ := json.Marshal(notif)
+	body, err := json.Marshal(notif)
+	if err != nil {
+		return fmt.Errorf("marshal notification: %w", err)
+	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", t.config.URL, bytes.NewReader(body))
 	if err != nil {
@@ -197,7 +206,10 @@ func (t *HTTPTransport) Respond(ctx context.Context, id any, result any, rpcErr 
 		}
 		resp.Result = data
 	}
-	body, _ := json.Marshal(resp)
+	body, err := json.Marshal(resp)
+	if err != nil {
+		return fmt.Errorf("marshal response: %w", err)
+	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", t.config.URL, bytes.NewReader(body))
 	if err != nil {

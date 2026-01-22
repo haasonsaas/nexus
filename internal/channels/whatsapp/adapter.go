@@ -93,7 +93,10 @@ func (a *Adapter) Start(ctx context.Context) error {
 	// Connect
 	if a.client.Store.ID == nil {
 		// Not logged in - need QR code
-		qrChan, _ := a.client.GetQRChannel(ctx)
+		qrChan, err := a.client.GetQRChannel(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get QR channel: %w", err)
+		}
 		if err := a.client.Connect(); err != nil {
 			return fmt.Errorf("failed to connect: %w", err)
 		}

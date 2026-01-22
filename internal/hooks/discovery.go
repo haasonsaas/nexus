@@ -673,8 +673,8 @@ func BuildDefaultSources(workspacePath, localPath string, extraDirs []string) []
 
 // DefaultLocalPath returns the default path for local hooks.
 func DefaultLocalPath() string {
-	home, _ := os.UserHomeDir()
-	if strings.TrimSpace(home) == "" {
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
 		home = "."
 	}
 	return filepath.Join(home, ".nexus", "hooks")

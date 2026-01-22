@@ -89,7 +89,10 @@ func (m *Manager) Spawn(ctx context.Context, parentID, parentSession, name, task
 	// Announce spawn
 	if announcer != nil {
 		announcement := fmt.Sprintf("🤖 Spawning sub-agent '%s' to: %s", name, task)
-		_ = announcer(ctx, parentSession, announcement)
+		if err := announcer(ctx, parentSession, announcement); err != nil {
+			// Best-effort announcement; ignore errors.
+			_ = err
+		}
 	}
 
 	// Run sub-agent in background

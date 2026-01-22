@@ -128,7 +128,9 @@ func (a *Adapter) Stop(ctx context.Context) error {
 	}
 
 	if a.process != nil {
-		a.process.Wait()
+		if err := a.process.Wait(); err != nil {
+			a.Logger().Debug("signal process wait returned error", "error", err)
+		}
 	}
 
 	a.wg.Wait()
@@ -145,18 +147,19 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	}
 
 	// Build send request
+	params := map[string]any{
+		"recipient": []string{peerID},
+		"message":   msg.Content,
+	}
 	req := map[string]any{
 		"method": "send",
-		"params": map[string]any{
-			"recipient": []string{peerID},
-			"message":   msg.Content,
-		},
+		"params": params,
 	}
 
 	// Handle group messages
 	if groupID, ok := msg.Metadata["group_id"].(string); ok && groupID != "" {
-		req["params"].(map[string]any)["groupId"] = groupID
-		delete(req["params"].(map[string]any), "recipient")
+		params["groupId"] = groupID
+		delete(params, "recipient")
 	}
 
 	// Send attachments
@@ -177,7 +180,7 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	}
 
 	if len(attachmentPaths) > 0 {
-		req["params"].(map[string]any)["attachments"] = attachmentPaths
+		params["attachments"] = attachmentPaths
 	}
 
 	_, err := a.call(ctx, req)

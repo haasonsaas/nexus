@@ -169,7 +169,10 @@ func (p *GenericOAuthProvider) UserInfo(ctx context.Context, token *oauth2.Token
 	defer resp.Body.Close()
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 8192))
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 8192))
+		if readErr != nil {
+			return nil, fmt.Errorf("user info request failed with status %d and unreadable body: %w", resp.StatusCode, readErr)
+		}
 		return nil, fmt.Errorf("user info request failed: %s", strings.TrimSpace(string(body)))
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))

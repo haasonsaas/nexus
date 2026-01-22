@@ -148,7 +148,10 @@ func (c *RegistryClient) FetchIndex(ctx context.Context, registryURL string) (*p
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		if readErr != nil {
+			return nil, fmt.Errorf("registry returned %d and failed to read body: %w", resp.StatusCode, readErr)
+		}
 		return nil, fmt.Errorf("registry returned %d: %s", resp.StatusCode, string(body))
 	}
 

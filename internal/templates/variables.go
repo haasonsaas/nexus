@@ -258,7 +258,9 @@ func toInt(v any) int {
 		return int(val)
 	case string:
 		var i int
-		fmt.Sscanf(val, "%d", &i)
+		if _, err := fmt.Sscanf(val, "%d", &i); err != nil {
+			return 0
+		}
 		return i
 	default:
 		return 0

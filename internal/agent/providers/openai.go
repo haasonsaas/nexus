@@ -784,30 +784,30 @@ func (p *OpenAIProvider) wrapError(err error, model string) error {
 
 	var apiErr *openai.APIError
 	if errors.As(err, &apiErr) {
-		providerErr.WithStatus(apiErr.HTTPStatusCode)
+		providerErr = providerErr.WithStatus(apiErr.HTTPStatusCode)
 		if apiErr.Message != "" {
-			providerErr.WithMessage(apiErr.Message)
+			providerErr = providerErr.WithMessage(apiErr.Message)
 		}
 		if apiErr.Code != nil {
-			providerErr.WithCode(fmt.Sprint(apiErr.Code))
+			providerErr = providerErr.WithCode(fmt.Sprint(apiErr.Code))
 		}
 		return providerErr
 	}
 
 	var reqErr *openai.RequestError
 	if errors.As(err, &reqErr) {
-		providerErr.WithStatus(reqErr.HTTPStatusCode)
+		providerErr = providerErr.WithStatus(reqErr.HTTPStatusCode)
 		if reqErr.Err != nil {
 			var inner *openai.APIError
 			if errors.As(reqErr.Err, &inner) {
 				if inner.Message != "" {
-					providerErr.WithMessage(inner.Message)
+					providerErr = providerErr.WithMessage(inner.Message)
 				}
 				if inner.Code != nil {
-					providerErr.WithCode(fmt.Sprint(inner.Code))
+					providerErr = providerErr.WithCode(fmt.Sprint(inner.Code))
 				}
 			} else {
-				providerErr.WithMessage(reqErr.Err.Error())
+				providerErr = providerErr.WithMessage(reqErr.Err.Error())
 			}
 		}
 		return providerErr

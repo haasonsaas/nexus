@@ -78,6 +78,7 @@ import (
 
 	"github.com/google/uuid"
 	agentctx "github.com/haasonsaas/nexus/internal/agent/context"
+	"github.com/haasonsaas/nexus/internal/jobs"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/tools/policy"
 	"github.com/haasonsaas/nexus/pkg/models"
@@ -390,6 +391,9 @@ type Runtime struct {
 	// toolEvents optionally persists tool calls/results for audit and replay
 	toolEvents ToolEventStore
 
+	// opts configures runtime behavior (tool loop, approvals, async jobs).
+	opts RuntimeOptions
+
 	// defaultModel is used when requests omit a model
 	defaultModel string
 
@@ -433,11 +437,42 @@ type Runtime struct {
 //	store := sessions.NewCockroachStore(db)
 //	runtime := NewRuntime(provider, store)
 func NewRuntime(provider LLMProvider, sessions sessions.Store) *Runtime {
-	return &Runtime{
+	return NewRuntimeWithOptions(provider, sessions, DefaultRuntimeOptions())
+}
+
+// NewRuntimeWithOptions creates a runtime with custom options.
+func NewRuntimeWithOptions(provider LLMProvider, sessions sessions.Store, opts RuntimeOptions) *Runtime {
+	opts = mergeRuntimeOptions(DefaultRuntimeOptions(), opts)
+	runtime := &Runtime{
 		provider: provider,
 		tools:    NewToolRegistry(),
 		sessions: sessions,
+		opts:     opts,
 		plugins:  NewPluginRegistry(),
+	}
+	if opts.MaxIterations > 0 {
+		runtime.maxIterations = opts.MaxIterations
+	}
+	if opts.ToolParallelism > 0 || opts.ToolTimeout > 0 {
+		runtime.toolExec = ToolExecConfig{
+			Concurrency:    opts.ToolParallelism,
+			PerToolTimeout: opts.ToolTimeout,
+		}
+	}
+	return runtime
+}
+
+// SetOptions updates runtime behavior options.
+func (r *Runtime) SetOptions(opts RuntimeOptions) {
+	r.opts = mergeRuntimeOptions(r.opts, opts)
+	if r.opts.MaxIterations > 0 {
+		r.maxIterations = r.opts.MaxIterations
+	}
+	if r.opts.ToolParallelism > 0 || r.opts.ToolTimeout > 0 {
+		r.toolExec = ToolExecConfig{
+			Concurrency:    r.opts.ToolParallelism,
+			PerToolTimeout: r.opts.ToolTimeout,
+		}
 	}
 }
 
@@ -1106,6 +1141,7 @@ const processBufferSize = 10
 type ResponseChunk struct {
 	Text       string               `json:"text,omitempty"`
 	ToolResult *models.ToolResult   `json:"tool_result,omitempty"`
+	ToolEvent  *models.ToolEvent    `json:"tool_event,omitempty"`
 	Event      *models.RuntimeEvent `json:"event,omitempty"`
 	Error      error                `json:"-"`
 }
@@ -1174,4 +1210,104 @@ func filterToolsByPolicy(resolver *policy.Resolver, toolPolicy *policy.Policy, t
 		}
 	}
 	return filtered
+}
+
+func (r *Runtime) emitToolEvent(chunks chan<- *ResponseChunk, event *models.ToolEvent) {
+	if r.opts.DisableToolEvents || event == nil {
+		return
+	}
+	chunks <- &ResponseChunk{ToolEvent: event}
+}
+
+func (r *Runtime) requiresApproval(toolName string, resolver *policy.Resolver) bool {
+	if len(r.opts.RequireApproval) == 0 {
+		return false
+	}
+	name := normalizeToolName(toolName, resolver)
+	for _, pattern := range r.opts.RequireApproval {
+		if matchToolPattern(normalizeToolName(pattern, resolver), name) {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Runtime) isAsyncTool(toolName string, resolver *policy.Resolver) bool {
+	if len(r.opts.AsyncTools) == 0 {
+		return false
+	}
+	name := normalizeToolName(toolName, resolver)
+	for _, pattern := range r.opts.AsyncTools {
+		if matchToolPattern(normalizeToolName(pattern, resolver), name) {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Runtime) runToolJob(tc models.ToolCall, job *jobs.Job, toolExec *ToolExecutor) {
+	if job == nil || r.opts.JobStore == nil {
+		return
+	}
+	ctx := context.Background()
+	job.Status = jobs.StatusRunning
+	job.StartedAt = time.Now()
+	_ = r.opts.JobStore.Update(ctx, job)
+
+	var result models.ToolResult
+	var execErr error
+	if toolExec != nil {
+		execResults := toolExec.ExecuteConcurrently(ctx, []models.ToolCall{tc}, nil)
+		if len(execResults) > 0 {
+			result = execResults[0].Result
+		} else {
+			execErr = fmt.Errorf("tool execution failed")
+		}
+	} else {
+		res, err := r.tools.Execute(ctx, tc.Name, tc.Input)
+		if err != nil {
+			execErr = err
+		} else if res != nil {
+			result = models.ToolResult{
+				ToolCallID: tc.ID,
+				Content:    res.Content,
+				IsError:    res.IsError,
+			}
+		}
+	}
+
+	if execErr != nil {
+		job.Status = jobs.StatusFailed
+		job.Error = execErr.Error()
+	} else if result.IsError {
+		job.Status = jobs.StatusFailed
+		job.Error = result.Content
+		job.Result = &result
+	} else {
+		job.Status = jobs.StatusSucceeded
+		job.Result = &result
+	}
+	job.FinishedAt = time.Now()
+	_ = r.opts.JobStore.Update(ctx, job)
+}
+
+func normalizeToolName(name string, resolver *policy.Resolver) string {
+	if resolver == nil {
+		return policy.NormalizeTool(name)
+	}
+	return resolver.CanonicalName(name)
+}
+
+func matchToolPattern(pattern, toolName string) bool {
+	if pattern == "" || toolName == "" {
+		return false
+	}
+	if pattern == "mcp:*" {
+		return strings.HasPrefix(toolName, "mcp:")
+	}
+	if strings.HasSuffix(pattern, ".*") {
+		prefix := strings.TrimSuffix(pattern, "*")
+		return strings.HasPrefix(toolName, prefix)
+	}
+	return pattern == toolName
 }

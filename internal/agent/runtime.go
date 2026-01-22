@@ -406,6 +406,9 @@ type Runtime struct {
 
 	// summarizeConfig configures conversation summarization
 	summarizeConfig *agentctx.SummarizationConfig
+
+	// plugins holds registered plugins for event hooks
+	plugins *PluginRegistry
 }
 
 // NewRuntime creates a new agent runtime with the given provider and session store.
@@ -430,6 +433,7 @@ func NewRuntime(provider LLMProvider, sessions sessions.Store) *Runtime {
 		provider: provider,
 		tools:    NewToolRegistry(),
 		sessions: sessions,
+		plugins:  NewPluginRegistry(),
 	}
 }
 
@@ -466,6 +470,19 @@ func (r *Runtime) SetPackOptions(opts *agentctx.PackOptions) {
 // SetSummarizationConfig configures conversation summarization.
 func (r *Runtime) SetSummarizationConfig(config *agentctx.SummarizationConfig) {
 	r.summarizeConfig = config
+}
+
+// Use registers a plugin to receive agent events during processing.
+// Plugins are called in registration order for each event.
+//
+// Example:
+//
+//	runtime.Use(&LoggerPlugin{})
+//	runtime.Use(agent.PluginFunc(func(ctx context.Context, e models.AgentEvent) {
+//	    log.Printf("Event: %s", e.Type)
+//	}))
+func (r *Runtime) Use(p Plugin) {
+	r.plugins.Use(p)
 }
 
 // buildCompletionMessages converts stored message history to CompletionMessage slice.

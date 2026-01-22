@@ -43,6 +43,22 @@ type HealthAdapter interface {
 	Metrics() MetricsSnapshot
 }
 
+// StreamingAdapter represents adapters that support streaming responses.
+// This enables real-time "typing" indicators and progressive message updates.
+type StreamingAdapter interface {
+	// SendTypingIndicator shows a typing indicator to the user.
+	// The indicator typically lasts 5 seconds or until a message is sent.
+	SendTypingIndicator(ctx context.Context, msg *models.Message) error
+
+	// StartStreamingResponse sends an initial message and returns an ID
+	// that can be used to update the message with additional content.
+	StartStreamingResponse(ctx context.Context, msg *models.Message) (messageID string, err error)
+
+	// UpdateStreamingResponse updates a previously sent streaming message.
+	// This is typically used to append text as the LLM generates tokens.
+	UpdateStreamingResponse(ctx context.Context, msg *models.Message, messageID string, content string) error
+}
+
 // FullAdapter aggregates all adapter capabilities for convenience.
 type FullAdapter interface {
 	Adapter
@@ -85,6 +101,7 @@ type Registry struct {
 	outbound  map[models.ChannelType]OutboundAdapter
 	lifecycle map[models.ChannelType]LifecycleAdapter
 	health    map[models.ChannelType]HealthAdapter
+	streaming map[models.ChannelType]StreamingAdapter
 }
 
 // NewRegistry creates a new channel registry.
@@ -95,6 +112,7 @@ func NewRegistry() *Registry {
 		outbound:  make(map[models.ChannelType]OutboundAdapter),
 		lifecycle: make(map[models.ChannelType]LifecycleAdapter),
 		health:    make(map[models.ChannelType]HealthAdapter),
+		streaming: make(map[models.ChannelType]StreamingAdapter),
 	}
 }
 
@@ -129,6 +147,12 @@ func (r *Registry) Register(adapter Adapter) {
 	} else {
 		delete(r.health, channelType)
 	}
+
+	if streaming, ok := adapter.(StreamingAdapter); ok {
+		r.streaming[channelType] = streaming
+	} else {
+		delete(r.streaming, channelType)
+	}
 }
 
 // Get returns an adapter by channel type.
@@ -144,6 +168,14 @@ func (r *Registry) GetOutbound(channelType models.ChannelType) (OutboundAdapter,
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	adapter, ok := r.outbound[channelType]
+	return adapter, ok
+}
+
+// GetStreaming returns a streaming adapter for the channel if available.
+func (r *Registry) GetStreaming(channelType models.ChannelType) (StreamingAdapter, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	adapter, ok := r.streaming[channelType]
 	return adapter, ok
 }
 

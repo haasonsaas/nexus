@@ -40,6 +40,12 @@ type BotClient interface {
 
 	// StartWebhook starts the webhook server.
 	StartWebhook(ctx context.Context)
+
+	// SendChatAction sends a chat action (e.g., typing indicator) to a chat.
+	SendChatAction(ctx context.Context, params *bot.SendChatActionParams) (bool, error)
+
+	// EditMessageText edits a text message in a chat.
+	EditMessageText(ctx context.Context, params *bot.EditMessageTextParams) (*models.Message, error)
 }
 
 // realBotClient wraps a *bot.Bot to implement BotClient.
@@ -90,4 +96,12 @@ func (r *realBotClient) Start(ctx context.Context) {
 
 func (r *realBotClient) StartWebhook(ctx context.Context) {
 	r.bot.StartWebhook(ctx)
+}
+
+func (r *realBotClient) SendChatAction(ctx context.Context, params *bot.SendChatActionParams) (bool, error) {
+	return r.bot.SendChatAction(ctx, params)
+}
+
+func (r *realBotClient) EditMessageText(ctx context.Context, params *bot.EditMessageTextParams) (*models.Message, error) {
+	return r.bot.EditMessageText(ctx, params)
 }

@@ -8,6 +8,7 @@ import (
 	"context"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/agent"
@@ -28,6 +29,13 @@ const (
 
 	// maxToolResults is the maximum number of tool results per processing.
 	maxToolResults = 100
+
+	// streamingUpdateInterval is the minimum time between streaming message updates
+	// to avoid hitting API rate limits.
+	streamingUpdateInterval = 1 * time.Second
+
+	// streamingTypingInterval is how often to refresh the typing indicator.
+	streamingTypingInterval = 4 * time.Second
 )
 
 // startProcessing starts the background message processing goroutine.
@@ -234,6 +242,38 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		return
 	}
 
+	// Check for streaming support
+	streamingAdapter, hasStreaming := s.channels.GetStreaming(msg.Channel)
+	outboundAdapter, hasOutbound := s.channels.GetOutbound(msg.Channel)
+	if !hasOutbound {
+		s.logger.Error("no adapter registered for channel", "channel", msg.Channel)
+		return
+	}
+
+	// Build outbound message template for streaming operations
+	outboundMsg := &models.Message{
+		SessionID: session.ID,
+		Channel:   msg.Channel,
+		Direction: models.DirectionOutbound,
+		Role:      models.RoleAssistant,
+		Metadata:  s.buildReplyMetadata(msg),
+		CreatedAt: time.Now(),
+	}
+
+	// Streaming state
+	var streamingMsgID string
+	var lastUpdate time.Time
+	var lastTyping time.Time
+	var mu sync.Mutex
+
+	// Send initial typing indicator if streaming is supported
+	if hasStreaming {
+		if err := streamingAdapter.SendTypingIndicator(runCtx, outboundMsg); err != nil {
+			s.logger.Debug("failed to send typing indicator", "error", err)
+		}
+		lastTyping = time.Now()
+	}
+
 	var response strings.Builder
 	var toolResults []models.ToolResult
 	var truncated bool
@@ -254,6 +294,32 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 				continue
 			}
 			response.WriteString(chunk.Text)
+
+			// Handle streaming updates
+			if hasStreaming {
+				mu.Lock()
+				now := time.Now()
+
+				// Start streaming response on first text
+				if streamingMsgID == "" {
+					var err error
+					streamingMsgID, err = streamingAdapter.StartStreamingResponse(runCtx, outboundMsg)
+					if err != nil {
+						s.logger.Debug("failed to start streaming response", "error", err)
+						// Fall back to non-streaming mode
+						hasStreaming = false
+					} else {
+						lastUpdate = now
+					}
+				} else if now.Sub(lastUpdate) >= streamingUpdateInterval {
+					// Throttle updates to avoid rate limits
+					if err := streamingAdapter.UpdateStreamingResponse(runCtx, outboundMsg, streamingMsgID, response.String()); err != nil {
+						s.logger.Debug("failed to update streaming response", "error", err)
+					}
+					lastUpdate = now
+				}
+				mu.Unlock()
+			}
 		}
 		if chunk.ToolResult != nil {
 			// Check tool results limit
@@ -264,6 +330,18 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 				continue
 			}
 			toolResults = append(toolResults, *chunk.ToolResult)
+
+			// Refresh typing indicator during tool execution
+			if hasStreaming && streamingMsgID == "" {
+				mu.Lock()
+				if time.Since(lastTyping) >= streamingTypingInterval {
+					if err := streamingAdapter.SendTypingIndicator(runCtx, outboundMsg); err != nil {
+						s.logger.Debug("failed to refresh typing indicator", "error", err)
+					}
+					lastTyping = time.Now()
+				}
+				mu.Unlock()
+			}
 		}
 	}
 
@@ -271,32 +349,32 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		return
 	}
 
-	adapter, ok := s.channels.GetOutbound(msg.Channel)
-	if !ok {
-		s.logger.Error("no adapter registered for channel", "channel", msg.Channel)
-		return
-	}
+	outboundMsg.Content = response.String()
+	outboundMsg.ToolResults = toolResults
 
-	outbound := &models.Message{
-		SessionID:   session.ID,
-		Channel:     msg.Channel,
-		Direction:   models.DirectionOutbound,
-		Role:        models.RoleAssistant,
-		Content:     response.String(),
-		ToolResults: toolResults,
-		Metadata:    s.buildReplyMetadata(msg),
-		CreatedAt:   time.Now(),
-	}
-
-	if err := adapter.Send(ctx, outbound); err != nil {
-		s.logger.Error("failed to send outbound message", "error", err)
-		return
+	// Final update or send
+	if hasStreaming && streamingMsgID != "" {
+		// Do final update with complete content
+		if err := streamingAdapter.UpdateStreamingResponse(runCtx, outboundMsg, streamingMsgID, response.String()); err != nil {
+			s.logger.Debug("failed to send final streaming update", "error", err)
+			// Fall back to sending a new message
+			if err := outboundAdapter.Send(ctx, outboundMsg); err != nil {
+				s.logger.Error("failed to send outbound message", "error", err)
+				return
+			}
+		}
+	} else {
+		// Non-streaming: send complete message
+		if err := outboundAdapter.Send(ctx, outboundMsg); err != nil {
+			s.logger.Error("failed to send outbound message", "error", err)
+			return
+		}
 	}
 
 	// Note: assistant message persistence is handled by runtime.Process()
 	// The runtime persists the full message with tool calls during the agentic loop.
 	if s.memoryLogger != nil {
-		if err := s.memoryLogger.Append(outbound); err != nil {
+		if err := s.memoryLogger.Append(outboundMsg); err != nil {
 			s.logger.Error("failed to write memory log", "error", err)
 		}
 	}

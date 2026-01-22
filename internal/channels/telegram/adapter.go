@@ -439,6 +439,103 @@ func (a *Adapter) Send(ctx context.Context, msg *nexusmodels.Message) error {
 	return nil
 }
 
+// SendTypingIndicator shows a "typing" indicator in the chat.
+// This is part of the StreamingAdapter interface.
+func (a *Adapter) SendTypingIndicator(ctx context.Context, msg *nexusmodels.Message) error {
+	if a.botClient == nil {
+		return channels.ErrInternal("bot not initialized", nil)
+	}
+
+	chatID, err := a.extractChatID(msg)
+	if err != nil {
+		return channels.ErrInvalidInput("failed to extract chat ID", err)
+	}
+
+	_, err = a.botClient.SendChatAction(ctx, &bot.SendChatActionParams{
+		ChatID: chatID,
+		Action: models.ChatActionTyping,
+	})
+	if err != nil {
+		a.logger.Debug("failed to send typing indicator", "error", err, "chat_id", chatID)
+		// Don't return error - typing indicators are best-effort
+		return nil
+	}
+
+	return nil
+}
+
+// StartStreamingResponse sends an initial placeholder message and returns its ID.
+// This is part of the StreamingAdapter interface.
+func (a *Adapter) StartStreamingResponse(ctx context.Context, msg *nexusmodels.Message) (string, error) {
+	if a.botClient == nil {
+		return "", channels.ErrInternal("bot not initialized", nil)
+	}
+
+	chatID, err := a.extractChatID(msg)
+	if err != nil {
+		return "", channels.ErrInvalidInput("failed to extract chat ID", err)
+	}
+
+	// Apply rate limiting
+	if err := a.rateLimiter.Wait(ctx); err != nil {
+		return "", channels.ErrTimeout("rate limit wait cancelled", err)
+	}
+
+	// Send initial message with a placeholder that indicates processing
+	sentMsg, err := a.botClient.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID: chatID,
+		Text:   "...",
+	})
+	if err != nil {
+		a.logger.Error("failed to start streaming response", "error", err, "chat_id", chatID)
+		a.metrics.RecordMessageFailed()
+		return "", channels.ErrInternal("failed to send initial message", err)
+	}
+
+	a.metrics.RecordMessageSent()
+	return strconv.Itoa(sentMsg.ID), nil
+}
+
+// UpdateStreamingResponse updates a previously sent message with new content.
+// This is part of the StreamingAdapter interface.
+func (a *Adapter) UpdateStreamingResponse(ctx context.Context, msg *nexusmodels.Message, messageID string, content string) error {
+	if a.botClient == nil {
+		return channels.ErrInternal("bot not initialized", nil)
+	}
+
+	chatID, err := a.extractChatID(msg)
+	if err != nil {
+		return channels.ErrInvalidInput("failed to extract chat ID", err)
+	}
+
+	msgID, err := strconv.Atoi(messageID)
+	if err != nil {
+		return channels.ErrInvalidInput("invalid message ID", err)
+	}
+
+	// Apply rate limiting for edits
+	if err := a.rateLimiter.Wait(ctx); err != nil {
+		return channels.ErrTimeout("rate limit wait cancelled", err)
+	}
+
+	_, err = a.botClient.EditMessageText(ctx, &bot.EditMessageTextParams{
+		ChatID:    chatID,
+		MessageID: msgID,
+		Text:      content,
+	})
+	if err != nil {
+		// Check for "message is not modified" error which is expected
+		// when content hasn't actually changed (common with streaming)
+		if strings.Contains(err.Error(), "message is not modified") {
+			return nil
+		}
+		a.logger.Debug("failed to update streaming response", "error", err, "chat_id", chatID, "message_id", msgID)
+		return channels.ErrInternal("failed to edit message", err)
+	}
+
+	return nil
+}
+
 // DownloadAttachment fetches attachment bytes from Telegram without exposing the bot token.
 func (a *Adapter) DownloadAttachment(ctx context.Context, msg *nexusmodels.Message, attachment *nexusmodels.Attachment) ([]byte, string, string, error) {
 	if a.botClient == nil {

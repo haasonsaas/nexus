@@ -155,6 +155,14 @@ func (m *mockBotClient) StartWebhook(ctx context.Context) {
 	<-ctx.Done()
 }
 
+func (m *mockBotClient) SendChatAction(ctx context.Context, params *bot.SendChatActionParams) (bool, error) {
+	return true, nil
+}
+
+func (m *mockBotClient) EditMessageText(ctx context.Context, params *bot.EditMessageTextParams) (*models.Message, error) {
+	return &models.Message{ID: int(params.MessageID)}, nil
+}
+
 func (m *mockBotClient) getSendMessageCalls() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()

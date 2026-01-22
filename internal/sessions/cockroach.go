@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/haasonsaas/nexus/pkg/models"
 	_ "github.com/lib/pq"
 )
@@ -602,8 +603,7 @@ func (s *CockroachStore) GetHistory(ctx context.Context, sessionID string, limit
 	return messages, nil
 }
 
-// generateID generates a UUID-like ID.
-// In production, you might want to use github.com/google/uuid
+// generateID generates a unique UUID.
 func generateID() string {
-	return fmt.Sprintf("%d", time.Now().UnixNano())
+	return uuid.NewString()
 }

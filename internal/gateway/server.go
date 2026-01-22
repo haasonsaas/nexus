@@ -93,6 +93,9 @@ type Server struct {
 
 	broadcastManager *BroadcastManager
 	hooksRegistry    *hooks.Registry
+
+	// messageSem limits concurrent message processing to prevent unbounded goroutine growth
+	messageSem chan struct{}
 }
 
 // NewServer creates a new gateway server with the given configuration and logger.
@@ -301,6 +304,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		commandRegistry:    commandRegistry,
 		commandParser:      commandParser,
 		activeRuns:         make(map[string]activeRun),
+		messageSem:         make(chan struct{}, 100), // Limit concurrent message handlers
 	}
 	grpcSvc := newGRPCService(server)
 	proto.RegisterNexusGatewayServer(grpcServer, grpcSvc)

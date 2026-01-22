@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -693,10 +694,16 @@ func isRateLimitError(err error) bool {
 	if err == nil {
 		return false
 	}
-	// Telegram returns "Too Many Requests" errors
-	return errors.Is(err, context.DeadlineExceeded) ||
-		(err.Error() != "" && (errors.Is(err, errors.New("Too Many Requests")) ||
-			errors.Is(err, errors.New("429"))))
+	// Check for context deadline as a rate limit indicator
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	// Check error message for Telegram rate limit responses
+	errStr := err.Error()
+	return strings.Contains(errStr, "Too Many Requests") ||
+		strings.Contains(errStr, "429") ||
+		strings.Contains(errStr, "FLOOD_WAIT") ||
+		strings.Contains(errStr, "rate limit")
 }
 
 // telegramMessageInterface is an interface for converting messages in tests

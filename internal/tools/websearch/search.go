@@ -20,6 +20,9 @@ const (
 	BackendSearXNG     SearchBackend = "searxng"
 	BackendDuckDuckGo  SearchBackend = "duckduckgo"
 	BackendBraveSearch SearchBackend = "brave"
+
+	// maxCacheSize limits the number of cached search responses to prevent unbounded memory growth
+	maxCacheSize = 1000
 )
 
 // SearchType represents the type of search to perform (web, image, or news).
@@ -319,16 +322,35 @@ func (t *WebSearchTool) putInCache(key string, response *SearchResponse) {
 	t.cacheMu.Lock()
 	defer t.cacheMu.Unlock()
 
-	t.cache[key] = &cacheEntry{
-		response:  response,
-		expiresAt: time.Now().Add(time.Duration(t.config.CacheTTL) * time.Second),
-	}
+	now := time.Now()
 
-	// Clean up expired entries
+	// Clean up expired entries first
 	for k, v := range t.cache {
-		if time.Now().After(v.expiresAt) {
+		if now.After(v.expiresAt) {
 			delete(t.cache, k)
 		}
+	}
+
+	// If still at capacity after cleanup, evict oldest entries
+	for len(t.cache) >= maxCacheSize {
+		var oldestKey string
+		var oldestTime time.Time
+		for k, v := range t.cache {
+			if oldestKey == "" || v.expiresAt.Before(oldestTime) {
+				oldestKey = k
+				oldestTime = v.expiresAt
+			}
+		}
+		if oldestKey != "" {
+			delete(t.cache, oldestKey)
+		} else {
+			break
+		}
+	}
+
+	t.cache[key] = &cacheEntry{
+		response:  response,
+		expiresAt: now.Add(time.Duration(t.config.CacheTTL) * time.Second),
 	}
 }
 

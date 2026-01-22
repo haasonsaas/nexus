@@ -39,11 +39,20 @@ func (s *Server) processMessages(ctx context.Context) {
 			if !ok {
 				return
 			}
-			s.wg.Add(1)
-			go func(message *models.Message) {
-				defer s.wg.Done()
-				s.handleMessage(ctx, message)
-			}(msg)
+			// Acquire semaphore slot to limit concurrent handlers
+			select {
+			case s.messageSem <- struct{}{}:
+				s.wg.Add(1)
+				go func(message *models.Message) {
+					defer func() {
+						<-s.messageSem // Release semaphore slot
+						s.wg.Done()
+					}()
+					s.handleMessage(ctx, message)
+				}(msg)
+			case <-ctx.Done():
+				return
+			}
 		}
 	}
 }

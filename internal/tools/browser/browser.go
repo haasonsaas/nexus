@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/haasonsaas/nexus/internal/agent"
@@ -149,7 +150,23 @@ func (b *BrowserTool) handleNavigate(ctx context.Context, instance *BrowserInsta
 		}, nil
 	}
 
-	_, err := instance.Page.Goto(p.URL, playwright.PageGotoOptions{
+	// Validate URL to prevent SSRF and dangerous protocols
+	parsedURL, err := url.Parse(p.URL)
+	if err != nil {
+		return &agent.ToolResult{
+			Content: fmt.Sprintf("invalid URL: %v", err),
+			IsError: true,
+		}, nil
+	}
+	// Only allow http and https schemes to prevent file://, javascript:, etc.
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return &agent.ToolResult{
+			Content: fmt.Sprintf("URL scheme must be http or https, got: %s", parsedURL.Scheme),
+			IsError: true,
+		}, nil
+	}
+
+	_, err = instance.Page.Goto(p.URL, playwright.PageGotoOptions{
 		WaitUntil: playwright.WaitUntilStateDomcontentloaded,
 	})
 	if err != nil {
@@ -318,11 +335,20 @@ func (b *BrowserTool) handleExtractHTML(ctx context.Context, instance *BrowserIn
 		// Get full page HTML
 		html, err = instance.Page.Content()
 	} else {
-		// Get element's innerHTML
-		result, evalErr := instance.Page.Evaluate(fmt.Sprintf("document.querySelector('%s').innerHTML", p.Selector))
+		// Get element's innerHTML using parameterized evaluation to prevent injection
+		result, evalErr := instance.Page.Evaluate(`(selector) => {
+			const el = document.querySelector(selector);
+			return el ? el.innerHTML : null;
+		}`, p.Selector)
 		if evalErr != nil {
 			return &agent.ToolResult{
 				Content: fmt.Sprintf("HTML extraction failed: %v", evalErr),
+				IsError: true,
+			}, nil
+		}
+		if result == nil {
+			return &agent.ToolResult{
+				Content: fmt.Sprintf("Element not found for selector: %s", p.Selector),
 				IsError: true,
 			}, nil
 		}

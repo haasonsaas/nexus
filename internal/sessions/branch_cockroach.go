@@ -149,8 +149,15 @@ func (s *CockroachBranchStore) ListBranches(ctx context.Context, sessionID strin
 		argPos++
 	}
 
+	// Validate orderCol against allowlist to prevent SQL injection
+	validOrderColumns := map[string]bool{
+		"created_at": true,
+		"updated_at": true,
+		"name":       true,
+		"status":     true,
+	}
 	orderCol := "created_at"
-	if opts.OrderBy != "" {
+	if opts.OrderBy != "" && validOrderColumns[opts.OrderBy] {
 		orderCol = opts.OrderBy
 	}
 	if opts.OrderDesc {

@@ -553,6 +553,15 @@ func (p *AnthropicProvider) createStream(ctx context.Context, req *agent.Complet
 		params.Tools = tools
 	}
 
+	// Enable extended thinking if requested
+	if req.EnableThinking {
+		budgetTokens := int64(req.ThinkingBudgetTokens)
+		if budgetTokens < 1024 {
+			budgetTokens = 10000 // Default budget if not specified or too low
+		}
+		params.Thinking = anthropic.ThinkingConfigParamOfEnabled(budgetTokens)
+	}
+
 	// Create streaming request using Anthropic SDK
 	stream := p.client.Messages.NewStreaming(ctx, params)
 
@@ -604,7 +613,8 @@ const maxEmptyStreamEvents = 300
 func (p *AnthropicProvider) processStream(stream *ssestream.Stream[anthropic.MessageStreamEventUnion], chunks chan<- *agent.CompletionChunk, model string) {
 	var currentToolCall *models.ToolCall
 	var currentToolInput strings.Builder
-	emptyEventCount := 0 // Track consecutive empty events for malformed stream detection
+	emptyEventCount := 0     // Track consecutive empty events for malformed stream detection
+	inThinkingBlock := false // Track if we're currently in a thinking block
 
 	// Track current tool call being assembled across multiple events
 	for stream.Next() {
@@ -613,13 +623,23 @@ func (p *AnthropicProvider) processStream(stream *ssestream.Stream[anthropic.Mes
 
 		switch event.Type {
 		case "content_block_start":
-			// New content block starting (could be text or tool use)
+			// New content block starting (could be text, tool use, or thinking)
 			contentBlockStart := event.AsContentBlockStart()
-			contentBlock := contentBlockStart.ContentBlock.AsAny()
+			contentBlock := contentBlockStart.ContentBlock
 
-			// Check if this is a tool use block
-			if toolUse, ok := contentBlock.(anthropic.ToolUseBlock); ok {
+			// Check block type
+			switch contentBlock.Type {
+			case "thinking":
+				// Start of a thinking block
+				inThinkingBlock = true
+				chunks <- &agent.CompletionChunk{
+					ThinkingStart: true,
+				}
+				eventProcessed = true
+
+			case "tool_use":
 				// Initialize new tool call with ID and name
+				toolUse := contentBlock.AsToolUse()
 				currentToolCall = &models.ToolCall{
 					ID:   toolUse.ID,
 					Name: toolUse.Name,
@@ -631,31 +651,47 @@ func (p *AnthropicProvider) processStream(stream *ssestream.Stream[anthropic.Mes
 		case "content_block_delta":
 			// Incremental content updates
 			contentBlockDelta := event.AsContentBlockDelta()
-			delta := contentBlockDelta.Delta.AsAny()
+			delta := contentBlockDelta.Delta
 
-			// Handle text delta - emit immediately for real-time streaming
-			if textDelta, ok := delta.(anthropic.TextDelta); ok {
-				if textDelta.Text != "" {
+			// Handle different delta types
+			switch delta.Type {
+			case "text_delta":
+				// Text delta - emit immediately for real-time streaming
+				if delta.Text != "" {
 					chunks <- &agent.CompletionChunk{
-						Text: textDelta.Text,
+						Text: delta.Text,
 					}
 					eventProcessed = true
 				}
-			}
 
-			// Handle tool input delta - accumulate JSON fragments
-			// Tool arguments are streamed as partial JSON strings
-			if inputDelta, ok := delta.(anthropic.InputJSONDelta); ok {
-				if inputDelta.PartialJSON != "" {
-					currentToolInput.WriteString(inputDelta.PartialJSON)
+			case "thinking_delta":
+				// Thinking delta - emit thinking content
+				if delta.Thinking != "" {
+					chunks <- &agent.CompletionChunk{
+						Thinking: delta.Thinking,
+					}
+					eventProcessed = true
+				}
+
+			case "input_json_delta":
+				// Tool input delta - accumulate JSON fragments
+				if delta.PartialJSON != "" {
+					currentToolInput.WriteString(delta.PartialJSON)
 					eventProcessed = true
 				}
 			}
 
 		case "content_block_stop":
-			// Content block complete - finalize if it was a tool call
-			if currentToolCall != nil {
-				// Convert accumulated JSON string to RawMessage
+			// Content block complete
+			if inThinkingBlock {
+				// End of thinking block
+				chunks <- &agent.CompletionChunk{
+					ThinkingEnd: true,
+				}
+				inThinkingBlock = false
+				eventProcessed = true
+			} else if currentToolCall != nil {
+				// Finalize tool call
 				currentToolCall.Input = json.RawMessage(currentToolInput.String())
 				chunks <- &agent.CompletionChunk{
 					ToolCall: currentToolCall,

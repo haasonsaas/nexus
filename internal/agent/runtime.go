@@ -293,6 +293,15 @@ type CompletionRequest struct {
 	// MaxTokens limits the maximum length of the generated response.
 	// If 0 or negative, the provider's default is used (typically 4096).
 	MaxTokens int `json:"max_tokens,omitempty"`
+
+	// EnableThinking enables extended thinking mode for supported models (e.g., Claude).
+	// When enabled, the model uses additional compute for complex reasoning tasks.
+	EnableThinking bool `json:"enable_thinking,omitempty"`
+
+	// ThinkingBudgetTokens sets the token budget for extended thinking.
+	// Only used when EnableThinking is true. If 0, a default budget is used.
+	// Typical range: 1024-100000 tokens depending on task complexity.
+	ThinkingBudgetTokens int `json:"thinking_budget_tokens,omitempty"`
 }
 
 // CompletionMessage represents a single message in a conversation.
@@ -357,6 +366,16 @@ type CompletionChunk struct {
 
 	// Error contains any error that occurred (streaming is terminated)
 	Error error `json:"-"`
+
+	// Thinking contains reasoning/thinking text when extended thinking is enabled.
+	// This is streamed separately from the main response text.
+	Thinking string `json:"thinking,omitempty"`
+
+	// ThinkingStart signals the beginning of a thinking block.
+	ThinkingStart bool `json:"thinking_start,omitempty"`
+
+	// ThinkingEnd signals the end of a thinking block.
+	ThinkingEnd bool `json:"thinking_end,omitempty"`
 }
 
 // Model describes an available LLM model and its capabilities.

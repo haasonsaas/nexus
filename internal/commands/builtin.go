@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -211,6 +212,73 @@ func RegisterBuiltins(r *Registry) {
 				Text: "Compacting conversation...",
 				Data: map[string]any{
 					"action": "compact",
+				},
+			}, nil
+		},
+	})
+
+	// Think/extended thinking mode command
+	mustRegister(&Command{
+		Name:        "think",
+		Aliases:     []string{"thinking", "extended-thinking"},
+		Description: "Enable or disable extended thinking mode for Claude models",
+		Usage:       "/think [budget] or /think off",
+		AcceptsArgs: true,
+		Category:    "config",
+		Source:      "builtin",
+		Handler: func(ctx context.Context, inv *Invocation) (*Result, error) {
+			args := strings.TrimSpace(strings.ToLower(inv.Args))
+
+			// Check for disable commands
+			if args == "off" || args == "disable" || args == "0" {
+				return &Result{
+					Text: "Extended thinking disabled.",
+					Data: map[string]any{
+						"action":  "set_thinking",
+						"enabled": false,
+					},
+				}, nil
+			}
+
+			// Check current status if no args
+			if args == "" || args == "status" {
+				enabled := false
+				budget := 0
+				if inv.Context != nil {
+					if e, ok := inv.Context["thinking_enabled"].(bool); ok {
+						enabled = e
+					}
+					if b, ok := inv.Context["thinking_budget"].(int); ok {
+						budget = b
+					}
+				}
+				if enabled {
+					return &Result{
+						Text: fmt.Sprintf("Extended thinking: enabled (budget: %d tokens)", budget),
+					}, nil
+				}
+				return &Result{
+					Text: "Extended thinking: disabled\n\nUsage: /think [budget] - Enable with optional token budget (default: 10000)\n       /think off - Disable extended thinking",
+				}, nil
+			}
+
+			// Parse token budget
+			budget := 10000 // Default
+			if b, err := strconv.Atoi(args); err == nil && b > 0 {
+				budget = b
+			}
+
+			// Validate budget (minimum 1024 tokens required by API)
+			if budget < 1024 {
+				budget = 1024
+			}
+
+			return &Result{
+				Text: fmt.Sprintf("Extended thinking enabled with %d token budget.", budget),
+				Data: map[string]any{
+					"action":  "set_thinking",
+					"enabled": true,
+					"budget":  budget,
 				},
 			}, nil
 		},

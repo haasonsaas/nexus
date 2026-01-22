@@ -842,12 +842,12 @@ func TestExecuteWithTimeout_Cancellation(t *testing.T) {
 func TestToolExecResult_Fields(t *testing.T) {
 	start := time.Now()
 	result := ToolExecResult{
-		Index:    0,
-		ToolCall: models.ToolCall{ID: "call-1", Name: "test"},
-		Result:   models.ToolResult{ToolCallID: "call-1", Content: "ok"},
+		Index:     0,
+		ToolCall:  models.ToolCall{ID: "call-1", Name: "test"},
+		Result:    models.ToolResult{ToolCallID: "call-1", Content: "ok"},
 		StartTime: start,
 		EndTime:   start.Add(100 * time.Millisecond),
-		TimedOut: false,
+		TimedOut:  false,
 	}
 
 	if result.Index != 0 {

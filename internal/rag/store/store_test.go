@@ -12,16 +12,16 @@ import (
 
 // MockDocumentStore provides a mock implementation of DocumentStore for testing.
 type MockDocumentStore struct {
-	AddDocumentFunc         func(ctx context.Context, doc *models.Document, chunks []*models.DocumentChunk) error
-	GetDocumentFunc         func(ctx context.Context, id string) (*models.Document, error)
-	ListDocumentsFunc       func(ctx context.Context, opts *ListOptions) ([]*models.Document, error)
-	DeleteDocumentFunc      func(ctx context.Context, id string) error
-	GetChunkFunc            func(ctx context.Context, id string) (*models.DocumentChunk, error)
-	GetChunksByDocumentFunc func(ctx context.Context, documentID string) ([]*models.DocumentChunk, error)
-	SearchFunc              func(ctx context.Context, req *models.DocumentSearchRequest, embedding []float32) (*models.DocumentSearchResponse, error)
+	AddDocumentFunc           func(ctx context.Context, doc *models.Document, chunks []*models.DocumentChunk) error
+	GetDocumentFunc           func(ctx context.Context, id string) (*models.Document, error)
+	ListDocumentsFunc         func(ctx context.Context, opts *ListOptions) ([]*models.Document, error)
+	DeleteDocumentFunc        func(ctx context.Context, id string) error
+	GetChunkFunc              func(ctx context.Context, id string) (*models.DocumentChunk, error)
+	GetChunksByDocumentFunc   func(ctx context.Context, documentID string) ([]*models.DocumentChunk, error)
+	SearchFunc                func(ctx context.Context, req *models.DocumentSearchRequest, embedding []float32) (*models.DocumentSearchResponse, error)
 	UpdateChunkEmbeddingsFunc func(ctx context.Context, embeddings map[string][]float32) error
-	StatsFunc               func(ctx context.Context) (*StoreStats, error)
-	CloseFunc               func() error
+	StatsFunc                 func(ctx context.Context) (*StoreStats, error)
+	CloseFunc                 func() error
 }
 
 func (m *MockDocumentStore) AddDocument(ctx context.Context, doc *models.Document, chunks []*models.DocumentChunk) error {

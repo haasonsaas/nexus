@@ -61,10 +61,12 @@ func newLoopMemoryStore() *loopMemoryStore {
 	}
 }
 
-func (s *loopMemoryStore) Create(ctx context.Context, session *models.Session) error  { return nil }
-func (s *loopMemoryStore) Get(ctx context.Context, id string) (*models.Session, error) { return nil, nil }
-func (s *loopMemoryStore) Update(ctx context.Context, session *models.Session) error   { return nil }
-func (s *loopMemoryStore) Delete(ctx context.Context, id string) error                 { return nil }
+func (s *loopMemoryStore) Create(ctx context.Context, session *models.Session) error { return nil }
+func (s *loopMemoryStore) Get(ctx context.Context, id string) (*models.Session, error) {
+	return nil, nil
+}
+func (s *loopMemoryStore) Update(ctx context.Context, session *models.Session) error { return nil }
+func (s *loopMemoryStore) Delete(ctx context.Context, id string) error               { return nil }
 func (s *loopMemoryStore) GetByKey(ctx context.Context, key string) (*models.Session, error) {
 	return nil, nil
 }
@@ -164,7 +166,9 @@ func TestAgenticLoop_SingleToolCall(t *testing.T) {
 	registry.Register(&testExecTool{
 		name: "echo",
 		execFunc: func(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
-			var p struct{ Text string `json:"text"` }
+			var p struct {
+				Text string `json:"text"`
+			}
 			json.Unmarshal(params, &p)
 			return &ToolResult{Content: p.Text}, nil
 		},

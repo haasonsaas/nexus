@@ -316,10 +316,10 @@ Content`
 
 func TestParser_Parse_Sections(t *testing.T) {
 	tests := []struct {
-		name           string
-		content        string
-		expectedCount  int
-		checkSections  func(t *testing.T, sections []parser.Section)
+		name          string
+		content       string
+		expectedCount int
+		checkSections func(t *testing.T, sections []parser.Section)
 	}{
 		{
 			name:          "no headings",
@@ -447,10 +447,10 @@ func TestParser_Parse_SectionOffsets(t *testing.T) {
 
 func TestExtractFrontmatter(t *testing.T) {
 	tests := []struct {
-		name          string
-		content       string
-		expectFM      string
-		expectBody    string
+		name       string
+		content    string
+		expectFM   string
+		expectBody string
 	}{
 		{
 			name:       "no frontmatter",

@@ -633,12 +633,12 @@ func TestInjector_formatContext(t *testing.T) {
 
 func TestInjector_InjectForMessage(t *testing.T) {
 	tests := []struct {
-		name       string
-		cfg        *InjectorConfig
-		msg        *models.Message
-		sessionID  string
-		wantEmpty  bool
-		wantErr    bool
+		name      string
+		cfg       *InjectorConfig
+		msg       *models.Message
+		sessionID string
+		wantEmpty bool
+		wantErr   bool
 	}{
 		{
 			name:      "nil message returns empty result",

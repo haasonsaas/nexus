@@ -1734,9 +1734,9 @@ func TestIsConnectedStates(t *testing.T) {
 
 func TestJIDServerTypes(t *testing.T) {
 	tests := []struct {
-		jid          string
-		isGroup      bool
-		description  string
+		jid         string
+		isGroup     bool
+		description string
 	}{
 		{"1234567890@s.whatsapp.net", false, "individual user"},
 		{"1234567890-1234567890@g.us", true, "group chat"},
@@ -1784,9 +1784,9 @@ func TestRawMessageWithAllFields(t *testing.T) {
 			},
 		},
 		Extra: map[string]any{
-			"forwarded":       true,
-			"broadcast":       false,
-			"mention_count":   3,
+			"forwarded":     true,
+			"broadcast":     false,
+			"mention_count": 3,
 		},
 	}
 
@@ -1855,9 +1855,9 @@ func TestRawAttachmentWithInlineData(t *testing.T) {
 
 func TestMIMETypeCategories(t *testing.T) {
 	categories := map[string][]string{
-		"image": {"image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp"},
-		"video": {"video/mp4", "video/quicktime", "video/webm", "video/avi"},
-		"audio": {"audio/mpeg", "audio/ogg", "audio/wav", "audio/aac"},
+		"image":    {"image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp"},
+		"video":    {"video/mp4", "video/quicktime", "video/webm", "video/avi"},
+		"audio":    {"audio/mpeg", "audio/ogg", "audio/wav", "audio/aac"},
 		"document": {"application/pdf", "application/msword", "text/plain", "application/zip"},
 	}
 

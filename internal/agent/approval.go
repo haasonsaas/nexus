@@ -104,9 +104,7 @@ type ApprovalStore interface {
 // NewApprovalChecker creates a new approval checker with the given default policy.
 // If defaultPolicy is nil, DefaultApprovalPolicy is used.
 func NewApprovalChecker(defaultPolicy *ApprovalPolicy) *ApprovalChecker {
-	if defaultPolicy == nil {
-		defaultPolicy = DefaultApprovalPolicy()
-	}
+	defaultPolicy = normalizeApprovalPolicy(defaultPolicy)
 	return &ApprovalChecker{
 		agentPolicies: make(map[string]*ApprovalPolicy),
 		defaultPolicy: defaultPolicy,
@@ -132,7 +130,7 @@ func (c *ApprovalChecker) SetUIAvailableCheck(fn func() bool) {
 func (c *ApprovalChecker) SetAgentPolicy(agentID string, policy *ApprovalPolicy) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.agentPolicies[agentID] = policy
+	c.agentPolicies[agentID] = normalizeApprovalPolicy(policy)
 }
 
 // RegisterSkillTools registers tools provided by skills for automatic allowlisting
@@ -354,6 +352,49 @@ func matchesPattern(patterns []string, toolName string) bool {
 		}
 	}
 	return false
+}
+
+func normalizeApprovalPolicy(policy *ApprovalPolicy) *ApprovalPolicy {
+	defaults := DefaultApprovalPolicy()
+	if policy == nil {
+		return defaults
+	}
+
+	if len(policy.SafeBins) > 0 {
+		clone := *policy
+		clone.Allowlist = append([]string(nil), policy.Allowlist...)
+		clone.Denylist = append([]string(nil), policy.Denylist...)
+		clone.RequireApproval = append([]string(nil), policy.RequireApproval...)
+		clone.SafeBins = append([]string(nil), policy.SafeBins...)
+		return &clone
+	}
+
+	merged := *defaults
+
+	if len(policy.Allowlist) > 0 {
+		merged.Allowlist = append([]string(nil), policy.Allowlist...)
+	}
+	if len(policy.Denylist) > 0 {
+		merged.Denylist = append([]string(nil), policy.Denylist...)
+	}
+	if len(policy.RequireApproval) > 0 {
+		merged.RequireApproval = append([]string(nil), policy.RequireApproval...)
+	}
+	if len(policy.SafeBins) > 0 {
+		merged.SafeBins = append([]string(nil), policy.SafeBins...)
+	}
+	if policy.DefaultDecision != "" {
+		merged.DefaultDecision = policy.DefaultDecision
+	}
+	if policy.RequestTTL > 0 {
+		merged.RequestTTL = policy.RequestTTL
+	}
+
+	if policy.AskFallback || len(policy.RequireApproval) > 0 {
+		merged.AskFallback = policy.AskFallback
+	}
+
+	return &merged
 }
 
 // MemoryApprovalStore is a thread-safe in-memory implementation of ApprovalStore.

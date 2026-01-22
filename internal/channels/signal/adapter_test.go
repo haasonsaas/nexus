@@ -693,11 +693,11 @@ func TestSignalContactParsing(t *testing.T) {
 
 func TestSignalContactParsingPartial(t *testing.T) {
 	tests := []struct {
-		name        string
-		input       string
-		wantNumber  string
-		wantUUID    string
-		wantName    string
+		name       string
+		input      string
+		wantNumber string
+		wantUUID   string
+		wantName   string
 	}{
 		{
 			name:       "only number",
@@ -715,10 +715,10 @@ func TestSignalContactParsingPartial(t *testing.T) {
 			wantName: "Jane Doe",
 		},
 		{
-			name:        "number and name",
-			input:       `{"number": "+1234567890", "name": "John"}`,
-			wantNumber:  "+1234567890",
-			wantName:    "John",
+			name:       "number and name",
+			input:      `{"number": "+1234567890", "name": "John"}`,
+			wantNumber: "+1234567890",
+			wantName:   "John",
 		},
 	}
 
@@ -905,10 +905,10 @@ func TestTimestampConversion(t *testing.T) {
 
 func TestSignalGroupInfoParsing(t *testing.T) {
 	tests := []struct {
-		name       string
-		input      string
-		wantID     string
-		wantName   string
+		name     string
+		input    string
+		wantID   string
+		wantName string
 	}{
 		{
 			name:     "basic group",

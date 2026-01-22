@@ -172,12 +172,86 @@ func (p *Pool) createExecutor(language string) (RuntimeExecutor, error) {
 	case BackendDocker:
 		return newDockerExecutor(language, p.config.DefaultCPU, p.config.DefaultMemory)
 	case BackendFirecracker:
-		// Firecracker implementation would go here
-		// For now, fall back to Docker
-		return newDockerExecutor(language, p.config.DefaultCPU, p.config.DefaultMemory)
+		return newFirecrackerExecutor(language, p.config.DefaultCPU, p.config.DefaultMemory)
 	default:
 		return nil, fmt.Errorf("unsupported backend: %s", p.config.Backend)
 	}
+}
+
+// firecrackerBackend holds the shared Firecracker backend instance.
+var (
+	firecrackerBackend     *firecrackerBackendWrapper
+	firecrackerBackendOnce sync.Once
+	firecrackerBackendErr  error
+)
+
+// firecrackerBackendWrapper wraps the Firecracker backend for lazy initialization.
+type firecrackerBackendWrapper struct {
+	backend interface {
+		Run(ctx context.Context, params *ExecuteParams, workspace string) (*ExecuteResult, error)
+		Close() error
+	}
+}
+
+// newFirecrackerExecutor creates a new Firecracker-based executor.
+func newFirecrackerExecutor(language string, cpuLimit, memLimit int) (RuntimeExecutor, error) {
+	// Lazy initialization of shared backend
+	firecrackerBackendOnce.Do(func() {
+		// Import the firecracker package at runtime to avoid circular imports
+		// The actual backend is created in the firecracker package
+		firecrackerBackendErr = fmt.Errorf("firecracker backend not initialized - call InitFirecrackerBackend first")
+	})
+
+	if firecrackerBackendErr != nil {
+		// Fall back to Docker if Firecracker is not available
+		return newDockerExecutor(language, cpuLimit, memLimit)
+	}
+
+	return &firecrackerExecutorWrapper{
+		language: language,
+		cpuLimit: cpuLimit,
+		memLimit: memLimit,
+		backend:  firecrackerBackend,
+	}, nil
+}
+
+// firecrackerExecutorWrapper wraps a Firecracker executor.
+type firecrackerExecutorWrapper struct {
+	language string
+	cpuLimit int
+	memLimit int
+	backend  *firecrackerBackendWrapper
+}
+
+// Run executes code in a Firecracker microVM.
+func (f *firecrackerExecutorWrapper) Run(ctx context.Context, params *ExecuteParams, workspace string) (*ExecuteResult, error) {
+	if f.backend == nil || f.backend.backend == nil {
+		return nil, fmt.Errorf("firecracker backend not initialized")
+	}
+	return f.backend.backend.Run(ctx, params, workspace)
+}
+
+// Language returns the language this executor handles.
+func (f *firecrackerExecutorWrapper) Language() string {
+	return f.language
+}
+
+// Close cleans up resources.
+func (f *firecrackerExecutorWrapper) Close() error {
+	// Individual executors don't close the shared backend
+	return nil
+}
+
+// InitFirecrackerBackend initializes the Firecracker backend.
+// This should be called during application startup if Firecracker support is desired.
+func InitFirecrackerBackend(backend interface {
+	Run(ctx context.Context, params *ExecuteParams, workspace string) (*ExecuteResult, error)
+	Close() error
+}) {
+	firecrackerBackendOnce.Do(func() {
+		firecrackerBackend = &firecrackerBackendWrapper{backend: backend}
+		firecrackerBackendErr = nil
+	})
 }
 
 // Stats returns statistics about the pool.

@@ -640,6 +640,10 @@ type telegramMessageInterface interface {
 	GetDocumentMimeType() string
 	HasAudio() bool
 	GetAudioID() string
+	HasVoice() bool
+	GetVoiceID() string
+	GetVoiceDuration() int
+	GetVoiceMimeType() string
 }
 
 type userInterface interface {
@@ -723,6 +727,32 @@ func (t *telegramMessageAdapter) GetAudioID() string {
 	return ""
 }
 
+func (t *telegramMessageAdapter) HasVoice() bool {
+	return t.Voice != nil
+}
+
+func (t *telegramMessageAdapter) GetVoiceID() string {
+	if t.Voice != nil {
+		return t.Voice.FileID
+	}
+	return ""
+}
+
+func (t *telegramMessageAdapter) GetVoiceDuration() int {
+	if t.Voice != nil {
+		return t.Voice.Duration
+	}
+	return 0
+}
+
+func (t *telegramMessageAdapter) GetVoiceMimeType() string {
+	if t.Voice != nil {
+		return t.Voice.MimeType
+	}
+	// Default for Telegram voice messages
+	return "audio/ogg"
+}
+
 type userAdapter struct {
 	*models.User
 }
@@ -797,6 +827,21 @@ func convertTelegramMessage(msg telegramMessageInterface) *nexusmodels.Message {
 			Type: "audio",
 			URL:  msg.GetAudioID(),
 		})
+	}
+
+	// Voice messages are distinct from audio in Telegram API
+	// They are typically OGG files recorded as voice notes
+	if msg.HasVoice() {
+		attachments = append(attachments, nexusmodels.Attachment{
+			ID:       msg.GetVoiceID(),
+			Type:     "voice",
+			URL:      msg.GetVoiceID(),
+			MimeType: msg.GetVoiceMimeType(),
+		})
+		// Mark message as containing voice for transcription handling
+		m.Metadata["has_voice"] = true
+		m.Metadata["voice_duration"] = msg.GetVoiceDuration()
+		m.Metadata["voice_file_id"] = msg.GetVoiceID()
 	}
 
 	if len(attachments) > 0 {

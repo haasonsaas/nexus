@@ -1,0 +1,93 @@
+{{define "sessions/list.html"}}
+<div class="page-header">
+    <h1>Sessions</h1>
+    <p class="subtitle">Manage conversation sessions across all channels</p>
+</div>
+
+<div class="filters-bar">
+    <form class="filters-form" hx-get="/ui/api/sessions" hx-target="#sessions-table-body" hx-swap="innerHTML" hx-trigger="change">
+        <div class="filter-group">
+            <label for="channel-filter">Channel</label>
+            <select id="channel-filter" name="channel" class="filter-select">
+                <option value="">All Channels</option>
+                {{range .Channels}}
+                <option value="{{.}}"{{if eq . $.ChannelFilter}} selected{{end}}>{{. | upper}}</option>
+                {{end}}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="agent-filter">Agent</label>
+            <input type="text" id="agent-filter" name="agent" value="{{.AgentFilter}}" class="filter-input" placeholder="Agent ID">
+        </div>
+        <button type="submit" class="btn btn-secondary">Filter</button>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <span class="session-count">{{.TotalCount}} sessions</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Channel</th>
+                    <th>Title / ID</th>
+                    <th>Channel ID</th>
+                    <th>Updated</th>
+                    <th>Created</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="sessions-table-body">
+                {{template "sessions/rows.html" .}}
+            </tbody>
+        </table>
+    </div>
+    {{if .HasMore}}
+    <div class="card-footer">
+        <button class="btn btn-secondary load-more"
+                hx-get="/ui/api/sessions?page={{add .Page 1}}&channel={{.ChannelFilter}}&agent={{.AgentFilter}}"
+                hx-target="#sessions-table-body"
+                hx-swap="beforeend"
+                hx-trigger="click">
+            Load More
+        </button>
+    </div>
+    {{end}}
+</div>
+{{end}}
+
+{{define "sessions/rows.html"}}
+{{range .Sessions}}
+<tr class="session-row" data-id="{{.ID}}">
+    <td>
+        <span class="channel-badge channel-{{.Channel | lower}}">
+            {{.Channel}}
+        </span>
+    </td>
+    <td>
+        <a href="/ui/sessions/{{.ID}}" class="session-link">
+            {{if .Title}}
+                {{.Title | truncate 40}}
+            {{else}}
+                {{.ID | truncate 12}}
+            {{end}}
+        </a>
+    </td>
+    <td class="text-muted">{{.ChannelID | truncate 20}}</td>
+    <td class="text-muted">{{.UpdatedAt | formatTime}}</td>
+    <td class="text-muted">{{.CreatedAt | formatTime}}</td>
+    <td>
+        <a href="/ui/sessions/{{.ID}}" class="btn btn-sm">View</a>
+    </td>
+</tr>
+{{else}}
+<tr>
+    <td colspan="6" class="empty-state">
+        <p>No sessions found</p>
+        <p class="text-muted">Sessions will appear here when conversations start</p>
+    </td>
+</tr>
+{{end}}
+{{end}}

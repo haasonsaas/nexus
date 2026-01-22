@@ -1,0 +1,221 @@
+// Package web provides the HTTP dashboard UI for Nexus.
+package web
+
+import (
+	"embed"
+	"html/template"
+	"io/fs"
+	"log/slog"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/haasonsaas/nexus/internal/auth"
+	"github.com/haasonsaas/nexus/internal/sessions"
+	"github.com/haasonsaas/nexus/pkg/models"
+)
+
+//go:embed templates/*.html templates/**/*.html
+var templatesFS embed.FS
+
+//go:embed static/*
+var staticFS embed.FS
+
+// Config holds web UI configuration.
+type Config struct {
+	// BasePath is the URL prefix for the UI (default: /ui)
+	BasePath string
+	// AuthService for validating requests (optional)
+	AuthService *auth.Service
+	// SessionStore for accessing session data
+	SessionStore sessions.Store
+	// DefaultAgentID is the agent ID used for listing sessions
+	DefaultAgentID string
+	// Logger for request logging
+	Logger *slog.Logger
+	// ServerStartTime for uptime calculation
+	ServerStartTime time.Time
+}
+
+// Handler is the main web UI HTTP handler.
+type Handler struct {
+	config    *Config
+	templates *template.Template
+	mux       *http.ServeMux
+}
+
+// NewHandler creates a new web UI handler.
+func NewHandler(cfg *Config) (*Handler, error) {
+	if cfg == nil {
+		cfg = &Config{}
+	}
+	if cfg.BasePath == "" {
+		cfg.BasePath = "/ui"
+	}
+	if cfg.Logger == nil {
+		cfg.Logger = slog.Default()
+	}
+	if cfg.DefaultAgentID == "" {
+		cfg.DefaultAgentID = "main"
+	}
+
+	// Parse templates with custom functions
+	funcMap := template.FuncMap{
+		"formatTime":     formatTime,
+		"formatDuration": formatDuration,
+		"truncate":       truncate,
+		"channelIcon":    channelIcon,
+		"roleClass":      roleClass,
+		"safeHTML":       safeHTML,
+		"hasPrefix":      strings.HasPrefix,
+		"lower":          strings.ToLower,
+		"upper":          strings.ToUpper,
+		"add":            func(a, b int) int { return a + b },
+		"sub":            func(a, b int) int { return a - b },
+	}
+
+	tmpl, err := template.New("").Funcs(funcMap).ParseFS(templatesFS, "templates/*.html", "templates/**/*.html")
+	if err != nil {
+		return nil, err
+	}
+
+	h := &Handler{
+		config:    cfg,
+		templates: tmpl,
+		mux:       http.NewServeMux(),
+	}
+
+	h.setupRoutes()
+	return h, nil
+}
+
+// setupRoutes configures all HTTP routes.
+func (h *Handler) setupRoutes() {
+	// Static files
+	staticContent, _ := fs.Sub(staticFS, "static")
+	h.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticContent))))
+
+	// Page routes
+	h.mux.HandleFunc("/", h.handleIndex)
+	h.mux.HandleFunc("/sessions", h.handleSessionList)
+	h.mux.HandleFunc("/sessions/", h.handleSessionDetail)
+	h.mux.HandleFunc("/status", h.handleStatusDashboard)
+
+	// API routes for htmx
+	h.mux.HandleFunc("/api/sessions", h.apiSessionList)
+	h.mux.HandleFunc("/api/sessions/", h.apiSessionMessages)
+	h.mux.HandleFunc("/api/status", h.apiStatus)
+}
+
+// ServeHTTP implements http.Handler.
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Strip base path prefix
+	path := r.URL.Path
+	if h.config.BasePath != "" && h.config.BasePath != "/" {
+		path = strings.TrimPrefix(path, h.config.BasePath)
+		if path == "" {
+			path = "/"
+		}
+	}
+	r.URL.Path = path
+
+	h.mux.ServeHTTP(w, r)
+}
+
+// Mount returns the handler with middleware applied.
+func (h *Handler) Mount() http.Handler {
+	var handler http.Handler = h
+
+	// Apply auth middleware if configured
+	if h.config.AuthService != nil && h.config.AuthService.Enabled() {
+		handler = AuthMiddleware(h.config.AuthService, h.config.Logger)(handler)
+	}
+
+	// Apply logging middleware
+	handler = LoggingMiddleware(h.config.Logger)(handler)
+
+	return handler
+}
+
+// Template helper functions
+
+func formatTime(t time.Time) string {
+	if t.IsZero() {
+		return "-"
+	}
+	return t.Format("2006-01-02 15:04:05")
+}
+
+func formatDuration(d time.Duration) string {
+	if d < time.Minute {
+		return d.Round(time.Second).String()
+	}
+	if d < time.Hour {
+		return d.Round(time.Minute).String()
+	}
+	hours := int(d.Hours())
+	if hours < 24 {
+		return strings.TrimSuffix(d.Round(time.Minute).String(), "0s")
+	}
+	days := hours / 24
+	remainingHours := hours % 24
+	if days == 1 && remainingHours == 0 {
+		return "1 day"
+	}
+	if days == 1 {
+		return "1 day " + (time.Duration(remainingHours) * time.Hour).String()
+	}
+	if remainingHours == 0 {
+		if days == 1 {
+			return "1 day"
+		}
+		return strings.Replace(strings.TrimSuffix((time.Duration(days)*24*time.Hour).String(), "0m0s"), "h", " days", 1)
+	}
+	return d.Round(time.Hour).String()
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	if n <= 3 {
+		return s[:n]
+	}
+	return s[:n-3] + "..."
+}
+
+func channelIcon(ch models.ChannelType) string {
+	switch ch {
+	case models.ChannelTelegram:
+		return "telegram"
+	case models.ChannelSlack:
+		return "slack"
+	case models.ChannelDiscord:
+		return "discord"
+	case models.ChannelWhatsApp:
+		return "whatsapp"
+	case models.ChannelAPI:
+		return "api"
+	default:
+		return "chat"
+	}
+}
+
+func roleClass(role models.Role) string {
+	switch role {
+	case models.RoleUser:
+		return "message-user"
+	case models.RoleAssistant:
+		return "message-assistant"
+	case models.RoleSystem:
+		return "message-system"
+	case models.RoleTool:
+		return "message-tool"
+	default:
+		return ""
+	}
+}
+
+func safeHTML(s string) template.HTML {
+	return template.HTML(s)
+}

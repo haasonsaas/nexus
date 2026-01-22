@@ -1,0 +1,133 @@
+{{define "sessions/detail.html"}}
+<div class="page-header">
+    <nav class="breadcrumb">
+        <a href="/ui/sessions">Sessions</a>
+        <span class="separator">/</span>
+        <span class="current">{{if .Session.Title}}{{.Session.Title | truncate 30}}{{else}}{{.Session.ID | truncate 12}}{{end}}</span>
+    </nav>
+</div>
+
+{{if .Session}}
+<div class="session-header card">
+    <div class="card-body">
+        <div class="session-meta">
+            <div class="meta-item">
+                <label>Session ID</label>
+                <span class="mono">{{.Session.ID}}</span>
+            </div>
+            <div class="meta-item">
+                <label>Channel</label>
+                <span class="channel-badge channel-{{.Session.Channel | lower}}">{{.Session.Channel}}</span>
+            </div>
+            <div class="meta-item">
+                <label>Channel ID</label>
+                <span class="mono">{{.Session.ChannelID}}</span>
+            </div>
+            <div class="meta-item">
+                <label>Agent</label>
+                <span>{{.Session.AgentID}}</span>
+            </div>
+            <div class="meta-item">
+                <label>Created</label>
+                <span>{{.Session.CreatedAt | formatTime}}</span>
+            </div>
+            <div class="meta-item">
+                <label>Last Updated</label>
+                <span>{{.Session.UpdatedAt | formatTime}}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="messages-container card">
+    <div class="card-header">
+        <h2>Messages</h2>
+        <span class="message-count">{{len .Messages}} messages</span>
+    </div>
+    <div class="messages-list" id="messages-list">
+        {{template "sessions/messages.html" .}}
+    </div>
+    {{if .HasMore}}
+    <div class="card-footer">
+        <button class="btn btn-secondary load-more"
+                hx-get="/ui/api/sessions/{{.Session.ID}}/messages?page={{add .Page 1}}"
+                hx-target="#messages-list"
+                hx-swap="beforeend"
+                hx-trigger="click">
+            Load More Messages
+        </button>
+    </div>
+    {{end}}
+</div>
+{{else}}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <p>Session not found</p>
+        </div>
+    </div>
+</div>
+{{end}}
+{{end}}
+
+{{define "sessions/messages.html"}}
+{{range .Messages}}
+<div class="message {{.Role | roleClass}}" data-id="{{.ID}}">
+    <div class="message-header">
+        <span class="message-role">{{.Role}}</span>
+        <span class="message-time">{{.CreatedAt | formatTime}}</span>
+        {{if .Direction}}
+        <span class="message-direction direction-{{.Direction}}">{{.Direction}}</span>
+        {{end}}
+    </div>
+    <div class="message-content">
+        <pre class="message-text">{{.Content}}</pre>
+    </div>
+    {{if .ToolCalls}}
+    <div class="message-tools">
+        <details class="tool-calls">
+            <summary>Tool Calls ({{len .ToolCalls}})</summary>
+            <div class="tool-calls-list">
+                {{range .ToolCalls}}
+                <div class="tool-call">
+                    <span class="tool-name">{{.Name}}</span>
+                    <pre class="tool-input">{{.Input}}</pre>
+                </div>
+                {{end}}
+            </div>
+        </details>
+    </div>
+    {{end}}
+    {{if .ToolResults}}
+    <div class="message-tools">
+        <details class="tool-results">
+            <summary>Tool Results ({{len .ToolResults}})</summary>
+            <div class="tool-results-list">
+                {{range .ToolResults}}
+                <div class="tool-result{{if .IsError}} tool-error{{end}}">
+                    <span class="tool-call-id">{{.ToolCallID}}</span>
+                    <pre class="tool-output">{{.Content | truncate 500}}</pre>
+                </div>
+                {{end}}
+            </div>
+        </details>
+    </div>
+    {{end}}
+    {{if .Attachments}}
+    <div class="message-attachments">
+        <span class="attachment-count">{{len .Attachments}} attachments</span>
+        {{range .Attachments}}
+        <div class="attachment">
+            <span class="attachment-type">{{.Type}}</span>
+            <span class="attachment-name">{{.Filename}}</span>
+        </div>
+        {{end}}
+    </div>
+    {{end}}
+</div>
+{{else}}
+<div class="empty-state">
+    <p>No messages in this session</p>
+</div>
+{{end}}
+{{end}}

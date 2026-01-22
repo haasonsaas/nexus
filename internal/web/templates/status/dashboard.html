@@ -1,0 +1,119 @@
+{{define "status/dashboard.html"}}
+<div class="page-header">
+    <h1>System Status</h1>
+    <p class="subtitle">Monitor Nexus gateway health and performance</p>
+</div>
+
+<div class="status-grid">
+    <div class="status-card card">
+        <div class="card-header">
+            <h3>Server Info</h3>
+            <button class="btn btn-sm btn-secondary"
+                    hx-get="/ui/api/status"
+                    hx-target="#status-metrics"
+                    hx-swap="innerHTML">
+                Refresh
+            </button>
+        </div>
+        <div class="card-body" id="status-metrics">
+            {{template "status/metrics.html" .Status}}
+        </div>
+    </div>
+
+    <div class="status-card card">
+        <div class="card-header">
+            <h3>Database</h3>
+        </div>
+        <div class="card-body">
+            <div class="status-indicator">
+                {{if eq .Status.DatabaseStatus "connected"}}
+                <span class="indicator indicator-success"></span>
+                <span class="indicator-label">Connected</span>
+                {{else if eq .Status.DatabaseStatus "error"}}
+                <span class="indicator indicator-error"></span>
+                <span class="indicator-label">Error</span>
+                {{else}}
+                <span class="indicator indicator-warning"></span>
+                <span class="indicator-label">{{.Status.DatabaseStatus}}</span>
+                {{end}}
+            </div>
+        </div>
+    </div>
+
+    <div class="status-card card">
+        <div class="card-header">
+            <h3>Channels</h3>
+        </div>
+        <div class="card-body">
+            {{if .Status.Channels}}
+            <ul class="channel-list">
+                {{range .Status.Channels}}
+                <li class="channel-status">
+                    <span class="channel-name">{{.Name}}</span>
+                    <span class="channel-type">{{.Type}}</span>
+                    {{if .Enabled}}
+                    <span class="status-badge status-enabled">Enabled</span>
+                    {{else}}
+                    <span class="status-badge status-disabled">Disabled</span>
+                    {{end}}
+                </li>
+                {{end}}
+            </ul>
+            {{else}}
+            <p class="text-muted">No channels configured</p>
+            {{end}}
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Runtime Information</h3>
+    </div>
+    <div class="card-body">
+        <div class="info-grid">
+            <div class="info-item">
+                <label>Go Version</label>
+                <span>{{.Status.GoVersion}}</span>
+            </div>
+            <div class="info-item">
+                <label>CPUs</label>
+                <span>{{.Status.NumCPU}}</span>
+            </div>
+            <div class="info-item">
+                <label>Goroutines</label>
+                <span>{{.Status.NumGoroutines}}</span>
+            </div>
+            <div class="info-item">
+                <label>Memory Allocated</label>
+                <span>{{printf "%.2f MB" .Status.MemAllocMB}}</span>
+            </div>
+            <div class="info-item">
+                <label>System Memory</label>
+                <span>{{printf "%.2f MB" .Status.MemSysMB}}</span>
+            </div>
+            <div class="info-item">
+                <label>Uptime</label>
+                <span>{{.Status.UptimeString}}</span>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+
+{{define "status/metrics.html"}}
+<div class="metrics-list">
+    <div class="metric">
+        <span class="metric-label">Uptime</span>
+        <span class="metric-value">{{.UptimeString}}</span>
+    </div>
+    <div class="metric">
+        <span class="metric-label">Goroutines</span>
+        <span class="metric-value">{{.NumGoroutines}}</span>
+    </div>
+    <div class="metric">
+        <span class="metric-label">Memory</span>
+        <span class="metric-value">{{printf "%.2f MB" .MemAllocMB}}</span>
+    </div>
+</div>
+{{end}}

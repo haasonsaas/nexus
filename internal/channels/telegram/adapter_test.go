@@ -167,6 +167,21 @@ func TestConvertTelegramMessage_WithAttachments(t *testing.T) {
 			},
 			wantAttachType: "audio",
 		},
+		{
+			name: "voice attachment",
+			teleMsg: &mockTelegramMessage{
+				messageID:     128,
+				chatID:        456789,
+				fromID:        111,
+				fromFirst:     "John",
+				date:          time.Now().Unix(),
+				hasVoice:      true,
+				voiceID:       "voice123",
+				voiceDuration: 15,
+				voiceMimeType: "audio/ogg",
+			},
+			wantAttachType: "voice",
+		},
 	}
 
 	for _, tt := range tests {
@@ -296,6 +311,11 @@ type mockTelegramMessage struct {
 
 	hasAudio bool
 	audioID  string
+
+	hasVoice      bool
+	voiceID       string
+	voiceDuration int
+	voiceMimeType string
 }
 
 func (m *mockTelegramMessage) GetMessageID() int64 {
@@ -352,6 +372,25 @@ func (m *mockTelegramMessage) HasAudio() bool {
 
 func (m *mockTelegramMessage) GetAudioID() string {
 	return m.audioID
+}
+
+func (m *mockTelegramMessage) HasVoice() bool {
+	return m.hasVoice
+}
+
+func (m *mockTelegramMessage) GetVoiceID() string {
+	return m.voiceID
+}
+
+func (m *mockTelegramMessage) GetVoiceDuration() int {
+	return m.voiceDuration
+}
+
+func (m *mockTelegramMessage) GetVoiceMimeType() string {
+	if m.voiceMimeType != "" {
+		return m.voiceMimeType
+	}
+	return "audio/ogg"
 }
 
 type mockUser struct {

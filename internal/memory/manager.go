@@ -3,11 +3,14 @@ package memory
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/memory/backend"
+	"github.com/haasonsaas/nexus/internal/memory/backend/lancedb"
+	"github.com/haasonsaas/nexus/internal/memory/backend/pgvector"
 	"github.com/haasonsaas/nexus/internal/memory/backend/sqlitevec"
 	"github.com/haasonsaas/nexus/internal/memory/embeddings"
 	"github.com/haasonsaas/nexus/internal/memory/embeddings/ollama"
@@ -32,8 +35,8 @@ type Config struct {
 
 	// Backend-specific config
 	SQLiteVec SQLiteVecConfig `yaml:"sqlite_vec"`
-	// LanceDB   LanceDBConfig   `yaml:"lancedb"`
-	// Pgvector  PgvectorConfig  `yaml:"pgvector"`
+	Pgvector  PgvectorConfig  `yaml:"pgvector"`
+	LanceDB   LanceDBConfig   `yaml:"lancedb"`
 
 	// Embedding provider config
 	Embeddings EmbeddingsConfig `yaml:"embeddings"`
@@ -48,6 +51,47 @@ type Config struct {
 // SQLiteVecConfig contains sqlite-vec specific configuration.
 type SQLiteVecConfig struct {
 	Path string `yaml:"path"` // Path to database file
+}
+
+// PgvectorConfig contains pgvector specific configuration.
+type PgvectorConfig struct {
+	// DSN is the PostgreSQL connection string.
+	// If empty and UseCockroachDB is true, uses the existing CockroachDB connection.
+	DSN string `yaml:"dsn"`
+
+	// UseCockroachDB indicates whether to reuse the existing CockroachDB connection.
+	// When true, DSN is ignored and the shared database connection is used.
+	UseCockroachDB bool `yaml:"use_cockroachdb"`
+
+	// DB is an existing database connection to reuse (set programmatically, not via config).
+	DB *sql.DB `yaml:"-"`
+
+	// RunMigrations controls whether to run migrations on startup.
+	// Default is true.
+	RunMigrations bool `yaml:"run_migrations"`
+}
+
+// LanceDBConfig contains LanceDB specific configuration.
+type LanceDBConfig struct {
+	// Path is the directory path for LanceDB storage.
+	Path string `yaml:"path"`
+
+	// IndexType specifies the vector index type to use.
+	// Options: auto, ivf_pq, ivf_flat, hnsw_pq, hnsw_sq
+	IndexType string `yaml:"index_type"`
+
+	// MetricType specifies the distance metric.
+	// Options: cosine, l2, dot
+	MetricType string `yaml:"metric_type"`
+
+	// NProbes is the number of probes for IVF indexes.
+	NProbes int `yaml:"n_probes"`
+
+	// EF is the HNSW ef parameter for search.
+	EF int `yaml:"ef"`
+
+	// RefineFactor improves accuracy by re-ranking results.
+	RefineFactor int `yaml:"refine_factor"`
 }
 
 // EmbeddingsConfig contains embedding provider configuration.
@@ -113,6 +157,20 @@ func NewManager(cfg *Config) (*Manager, error) {
 		b, err = sqlitevec.New(sqlitevec.Config{
 			Path:      cfg.SQLiteVec.Path,
 			Dimension: cfg.Dimension,
+		})
+	case "pgvector", "postgres", "postgresql":
+		b, err = pgvector.New(pgvector.Config{
+			DSN:           cfg.Pgvector.DSN,
+			DB:            cfg.Pgvector.DB,
+			Dimension:     cfg.Dimension,
+			RunMigrations: cfg.Pgvector.RunMigrations,
+		})
+	case "lancedb", "lance":
+		b, err = lancedb.New(lancedb.Config{
+			Path:       cfg.LanceDB.Path,
+			Dimension:  cfg.Dimension,
+			IndexType:  lancedb.IndexType(cfg.LanceDB.IndexType),
+			MetricType: cfg.LanceDB.MetricType,
 		})
 	default:
 		return nil, fmt.Errorf("unknown backend: %s", cfg.Backend)

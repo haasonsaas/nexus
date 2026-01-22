@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - Nexus</title>
+    <link rel="stylesheet" href="/ui/static/css/style.css">
+    <script src="/ui/static/js/htmx.min.js"></script>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-brand">
+            <a href="/ui/">
+                <span class="logo">N</span>
+                <span class="brand-name">Nexus</span>
+            </a>
+        </div>
+        <ul class="navbar-nav">
+            <li class="nav-item{{if eq .CurrentPath "/sessions"}} active{{end}}">
+                <a href="/ui/sessions">Sessions</a>
+            </li>
+            <li class="nav-item{{if eq .CurrentPath "/status"}} active{{end}}">
+                <a href="/ui/status">Status</a>
+            </li>
+        </ul>
+        {{if .User}}
+        <div class="navbar-user">
+            <span class="user-name">{{.User.Name}}</span>
+        </div>
+        {{end}}
+    </nav>
+
+    <main class="container">
+        {{if .Error}}
+        <div class="alert alert-error">
+            {{.Error}}
+        </div>
+        {{end}}
+
+        {{if .Flash}}
+        <div class="alert alert-success">
+            {{.Flash}}
+        </div>
+        {{end}}
+
+        {{/* Render the appropriate content based on the page */}}
+        {{if eq .CurrentPath "/sessions"}}
+            {{template "sessions/list.html" .}}
+        {{else if hasPrefix .CurrentPath "/sessions/"}}
+            {{template "sessions/detail.html" .}}
+        {{else if eq .CurrentPath "/status"}}
+            {{template "status/dashboard.html" .}}
+        {{else}}
+            <div class="content">
+                <h1>{{.Title}}</h1>
+                {{if .Error}}
+                <p>{{.Error}}</p>
+                {{end}}
+            </div>
+        {{end}}
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <p>Nexus Gateway Dashboard</p>
+        </div>
+    </footer>
+</body>
+</html>

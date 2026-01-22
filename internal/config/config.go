@@ -17,22 +17,23 @@ import (
 
 // Config is the main configuration structure for Nexus.
 type Config struct {
-	Server       ServerConfig        `yaml:"server"`
-	Database     DatabaseConfig      `yaml:"database"`
-	Auth         AuthConfig          `yaml:"auth"`
-	Session      SessionConfig       `yaml:"session"`
-	Workspace    WorkspaceConfig     `yaml:"workspace"`
-	Identity     IdentityConfig      `yaml:"identity"`
-	User         UserConfig          `yaml:"user"`
-	Plugins      PluginsConfig       `yaml:"plugins"`
-	Skills       skills.SkillsConfig `yaml:"skills"`
-	VectorMemory memory.Config       `yaml:"vector_memory"`
-	MCP          mcp.Config          `yaml:"mcp"`
-	Channels     ChannelsConfig      `yaml:"channels"`
-	LLM          LLMConfig           `yaml:"llm"`
-	Tools        ToolsConfig         `yaml:"tools"`
-	Cron         CronConfig          `yaml:"cron"`
-	Logging      LoggingConfig       `yaml:"logging"`
+	Server        ServerConfig        `yaml:"server"`
+	Database      DatabaseConfig      `yaml:"database"`
+	Auth          AuthConfig          `yaml:"auth"`
+	Session       SessionConfig       `yaml:"session"`
+	Workspace     WorkspaceConfig     `yaml:"workspace"`
+	Identity      IdentityConfig      `yaml:"identity"`
+	User          UserConfig          `yaml:"user"`
+	Plugins       PluginsConfig       `yaml:"plugins"`
+	Skills        skills.SkillsConfig `yaml:"skills"`
+	VectorMemory  memory.Config       `yaml:"vector_memory"`
+	MCP           mcp.Config          `yaml:"mcp"`
+	Channels      ChannelsConfig      `yaml:"channels"`
+	LLM           LLMConfig           `yaml:"llm"`
+	Tools         ToolsConfig         `yaml:"tools"`
+	Cron          CronConfig          `yaml:"cron"`
+	Logging       LoggingConfig       `yaml:"logging"`
+	Transcription TranscriptionConfig `yaml:"transcription"`
 }
 
 type ServerConfig struct {
@@ -342,6 +343,28 @@ type LoggingConfig struct {
 	Format string `yaml:"format"`
 }
 
+// TranscriptionConfig configures audio transcription.
+type TranscriptionConfig struct {
+	// Enabled enables/disables transcription globally
+	Enabled bool `yaml:"enabled"`
+
+	// Provider is the transcription provider (e.g., "openai")
+	Provider string `yaml:"provider"`
+
+	// APIKey is the API key for the transcription provider
+	APIKey string `yaml:"api_key"`
+
+	// BaseURL is an optional custom base URL for the API
+	BaseURL string `yaml:"base_url"`
+
+	// Model is the transcription model to use (e.g., "whisper-1")
+	Model string `yaml:"model"`
+
+	// Language is the default language for transcription (ISO 639-1)
+	// If empty, the provider will auto-detect the language
+	Language string `yaml:"language"`
+}
+
 // Load reads and parses the configuration file.
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
@@ -384,6 +407,7 @@ func applyDefaults(cfg *Config) {
 	applyToolsDefaults(cfg)
 	applyLLMDefaults(&cfg.LLM)
 	applyLoggingDefaults(&cfg.Logging)
+	applyTranscriptionDefaults(&cfg.Transcription)
 }
 
 func applyServerDefaults(cfg *ServerConfig) {
@@ -557,6 +581,15 @@ func applyLoggingDefaults(cfg *LoggingConfig) {
 	}
 	if cfg.Format == "" {
 		cfg.Format = "json"
+	}
+}
+
+func applyTranscriptionDefaults(cfg *TranscriptionConfig) {
+	if cfg.Provider == "" {
+		cfg.Provider = "openai"
+	}
+	if cfg.Model == "" {
+		cfg.Model = "whisper-1"
 	}
 }
 

@@ -92,7 +92,11 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		s.handleMessageHook(ctx, msg)
 		return
 	}
-	if msg.Metadata == nil {
+
+	// Normalize message metadata to canonical format
+	if s.normalizer != nil {
+		s.normalizer.Normalize(msg)
+	} else if msg.Metadata == nil {
 		msg.Metadata = map[string]any{}
 	}
 

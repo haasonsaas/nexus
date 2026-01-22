@@ -99,6 +99,12 @@ type Server struct {
 
 	// messageSem limits concurrent message processing to prevent unbounded goroutine growth
 	messageSem chan struct{}
+
+	// normalizer normalizes incoming messages to canonical format
+	normalizer *MessageNormalizer
+
+	// streamingRegistry manages streaming behavior per channel
+	streamingRegistry *StreamingRegistry
 }
 
 // NewServer creates a new gateway server with the given configuration and logger.
@@ -317,6 +323,8 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		commandParser:      commandParser,
 		activeRuns:         make(map[string]activeRun),
 		messageSem:         make(chan struct{}, 100), // Limit concurrent message handlers
+		normalizer:         NewMessageNormalizer(),
+		streamingRegistry:  NewStreamingRegistry(),
 	}
 	grpcSvc := newGRPCService(server)
 	proto.RegisterNexusGatewayServer(grpcServer, grpcSvc)
@@ -336,6 +344,16 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 // Channels returns the channel registry for accessing registered channel adapters.
 func (s *Server) Channels() *channels.Registry {
 	return s.channels
+}
+
+// Normalizer returns the message normalizer.
+func (s *Server) Normalizer() *MessageNormalizer {
+	return s.normalizer
+}
+
+// StreamingRegistry returns the streaming behavior registry.
+func (s *Server) StreamingRegistry() *StreamingRegistry {
+	return s.streamingRegistry
 }
 
 // registerChannelsFromConfig registers channel adapters based on configuration.

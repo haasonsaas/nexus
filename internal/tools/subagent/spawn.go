@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/haasonsaas/nexus/internal/agent"
+	"github.com/haasonsaas/nexus/internal/tools/policy"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
@@ -118,8 +119,15 @@ func (m *Manager) runSubAgent(ctx context.Context, sa *SubAgent) {
 		CreatedAt: time.Now(),
 	}
 
-	// TODO: Apply per-agent tool policy based on AllowedTools/DeniedTools
-	// This would require passing the policy to the runtime context
+	// Apply per-agent tool policy based on AllowedTools/DeniedTools
+	if len(sa.AllowedTools) > 0 || len(sa.DeniedTools) > 0 {
+		resolver := policy.NewResolver()
+		toolPolicy := &policy.Policy{
+			Allow: sa.AllowedTools,
+			Deny:  sa.DeniedTools,
+		}
+		ctx = agent.WithToolPolicy(ctx, resolver, toolPolicy)
+	}
 
 	chunks, err := m.runtime.Process(ctx, session, msg)
 	if err != nil {

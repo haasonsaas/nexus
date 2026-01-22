@@ -55,7 +55,23 @@ func NewRegistry(cfg *TemplatesConfig, workspacePath string) (*Registry, error) 
 		switch srcCfg.Type {
 		case SourceLocal, SourceExtra:
 			sources = append(sources, NewLocalSource(srcCfg.Path, srcCfg.Type, PriorityExtra))
-			// TODO: Add git and registry sources
+		case SourceGit:
+			// Determine cache directory for git repos
+			cacheDir := filepath.Join(homeDir, ".nexus", "cache", "templates", "git")
+			sources = append(sources, NewGitSource(
+				srcCfg.URL,
+				srcCfg.Branch,
+				srcCfg.SubPath,
+				cacheDir,
+				srcCfg.Refresh,
+				PriorityExtra,
+			))
+		case SourceRegistry:
+			sources = append(sources, NewRegistrySource(
+				srcCfg.URL,
+				srcCfg.Auth,
+				PriorityExtra,
+			))
 		}
 	}
 

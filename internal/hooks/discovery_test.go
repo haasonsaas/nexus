@@ -575,14 +575,15 @@ func TestFilterEligible(t *testing.T) {
 }
 
 func TestBuildDefaultSources(t *testing.T) {
-	sources := BuildDefaultSources("/workspace", "/home/.nexus/hooks", "/bundled", []string{"/extra1", "/extra2"})
+	sources := BuildDefaultSources("/workspace", "/home/.nexus/hooks", []string{"/extra1", "/extra2"})
 
-	if len(sources) != 5 {
-		t.Fatalf("expected 5 sources, got %d", len(sources))
+	// BuildDefaultSources no longer includes bundled (those are added via EmbeddedSource)
+	if len(sources) != 4 {
+		t.Fatalf("expected 4 sources, got %d", len(sources))
 	}
 
 	// Verify order and types
-	expectedTypes := []SourceType{SourceExtra, SourceExtra, SourceBundled, SourceLocal, SourceWorkspace}
+	expectedTypes := []SourceType{SourceExtra, SourceExtra, SourceLocal, SourceWorkspace}
 	for i, source := range sources {
 		if source.Type() != expectedTypes[i] {
 			t.Errorf("source %d: expected type %s, got %s", i, expectedTypes[i], source.Type())

@@ -23,6 +23,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/cron"
 	"github.com/haasonsaas/nexus/internal/hooks"
+	"github.com/haasonsaas/nexus/internal/hooks/bundled"
 	"github.com/haasonsaas/nexus/internal/jobs"
 	"github.com/haasonsaas/nexus/internal/mcp"
 	"github.com/haasonsaas/nexus/internal/media"
@@ -239,9 +240,12 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		sources := hooks.BuildDefaultSources(
 			cfg.Workspace.Path,
 			hooks.DefaultLocalPath(),
-			"", // bundled path (TODO: embed bundled hooks)
 			nil, // extra dirs
 		)
+		// Add embedded bundled hooks source
+		sources = append([]hooks.DiscoverySource{
+			hooks.NewEmbeddedSource(bundled.BundledFS(), hooks.SourceBundled, hooks.PriorityBundled),
+		}, sources...)
 		discoveredHooks, err := hooks.DiscoverAll(discoverCtx, sources)
 		if err != nil {
 			logger.Error("hook discovery failed", "error", err)

@@ -60,7 +60,21 @@ func NewManager(cfg *SkillsConfig, workspacePath string, configValues map[string
 		switch srcCfg.Type {
 		case SourceLocal, SourceExtra:
 			sources = append(sources, NewLocalSource(srcCfg.Path, srcCfg.Type, PriorityExtra))
-			// TODO: Add git and registry sources
+		case SourceGit:
+			sources = append(sources, NewGitSource(
+				srcCfg.URL,
+				srcCfg.Branch,
+				srcCfg.SubPath,
+				"", // Use default cache dir
+				srcCfg.Refresh,
+				PriorityExtra,
+			))
+		case SourceRegistry:
+			sources = append(sources, NewRegistrySource(
+				srcCfg.URL,
+				srcCfg.Auth,
+				PriorityExtra,
+			))
 		}
 	}
 

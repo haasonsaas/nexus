@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -215,6 +216,99 @@ func (s *LocalSource) Discover(ctx context.Context) ([]*HookEntry, error) {
 // WatchPaths returns the directory to watch for hook changes.
 func (s *LocalSource) WatchPaths() []string {
 	return []string{s.path}
+}
+
+// EmbeddedSource discovers hooks from an embedded filesystem.
+type EmbeddedSource struct {
+	fs         fs.FS
+	sourceType SourceType
+	priority   int
+	logger     *slog.Logger
+}
+
+// NewEmbeddedSource creates an embedded filesystem discovery source.
+func NewEmbeddedSource(fsys fs.FS, sourceType SourceType, priority int) *EmbeddedSource {
+	return &EmbeddedSource{
+		fs:         fsys,
+		sourceType: sourceType,
+		priority:   priority,
+		logger:     slog.Default().With("component", "hooks", "source", string(sourceType)),
+	}
+}
+
+func (s *EmbeddedSource) Type() SourceType {
+	return s.sourceType
+}
+
+func (s *EmbeddedSource) Priority() int {
+	return s.priority
+}
+
+func (s *EmbeddedSource) Discover(ctx context.Context) ([]*HookEntry, error) {
+	var hooks []*HookEntry
+
+	// Walk the embedded filesystem
+	err := fs.WalkDir(s.fs, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		// Skip non-directories and the root
+		if !d.IsDir() || path == "." {
+			return nil
+		}
+
+		// Check for HOOK.md in this directory
+		hookFile := filepath.Join(path, HookFilename)
+		data, err := fs.ReadFile(s.fs, hookFile)
+		if err != nil {
+			// No HOOK.md in this directory, continue walking
+			return nil
+		}
+
+		// Parse the hook
+		hook, err := ParseHook(data, path)
+		if err != nil {
+			s.logger.Warn("failed to parse embedded hook",
+				"path", path,
+				"error", err)
+			return nil
+		}
+
+		// Set source metadata
+		hook.Source = s.sourceType
+		hook.SourcePriority = s.priority
+
+		// Validate
+		if err := ValidateHook(hook); err != nil {
+			s.logger.Warn("invalid embedded hook",
+				"path", path,
+				"error", err)
+			return nil
+		}
+
+		hooks = append(hooks, hook)
+		s.logger.Debug("discovered embedded hook",
+			"name", hook.Config.Name,
+			"path", path,
+			"events", hook.Config.Events)
+
+		// Don't descend into hook directories
+		return fs.SkipDir
+	})
+
+	if err != nil && err != fs.SkipDir {
+		return nil, fmt.Errorf("walk embedded filesystem: %w", err)
+	}
+
+	s.logger.Info("discovered embedded hooks", "count", len(hooks))
+	return hooks, nil
 }
 
 // ParseHookFile parses a HOOK.md file and returns a HookEntry.
@@ -554,17 +648,13 @@ const (
 )
 
 // BuildDefaultSources creates the default discovery sources.
-func BuildDefaultSources(workspacePath, localPath, bundledPath string, extraDirs []string) []DiscoverySource {
+// Note: Bundled hooks should be added separately using NewEmbeddedSource with bundled.BundledFS().
+func BuildDefaultSources(workspacePath, localPath string, extraDirs []string) []DiscoverySource {
 	var sources []DiscoverySource
 
 	// Extra directories (lowest priority)
 	for _, dir := range extraDirs {
 		sources = append(sources, NewLocalSource(dir, SourceExtra, PriorityExtra))
-	}
-
-	// Bundled hooks
-	if bundledPath != "" {
-		sources = append(sources, NewLocalSource(bundledPath, SourceBundled, PriorityBundled))
 	}
 
 	// Local hooks (~/.nexus/hooks/)

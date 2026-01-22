@@ -175,9 +175,17 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 				continue
 			}
 			attachmentPaths = append(attachmentPaths, path)
-			defer os.Remove(path)
 		}
 	}
+
+	// Clean up temp files after send completes (or on error)
+	defer func() {
+		for _, path := range attachmentPaths {
+			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+				a.Logger().Debug("failed to remove temp file", "path", path, "error", err)
+			}
+		}
+	}()
 
 	if len(attachmentPaths) > 0 {
 		params["attachments"] = attachmentPaths

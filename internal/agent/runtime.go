@@ -127,6 +127,10 @@ const (
 	ElevatedFull ElevatedMode = "full"
 )
 
+// MaxResponseTextSize is the maximum size of accumulated response text (1MB).
+// This prevents memory exhaustion from malicious or buggy model responses.
+const MaxResponseTextSize = 1 << 20 // 1MB
+
 // ParseElevatedMode normalizes a user-facing directive to an ElevatedMode.
 func ParseElevatedMode(value string) (ElevatedMode, bool) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
@@ -1001,6 +1005,11 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 				break
 			}
 			if chunk.Text != "" {
+				// Check size limit to prevent memory exhaustion
+				if textBuilder.Len()+len(chunk.Text) > MaxResponseTextSize {
+					emitter.RunError(ctx, fmt.Errorf("response text exceeds maximum size of %d bytes", MaxResponseTextSize), true)
+					return fmt.Errorf("response text exceeds maximum size of %d bytes", MaxResponseTextSize)
+				}
 				textBuilder.WriteString(chunk.Text)
 				emitter.ModelDelta(ctx, chunk.Text)
 			}

@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/channels"
@@ -30,7 +31,7 @@ type Adapter struct {
 	config *Config
 	db     *sql.DB
 
-	lastMessageID int64
+	lastMessageID atomic.Int64
 	pollInterval  time.Duration
 
 	cancelFunc context.CancelFunc
@@ -84,11 +85,12 @@ func (a *Adapter) Start(ctx context.Context) error {
 	}
 
 	// Get the last message ID to avoid processing old messages
-	a.lastMessageID, err = a.getLastMessageID(ctx)
+	lastID, err := a.getLastMessageID(ctx)
 	if err != nil {
 		a.Logger().Warn("failed to get last message ID", "error", err)
-		a.lastMessageID = 0
+		lastID = 0
 	}
+	a.lastMessageID.Store(lastID)
 
 	a.SetStatus(true, "")
 	a.Logger().Info("started iMessage adapter",
@@ -307,7 +309,7 @@ func (a *Adapter) pollNewMessages(ctx context.Context) {
 		LIMIT 100
 	`
 
-	rows, err := a.db.QueryContext(ctx, query, a.lastMessageID)
+	rows, err := a.db.QueryContext(ctx, query, a.lastMessageID.Load())
 	if err != nil {
 		a.Logger().Error("failed to poll messages", "error", err)
 		return
@@ -327,9 +329,15 @@ func (a *Adapter) pollNewMessages(ctx context.Context) {
 			continue
 		}
 
-		// Update last message ID
-		if rowID > a.lastMessageID {
-			a.lastMessageID = rowID
+		// Update last message ID atomically
+		for {
+			current := a.lastMessageID.Load()
+			if rowID <= current {
+				break
+			}
+			if a.lastMessageID.CompareAndSwap(current, rowID) {
+				break
+			}
 		}
 
 		// Skip outgoing messages

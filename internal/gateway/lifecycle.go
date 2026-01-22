@@ -45,6 +45,9 @@ func (s *Server) Start(ctx context.Context) error {
 	// Start job pruning background task
 	s.startJobPruning(ctx)
 
+	// Start active runs cleanup background task
+	s.startActiveRunsCleanup(ctx)
+
 	// Trigger gateway:startup hook
 	startupEvent := hooks.NewEvent(hooks.EventGatewayStartup, "").
 		WithContext("workspace", s.config.Workspace.Path).
@@ -244,6 +247,29 @@ func (s *Server) startJobPruning(ctx context.Context) {
 				} else if pruned > 0 {
 					s.logger.Info("pruned old jobs", "count", pruned)
 				}
+			}
+		}
+	}()
+}
+
+// startActiveRunsCleanup starts a background goroutine that cleans up stale active runs.
+// This prevents unbounded memory growth from orphaned entries.
+func (s *Server) startActiveRunsCleanup(ctx context.Context) {
+	// Clean up stale active runs every 5 minutes
+	const cleanupInterval = 5 * time.Minute
+
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		ticker := time.NewTicker(cleanupInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				s.cleanupStaleActiveRuns()
 			}
 		}
 	}()

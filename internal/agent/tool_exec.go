@@ -205,7 +205,12 @@ func (e *ToolExecutor) executeWithTimeout(ctx context.Context, call models.ToolC
 
 	go func() {
 		result, err := e.registry.Execute(ctx, call.Name, call.Input)
-		resultChan <- execResult{result: result, err: err}
+		// Use non-blocking send to prevent goroutine leak if context is already done
+		select {
+		case resultChan <- execResult{result: result, err: err}:
+		default:
+			// Channel is full or nobody is listening; result is discarded
+		}
 	}()
 
 	select {

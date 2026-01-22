@@ -4,6 +4,7 @@ import (
 	"context"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/haasonsaas/nexus/internal/commands"
@@ -168,8 +169,9 @@ func isAdminMessage(msg *models.Message) bool {
 }
 
 type activeRun struct {
-	token  string
-	cancel context.CancelFunc
+	token     string
+	cancel    context.CancelFunc
+	startedAt time.Time
 }
 
 func (s *Server) registerActiveRun(sessionID string, cancel context.CancelFunc) string {
@@ -185,7 +187,7 @@ func (s *Server) registerActiveRun(sessionID string, cancel context.CancelFunc) 
 	if existing, ok := s.activeRuns[sessionID]; ok && existing.cancel != nil {
 		existing.cancel()
 	}
-	s.activeRuns[sessionID] = activeRun{token: token, cancel: cancel}
+	s.activeRuns[sessionID] = activeRun{token: token, cancel: cancel, startedAt: time.Now()}
 	return token
 }
 
@@ -236,6 +238,35 @@ func (s *Server) hasActiveRun(sessionID string) bool {
 	_, ok := s.activeRuns[sessionID]
 	s.activeRunsMu.Unlock()
 	return ok
+}
+
+// activeRunMaxAge is the maximum age for an active run before it's considered stale.
+// Runs older than this are cleaned up to prevent memory leaks from orphaned entries.
+const activeRunMaxAge = 1 * time.Hour
+
+// cleanupStaleActiveRuns removes active runs older than activeRunMaxAge.
+// This prevents unbounded memory growth from orphaned entries.
+func (s *Server) cleanupStaleActiveRuns() {
+	if s == nil {
+		return
+	}
+	s.activeRunsMu.Lock()
+	defer s.activeRunsMu.Unlock()
+	if s.activeRuns == nil {
+		return
+	}
+	now := time.Now()
+	for sessionID, run := range s.activeRuns {
+		if now.Sub(run.startedAt) > activeRunMaxAge {
+			if run.cancel != nil {
+				run.cancel()
+			}
+			delete(s.activeRuns, sessionID)
+			if s.logger != nil {
+				s.logger.Debug("cleaned up stale active run", "session_id", sessionID, "age", now.Sub(run.startedAt))
+			}
+		}
+	}
 }
 
 func (s *Server) maybeHandleInlineCommands(ctx context.Context, session *models.Session, msg *models.Message) bool {

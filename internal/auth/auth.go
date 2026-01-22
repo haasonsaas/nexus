@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/haasonsaas/nexus/pkg/models"
@@ -34,6 +35,7 @@ type APIKeyConfig struct {
 
 // Service validates JWTs and API keys.
 type Service struct {
+	mu        sync.RWMutex
 	jwt       *JWTService
 	apiKeys   map[string]*models.User
 	users     UserStore
@@ -53,36 +55,60 @@ func NewService(cfg Config) *Service {
 
 // Enabled reports whether auth checks should run.
 func (s *Service) Enabled() bool {
-	return s != nil && (s.jwt != nil || len(s.apiKeys) > 0)
+	if s == nil {
+		return false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.jwt != nil || len(s.apiKeys) > 0
 }
 
 // GenerateJWT issues a signed token for the given user.
 func (s *Service) GenerateJWT(user *models.User) (string, error) {
-	if s == nil || s.jwt == nil {
+	if s == nil {
 		return "", ErrAuthDisabled
 	}
-	return s.jwt.Generate(user)
+	s.mu.RLock()
+	jwt := s.jwt
+	s.mu.RUnlock()
+	if jwt == nil {
+		return "", ErrAuthDisabled
+	}
+	return jwt.Generate(user)
 }
 
 // ValidateJWT validates a JWT and returns the associated user.
 func (s *Service) ValidateJWT(token string) (*models.User, error) {
-	if s == nil || s.jwt == nil {
+	if s == nil {
 		return nil, ErrAuthDisabled
 	}
-	return s.jwt.Validate(token)
+	s.mu.RLock()
+	jwt := s.jwt
+	s.mu.RUnlock()
+	if jwt == nil {
+		return nil, ErrAuthDisabled
+	}
+	return jwt.Validate(token)
 }
 
 // ValidateAPIKey validates an API key and returns the associated user.
 // Uses constant-time comparison to prevent timing attacks.
 func (s *Service) ValidateAPIKey(key string) (*models.User, error) {
-	if s == nil || len(s.apiKeys) == 0 {
+	if s == nil {
+		return nil, ErrAuthDisabled
+	}
+	s.mu.RLock()
+	apiKeys := s.apiKeys
+	s.mu.RUnlock()
+
+	if len(apiKeys) == 0 {
 		return nil, ErrAuthDisabled
 	}
 	inputKey := strings.TrimSpace(key)
 	// Iterate through all keys using constant-time comparison
 	// to prevent timing attacks that could reveal valid keys.
 	var matchedUser *models.User
-	for storedKey, user := range s.apiKeys {
+	for storedKey, user := range apiKeys {
 		if subtle.ConstantTimeCompare([]byte(inputKey), []byte(storedKey)) == 1 {
 			matchedUser = user
 		}

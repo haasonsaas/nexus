@@ -51,6 +51,8 @@ func (s *Service) RegisterProvider(name string, provider OAuthProvider) {
 	if s == nil || provider == nil {
 		return
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.providers == nil {
 		s.providers = map[string]OAuthProvider{}
 	}
@@ -62,6 +64,8 @@ func (s *Service) SetUserStore(store UserStore) {
 	if s == nil {
 		return
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.users = store
 }
 
@@ -70,16 +74,23 @@ func (s *Service) HandleCallback(ctx context.Context, provider, code string) (*A
 	if s == nil {
 		return nil, ErrAuthDisabled
 	}
-	if s.users == nil {
+
+	// Read providers and users under lock
+	s.mu.RLock()
+	users := s.users
+	jwt := s.jwt
+	p := s.providers[strings.ToLower(strings.TrimSpace(provider))]
+	s.mu.RUnlock()
+
+	if users == nil {
 		return nil, ErrUserStoreMissing
 	}
-	if s.jwt == nil {
+	if jwt == nil {
 		return nil, ErrAuthDisabled
 	}
 	if strings.TrimSpace(code) == "" {
 		return nil, errors.New("authorization code required")
 	}
-	p := s.providers[strings.ToLower(strings.TrimSpace(provider))]
 	if p == nil {
 		return nil, ErrUnknownProvider
 	}
@@ -96,12 +107,12 @@ func (s *Service) HandleCallback(ctx context.Context, provider, code string) (*A
 	}
 
 	// Find or create user
-	user, err := s.users.FindOrCreate(ctx, info)
+	user, err := users.FindOrCreate(ctx, info)
 	if err != nil {
 		return nil, err
 	}
 
-	jwtToken, err := s.jwt.Generate(user)
+	jwtToken, err := jwt.Generate(user)
 	if err != nil {
 		return nil, err
 	}

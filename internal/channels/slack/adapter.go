@@ -168,10 +168,8 @@ func (a *Adapter) Stop(ctx context.Context) error {
 		a.cancel()
 	}
 
-	// Close the messages channel
-	close(a.messages)
-
-	// Wait for goroutines to finish with timeout
+	// Wait for goroutines to finish with timeout BEFORE closing messages channel
+	// This prevents panics from sending on a closed channel
 	done := make(chan struct{})
 	go func() {
 		a.wg.Wait()
@@ -180,11 +178,15 @@ func (a *Adapter) Stop(ctx context.Context) error {
 
 	select {
 	case <-done:
+		// Goroutines finished - safe to close messages channel now
+		close(a.messages)
 		a.updateStatus(false, "")
 		a.metrics.RecordConnectionClosed()
 		a.logger.Info("slack adapter stopped gracefully")
 		return nil
 	case <-ctx.Done():
+		// Timeout - still close the channel but some messages may be lost
+		close(a.messages)
 		a.updateStatus(false, "shutdown timeout")
 		a.logger.Warn("slack adapter stop timeout")
 		a.metrics.RecordError(channels.ErrCodeTimeout)

@@ -79,6 +79,7 @@ type HealthStatus struct {
 
 // Registry manages multiple channel adapters.
 type Registry struct {
+	mu        sync.RWMutex
 	adapters  map[models.ChannelType]Adapter
 	inbound   map[models.ChannelType]InboundAdapter
 	outbound  map[models.ChannelType]OutboundAdapter
@@ -99,6 +100,9 @@ func NewRegistry() *Registry {
 
 // Register adds an adapter to the registry.
 func (r *Registry) Register(adapter Adapter) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	channelType := adapter.Type()
 	r.adapters[channelType] = adapter
 
@@ -129,18 +133,24 @@ func (r *Registry) Register(adapter Adapter) {
 
 // Get returns an adapter by channel type.
 func (r *Registry) Get(channelType models.ChannelType) (Adapter, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	adapter, ok := r.adapters[channelType]
 	return adapter, ok
 }
 
 // GetOutbound returns an adapter that can send messages for the channel.
 func (r *Registry) GetOutbound(channelType models.ChannelType) (OutboundAdapter, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	adapter, ok := r.outbound[channelType]
 	return adapter, ok
 }
 
 // HealthAdapters returns a copy of registered health adapters.
 func (r *Registry) HealthAdapters() map[models.ChannelType]HealthAdapter {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	out := make(map[models.ChannelType]HealthAdapter, len(r.health))
 	for channelType, adapter := range r.health {
 		out[channelType] = adapter
@@ -150,6 +160,8 @@ func (r *Registry) HealthAdapters() map[models.ChannelType]HealthAdapter {
 
 // All returns all registered adapters.
 func (r *Registry) All() []Adapter {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	adapters := make([]Adapter, 0, len(r.adapters))
 	for _, a := range r.adapters {
 		adapters = append(adapters, a)
@@ -159,7 +171,15 @@ func (r *Registry) All() []Adapter {
 
 // StartAll starts all registered adapters.
 func (r *Registry) StartAll(ctx context.Context) error {
+	// Copy adapters under lock to avoid holding lock during potentially slow Start calls
+	r.mu.RLock()
+	adapters := make([]LifecycleAdapter, 0, len(r.lifecycle))
 	for _, adapter := range r.lifecycle {
+		adapters = append(adapters, adapter)
+	}
+	r.mu.RUnlock()
+
+	for _, adapter := range adapters {
 		if err := adapter.Start(ctx); err != nil {
 			return err
 		}
@@ -169,8 +189,16 @@ func (r *Registry) StartAll(ctx context.Context) error {
 
 // StopAll stops all registered adapters.
 func (r *Registry) StopAll(ctx context.Context) error {
-	var lastErr error
+	// Copy adapters under lock to avoid holding lock during potentially slow Stop calls
+	r.mu.RLock()
+	adapters := make([]LifecycleAdapter, 0, len(r.lifecycle))
 	for _, adapter := range r.lifecycle {
+		adapters = append(adapters, adapter)
+	}
+	r.mu.RUnlock()
+
+	var lastErr error
+	for _, adapter := range adapters {
 		if err := adapter.Stop(ctx); err != nil {
 			lastErr = err
 		}
@@ -184,7 +212,15 @@ func (r *Registry) AggregateMessages(ctx context.Context) <-chan *models.Message
 	out := make(chan *models.Message)
 	var wg sync.WaitGroup
 
+	// Copy adapters under lock before starting goroutines
+	r.mu.RLock()
+	adapters := make([]InboundAdapter, 0, len(r.inbound))
 	for _, adapter := range r.inbound {
+		adapters = append(adapters, adapter)
+	}
+	r.mu.RUnlock()
+
+	for _, adapter := range adapters {
 		wg.Add(1)
 		go func(a InboundAdapter) {
 			defer wg.Done()

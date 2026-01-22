@@ -92,7 +92,7 @@ func (s *CockroachBranchStore) UpdateBranch(ctx context.Context, branch *models.
 func (s *CockroachBranchStore) DeleteBranch(ctx context.Context, branchID string, deleteMessages bool) error {
 	branch, err := s.GetBranch(ctx, branchID)
 	if err != nil {
-		return err
+		return fmt.Errorf("get branch %q: %w", branchID, err)
 	}
 	if branch.IsPrimary {
 		return ErrCannotDeletePrimary
@@ -466,7 +466,7 @@ func (s *CockroachBranchStore) MergeBranch(ctx context.Context, sourceBranchID, 
 func (s *CockroachBranchStore) ArchiveBranch(ctx context.Context, branchID string) error {
 	branch, err := s.GetBranch(ctx, branchID)
 	if err != nil {
-		return err
+		return fmt.Errorf("get branch %q: %w", branchID, err)
 	}
 	if branch.IsPrimary {
 		return ErrCannotDeletePrimary
@@ -536,7 +536,7 @@ func (s *CockroachBranchStore) AppendMessageToBranch(ctx context.Context, sessio
 	if branchID == "" {
 		branch, err := s.GetPrimaryBranch(ctx, sessionID)
 		if err != nil {
-			return err
+			return fmt.Errorf("get primary branch for session %q: %w", sessionID, err)
 		}
 		branchID = branch.ID
 	}
@@ -698,7 +698,7 @@ func (s *CockroachBranchStore) EnsurePrimaryBranch(ctx context.Context, sessionI
 func (s *CockroachBranchStore) MigrateSessionToBranches(ctx context.Context, sessionID string) error {
 	branch, err := s.EnsurePrimaryBranch(ctx, sessionID)
 	if err != nil {
-		return err
+		return fmt.Errorf("ensure primary branch for session %q: %w", sessionID, err)
 	}
 
 	// Update messages without branch_id to use primary branch
@@ -709,8 +709,10 @@ func (s *CockroachBranchStore) MigrateSessionToBranches(ctx context.Context, ses
 		)
 		WHERE session_id = $2 AND (branch_id IS NULL OR branch_id = '')
 	`
-	_, err = s.db.ExecContext(ctx, query, branch.ID, sessionID)
-	return err
+	if _, err := s.db.ExecContext(ctx, query, branch.ID, sessionID); err != nil {
+		return fmt.Errorf("migrate messages to primary branch: %w", err)
+	}
+	return nil
 }
 
 func (s *CockroachBranchStore) scanMessages(rows *sql.Rows) ([]*models.Message, error) {

@@ -2,12 +2,14 @@ package policy
 
 import (
 	"strings"
+	"sync"
 )
 
 // Resolver resolves tool access based on policies by evaluating profiles,
 // groups, allow lists, and deny lists. It supports MCP server tool registration
 // and custom tool aliases.
 type Resolver struct {
+	mu         sync.RWMutex
 	groups     map[string][]string
 	mcpServers map[string][]string // serverID -> tool names
 	aliases    map[string]string   // alias -> canonical tool name
@@ -32,12 +34,16 @@ func NewResolver() *Resolver {
 
 // AddGroup adds a custom tool group that can be referenced in policies.
 func (r *Resolver) AddGroup(name string, tools []string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.groups[name] = tools
 }
 
 // RegisterMCPServer registers tools from an MCP server, making them available
 // for policy rules and creating a group "mcp:serverID" for convenience.
 func (r *Resolver) RegisterMCPServer(serverID string, tools []string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.mcpServers[serverID] = tools
 	// Also add as a group
 	r.groups["mcp:"+serverID] = tools
@@ -51,11 +57,20 @@ func (r *Resolver) RegisterAlias(alias string, canonical string) {
 	if alias == "" || canonical == "" {
 		return
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.aliases[alias] = canonical
 }
 
 // CanonicalName resolves a tool name to its canonical form via registered aliases.
 func (r *Resolver) CanonicalName(name string) string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.canonicalNameLocked(name)
+}
+
+// canonicalNameLocked is the internal version that assumes lock is held.
+func (r *Resolver) canonicalNameLocked(name string) string {
 	normalized := NormalizeTool(name)
 	if canonical, ok := r.aliases[normalized]; ok {
 		return canonical
@@ -69,8 +84,11 @@ func (r *Resolver) ExpandGroups(items []string) []string {
 	var result []string
 	seen := make(map[string]bool)
 
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
 	for _, item := range items {
-		normalized := r.CanonicalName(item)
+		normalized := r.canonicalNameLocked(item)
 
 		// Check if it's a group reference
 		if tools, ok := r.groups[normalized]; ok {

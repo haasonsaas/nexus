@@ -57,11 +57,11 @@ func TestEdgeTool(t *testing.T) {
 
 func TestParse(t *testing.T) {
 	tests := []struct {
-		canonical     string
-		expectSource  ToolSource
-		expectNS      string
-		expectName    string
-		expectErr     bool
+		canonical    string
+		expectSource ToolSource
+		expectNS     string
+		expectName   string
+		expectErr    bool
 	}{
 		{"core.browser", SourceCore, "", "browser", false},
 		{"mcp:server.tool", SourceMCP, "server", "tool", false},

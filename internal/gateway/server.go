@@ -30,6 +30,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/storage"
 	"github.com/haasonsaas/nexus/internal/tools/browser"
 	"github.com/haasonsaas/nexus/internal/tools/memorysearch"
+	"github.com/haasonsaas/nexus/internal/tools/policy"
 	"github.com/haasonsaas/nexus/internal/tools/sandbox"
 	"github.com/haasonsaas/nexus/internal/tools/websearch"
 	"github.com/haasonsaas/nexus/pkg/models"
@@ -63,6 +64,10 @@ type Server struct {
 	authService    *auth.Service
 	cronScheduler  *cron.Scheduler
 	mcpManager     *mcp.Manager
+
+	toolPolicyResolver *policy.Resolver
+	llmProvider        agent.LLMProvider
+	defaultModel       string
 }
 
 // NewServer creates a new gateway server.
@@ -126,6 +131,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		logger.Warn("vector memory not initialized", "error", err)
 	}
 	mcpManager := mcp.NewManager(&cfg.MCP, logger)
+	toolPolicyResolver := policy.NewResolver()
 
 	stores, err := initStorageStores(cfg)
 	if err != nil {
@@ -145,18 +151,19 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	}
 
 	server := &Server{
-		config:         cfg,
-		grpc:           grpcServer,
-		channels:       channels.NewRegistry(),
-		logger:         logger,
-		channelPlugins: newChannelPluginRegistry(),
-		runtimePlugins: plugins.DefaultRuntimeRegistry(),
-		skillsManager:  skillsMgr,
-		vectorMemory:   vectorMem,
-		stores:         stores,
-		authService:    authService,
-		cronScheduler:  cronScheduler,
-		mcpManager:     mcpManager,
+		config:             cfg,
+		grpc:               grpcServer,
+		channels:           channels.NewRegistry(),
+		logger:             logger,
+		channelPlugins:     newChannelPluginRegistry(),
+		runtimePlugins:     plugins.DefaultRuntimeRegistry(),
+		skillsManager:      skillsMgr,
+		vectorMemory:       vectorMem,
+		stores:             stores,
+		authService:        authService,
+		cronScheduler:      cronScheduler,
+		mcpManager:         mcpManager,
+		toolPolicyResolver: toolPolicyResolver,
 	}
 	grpcSvc := newGRPCService(server)
 	proto.RegisterNexusGatewayServer(grpcServer, grpcSvc)
@@ -349,6 +356,11 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 	if systemPrompt := s.systemPromptForMessage(ctx, session, msg); systemPrompt != "" {
 		promptCtx = agent.WithSystemPrompt(promptCtx, systemPrompt)
 	}
+	if s.toolPolicyResolver != nil {
+		if toolPolicy := s.toolPolicyForAgent(ctx, agentID); toolPolicy != nil {
+			promptCtx = agent.WithToolPolicy(promptCtx, s.toolPolicyResolver, toolPolicy)
+		}
+	}
 
 	chunks, err := runtime.Process(promptCtx, session, msg)
 	if err != nil {
@@ -482,6 +494,10 @@ func (s *Server) ensureRuntime(ctx context.Context) (*agent.Runtime, error) {
 	if err != nil {
 		return nil, err
 	}
+	if s.llmProvider == nil {
+		s.llmProvider = provider
+		s.defaultModel = defaultModel
+	}
 	if s.mcpManager != nil {
 		if err := s.mcpManager.Start(ctx); err != nil {
 			return nil, fmt.Errorf("mcp manager: %w", err)
@@ -503,6 +519,7 @@ func (s *Server) ensureRuntime(ctx context.Context) (*agent.Runtime, error) {
 			return nil, err
 		}
 	}
+	s.registerMCPSamplingHandler()
 
 	s.runtime = runtime
 	return runtime, nil
@@ -632,7 +649,7 @@ func (s *Server) registerTools(runtime *agent.Runtime) error {
 	}
 
 	if s.config.MCP.Enabled && s.mcpManager != nil {
-		mcp.RegisterTools(runtime, s.mcpManager)
+		mcp.RegisterToolsWithRegistrar(runtime, s.mcpManager, s.toolPolicyResolver)
 	}
 
 	return nil

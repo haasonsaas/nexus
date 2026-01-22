@@ -22,6 +22,34 @@ func (f *fakeToolCaller) CallTool(ctx context.Context, serverID, toolName string
 	return f.result, f.err
 }
 
+type fakeResourceReader struct {
+	serverID string
+	uri      string
+	result   []*ResourceContent
+	err      error
+}
+
+func (f *fakeResourceReader) ReadResource(ctx context.Context, serverID, uri string) ([]*ResourceContent, error) {
+	f.serverID = serverID
+	f.uri = uri
+	return f.result, f.err
+}
+
+type fakePromptGetter struct {
+	serverID string
+	name     string
+	args     map[string]string
+	result   *GetPromptResult
+	err      error
+}
+
+func (f *fakePromptGetter) GetPrompt(ctx context.Context, serverID, name string, arguments map[string]string) (*GetPromptResult, error) {
+	f.serverID = serverID
+	f.name = name
+	f.args = arguments
+	return f.result, f.err
+}
+
 func TestSafeToolNameSanitizes(t *testing.T) {
 	used := make(map[string]struct{})
 	name := safeToolName("git-hub", "search/repo", used)
@@ -82,5 +110,48 @@ func TestMCPToolBridgeExecute(t *testing.T) {
 	}
 	if caller.args["value"] != "hi" {
 		t.Fatalf("expected arg value %q, got %v", "hi", caller.args["value"])
+	}
+}
+
+func TestResourceReadBridgeExecute(t *testing.T) {
+	reader := &fakeResourceReader{
+		result: []*ResourceContent{{URI: "file://note.txt", Text: "hello"}},
+	}
+	bridge := NewResourceReadBridge(reader, "server", "mcp_server_resource_read")
+
+	result, err := bridge.Execute(context.Background(), json.RawMessage(`{"uri":"file://note.txt"}`))
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if result.Content != "hello" {
+		t.Fatalf("expected content %q, got %q", "hello", result.Content)
+	}
+	if reader.serverID != "server" || reader.uri != "file://note.txt" {
+		t.Fatalf("expected reader called with server/uri, got %q/%q", reader.serverID, reader.uri)
+	}
+}
+
+func TestPromptGetBridgeExecute(t *testing.T) {
+	getter := &fakePromptGetter{
+		result: &GetPromptResult{
+			Messages: []PromptMessage{
+				{Role: "assistant", Content: MessageContent{Type: "text", Text: "hello"}},
+			},
+		},
+	}
+	bridge := NewPromptGetBridge(getter, "server", "mcp_server_prompt_get")
+
+	result, err := bridge.Execute(context.Background(), json.RawMessage(`{"name":"greet","arguments":{"name":"Jane"}}`))
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if result.Content != "hello" {
+		t.Fatalf("expected content %q, got %q", "hello", result.Content)
+	}
+	if getter.serverID != "server" || getter.name != "greet" {
+		t.Fatalf("expected getter called with server/name, got %q/%q", getter.serverID, getter.name)
+	}
+	if getter.args["name"] != "Jane" {
+		t.Fatalf("expected prompt arg %q, got %v", "Jane", getter.args["name"])
 	}
 }

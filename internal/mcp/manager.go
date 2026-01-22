@@ -14,6 +14,8 @@ type Manager struct {
 	logger  *slog.Logger
 	clients map[string]*Client
 	mu      sync.RWMutex
+
+	samplingHandler SamplingHandler
 }
 
 // Config holds the MCP manager configuration.
@@ -103,6 +105,9 @@ func (m *Manager) Connect(ctx context.Context, serverID string) error {
 	if err := client.Connect(ctx); err != nil {
 		return err
 	}
+	if m.samplingHandler != nil {
+		client.HandleSampling(m.samplingHandler)
+	}
 
 	m.mu.Lock()
 	m.clients[serverID] = client
@@ -113,6 +118,24 @@ func (m *Manager) Connect(ctx context.Context, serverID string) error {
 		"name", client.ServerInfo().Name)
 
 	return nil
+}
+
+// SetSamplingHandler enables sampling on all connected clients and future connections.
+func (m *Manager) SetSamplingHandler(handler SamplingHandler) {
+	m.mu.Lock()
+	m.samplingHandler = handler
+	clients := make([]*Client, 0, len(m.clients))
+	for _, client := range m.clients {
+		clients = append(clients, client)
+	}
+	m.mu.Unlock()
+
+	if handler == nil {
+		return
+	}
+	for _, client := range clients {
+		client.HandleSampling(handler)
+	}
 }
 
 // Disconnect disconnects from a specific MCP server.

@@ -2,10 +2,12 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
 	"github.com/haasonsaas/nexus/internal/sessions"
+	"github.com/haasonsaas/nexus/internal/tools/policy"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
@@ -64,6 +66,43 @@ func (p *cancelProvider) Models() []Model { return nil }
 
 func (p *cancelProvider) SupportsTools() bool { return false }
 
+type toolRecordingProvider struct {
+	tools []string
+}
+
+func (p *toolRecordingProvider) Complete(ctx context.Context, req *CompletionRequest) (<-chan *CompletionChunk, error) {
+	for _, tool := range req.Tools {
+		p.tools = append(p.tools, tool.Name())
+	}
+	ch := make(chan *CompletionChunk, 1)
+	ch <- &CompletionChunk{Text: "ok"}
+	close(ch)
+	return ch, nil
+}
+
+func (p *toolRecordingProvider) Name() string { return "tool-recording" }
+
+func (p *toolRecordingProvider) Models() []Model { return nil }
+
+func (p *toolRecordingProvider) SupportsTools() bool { return true }
+
+type toolCallProvider struct {
+	toolCall *models.ToolCall
+}
+
+func (p *toolCallProvider) Complete(ctx context.Context, req *CompletionRequest) (<-chan *CompletionChunk, error) {
+	ch := make(chan *CompletionChunk, 1)
+	ch <- &CompletionChunk{ToolCall: p.toolCall}
+	close(ch)
+	return ch, nil
+}
+
+func (p *toolCallProvider) Name() string { return "tool-call" }
+
+func (p *toolCallProvider) Models() []Model { return nil }
+
+func (p *toolCallProvider) SupportsTools() bool { return true }
+
 type stubStore struct{}
 
 func (stubStore) Create(ctx context.Context, session *models.Session) error { return nil }
@@ -90,6 +129,23 @@ func (stubStore) AppendMessage(ctx context.Context, sessionID string, msg *model
 
 func (stubStore) GetHistory(ctx context.Context, sessionID string, limit int) ([]*models.Message, error) {
 	return nil, nil
+}
+
+type testTool struct {
+	name        string
+	executed    bool
+	description string
+}
+
+func (t *testTool) Name() string { return t.name }
+
+func (t *testTool) Description() string { return t.description }
+
+func (t *testTool) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
+
+func (t *testTool) Execute(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
+	t.executed = true
+	return &ToolResult{Content: "ok"}, nil
 }
 
 func TestProcessReturnsBufferedChannel(t *testing.T) {
@@ -198,5 +254,74 @@ func TestProcessPropagatesContextCancel(t *testing.T) {
 	}
 	if !errors.Is(gotErr, context.Canceled) {
 		t.Fatalf("expected context.Canceled, got %v", gotErr)
+	}
+}
+
+func TestProcessAppliesToolPolicyFilter(t *testing.T) {
+	provider := &toolRecordingProvider{}
+	runtime := NewRuntime(provider, stubStore{})
+
+	allowedTool := &testTool{name: "allowed_tool"}
+	mcpTool := &testTool{name: "mcp_github_search"}
+	runtime.RegisterTool(allowedTool)
+	runtime.RegisterTool(mcpTool)
+
+	resolver := policy.NewResolver()
+	resolver.RegisterMCPServer("github", []string{"search"})
+	resolver.RegisterAlias("mcp_github_search", "mcp:github.search")
+	toolPolicy := &policy.Policy{Allow: []string{"mcp:github.search"}}
+
+	ctx := WithToolPolicy(context.Background(), resolver, toolPolicy)
+	session := &models.Session{ID: "session-1", Channel: models.ChannelTelegram}
+	msg := &models.Message{Role: models.RoleUser, Content: "hi"}
+
+	ch, err := runtime.Process(ctx, session, msg)
+	if err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+	for range ch {
+	}
+
+	if len(provider.tools) != 1 || provider.tools[0] != "mcp_github_search" {
+		t.Fatalf("expected only MCP tool to be passed, got %v", provider.tools)
+	}
+}
+
+func TestProcessDeniesToolCallByPolicy(t *testing.T) {
+	tool := &testTool{name: "danger_tool"}
+	provider := &toolCallProvider{
+		toolCall: &models.ToolCall{
+			ID:    "call-1",
+			Name:  "danger_tool",
+			Input: []byte(`{}`),
+		},
+	}
+	runtime := NewRuntime(provider, stubStore{})
+	runtime.RegisterTool(tool)
+
+	resolver := policy.NewResolver()
+	toolPolicy := &policy.Policy{Allow: []string{"safe_tool"}}
+	ctx := WithToolPolicy(context.Background(), resolver, toolPolicy)
+
+	session := &models.Session{ID: "session-1", Channel: models.ChannelTelegram}
+	msg := &models.Message{Role: models.RoleUser, Content: "hi"}
+
+	ch, err := runtime.Process(ctx, session, msg)
+	if err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+
+	var gotResult *models.ToolResult
+	for chunk := range ch {
+		if chunk.ToolResult != nil {
+			gotResult = chunk.ToolResult
+		}
+	}
+
+	if gotResult == nil || !gotResult.IsError {
+		t.Fatalf("expected denied tool result error, got %+v", gotResult)
+	}
+	if tool.executed {
+		t.Fatal("expected tool not to execute when denied")
 	}
 }

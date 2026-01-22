@@ -74,6 +74,7 @@ import (
 	"sync"
 
 	"github.com/haasonsaas/nexus/internal/sessions"
+	"github.com/haasonsaas/nexus/internal/tools/policy"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
@@ -98,6 +99,30 @@ func systemPromptFromContext(ctx context.Context) (string, bool) {
 		return "", false
 	}
 	return value, true
+}
+
+type toolPolicyKey struct{}
+type toolResolverKey struct{}
+
+// WithToolPolicy stores a tool policy override in the context.
+func WithToolPolicy(ctx context.Context, resolver *policy.Resolver, toolPolicy *policy.Policy) context.Context {
+	if resolver == nil || toolPolicy == nil {
+		return ctx
+	}
+	ctx = context.WithValue(ctx, toolResolverKey{}, resolver)
+	return context.WithValue(ctx, toolPolicyKey{}, toolPolicy)
+}
+
+func toolPolicyFromContext(ctx context.Context) (*policy.Resolver, *policy.Policy, bool) {
+	resolver, ok := ctx.Value(toolResolverKey{}).(*policy.Resolver)
+	if !ok || resolver == nil {
+		return nil, nil, false
+	}
+	pol, ok := ctx.Value(toolPolicyKey{}).(*policy.Policy)
+	if !ok || pol == nil {
+		return nil, nil, false
+	}
+	return resolver, pol, true
 }
 
 // LLMProvider defines the interface for Large Language Model backends.
@@ -469,9 +494,13 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 			Content: msg.Content,
 		})
 
+		tools := r.tools.AsLLMTools()
+		if resolver, toolPolicy, ok := toolPolicyFromContext(ctx); ok {
+			tools = filterToolsByPolicy(resolver, toolPolicy, tools)
+		}
 		req := &CompletionRequest{
 			Messages:  messages,
-			Tools:     r.tools.AsLLMTools(),
+			Tools:     tools,
 			MaxTokens: 4096,
 		}
 		if req.Model == "" && r.defaultModel != "" {
@@ -498,6 +527,18 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 			}
 
 			if chunk.ToolCall != nil {
+				if resolver, toolPolicy, ok := toolPolicyFromContext(ctx); ok {
+					if !resolver.IsAllowed(toolPolicy, chunk.ToolCall.Name) {
+						chunks <- &ResponseChunk{
+							ToolResult: &models.ToolResult{
+								ToolCallID: chunk.ToolCall.ID,
+								Content:    "tool not allowed: " + chunk.ToolCall.Name,
+								IsError:    true,
+							},
+						}
+						continue
+					}
+				}
 				// Execute tool
 				result, err := r.tools.Execute(ctx, chunk.ToolCall.Name, chunk.ToolCall.Input)
 				if err != nil {
@@ -587,4 +628,17 @@ func (r *ToolRegistry) AsLLMTools() []Tool {
 		tools = append(tools, t)
 	}
 	return tools
+}
+
+func filterToolsByPolicy(resolver *policy.Resolver, toolPolicy *policy.Policy, tools []Tool) []Tool {
+	if resolver == nil || toolPolicy == nil {
+		return tools
+	}
+	filtered := make([]Tool, 0, len(tools))
+	for _, tool := range tools {
+		if resolver.IsAllowed(toolPolicy, tool.Name()) {
+			filtered = append(filtered, tool)
+		}
+	}
+	return filtered
 }

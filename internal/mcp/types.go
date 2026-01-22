@@ -16,9 +16,9 @@ const (
 
 // ServerConfig holds configuration for an MCP server.
 type ServerConfig struct {
-	ID        string            `yaml:"id" json:"id"`
-	Name      string            `yaml:"name" json:"name"`
-	Transport TransportType     `yaml:"transport" json:"transport"`
+	ID        string        `yaml:"id" json:"id"`
+	Name      string        `yaml:"name" json:"name"`
+	Transport TransportType `yaml:"transport" json:"transport"`
 
 	// Stdio transport options
 	Command string            `yaml:"command" json:"command,omitempty"`
@@ -85,6 +85,39 @@ type MessageContent struct {
 	Data     string           `json:"data,omitempty"`
 	MimeType string           `json:"mimeType,omitempty"`
 	Resource *ResourceContent `json:"resource,omitempty"`
+}
+
+// SamplingMessage represents a message for sampling requests.
+type SamplingMessage struct {
+	Role    string         `json:"role"`
+	Content MessageContent `json:"content"`
+}
+
+// ModelPreferences describes preferred models for sampling.
+type ModelPreferences struct {
+	Hints []ModelHint `json:"hints,omitempty"`
+}
+
+// ModelHint suggests a model name.
+type ModelHint struct {
+	Name string `json:"name,omitempty"`
+}
+
+// SamplingRequest represents a server-initiated sampling request.
+type SamplingRequest struct {
+	Messages     []SamplingMessage `json:"messages"`
+	ModelPrefs   *ModelPreferences `json:"modelPreferences,omitempty"`
+	SystemPrompt string            `json:"systemPrompt,omitempty"`
+	MaxTokens    int               `json:"maxTokens,omitempty"`
+	Model        string            `json:"model,omitempty"`
+}
+
+// SamplingResponse represents a client response to a sampling request.
+type SamplingResponse struct {
+	Role       string         `json:"role"`
+	Content    MessageContent `json:"content"`
+	Model      string         `json:"model"`
+	StopReason string         `json:"stopReason,omitempty"`
 }
 
 // ToolCallResult holds the result of calling an MCP tool.

@@ -36,6 +36,7 @@ import (
 	"bufio"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -49,6 +50,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/doctor"
 	"github.com/haasonsaas/nexus/internal/gateway"
+	"github.com/haasonsaas/nexus/internal/mcp"
 	"github.com/haasonsaas/nexus/internal/memory"
 	"github.com/haasonsaas/nexus/internal/onboard"
 	"github.com/haasonsaas/nexus/internal/plugins"
@@ -127,6 +129,7 @@ Documentation: https://github.com/haasonsaas/nexus`,
 		buildSkillsCmd(),
 		buildServiceCmd(),
 		buildMemoryCmd(),
+		buildMcpCmd(),
 	)
 
 	return rootCmd
@@ -1010,6 +1013,464 @@ func buildMemoryCompactCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
 	return cmd
+}
+
+// buildMcpCmd creates the "mcp" command group for MCP servers/tools.
+func buildMcpCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mcp",
+		Short: "Manage MCP servers and tools",
+		Long: `Manage MCP servers and interact with MCP tools/resources/prompts.
+
+Use "nexus mcp servers" to list configured servers.`,
+	}
+	cmd.AddCommand(
+		buildMcpServersCmd(),
+		buildMcpConnectCmd(),
+		buildMcpToolsCmd(),
+		buildMcpCallCmd(),
+		buildMcpResourcesCmd(),
+		buildMcpReadCmd(),
+		buildMcpPromptsCmd(),
+		buildMcpPromptCmd(),
+	)
+	return cmd
+}
+
+func buildMcpServersCmd() *cobra.Command {
+	var configPath string
+	cmd := &cobra.Command{
+		Use:   "servers",
+		Short: "List configured MCP servers",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, mgr, err := loadMCPManager(configPath)
+			if err != nil {
+				return err
+			}
+			if cfg.MCP.Enabled {
+				if err := mgr.Start(cmd.Context()); err != nil {
+					return err
+				}
+			}
+			defer mgr.Stop()
+
+			out := cmd.OutOrStdout()
+			statuses := mgr.Status()
+			if len(statuses) == 0 {
+				fmt.Fprintln(out, "No MCP servers configured.")
+				return nil
+			}
+			fmt.Fprintln(out, "MCP Servers:")
+			for _, status := range statuses {
+				state := "disconnected"
+				if status.Connected {
+					state = "connected"
+				}
+				fmt.Fprintf(out, "  %s (%s) - %s\n", status.ID, status.Name, state)
+				if status.Connected {
+					fmt.Fprintf(out, "    Tools: %d | Resources: %d | Prompts: %d\n", status.Tools, status.Resources, status.Prompts)
+				}
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	return cmd
+}
+
+func buildMcpConnectCmd() *cobra.Command {
+	var configPath string
+	cmd := &cobra.Command{
+		Use:   "connect <server-id>",
+		Short: "Connect to an MCP server",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, mgr, err := loadMCPManager(configPath)
+			if err != nil {
+				return err
+			}
+			defer mgr.Stop()
+
+			if err := mgr.Connect(cmd.Context(), args[0]); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Connected to %s\n", args[0])
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	return cmd
+}
+
+func buildMcpToolsCmd() *cobra.Command {
+	var (
+		configPath string
+		serverID   string
+	)
+	cmd := &cobra.Command{
+		Use:   "tools",
+		Short: "List MCP tools",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, mgr, err := loadMCPManager(configPath)
+			if err != nil {
+				return err
+			}
+			defer mgr.Stop()
+
+			if serverID != "" {
+				if err := mgr.Connect(cmd.Context(), serverID); err != nil {
+					return err
+				}
+			} else {
+				if err := mgr.Start(cmd.Context()); err != nil {
+					return err
+				}
+			}
+
+			tools := mgr.AllTools()
+			out := cmd.OutOrStdout()
+			if serverID != "" {
+				list := tools[serverID]
+				if len(list) == 0 {
+					fmt.Fprintf(out, "No tools for %s\n", serverID)
+					return nil
+				}
+				fmt.Fprintf(out, "Tools for %s:\n", serverID)
+				for _, tool := range list {
+					fmt.Fprintf(out, "  - %s: %s\n", tool.Name, tool.Description)
+				}
+				return nil
+			}
+			if len(tools) == 0 {
+				fmt.Fprintln(out, "No tools available.")
+				return nil
+			}
+			for id, list := range tools {
+				fmt.Fprintf(out, "Tools for %s:\n", id)
+				for _, tool := range list {
+					fmt.Fprintf(out, "  - %s: %s\n", tool.Name, tool.Description)
+				}
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	cmd.Flags().StringVar(&serverID, "server", "", "Server ID (optional)")
+	return cmd
+}
+
+func buildMcpCallCmd() *cobra.Command {
+	var (
+		configPath string
+		rawArgs    []string
+	)
+	cmd := &cobra.Command{
+		Use:   "call <server.tool>",
+		Short: "Call an MCP tool",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			serverID, toolName, err := parseMCPQualifiedName(args[0])
+			if err != nil {
+				return err
+			}
+			_, mgr, err := loadMCPManager(configPath)
+			if err != nil {
+				return err
+			}
+			defer mgr.Stop()
+
+			if err := mgr.Connect(cmd.Context(), serverID); err != nil {
+				return err
+			}
+			toolArgs, err := parseAnyArgs(rawArgs)
+			if err != nil {
+				return err
+			}
+			result, err := mgr.CallTool(cmd.Context(), serverID, toolName, toolArgs)
+			if err != nil {
+				return err
+			}
+			out := cmd.OutOrStdout()
+			if result == nil || len(result.Content) == 0 {
+				fmt.Fprintln(out, "No result.")
+				return nil
+			}
+			for _, item := range result.Content {
+				if item.Type == "text" {
+					fmt.Fprintln(out, item.Text)
+					continue
+				}
+				payload, err := json.Marshal(item)
+				if err != nil {
+					return err
+				}
+				fmt.Fprintln(out, string(payload))
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	cmd.Flags().StringArrayVar(&rawArgs, "arg", nil, "Tool argument (key=value)")
+	return cmd
+}
+
+func buildMcpResourcesCmd() *cobra.Command {
+	var (
+		configPath string
+		serverID   string
+	)
+	cmd := &cobra.Command{
+		Use:   "resources",
+		Short: "List MCP resources",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, mgr, err := loadMCPManager(configPath)
+			if err != nil {
+				return err
+			}
+			defer mgr.Stop()
+
+			if serverID != "" {
+				if err := mgr.Connect(cmd.Context(), serverID); err != nil {
+					return err
+				}
+			} else {
+				if err := mgr.Start(cmd.Context()); err != nil {
+					return err
+				}
+			}
+
+			resources := mgr.AllResources()
+			out := cmd.OutOrStdout()
+			if serverID != "" {
+				list := resources[serverID]
+				if len(list) == 0 {
+					fmt.Fprintf(out, "No resources for %s\n", serverID)
+					return nil
+				}
+				fmt.Fprintf(out, "Resources for %s:\n", serverID)
+				for _, res := range list {
+					fmt.Fprintf(out, "  - %s (%s)\n", res.URI, res.Name)
+				}
+				return nil
+			}
+			if len(resources) == 0 {
+				fmt.Fprintln(out, "No resources available.")
+				return nil
+			}
+			for id, list := range resources {
+				fmt.Fprintf(out, "Resources for %s:\n", id)
+				for _, res := range list {
+					fmt.Fprintf(out, "  - %s (%s)\n", res.URI, res.Name)
+				}
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	cmd.Flags().StringVar(&serverID, "server", "", "Server ID (optional)")
+	return cmd
+}
+
+func buildMcpReadCmd() *cobra.Command {
+	var configPath string
+	cmd := &cobra.Command{
+		Use:   "read <server-id> <uri>",
+		Short: "Read an MCP resource",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, mgr, err := loadMCPManager(configPath)
+			if err != nil {
+				return err
+			}
+			defer mgr.Stop()
+
+			serverID := args[0]
+			if err := mgr.Connect(cmd.Context(), serverID); err != nil {
+				return err
+			}
+			contents, err := mgr.ReadResource(cmd.Context(), serverID, args[1])
+			if err != nil {
+				return err
+			}
+			out := cmd.OutOrStdout()
+			if len(contents) == 0 {
+				fmt.Fprintln(out, "No content.")
+				return nil
+			}
+			payload, err := json.Marshal(contents)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintln(out, string(payload))
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	return cmd
+}
+
+func buildMcpPromptsCmd() *cobra.Command {
+	var (
+		configPath string
+		serverID   string
+	)
+	cmd := &cobra.Command{
+		Use:   "prompts",
+		Short: "List MCP prompts",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, mgr, err := loadMCPManager(configPath)
+			if err != nil {
+				return err
+			}
+			defer mgr.Stop()
+
+			if serverID != "" {
+				if err := mgr.Connect(cmd.Context(), serverID); err != nil {
+					return err
+				}
+			} else {
+				if err := mgr.Start(cmd.Context()); err != nil {
+					return err
+				}
+			}
+
+			prompts := mgr.AllPrompts()
+			out := cmd.OutOrStdout()
+			if serverID != "" {
+				list := prompts[serverID]
+				if len(list) == 0 {
+					fmt.Fprintf(out, "No prompts for %s\n", serverID)
+					return nil
+				}
+				fmt.Fprintf(out, "Prompts for %s:\n", serverID)
+				for _, prompt := range list {
+					fmt.Fprintf(out, "  - %s: %s\n", prompt.Name, prompt.Description)
+				}
+				return nil
+			}
+			if len(prompts) == 0 {
+				fmt.Fprintln(out, "No prompts available.")
+				return nil
+			}
+			for id, list := range prompts {
+				fmt.Fprintf(out, "Prompts for %s:\n", id)
+				for _, prompt := range list {
+					fmt.Fprintf(out, "  - %s: %s\n", prompt.Name, prompt.Description)
+				}
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	cmd.Flags().StringVar(&serverID, "server", "", "Server ID (optional)")
+	return cmd
+}
+
+func buildMcpPromptCmd() *cobra.Command {
+	var (
+		configPath string
+		rawArgs    []string
+	)
+	cmd := &cobra.Command{
+		Use:   "prompt <server.prompt>",
+		Short: "Fetch an MCP prompt",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			serverID, promptName, err := parseMCPQualifiedName(args[0])
+			if err != nil {
+				return err
+			}
+			_, mgr, err := loadMCPManager(configPath)
+			if err != nil {
+				return err
+			}
+			defer mgr.Stop()
+
+			if err := mgr.Connect(cmd.Context(), serverID); err != nil {
+				return err
+			}
+			promptArgs, err := parseStringArgs(rawArgs)
+			if err != nil {
+				return err
+			}
+			result, err := mgr.GetPrompt(cmd.Context(), serverID, promptName, promptArgs)
+			if err != nil {
+				return err
+			}
+			payload, err := json.Marshal(result)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), string(payload))
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	cmd.Flags().StringArrayVar(&rawArgs, "arg", nil, "Prompt argument (key=value)")
+	return cmd
+}
+
+func loadMCPManager(configPath string) (*config.Config, *mcp.Manager, error) {
+	configPath = resolveConfigPath(configPath)
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !cfg.MCP.Enabled {
+		return cfg, mcp.NewManager(&cfg.MCP, slog.Default()), nil
+	}
+	return cfg, mcp.NewManager(&cfg.MCP, slog.Default()), nil
+}
+
+func parseMCPQualifiedName(value string) (string, string, error) {
+	parts := strings.SplitN(value, ".", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", fmt.Errorf("expected format <server>.<name>")
+	}
+	return parts[0], parts[1], nil
+}
+
+func parseAnyArgs(items []string) (map[string]any, error) {
+	if len(items) == 0 {
+		return nil, nil
+	}
+	out := make(map[string]any)
+	for _, item := range items {
+		key, value, err := parseKeyValue(item)
+		if err != nil {
+			return nil, err
+		}
+		var parsed any
+		if err := json.Unmarshal([]byte(value), &parsed); err == nil {
+			out[key] = parsed
+		} else {
+			out[key] = value
+		}
+	}
+	return out, nil
+}
+
+func parseStringArgs(items []string) (map[string]string, error) {
+	if len(items) == 0 {
+		return nil, nil
+	}
+	out := make(map[string]string)
+	for _, item := range items {
+		key, value, err := parseKeyValue(item)
+		if err != nil {
+			return nil, err
+		}
+		out[key] = value
+	}
+	return out, nil
+}
+
+func parseKeyValue(item string) (string, string, error) {
+	parts := strings.SplitN(item, "=", 2)
+	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" {
+		return "", "", fmt.Errorf("invalid arg %q, expected key=value", item)
+	}
+	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]), nil
 }
 
 // buildSetupCmd creates the "setup" command for initializing a workspace.

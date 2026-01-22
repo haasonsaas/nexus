@@ -27,11 +27,13 @@ type StdioTransport struct {
 	pending   map[int64]chan *JSONRPCResponse
 	pendingMu sync.Mutex
 	events    chan *JSONRPCNotification
+	requests  chan *JSONRPCRequest
 	nextID    atomic.Int64
 
 	connected atomic.Bool
 	stopChan  chan struct{}
 	wg        sync.WaitGroup
+	writeMu   sync.Mutex
 }
 
 // NewStdioTransport creates a new stdio transport.
@@ -41,6 +43,7 @@ func NewStdioTransport(cfg *ServerConfig) *StdioTransport {
 		logger:   slog.Default().With("mcp_server", cfg.ID, "transport", "stdio"),
 		pending:  make(map[int64]chan *JSONRPCResponse),
 		events:   make(chan *JSONRPCNotification, 100),
+		requests: make(chan *JSONRPCRequest, 100),
 		stopChan: make(chan struct{}),
 	}
 }
@@ -156,7 +159,10 @@ func (t *StdioTransport) Call(ctx context.Context, method string, params any) (j
 
 	// Send request
 	data, _ := json.Marshal(req)
-	if _, err := t.stdin.Write(append(data, '\n')); err != nil {
+	t.writeMu.Lock()
+	_, err := t.stdin.Write(append(data, '\n'))
+	t.writeMu.Unlock()
+	if err != nil {
 		return nil, fmt.Errorf("write request: %w", err)
 	}
 
@@ -201,7 +207,10 @@ func (t *StdioTransport) Notify(ctx context.Context, method string, params any) 
 	}
 
 	data, _ := json.Marshal(notif)
-	if _, err := t.stdin.Write(append(data, '\n')); err != nil {
+	t.writeMu.Lock()
+	_, err := t.stdin.Write(append(data, '\n'))
+	t.writeMu.Unlock()
+	if err != nil {
 		return fmt.Errorf("write notification: %w", err)
 	}
 
@@ -211,6 +220,38 @@ func (t *StdioTransport) Notify(ctx context.Context, method string, params any) 
 // Events returns the notification channel.
 func (t *StdioTransport) Events() <-chan *JSONRPCNotification {
 	return t.events
+}
+
+// Requests returns the request channel.
+func (t *StdioTransport) Requests() <-chan *JSONRPCRequest {
+	return t.requests
+}
+
+// Respond sends a response to a server request.
+func (t *StdioTransport) Respond(ctx context.Context, id any, result any, rpcErr *JSONRPCError) error {
+	if !t.connected.Load() {
+		return fmt.Errorf("not connected")
+	}
+	resp := JSONRPCResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Error:   rpcErr,
+	}
+	if rpcErr == nil && result != nil {
+		data, err := json.Marshal(result)
+		if err != nil {
+			return fmt.Errorf("marshal result: %w", err)
+		}
+		resp.Result = data
+	}
+	data, _ := json.Marshal(resp)
+	t.writeMu.Lock()
+	_, err := t.stdin.Write(append(data, '\n'))
+	t.writeMu.Unlock()
+	if err != nil {
+		return fmt.Errorf("write response: %w", err)
+	}
+	return nil
 }
 
 // Connected returns whether the transport is connected.
@@ -245,9 +286,54 @@ func (t *StdioTransport) readLoop() {
 
 // processLine handles a single JSON-RPC message.
 func (t *StdioTransport) processLine(line string) {
-	// Try to parse as response (has ID)
-	var resp JSONRPCResponse
-	if err := json.Unmarshal([]byte(line), &resp); err == nil && resp.ID != nil {
+	var envelope struct {
+		JSONRPC string          `json:"jsonrpc"`
+		ID      any             `json:"id"`
+		Method  string          `json:"method"`
+		Params  json.RawMessage `json:"params,omitempty"`
+		Result  json.RawMessage `json:"result,omitempty"`
+		Error   *JSONRPCError   `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal([]byte(line), &envelope); err != nil {
+		t.logger.Debug("failed to parse line", "error", err)
+		return
+	}
+
+	if envelope.Method != "" {
+		if envelope.ID != nil {
+			req := &JSONRPCRequest{
+				JSONRPC: envelope.JSONRPC,
+				ID:      envelope.ID,
+				Method:  envelope.Method,
+				Params:  envelope.Params,
+			}
+			select {
+			case t.requests <- req:
+			default:
+				t.logger.Warn("request channel full, dropping")
+			}
+			return
+		}
+		notif := &JSONRPCNotification{
+			JSONRPC: envelope.JSONRPC,
+			Method:  envelope.Method,
+			Params:  envelope.Params,
+		}
+		select {
+		case t.events <- notif:
+		default:
+			t.logger.Warn("notification channel full, dropping")
+		}
+		return
+	}
+
+	if envelope.ID != nil {
+		resp := JSONRPCResponse{
+			JSONRPC: envelope.JSONRPC,
+			ID:      envelope.ID,
+			Result:  envelope.Result,
+			Error:   envelope.Error,
+		}
 		// Convert ID to int64 for lookup
 		var id int64
 		switch v := resp.ID.(type) {
@@ -272,16 +358,6 @@ func (t *StdioTransport) processLine(line string) {
 		}
 		t.pendingMu.Unlock()
 		return
-	}
-
-	// Try to parse as notification (no ID)
-	var notif JSONRPCNotification
-	if err := json.Unmarshal([]byte(line), &notif); err == nil && notif.Method != "" {
-		select {
-		case t.events <- &notif:
-		default:
-			t.logger.Warn("notification channel full, dropping")
-		}
 	}
 }
 

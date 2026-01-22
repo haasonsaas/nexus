@@ -22,6 +22,12 @@ type Transport interface {
 	// Events returns a channel for receiving notifications from the server.
 	Events() <-chan *JSONRPCNotification
 
+	// Requests returns a channel for receiving server-initiated requests.
+	Requests() <-chan *JSONRPCRequest
+
+	// Respond sends a response to a server-initiated request.
+	Respond(ctx context.Context, id any, result any, rpcErr *JSONRPCError) error
+
 	// Connected returns whether the transport is connected.
 	Connected() bool
 }

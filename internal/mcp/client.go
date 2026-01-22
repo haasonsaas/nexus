@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 )
 
 // Client is an MCP client that connects to a single server.
@@ -228,4 +229,63 @@ func (c *Client) GetPrompt(ctx context.Context, name string, arguments map[strin
 // Events returns the notification channel.
 func (c *Client) Events() <-chan *JSONRPCNotification {
 	return c.transport.Events()
+}
+
+// SamplingHandler handles server-initiated sampling requests.
+type SamplingHandler func(ctx context.Context, req *SamplingRequest) (*SamplingResponse, error)
+
+// HandleSampling starts processing sampling requests from the server.
+func (c *Client) HandleSampling(handler SamplingHandler) {
+	if handler == nil {
+		return
+	}
+	go func() {
+		for req := range c.transport.Requests() {
+			if req == nil || req.Method != "sampling/createMessage" {
+				continue
+			}
+			go c.handleSamplingRequest(req, handler)
+		}
+	}()
+}
+
+func (c *Client) handleSamplingRequest(req *JSONRPCRequest, handler SamplingHandler) {
+	ctx := context.Background()
+	timeout := c.config.Timeout
+	if timeout == 0 {
+		timeout = 30 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	var params SamplingRequest
+	if len(req.Params) > 0 {
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			_ = c.transport.Respond(ctx, req.ID, nil, &JSONRPCError{
+				Code:    ErrCodeInvalidParams,
+				Message: "invalid sampling params",
+			})
+			return
+		}
+	}
+
+	response, err := handler(ctx, &params)
+	if err != nil {
+		_ = c.transport.Respond(ctx, req.ID, nil, &JSONRPCError{
+			Code:    ErrCodeInternalError,
+			Message: err.Error(),
+		})
+		return
+	}
+	if response == nil {
+		_ = c.transport.Respond(ctx, req.ID, nil, &JSONRPCError{
+			Code:    ErrCodeInternalError,
+			Message: "sampling handler returned nil response",
+		})
+		return
+	}
+
+	if err := c.transport.Respond(ctx, req.ID, response, nil); err != nil {
+		c.logger.Warn("failed to respond to sampling request", "error", err)
+	}
 }

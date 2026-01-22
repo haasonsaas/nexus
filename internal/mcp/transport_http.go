@@ -24,6 +24,7 @@ type HTTPTransport struct {
 	client *http.Client
 
 	events    chan *JSONRPCNotification
+	requests  chan *JSONRPCRequest
 	connected atomic.Bool
 	stopChan  chan struct{}
 	wg        sync.WaitGroup
@@ -43,6 +44,7 @@ func NewHTTPTransport(cfg *ServerConfig) *HTTPTransport {
 			Timeout: timeout,
 		},
 		events:   make(chan *JSONRPCNotification, 100),
+		requests: make(chan *JSONRPCRequest, 100),
 		stopChan: make(chan struct{}),
 	}
 }
@@ -173,6 +175,48 @@ func (t *HTTPTransport) Events() <-chan *JSONRPCNotification {
 	return t.events
 }
 
+// Requests returns the request channel.
+func (t *HTTPTransport) Requests() <-chan *JSONRPCRequest {
+	return t.requests
+}
+
+// Respond sends a response to a server request.
+func (t *HTTPTransport) Respond(ctx context.Context, id any, result any, rpcErr *JSONRPCError) error {
+	if !t.connected.Load() {
+		return fmt.Errorf("not connected")
+	}
+	resp := JSONRPCResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Error:   rpcErr,
+	}
+	if rpcErr == nil && result != nil {
+		data, err := json.Marshal(result)
+		if err != nil {
+			return fmt.Errorf("marshal result: %w", err)
+		}
+		resp.Result = data
+	}
+	body, _ := json.Marshal(resp)
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", t.config.URL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	for k, v := range t.config.Headers {
+		httpReq.Header.Set(k, v)
+	}
+
+	respHTTP, err := t.client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("http request: %w", err)
+	}
+	respHTTP.Body.Close()
+	return nil
+}
+
 // Connected returns whether the transport is connected.
 func (t *HTTPTransport) Connected() bool {
 	return t.connected.Load()
@@ -250,13 +294,41 @@ func (t *HTTPTransport) connectSSE(ctx context.Context, sseURL string) {
 		// Parse SSE data lines
 		if strings.HasPrefix(line, "data: ") {
 			data := strings.TrimPrefix(line, "data: ")
-			var notif JSONRPCNotification
-			if err := json.Unmarshal([]byte(data), &notif); err == nil && notif.Method != "" {
-				select {
-				case t.events <- &notif:
-				default:
-					t.logger.Warn("notification channel full, dropping")
+			var envelope struct {
+				JSONRPC string          `json:"jsonrpc"`
+				ID      any             `json:"id"`
+				Method  string          `json:"method"`
+				Params  json.RawMessage `json:"params,omitempty"`
+			}
+			if err := json.Unmarshal([]byte(data), &envelope); err != nil {
+				continue
+			}
+			if envelope.Method == "" {
+				continue
+			}
+			if envelope.ID != nil {
+				req := &JSONRPCRequest{
+					JSONRPC: envelope.JSONRPC,
+					ID:      envelope.ID,
+					Method:  envelope.Method,
+					Params:  envelope.Params,
 				}
+				select {
+				case t.requests <- req:
+				default:
+					t.logger.Warn("request channel full, dropping")
+				}
+				continue
+			}
+			notif := &JSONRPCNotification{
+				JSONRPC: envelope.JSONRPC,
+				Method:  envelope.Method,
+				Params:  envelope.Params,
+			}
+			select {
+			case t.events <- notif:
+			default:
+				t.logger.Warn("notification channel full, dropping")
 			}
 		}
 	}

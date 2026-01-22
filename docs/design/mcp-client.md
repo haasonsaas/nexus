@@ -912,6 +912,12 @@ Note: LLM providers require tool names to be alphanumeric/underscore. MCP tools 
 sanitized names like `mcp_<server>_<tool>` and a short hash suffix when needed (length/duplicate
 collisions). The original MCP server/tool name is preserved in the tool description.
 
+Additional MCP bridges are registered for resources/prompts:
+  - `mcp_<server>_resources_list` → `mcp:server.resources.list`
+  - `mcp_<server>_resource_read` → `mcp:server.resources.read`
+  - `mcp_<server>_prompts_list` → `mcp:server.prompts.list`
+  - `mcp_<server>_prompt_get` → `mcp:server.prompts.get`
+
 ```go
 // internal/mcp/bridge.go
 
@@ -1059,9 +1065,9 @@ nexus mcp prompt <server.prompt> --arg key=value
 
 ### Phase 4: HTTP Transport & Polish (Week 4)
 - [x] HTTP/SSE transport
-- [ ] Sampling support
-- [ ] CLI commands
-- [ ] Documentation
+- [x] Sampling support
+- [x] CLI commands
+- [x] Documentation
 
 ---
 

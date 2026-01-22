@@ -8,6 +8,7 @@ import (
 type Resolver struct {
 	groups     map[string][]string
 	mcpServers map[string][]string // serverID -> tool names
+	aliases    map[string]string   // alias -> canonical tool name
 }
 
 // NewResolver creates a new policy resolver.
@@ -15,6 +16,7 @@ func NewResolver() *Resolver {
 	return &Resolver{
 		groups:     DefaultGroups,
 		mcpServers: make(map[string][]string),
+		aliases:    make(map[string]string),
 	}
 }
 
@@ -30,13 +32,32 @@ func (r *Resolver) RegisterMCPServer(serverID string, tools []string) {
 	r.groups["mcp:"+serverID] = tools
 }
 
+// RegisterAlias registers an alias that resolves to a canonical tool name.
+func (r *Resolver) RegisterAlias(alias string, canonical string) {
+	alias = NormalizeTool(alias)
+	canonical = NormalizeTool(canonical)
+	if alias == "" || canonical == "" {
+		return
+	}
+	r.aliases[alias] = canonical
+}
+
+// CanonicalName resolves tool aliases to their canonical names.
+func (r *Resolver) CanonicalName(name string) string {
+	normalized := NormalizeTool(name)
+	if canonical, ok := r.aliases[normalized]; ok {
+		return canonical
+	}
+	return normalized
+}
+
 // ExpandGroups expands group references in a tool list.
 func (r *Resolver) ExpandGroups(items []string) []string {
 	var result []string
 	seen := make(map[string]bool)
 
 	for _, item := range items {
-		normalized := NormalizeTool(item)
+		normalized := r.CanonicalName(item)
 
 		// Check if it's a group reference
 		if tools, ok := r.groups[normalized]; ok {
@@ -76,7 +97,7 @@ func (r *Resolver) ExpandGroups(items []string) []string {
 
 // IsAllowed checks if a tool is allowed by the given policy.
 func (r *Resolver) IsAllowed(policy *Policy, toolName string) bool {
-	normalized := NormalizeTool(toolName)
+	normalized := r.CanonicalName(toolName)
 
 	// Build effective allow list
 	var allowed []string

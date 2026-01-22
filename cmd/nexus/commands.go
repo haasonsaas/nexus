@@ -1520,7 +1520,7 @@ func buildEventsListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List recent events",
-		Long: `List recent events, optionally filtered by type or session.`,
+		Long:  `List recent events, optionally filtered by type or session.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runEventsList(cmd, configPath, limit, eventType, sessionID)
 		},

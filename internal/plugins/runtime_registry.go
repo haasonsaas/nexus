@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,7 +11,9 @@ import (
 	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/config"
+	"github.com/haasonsaas/nexus/internal/hooks"
 	"github.com/haasonsaas/nexus/pkg/pluginsdk"
+	"github.com/spf13/cobra"
 )
 
 var defaultRuntimeRegistry = NewRuntimeRegistry()
@@ -37,6 +40,12 @@ type runtimeEntry struct {
 	channelsErr  error
 	toolsOnce    sync.Once
 	toolsErr     error
+	cliOnce      sync.Once
+	cliErr       error
+	servicesOnce sync.Once
+	servicesErr  error
+	hooksOnce    sync.Once
+	hooksErr     error
 }
 
 // RuntimeRegistry manages runtime plugin loading and registration.
@@ -129,6 +138,176 @@ func (r *RuntimeRegistry) LoadTools(cfg *config.Config, runtime *agent.Runtime) 
 		}
 	}
 	return nil
+}
+
+// LoadCLI registers CLI commands from enabled runtime plugins.
+func (r *RuntimeRegistry) LoadCLI(cfg *config.Config, rootCmd *cobra.Command, logger *slog.Logger) error {
+	if cfg == nil || rootCmd == nil {
+		return nil
+	}
+	for id, entry := range cfg.Plugins.Entries {
+		if !entry.Enabled {
+			continue
+		}
+		pluginEntry := r.ensureEntry(id, entry.Path)
+		plugin, err := pluginEntry.load(entry.Path)
+		if err != nil {
+			return err
+		}
+
+		// Check if plugin supports CLI registration
+		extPlugin, ok := plugin.(pluginsdk.ExtendedPlugin)
+		if !ok {
+			continue
+		}
+
+		pluginEntry.cliOnce.Do(func() {
+			api := &runtimeCLIRegistry{rootCmd: rootCmd, pluginID: id}
+			pluginEntry.cliErr = extPlugin.RegisterCLI(api, normalizeConfig(entry.Config))
+		})
+		if pluginEntry.cliErr != nil {
+			if logger != nil {
+				logger.Warn("plugin CLI registration failed", "plugin_id", id, "error", pluginEntry.cliErr)
+			}
+			// Don't fail the entire load for CLI registration errors
+		}
+	}
+	return nil
+}
+
+// LoadServices registers services from enabled runtime plugins.
+func (r *RuntimeRegistry) LoadServices(cfg *config.Config, manager *ServiceManager, logger *slog.Logger) error {
+	if cfg == nil || manager == nil {
+		return nil
+	}
+	for id, entry := range cfg.Plugins.Entries {
+		if !entry.Enabled {
+			continue
+		}
+		pluginEntry := r.ensureEntry(id, entry.Path)
+		plugin, err := pluginEntry.load(entry.Path)
+		if err != nil {
+			return err
+		}
+
+		// Check if plugin supports service registration
+		extPlugin, ok := plugin.(pluginsdk.ExtendedPlugin)
+		if !ok {
+			continue
+		}
+
+		pluginEntry.servicesOnce.Do(func() {
+			api := &runtimeServiceRegistry{manager: manager, pluginID: id}
+			pluginEntry.servicesErr = extPlugin.RegisterServices(api, normalizeConfig(entry.Config))
+		})
+		if pluginEntry.servicesErr != nil {
+			if logger != nil {
+				logger.Warn("plugin service registration failed", "plugin_id", id, "error", pluginEntry.servicesErr)
+			}
+		}
+	}
+	return nil
+}
+
+// LoadHooks registers hooks from enabled runtime plugins.
+func (r *RuntimeRegistry) LoadHooks(cfg *config.Config, registry *hooks.Registry, logger *slog.Logger) error {
+	if cfg == nil || registry == nil {
+		return nil
+	}
+	for id, entry := range cfg.Plugins.Entries {
+		if !entry.Enabled {
+			continue
+		}
+		pluginEntry := r.ensureEntry(id, entry.Path)
+		plugin, err := pluginEntry.load(entry.Path)
+		if err != nil {
+			return err
+		}
+
+		// Check if plugin supports hook registration
+		extPlugin, ok := plugin.(pluginsdk.ExtendedPlugin)
+		if !ok {
+			continue
+		}
+
+		pluginEntry.hooksOnce.Do(func() {
+			api := &runtimeHookRegistry{registry: registry, pluginID: id}
+			pluginEntry.hooksErr = extPlugin.RegisterHooks(api, normalizeConfig(entry.Config))
+		})
+		if pluginEntry.hooksErr != nil {
+			if logger != nil {
+				logger.Warn("plugin hook registration failed", "plugin_id", id, "error", pluginEntry.hooksErr)
+			}
+		}
+	}
+	return nil
+}
+
+// LoadFullPlugins loads plugins implementing the FullPlugin interface with unified API.
+func (r *RuntimeRegistry) LoadFullPlugins(cfg *config.Config, api *PluginAPIBuilder) error {
+	if cfg == nil || api == nil {
+		return nil
+	}
+	for id, entry := range cfg.Plugins.Entries {
+		if !entry.Enabled {
+			continue
+		}
+		pluginEntry := r.ensureEntry(id, entry.Path)
+		plugin, err := pluginEntry.load(entry.Path)
+		if err != nil {
+			return err
+		}
+
+		// Check if plugin implements FullPlugin interface
+		fullPlugin, ok := plugin.(pluginsdk.FullPlugin)
+		if !ok {
+			continue
+		}
+
+		pluginAPI := api.Build(id, normalizeConfig(entry.Config))
+		if err := fullPlugin.Register(pluginAPI); err != nil {
+			if api.Logger != nil {
+				api.Logger.Warn("full plugin registration failed", "plugin_id", id, "error", err)
+			}
+		}
+	}
+	return nil
+}
+
+// PluginAPIBuilder helps construct PluginAPI instances for plugins.
+type PluginAPIBuilder struct {
+	Channels        *channels.Registry
+	Tools           *agent.Runtime
+	RootCmd         *cobra.Command
+	ServiceManager  *ServiceManager
+	HookRegistry    *hooks.Registry
+	Logger          *slog.Logger
+	WorkspaceDir    string
+}
+
+// Build creates a PluginAPI for a specific plugin.
+func (b *PluginAPIBuilder) Build(pluginID string, cfg map[string]any) *pluginsdk.PluginAPI {
+	pluginLogger := b.Logger
+	if pluginLogger == nil {
+		pluginLogger = slog.Default()
+	}
+	pluginLogger = pluginLogger.With("plugin_id", pluginID)
+
+	return &pluginsdk.PluginAPI{
+		Channels: &runtimeChannelRegistry{registry: b.Channels},
+		Tools:    &runtimeToolRegistry{runtime: b.Tools},
+		CLI:      &runtimeCLIRegistry{rootCmd: b.RootCmd, pluginID: pluginID},
+		Services: &runtimeServiceRegistry{manager: b.ServiceManager, pluginID: pluginID},
+		Hooks:    &runtimeHookRegistry{registry: b.HookRegistry, pluginID: pluginID},
+		Config:   cfg,
+		Logger:   &pluginLoggerAdapter{logger: pluginLogger},
+		ResolvePath: func(path string) string {
+			if filepath.IsAbs(path) {
+				return path
+			}
+			return filepath.Join(b.WorkspaceDir, path)
+		},
+	}
 }
 
 func (r *RuntimeRegistry) ensureEntry(id, path string) *runtimeEntry {

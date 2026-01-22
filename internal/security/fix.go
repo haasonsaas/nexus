@@ -255,3 +255,17 @@ func RunDefaultFixDryRun() *FixResult {
 		DryRun:     true,
 	})
 }
+
+// DefaultStateDir returns the default nexus state directory.
+func DefaultStateDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ".nexus"
+	}
+	return filepath.Join(home, ".nexus")
+}
+
+// DefaultConfigPath returns the default config file path.
+func DefaultConfigPath() string {
+	return "nexus.yaml"
+}

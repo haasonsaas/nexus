@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/haasonsaas/nexus/internal/channels"
+	"github.com/haasonsaas/nexus/internal/hooks"
 	"github.com/haasonsaas/nexus/pkg/models"
 	"github.com/haasonsaas/nexus/pkg/pluginsdk"
+	"github.com/spf13/cobra"
 )
 
 var closedMessages <-chan *models.Message = func() <-chan *models.Message {
@@ -155,4 +158,308 @@ func toChannelHealth(status pluginsdk.HealthStatus) channels.HealthStatus {
 		LastCheck: status.LastCheck,
 		Degraded:  status.Degraded,
 	}
+}
+
+// =============================================================================
+// CLI Registry
+// =============================================================================
+
+// runtimeCLIRegistry adapts a cobra root command for plugin CLI registration.
+type runtimeCLIRegistry struct {
+	rootCmd  *cobra.Command
+	pluginID string
+}
+
+func (r *runtimeCLIRegistry) RegisterCommand(cmd *pluginsdk.CLICommand) error {
+	if r.rootCmd == nil {
+		return fmt.Errorf("CLI root command is nil")
+	}
+	if cmd == nil {
+		return fmt.Errorf("CLI command is nil")
+	}
+
+	cobraCmd := convertCLICommand(cmd)
+	r.rootCmd.AddCommand(cobraCmd)
+	return nil
+}
+
+func (r *runtimeCLIRegistry) RegisterSubcommand(parent string, cmd *pluginsdk.CLICommand) error {
+	if r.rootCmd == nil {
+		return fmt.Errorf("CLI root command is nil")
+	}
+	if cmd == nil {
+		return fmt.Errorf("CLI command is nil")
+	}
+
+	// Find parent command
+	parentCmd := findCommand(r.rootCmd, parent)
+	if parentCmd == nil {
+		return fmt.Errorf("parent command %q not found", parent)
+	}
+
+	cobraCmd := convertCLICommand(cmd)
+	parentCmd.AddCommand(cobraCmd)
+	return nil
+}
+
+// convertCLICommand converts a pluginsdk.CLICommand to a cobra.Command.
+func convertCLICommand(cmd *pluginsdk.CLICommand) *cobra.Command {
+	cobraCmd := &cobra.Command{
+		Use:     cmd.Use,
+		Short:   cmd.Short,
+		Long:    cmd.Long,
+		Example: cmd.Example,
+		Args:    cmd.Args,
+	}
+
+	if cmd.Run != nil {
+		cobraCmd.RunE = cmd.Run
+	}
+
+	if cmd.Flags != nil {
+		cmd.Flags(cobraCmd)
+	}
+
+	// Add subcommands recursively
+	for _, sub := range cmd.Subcommands {
+		cobraCmd.AddCommand(convertCLICommand(sub))
+	}
+
+	return cobraCmd
+}
+
+// findCommand finds a command by name path (e.g., "memory.search").
+func findCommand(root *cobra.Command, path string) *cobra.Command {
+	if path == "" {
+		return root
+	}
+
+	parts := splitCommandPath(path)
+	current := root
+
+	for _, part := range parts {
+		found := false
+		for _, child := range current.Commands() {
+			if child.Name() == part {
+				current = child
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil
+		}
+	}
+
+	return current
+}
+
+func splitCommandPath(path string) []string {
+	var parts []string
+	current := ""
+	for _, c := range path {
+		if c == '.' || c == '/' {
+			if current != "" {
+				parts = append(parts, current)
+				current = ""
+			}
+		} else {
+			current += string(c)
+		}
+	}
+	if current != "" {
+		parts = append(parts, current)
+	}
+	return parts
+}
+
+// =============================================================================
+// Service Registry
+// =============================================================================
+
+// ServiceManager manages plugin services lifecycle.
+type ServiceManager struct {
+	services []*pluginService
+	logger   *slog.Logger
+}
+
+type pluginService struct {
+	def      *pluginsdk.Service
+	pluginID string
+	running  bool
+}
+
+// NewServiceManager creates a new service manager.
+func NewServiceManager(logger *slog.Logger) *ServiceManager {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &ServiceManager{
+		logger: logger.With("component", "service-manager"),
+	}
+}
+
+// StartAll starts all registered services.
+func (m *ServiceManager) StartAll(ctx context.Context) error {
+	for _, svc := range m.services {
+		if svc.running {
+			continue
+		}
+		if err := svc.def.Start(ctx); err != nil {
+			m.logger.Error("failed to start service",
+				"service_id", svc.def.ID,
+				"plugin_id", svc.pluginID,
+				"error", err)
+			continue
+		}
+		svc.running = true
+		m.logger.Info("started service", "service_id", svc.def.ID, "plugin_id", svc.pluginID)
+	}
+	return nil
+}
+
+// StopAll stops all running services.
+func (m *ServiceManager) StopAll(ctx context.Context) error {
+	for i := len(m.services) - 1; i >= 0; i-- {
+		svc := m.services[i]
+		if !svc.running {
+			continue
+		}
+		if err := svc.def.Stop(ctx); err != nil {
+			m.logger.Error("failed to stop service",
+				"service_id", svc.def.ID,
+				"plugin_id", svc.pluginID,
+				"error", err)
+			continue
+		}
+		svc.running = false
+		m.logger.Info("stopped service", "service_id", svc.def.ID, "plugin_id", svc.pluginID)
+	}
+	return nil
+}
+
+// HealthCheck runs health checks for all services.
+func (m *ServiceManager) HealthCheck(ctx context.Context) map[string]error {
+	results := make(map[string]error)
+	for _, svc := range m.services {
+		if !svc.running || svc.def.HealthCheck == nil {
+			continue
+		}
+		results[svc.def.ID] = svc.def.HealthCheck(ctx)
+	}
+	return results
+}
+
+// Services returns all registered services.
+func (m *ServiceManager) Services() []*pluginsdk.Service {
+	result := make([]*pluginsdk.Service, len(m.services))
+	for i, svc := range m.services {
+		result[i] = svc.def
+	}
+	return result
+}
+
+// runtimeServiceRegistry adapts the service manager for plugin registration.
+type runtimeServiceRegistry struct {
+	manager  *ServiceManager
+	pluginID string
+}
+
+func (r *runtimeServiceRegistry) RegisterService(svc *pluginsdk.Service) error {
+	if r.manager == nil {
+		return fmt.Errorf("service manager is nil")
+	}
+	if svc == nil {
+		return fmt.Errorf("service is nil")
+	}
+	if svc.ID == "" {
+		return fmt.Errorf("service ID is required")
+	}
+	if svc.Start == nil {
+		return fmt.Errorf("service Start function is required")
+	}
+	if svc.Stop == nil {
+		return fmt.Errorf("service Stop function is required")
+	}
+
+	r.manager.services = append(r.manager.services, &pluginService{
+		def:      svc,
+		pluginID: r.pluginID,
+	})
+	return nil
+}
+
+// =============================================================================
+// Hook Registry Adapter
+// =============================================================================
+
+// runtimeHookRegistry adapts the internal hooks.Registry for plugin registration.
+type runtimeHookRegistry struct {
+	registry *hooks.Registry
+	pluginID string
+}
+
+func (r *runtimeHookRegistry) RegisterHook(reg *pluginsdk.HookRegistration) error {
+	if r.registry == nil {
+		return fmt.Errorf("hook registry is nil")
+	}
+	if reg == nil {
+		return fmt.Errorf("hook registration is nil")
+	}
+	if reg.EventType == "" {
+		return fmt.Errorf("event type is required")
+	}
+	if reg.Handler == nil {
+		return fmt.Errorf("handler is required")
+	}
+
+	// Convert plugin handler to internal handler
+	internalHandler := func(ctx context.Context, event *hooks.Event) error {
+		pluginEvent := &pluginsdk.HookEvent{
+			Type:      string(event.Type),
+			SessionID: event.SessionKey,
+			ChannelID: event.ChannelID,
+			Data:      event.Context,
+		}
+		return reg.Handler(ctx, pluginEvent)
+	}
+
+	// Build options
+	opts := []hooks.RegisterOption{
+		hooks.WithSource(r.pluginID),
+	}
+	if reg.Name != "" {
+		opts = append(opts, hooks.WithName(reg.Name))
+	}
+	if reg.Priority != 0 {
+		opts = append(opts, hooks.WithPriority(hooks.Priority(reg.Priority)))
+	}
+
+	r.registry.Register(reg.EventType, internalHandler, opts...)
+	return nil
+}
+
+// =============================================================================
+// Plugin Logger Adapter
+// =============================================================================
+
+// pluginLoggerAdapter adapts slog.Logger for pluginsdk.PluginLogger interface.
+type pluginLoggerAdapter struct {
+	logger *slog.Logger
+}
+
+func (l *pluginLoggerAdapter) Debug(msg string, args ...any) {
+	l.logger.Debug(msg, args...)
+}
+
+func (l *pluginLoggerAdapter) Info(msg string, args ...any) {
+	l.logger.Info(msg, args...)
+}
+
+func (l *pluginLoggerAdapter) Warn(msg string, args ...any) {
+	l.logger.Warn(msg, args...)
+}
+
+func (l *pluginLoggerAdapter) Error(msg string, args ...any) {
+	l.logger.Error(msg, args...)
 }

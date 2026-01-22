@@ -355,8 +355,15 @@ func listServerIDs(mgr *Manager) []string {
 	return ids
 }
 
+// safeToolName generates a namespaced tool name in the format mcp.<serverID>.<toolName>.
+// This enforces explicit namespacing to avoid collisions between MCP servers
+// and native tools.
 func safeToolName(serverID, toolName string, used map[string]struct{}) string {
-	base := "mcp_" + sanitizeToolPart(serverID) + "_" + sanitizeToolPart(toolName)
+	// Use dot notation for clear namespacing: mcp.<serverID>.<toolName>
+	sanitizedServer := sanitizeToolPart(serverID)
+	sanitizedTool := sanitizeToolPart(toolName)
+	base := "mcp." + sanitizedServer + "." + sanitizedTool
+
 	name := base
 	if len(name) > maxToolNameLen {
 		name = truncateWithHash(base, serverID, toolName)

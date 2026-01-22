@@ -50,6 +50,7 @@ type ToolGroup struct {
 }
 
 // DefaultGroups are the built-in tool groups.
+// Groups can be referenced in policies using their key (e.g., "group:fs").
 var DefaultGroups = map[string][]string{
 	// Filesystem tools
 	"group:fs": {"read", "write", "edit", "exec"},
@@ -82,6 +83,16 @@ var DefaultGroups = map[string][]string{
 		"send_message",
 		"job_status",
 	},
+
+	// MCP tools (dynamically populated via RegisterMCPServer)
+	// Use "mcp:*" in policies to allow all MCP tools
+	// Use "mcp:serverID.*" to allow all tools from a specific server
+	// Use "mcp:serverID.toolName" for specific tools
+	"group:mcp": {},
+
+	// All tools (native + MCP)
+	// Note: This is a marker group; actual resolution uses ProfileFull
+	"group:all": {},
 }
 
 // ProfileDefaults defines the default allow lists for each profile.
@@ -131,4 +142,135 @@ func NormalizeTools(names []string) []string {
 		}
 	}
 	return result
+}
+
+// UnifiedPolicyBuilder provides a fluent interface for building policies
+// that work consistently across native and MCP tools.
+type UnifiedPolicyBuilder struct {
+	policy *Policy
+}
+
+// NewUnifiedPolicy creates a new unified policy builder.
+func NewUnifiedPolicy() *UnifiedPolicyBuilder {
+	return &UnifiedPolicyBuilder{
+		policy: &Policy{},
+	}
+}
+
+// WithProfile sets the base profile.
+func (b *UnifiedPolicyBuilder) WithProfile(profile Profile) *UnifiedPolicyBuilder {
+	b.policy.Profile = profile
+	return b
+}
+
+// AllowNative allows native (built-in) tools.
+func (b *UnifiedPolicyBuilder) AllowNative(tools ...string) *UnifiedPolicyBuilder {
+	for _, t := range tools {
+		b.policy.Allow = append(b.policy.Allow, NormalizeTool(t))
+	}
+	return b
+}
+
+// AllowNativeGroup allows a native tool group (e.g., "fs", "web").
+func (b *UnifiedPolicyBuilder) AllowNativeGroup(groups ...string) *UnifiedPolicyBuilder {
+	for _, g := range groups {
+		if !strings.HasPrefix(g, "group:") {
+			g = "group:" + g
+		}
+		b.policy.Allow = append(b.policy.Allow, g)
+	}
+	return b
+}
+
+// AllowMCPServer allows all tools from an MCP server.
+func (b *UnifiedPolicyBuilder) AllowMCPServer(serverIDs ...string) *UnifiedPolicyBuilder {
+	for _, id := range serverIDs {
+		b.policy.Allow = append(b.policy.Allow, "mcp:"+id+".*")
+	}
+	return b
+}
+
+// AllowMCPTool allows a specific MCP tool.
+func (b *UnifiedPolicyBuilder) AllowMCPTool(serverID, toolName string) *UnifiedPolicyBuilder {
+	b.policy.Allow = append(b.policy.Allow, "mcp:"+serverID+"."+toolName)
+	return b
+}
+
+// AllowAllMCP allows all MCP tools.
+func (b *UnifiedPolicyBuilder) AllowAllMCP() *UnifiedPolicyBuilder {
+	b.policy.Allow = append(b.policy.Allow, "mcp:*")
+	return b
+}
+
+// DenyNative denies native (built-in) tools.
+func (b *UnifiedPolicyBuilder) DenyNative(tools ...string) *UnifiedPolicyBuilder {
+	for _, t := range tools {
+		b.policy.Deny = append(b.policy.Deny, NormalizeTool(t))
+	}
+	return b
+}
+
+// DenyMCPServer denies all tools from an MCP server.
+func (b *UnifiedPolicyBuilder) DenyMCPServer(serverIDs ...string) *UnifiedPolicyBuilder {
+	for _, id := range serverIDs {
+		b.policy.Deny = append(b.policy.Deny, "mcp:"+id+".*")
+	}
+	return b
+}
+
+// DenyMCPTool denies a specific MCP tool.
+func (b *UnifiedPolicyBuilder) DenyMCPTool(serverID, toolName string) *UnifiedPolicyBuilder {
+	b.policy.Deny = append(b.policy.Deny, "mcp:"+serverID+"."+toolName)
+	return b
+}
+
+// WithMCPServerPolicy sets provider-specific policy for an MCP server.
+func (b *UnifiedPolicyBuilder) WithMCPServerPolicy(serverID string, policy *Policy) *UnifiedPolicyBuilder {
+	if b.policy.ByProvider == nil {
+		b.policy.ByProvider = make(map[string]*Policy)
+	}
+	b.policy.ByProvider["mcp:"+serverID] = policy
+	return b
+}
+
+// WithNativePolicy sets provider-specific policy for native tools.
+func (b *UnifiedPolicyBuilder) WithNativePolicy(policy *Policy) *UnifiedPolicyBuilder {
+	if b.policy.ByProvider == nil {
+		b.policy.ByProvider = make(map[string]*Policy)
+	}
+	b.policy.ByProvider["nexus"] = policy
+	return b
+}
+
+// Build returns the constructed policy.
+func (b *UnifiedPolicyBuilder) Build() *Policy {
+	return b.policy
+}
+
+// IsMCPTool returns true if the tool name refers to an MCP tool.
+func IsMCPTool(toolName string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(toolName))
+	return strings.HasPrefix(normalized, "mcp:") || strings.HasPrefix(normalized, "mcp.")
+}
+
+// ParseMCPToolName extracts the server ID and tool name from an MCP tool reference.
+// Returns empty strings if the tool name is not an MCP tool.
+func ParseMCPToolName(toolName string) (serverID, tool string) {
+	normalized := strings.ToLower(strings.TrimSpace(toolName))
+
+	// Handle both mcp:server.tool and mcp.server.tool formats
+	var trimmed string
+	if strings.HasPrefix(normalized, "mcp:") {
+		trimmed = strings.TrimPrefix(normalized, "mcp:")
+	} else if strings.HasPrefix(normalized, "mcp.") {
+		trimmed = strings.TrimPrefix(normalized, "mcp.")
+	} else {
+		return "", ""
+	}
+
+	parts := strings.SplitN(trimmed, ".", 2)
+	if len(parts) < 2 {
+		return parts[0], ""
+	}
+	return parts[0], parts[1]
 }

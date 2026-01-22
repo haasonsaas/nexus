@@ -61,7 +61,7 @@ const (
 	// MetaNormalizedAt is the timestamp when normalization occurred.
 	MetaNormalizedAt = "_normalized_at"
 
-	// MetaOriginalChannel preserves channel-specific metadata prefix.
+	// MetaOriginalPrefix preserves channel-specific metadata prefix.
 	MetaOriginalPrefix = "_original_"
 )
 
@@ -69,6 +69,15 @@ const (
 type MessageNormalizer struct {
 	// preserveOriginal keeps original channel-specific keys with a prefix.
 	preserveOriginal bool
+
+	// MaxContentLength limits the content length (0 = unlimited)
+	MaxContentLength int
+
+	// TrimWhitespace removes leading/trailing whitespace
+	TrimWhitespace bool
+
+	// NormalizeNewlines converts all newline styles to \n
+	NormalizeNewlines bool
 }
 
 // NormalizerOption configures the MessageNormalizer.
@@ -81,15 +90,43 @@ func WithPreserveOriginal(preserve bool) NormalizerOption {
 	}
 }
 
+// WithMaxContentLength sets the maximum content length.
+func WithMaxContentLength(length int) NormalizerOption {
+	return func(n *MessageNormalizer) {
+		n.MaxContentLength = length
+	}
+}
+
+// WithTrimWhitespace enables/disables whitespace trimming.
+func WithTrimWhitespace(trim bool) NormalizerOption {
+	return func(n *MessageNormalizer) {
+		n.TrimWhitespace = trim
+	}
+}
+
+// WithNormalizeNewlines enables/disables newline normalization.
+func WithNormalizeNewlines(normalize bool) NormalizerOption {
+	return func(n *MessageNormalizer) {
+		n.NormalizeNewlines = normalize
+	}
+}
+
 // NewMessageNormalizer creates a new message normalizer.
 func NewMessageNormalizer(opts ...NormalizerOption) *MessageNormalizer {
 	n := &MessageNormalizer{
-		preserveOriginal: true, // Default to preserving original keys
+		preserveOriginal:  true, // Default to preserving original keys
+		TrimWhitespace:    true,
+		NormalizeNewlines: true,
 	}
 	for _, opt := range opts {
 		opt(n)
 	}
 	return n
+}
+
+// DefaultMessageNormalizer returns a normalizer with sensible defaults.
+func DefaultMessageNormalizer() *MessageNormalizer {
+	return NewMessageNormalizer()
 }
 
 // Normalize ensures the message has consistent metadata and required fields.
@@ -120,6 +157,12 @@ func (n *MessageNormalizer) Normalize(msg *models.Message) {
 		msg.Role = models.RoleUser
 	}
 
+	// Normalize content
+	msg.Content = n.normalizeContent(msg.Content)
+
+	// Normalize role
+	msg.Role = normalizeRole(msg.Role)
+
 	// Normalize channel-specific metadata
 	n.normalizeChannelMetadata(msg)
 
@@ -129,6 +172,49 @@ func (n *MessageNormalizer) Normalize(msg *models.Message) {
 	// Mark as normalized
 	msg.Metadata[MetaNormalized] = true
 	msg.Metadata[MetaNormalizedAt] = time.Now().Format(time.RFC3339)
+}
+
+// normalizeContent applies content normalization rules.
+func (n *MessageNormalizer) normalizeContent(content string) string {
+	if content == "" {
+		return ""
+	}
+
+	result := content
+
+	// Normalize newlines
+	if n.NormalizeNewlines {
+		result = strings.ReplaceAll(result, "\r\n", "\n")
+		result = strings.ReplaceAll(result, "\r", "\n")
+	}
+
+	// Trim whitespace
+	if n.TrimWhitespace {
+		result = strings.TrimSpace(result)
+	}
+
+	// Truncate if too long
+	if n.MaxContentLength > 0 && len(result) > n.MaxContentLength {
+		result = result[:n.MaxContentLength]
+	}
+
+	return result
+}
+
+// normalizeRole normalizes message roles to standard values.
+func normalizeRole(role models.Role) models.Role {
+	switch strings.ToLower(string(role)) {
+	case "user", "human":
+		return models.RoleUser
+	case "assistant", "ai", "bot":
+		return models.RoleAssistant
+	case "system":
+		return models.RoleSystem
+	case "tool", "function":
+		return models.RoleTool
+	default:
+		return role
+	}
 }
 
 // normalizeChannelMetadata maps channel-specific keys to canonical keys.
@@ -293,6 +379,12 @@ func (n *MessageNormalizer) normalizeAttachments(msg *models.Message) {
 	for i := range msg.Attachments {
 		att := &msg.Attachments[i]
 
+		// Normalize MIME type
+		att.MimeType = strings.ToLower(strings.TrimSpace(att.MimeType))
+
+		// Normalize type
+		att.Type = normalizeAttachmentType(att.Type)
+
 		// Detect type from MIME type if not set
 		if att.Type == "" && att.MimeType != "" {
 			att.Type = detectAttachmentType(att.MimeType)
@@ -307,6 +399,22 @@ func (n *MessageNormalizer) normalizeAttachments(msg *models.Message) {
 		if att.Type == "" {
 			att.Type = "document"
 		}
+	}
+}
+
+// normalizeAttachmentType normalizes attachment types.
+func normalizeAttachmentType(t string) string {
+	switch strings.ToLower(strings.TrimSpace(t)) {
+	case "image", "photo", "picture":
+		return "image"
+	case "audio", "voice", "sound":
+		return "audio"
+	case "video", "movie":
+		return "video"
+	case "file", "document", "doc":
+		return "document"
+	default:
+		return t
 	}
 }
 
@@ -434,4 +542,115 @@ func GetReplyTo(msg *models.Message) string {
 		return replyTo
 	}
 	return ""
+}
+
+// StreamingCapability describes a channel's streaming support.
+type StreamingCapability struct {
+	// SupportsStreaming indicates if the channel supports streaming responses
+	SupportsStreaming bool
+
+	// MaxChunkSize is the maximum size of a streaming chunk (0 = unlimited)
+	MaxChunkSize int
+
+	// MinChunkDelay is the minimum delay between chunks
+	MinChunkDelay time.Duration
+
+	// SupportsEdits indicates if the channel supports editing previous messages
+	SupportsEdits bool
+
+	// SupportsReactions indicates if the channel supports message reactions
+	SupportsReactions bool
+
+	// SupportsThreads indicates if the channel supports threaded replies
+	SupportsThreads bool
+
+	// SupportsTypingIndicator indicates if the channel supports typing indicators
+	SupportsTypingIndicator bool
+}
+
+// StreamingMatrix maps channel types to their streaming capabilities.
+var StreamingMatrix = map[models.ChannelType]StreamingCapability{
+	models.ChannelDiscord: {
+		SupportsStreaming:       true,
+		MaxChunkSize:            2000, // Discord message limit
+		MinChunkDelay:           100 * time.Millisecond,
+		SupportsEdits:           true,
+		SupportsReactions:       true,
+		SupportsThreads:         true,
+		SupportsTypingIndicator: true,
+	},
+	models.ChannelSlack: {
+		SupportsStreaming:       true,
+		MaxChunkSize:            4000, // Slack message limit
+		MinChunkDelay:           100 * time.Millisecond,
+		SupportsEdits:           true,
+		SupportsReactions:       true,
+		SupportsThreads:         true,
+		SupportsTypingIndicator: false, // Slack typing is per-user
+	},
+	models.ChannelTelegram: {
+		SupportsStreaming:       true,
+		MaxChunkSize:            4096, // Telegram message limit
+		MinChunkDelay:           200 * time.Millisecond,
+		SupportsEdits:           true,
+		SupportsReactions:       true,
+		SupportsThreads:         true,
+		SupportsTypingIndicator: true,
+	},
+	models.ChannelWhatsApp: {
+		SupportsStreaming:       false, // WhatsApp doesn't support message edits for streaming
+		MaxChunkSize:            65536,
+		MinChunkDelay:           0,
+		SupportsEdits:           false,
+		SupportsReactions:       true,
+		SupportsThreads:         false,
+		SupportsTypingIndicator: true,
+	},
+	models.ChannelMatrix: {
+		SupportsStreaming:       true,
+		MaxChunkSize:            65536,
+		MinChunkDelay:           100 * time.Millisecond,
+		SupportsEdits:           true,
+		SupportsReactions:       true,
+		SupportsThreads:         true,
+		SupportsTypingIndicator: true,
+	},
+	models.ChannelSignal: {
+		SupportsStreaming:       false,
+		MaxChunkSize:            0,
+		MinChunkDelay:           0,
+		SupportsEdits:           false,
+		SupportsReactions:       true,
+		SupportsThreads:         false,
+		SupportsTypingIndicator: true,
+	},
+	models.ChannelAPI: {
+		SupportsStreaming:       true,
+		MaxChunkSize:            0, // unlimited
+		MinChunkDelay:           0,
+		SupportsEdits:           false,
+		SupportsReactions:       false,
+		SupportsThreads:         false,
+		SupportsTypingIndicator: false,
+	},
+	models.ChannelIMessage: {
+		SupportsStreaming:       false,
+		MaxChunkSize:            0,
+		MinChunkDelay:           0,
+		SupportsEdits:           false,
+		SupportsReactions:       true,
+		SupportsThreads:         false,
+		SupportsTypingIndicator: true,
+	},
+}
+
+// GetStreamingCapability returns the streaming capability for a channel type.
+func GetStreamingCapability(channelType models.ChannelType) StreamingCapability {
+	if cap, ok := StreamingMatrix[channelType]; ok {
+		return cap
+	}
+	// Default: no streaming support
+	return StreamingCapability{
+		SupportsStreaming: false,
+	}
 }

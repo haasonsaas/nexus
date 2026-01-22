@@ -53,7 +53,8 @@ func (f *fakePromptGetter) GetPrompt(ctx context.Context, serverID, name string,
 func TestSafeToolNameSanitizes(t *testing.T) {
 	used := make(map[string]struct{})
 	name := safeToolName("git-hub", "search/repo", used)
-	if name != "mcp_git_hub_search_repo" {
+	// Format is now mcp.<serverID>.<toolName> for explicit namespacing
+	if name != "mcp.git_hub.search_repo" {
 		t.Fatalf("expected sanitized name, got %q", name)
 	}
 }

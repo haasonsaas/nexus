@@ -2,9 +2,11 @@ package agent
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/haasonsaas/nexus/internal/tools/policy"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
@@ -143,14 +145,22 @@ func (c *ApprovalChecker) RegisterSkillTools(tools []string) {
 	}
 }
 
+// PolicyFor returns the effective approval policy for the given agent.
+// The returned policy should be treated as read-only.
+func (c *ApprovalChecker) PolicyFor(agentID string) *ApprovalPolicy {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if policy, ok := c.agentPolicies[agentID]; ok && policy != nil {
+		return policy
+	}
+	return c.defaultPolicy
+}
+
 // Check evaluates whether a tool call should be allowed, denied, or requires approval.
 // Returns the decision and a reason string explaining the decision.
 func (c *ApprovalChecker) Check(ctx context.Context, agentID string, toolCall models.ToolCall) (ApprovalDecision, string) {
+	policy := c.PolicyFor(agentID)
 	c.mu.RLock()
-	policy := c.agentPolicies[agentID]
-	if policy == nil {
-		policy = c.defaultPolicy
-	}
 	skillTools := c.skillTools
 	c.mu.RUnlock()
 
@@ -180,12 +190,21 @@ func (c *ApprovalChecker) Check(ctx context.Context, agentID string, toolCall mo
 
 	// 5. Check require_approval list
 	if matchesPattern(policy.RequireApproval, toolName) {
+		if !policy.AskFallback && !c.IsUIAvailable() {
+			return ApprovalDenied, "approval unavailable"
+		}
 		return ApprovalPending, "tool requires approval"
 	}
 
 	// 6. Default decision
 	if policy.DefaultDecision == "" {
+		if !policy.AskFallback && !c.IsUIAvailable() {
+			return ApprovalDenied, "approval unavailable"
+		}
 		return ApprovalPending, "default policy"
+	}
+	if policy.DefaultDecision == ApprovalPending && !policy.AskFallback && !c.IsUIAvailable() {
+		return ApprovalDenied, "approval unavailable"
 	}
 	return policy.DefaultDecision, "default policy"
 }
@@ -302,32 +321,34 @@ func (c *ApprovalChecker) IsUIAvailable() bool {
 // matchesPattern checks if toolName matches any pattern in the list.
 // Supports: exact match, prefix* match, *suffix match, * (all), and mcp:* prefix.
 func matchesPattern(patterns []string, toolName string) bool {
+	normalizedTool := policy.NormalizeTool(toolName)
 	for _, pattern := range patterns {
 		if pattern == "" {
 			continue
 		}
+		normalizedPattern := policy.NormalizeTool(pattern)
 		// Wildcard matches everything
-		if pattern == "*" {
+		if normalizedPattern == "*" {
 			return true
 		}
-		if pattern == toolName {
+		if normalizedPattern == normalizedTool {
 			return true
 		}
 		// Handle mcp:* pattern
-		if pattern == "mcp:*" && len(toolName) > 4 && toolName[:4] == "mcp_" {
+		if normalizedPattern == "mcp:*" && strings.HasPrefix(normalizedTool, "mcp:") {
 			return true
 		}
 		// Handle prefix* pattern
-		if len(pattern) > 1 && pattern[len(pattern)-1] == '*' {
-			prefix := pattern[:len(pattern)-1]
-			if len(toolName) >= len(prefix) && toolName[:len(prefix)] == prefix {
+		if len(normalizedPattern) > 1 && normalizedPattern[len(normalizedPattern)-1] == '*' {
+			prefix := normalizedPattern[:len(normalizedPattern)-1]
+			if len(normalizedTool) >= len(prefix) && normalizedTool[:len(prefix)] == prefix {
 				return true
 			}
 		}
 		// Handle *suffix pattern
-		if len(pattern) > 1 && pattern[0] == '*' {
-			suffix := pattern[1:]
-			if len(toolName) >= len(suffix) && toolName[len(toolName)-len(suffix):] == suffix {
+		if len(normalizedPattern) > 1 && normalizedPattern[0] == '*' {
+			suffix := normalizedPattern[1:]
+			if len(normalizedTool) >= len(suffix) && normalizedTool[len(normalizedTool)-len(suffix):] == suffix {
 				return true
 			}
 		}

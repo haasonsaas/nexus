@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/haasonsaas/nexus/internal/agent"
@@ -233,6 +234,28 @@ func (t *SearchTool) Execute(ctx context.Context, params json.RawMessage) (*agen
 		}, nil
 	}
 
+	// Ensure deterministic ordering if the store response is unordered.
+	if len(resp.Results) > 1 {
+		sort.SliceStable(resp.Results, func(i, j int) bool {
+			if resp.Results[i] == nil && resp.Results[j] == nil {
+				return false
+			}
+			if resp.Results[i] == nil {
+				return false
+			}
+			if resp.Results[j] == nil {
+				return true
+			}
+			if resp.Results[i].Score == resp.Results[j].Score {
+				if resp.Results[i].Chunk == nil || resp.Results[j].Chunk == nil {
+					return resp.Results[i].Chunk != nil
+				}
+				return resp.Results[i].Chunk.ID < resp.Results[j].Chunk.ID
+			}
+			return resp.Results[i].Score > resp.Results[j].Score
+		})
+	}
+
 	// Format results
 	if len(resp.Results) == 0 {
 		return &agent.ToolResult{
@@ -242,6 +265,9 @@ func (t *SearchTool) Execute(ctx context.Context, params json.RawMessage) (*agen
 
 	results := make([]searchOutput, 0, len(resp.Results))
 	for _, r := range resp.Results {
+		if r == nil || r.Chunk == nil {
+			continue
+		}
 		output := searchOutput{
 			DocumentName: r.Chunk.Metadata.DocumentName,
 			Source:       r.Chunk.Metadata.DocumentSource,
@@ -258,6 +284,12 @@ func (t *SearchTool) Execute(ctx context.Context, params json.RawMessage) (*agen
 		}
 
 		results = append(results, output)
+	}
+
+	if len(results) == 0 {
+		return &agent.ToolResult{
+			Content: fmt.Sprintf("No relevant documents found for query: %q", query),
+		}, nil
 	}
 
 	// Format output

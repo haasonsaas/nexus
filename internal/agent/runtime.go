@@ -87,6 +87,8 @@ import (
 type systemPromptKey struct{}
 type chunksChanKey struct{}
 type sessionKey struct{}
+type runtimeOptsKey struct{}
+type elevatedKey struct{}
 
 // WithSession stores a session in the context.
 func WithSession(ctx context.Context, session *models.Session) context.Context {
@@ -103,6 +105,53 @@ func SessionFromContext(ctx context.Context) *models.Session {
 		return nil
 	}
 	return session
+}
+
+// WithRuntimeOptions stores per-request runtime option overrides in the context.
+func WithRuntimeOptions(ctx context.Context, opts RuntimeOptions) context.Context {
+	return context.WithValue(ctx, runtimeOptsKey{}, opts)
+}
+
+func runtimeOptionsFromContext(ctx context.Context) (RuntimeOptions, bool) {
+	opts, ok := ctx.Value(runtimeOptsKey{}).(RuntimeOptions)
+	return opts, ok
+}
+
+// ElevatedMode controls elevated execution semantics for a request.
+type ElevatedMode string
+
+const (
+	ElevatedOff  ElevatedMode = "off"
+	ElevatedAsk  ElevatedMode = "ask"
+	ElevatedFull ElevatedMode = "full"
+)
+
+// ParseElevatedMode normalizes a user-facing directive to an ElevatedMode.
+func ParseElevatedMode(value string) (ElevatedMode, bool) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "on", "ask":
+		return ElevatedAsk, true
+	case "full":
+		return ElevatedFull, true
+	case "off":
+		return ElevatedOff, true
+	default:
+		return ElevatedOff, false
+	}
+}
+
+// WithElevated stores an elevated mode override in the context.
+func WithElevated(ctx context.Context, mode ElevatedMode) context.Context {
+	return context.WithValue(ctx, elevatedKey{}, mode)
+}
+
+// ElevatedFromContext retrieves the elevated mode from context (default: off).
+func ElevatedFromContext(ctx context.Context) ElevatedMode {
+	mode, ok := ctx.Value(elevatedKey{}).(ElevatedMode)
+	if !ok {
+		return ElevatedOff
+	}
+	return mode
 }
 
 // WithSystemPrompt stores a request-scoped system prompt override in the context.
@@ -523,6 +572,9 @@ func (r *Runtime) SetBranchStore(store sessions.BranchStore) {
 // SetMaxIterations configures the maximum agentic loop iterations (default 5).
 func (r *Runtime) SetMaxIterations(max int) {
 	r.maxIterations = max
+	if max > 0 {
+		r.opts.MaxIterations = max
+	}
 }
 
 // SetMaxWallTime configures the maximum total run duration.
@@ -534,6 +586,18 @@ func (r *Runtime) SetMaxWallTime(d time.Duration) {
 // SetToolExecConfig configures tool execution behavior (timeouts, concurrency).
 func (r *Runtime) SetToolExecConfig(config ToolExecConfig) {
 	r.toolExec = config
+	if config.Concurrency > 0 {
+		r.opts.ToolParallelism = config.Concurrency
+	}
+	if config.PerToolTimeout > 0 {
+		r.opts.ToolTimeout = config.PerToolTimeout
+	}
+	if config.MaxAttempts > 0 {
+		r.opts.ToolMaxAttempts = config.MaxAttempts
+	}
+	if config.RetryBackoff > 0 {
+		r.opts.ToolRetryBackoff = config.RetryBackoff
+	}
 }
 
 // SetPackOptions configures context packing behavior.
@@ -696,6 +760,14 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 		defer cancel()
 	}
 
+	ctx = WithSession(ctx, session)
+
+	runOpts := r.opts
+	if override, ok := runtimeOptionsFromContext(ctx); ok {
+		runOpts = mergeRuntimeOptions(runOpts, override)
+	}
+	elevatedMode := ElevatedFromContext(ctx)
+
 	// 1) Load history (pre-incoming message)
 	branchID := strings.TrimSpace(msg.BranchID)
 	if r.branchStore != nil {
@@ -855,14 +927,19 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 	}
 
 	// Tool executor config
-	toolExecCfg := r.toolExec
+	toolExecCfg := ToolExecConfig{
+		Concurrency:    runOpts.ToolParallelism,
+		PerToolTimeout: runOpts.ToolTimeout,
+		MaxAttempts:    runOpts.ToolMaxAttempts,
+		RetryBackoff:   runOpts.ToolRetryBackoff,
+	}
 	if toolExecCfg.Concurrency <= 0 || toolExecCfg.PerToolTimeout <= 0 {
 		toolExecCfg = DefaultToolExecConfig()
 	}
 	toolExec := NewToolExecutor(r.tools, toolExecCfg)
 
 	// 8) Agentic loop
-	maxIters := r.maxIterations
+	maxIters := runOpts.MaxIterations
 	if maxIters <= 0 {
 		maxIters = 5
 	}
@@ -957,6 +1034,7 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 		allowedToOriginal := make([]int, 0, len(toolCalls))
 
 		skipFinalEvent := make([]bool, len(toolCalls))
+		approvalChecker := runOpts.ApprovalChecker
 
 		for i := range toolCalls {
 			tc := toolCalls[i]
@@ -983,39 +1061,104 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 				continue
 			}
 
-			// Check if tool requires approval
-			if r.requiresApproval(tc.Name, resolver) {
-				res := models.ToolResult{
-					ToolCallID: tc.ID,
-					Content:    "approval required for tool: " + tc.Name,
-					IsError:    true,
+			// Check approvals (policy-based or legacy require_approval)
+			if approvalChecker != nil {
+				decision, reason := approvalChecker.Check(ctx, session.AgentID, tc)
+				if decision == ApprovalPending && elevatedMode == ElevatedFull && matchesToolPatterns(runOpts.ElevatedTools, tc.Name, resolver) {
+					decision = ApprovalAllowed
+					reason = "elevated full"
 				}
-				results[i] = res
-				skipFinalEvent[i] = true
 
-				// Emit approval required event and result via ResponseChunk for Process() callers
-				if chunks, ok := ctx.Value(chunksChanKey{}).(chan<- *ResponseChunk); ok {
-					r.emitToolEvent(chunks, &models.ToolEvent{
+				switch decision {
+				case ApprovalDenied:
+					denied[i] = true
+					res := models.ToolResult{
 						ToolCallID: tc.ID,
-						ToolName:   tc.Name,
-						Stage:      models.ToolEventApprovalRequired,
-						Input:      tc.Input,
-						FinishedAt: time.Now(),
-					})
-					// Also send the tool result
-					chunks <- &ResponseChunk{ToolResult: &res}
-				}
-
-				if r.toolEvents != nil {
-					if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res); err != nil {
-						_ = err
+						Content:    "tool denied by approval policy: " + reason,
+						IsError:    true,
 					}
+					results[i] = res
+					emitter.ToolFinished(ctx, tc.ID, tc.Name, false, []byte(res.Content), 0)
+					if r.toolEvents != nil {
+						if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res); err != nil {
+							_ = err
+						}
+					}
+					continue
+				case ApprovalPending:
+					var approvalID string
+					if req, err := approvalChecker.CreateApprovalRequest(ctx, session.AgentID, session.ID, tc, reason); err == nil && req != nil {
+						approvalID = req.ID
+					}
+					content := "approval required for tool: " + tc.Name
+					if approvalID != "" {
+						content = fmt.Sprintf("%s (id: %s)", content, approvalID)
+					}
+					res := models.ToolResult{
+						ToolCallID: tc.ID,
+						Content:    content,
+						IsError:    true,
+					}
+					results[i] = res
+					skipFinalEvent[i] = true
+
+					// Emit approval required event and result via ResponseChunk for Process() callers
+					if chunks, ok := ctx.Value(chunksChanKey{}).(chan<- *ResponseChunk); ok {
+						r.emitToolEvent(chunks, &models.ToolEvent{
+							ToolCallID:   tc.ID,
+							ToolName:     tc.Name,
+							Stage:        models.ToolEventApprovalRequired,
+							Input:        tc.Input,
+							PolicyReason: reason,
+							FinishedAt:   time.Now(),
+						}, runOpts.DisableToolEvents)
+						// Also send the tool result
+						chunks <- &ResponseChunk{ToolResult: &res}
+					}
+
+					if r.toolEvents != nil {
+						if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res); err != nil {
+							_ = err
+						}
+					}
+					continue
 				}
-				continue
+			} else if r.requiresApproval(runOpts, tc.Name, resolver) {
+				if elevatedMode == ElevatedFull && matchesToolPatterns(runOpts.ElevatedTools, tc.Name, resolver) {
+					// bypass legacy approvals in elevated full
+				} else {
+					res := models.ToolResult{
+						ToolCallID: tc.ID,
+						Content:    "approval required for tool: " + tc.Name,
+						IsError:    true,
+					}
+					results[i] = res
+					skipFinalEvent[i] = true
+
+					// Emit approval required event and result via ResponseChunk for Process() callers
+					if chunks, ok := ctx.Value(chunksChanKey{}).(chan<- *ResponseChunk); ok {
+						r.emitToolEvent(chunks, &models.ToolEvent{
+							ToolCallID: tc.ID,
+							ToolName:   tc.Name,
+							Stage:      models.ToolEventApprovalRequired,
+							Input:      tc.Input,
+							FinishedAt: time.Now(),
+						}, runOpts.DisableToolEvents)
+						// Also send the tool result
+						chunks <- &ResponseChunk{ToolResult: &res}
+					}
+
+					if r.toolEvents != nil {
+						if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res); err != nil {
+							_ = err
+						}
+					}
+					continue
+				}
 			}
 
 			// Check if tool should run async
-			if r.isAsyncTool(tc.Name, resolver) && r.opts.JobStore != nil {
+			if r.isAsyncTool(runOpts, tc.Name, resolver) && runOpts.JobStore != nil {
 				job := &jobs.Job{
 					ID:         uuid.NewString(),
 					ToolName:   tc.Name,
@@ -1023,7 +1166,7 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 					Status:     jobs.StatusQueued,
 					CreatedAt:  time.Now(),
 				}
-				if err := r.opts.JobStore.Create(context.Background(), job); err != nil {
+				if err := runOpts.JobStore.Create(context.Background(), job); err != nil {
 					_ = err
 				}
 
@@ -1055,7 +1198,7 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 					}
 				}
 
-				go r.runToolJob(tc, job, toolExec)
+				go r.runToolJob(tc, job, toolExec, runOpts.JobStore)
 				continue
 			}
 
@@ -1369,47 +1512,29 @@ func filterToolsByPolicy(resolver *policy.Resolver, toolPolicy *policy.Policy, t
 	return filtered
 }
 
-func (r *Runtime) emitToolEvent(chunks chan<- *ResponseChunk, event *models.ToolEvent) {
-	if r.opts.DisableToolEvents || event == nil {
+func (r *Runtime) emitToolEvent(chunks chan<- *ResponseChunk, event *models.ToolEvent, disable bool) {
+	if disable || event == nil {
 		return
 	}
 	chunks <- &ResponseChunk{ToolEvent: event}
 }
 
-func (r *Runtime) requiresApproval(toolName string, resolver *policy.Resolver) bool {
-	if len(r.opts.RequireApproval) == 0 {
-		return false
-	}
-	name := normalizeToolName(toolName, resolver)
-	for _, pattern := range r.opts.RequireApproval {
-		if matchToolPattern(normalizeToolName(pattern, resolver), name) {
-			return true
-		}
-	}
-	return false
+func (r *Runtime) requiresApproval(opts RuntimeOptions, toolName string, resolver *policy.Resolver) bool {
+	return matchesToolPatterns(opts.RequireApproval, toolName, resolver)
 }
 
-func (r *Runtime) isAsyncTool(toolName string, resolver *policy.Resolver) bool {
-	if len(r.opts.AsyncTools) == 0 {
-		return false
-	}
-	name := normalizeToolName(toolName, resolver)
-	for _, pattern := range r.opts.AsyncTools {
-		if matchToolPattern(normalizeToolName(pattern, resolver), name) {
-			return true
-		}
-	}
-	return false
+func (r *Runtime) isAsyncTool(opts RuntimeOptions, toolName string, resolver *policy.Resolver) bool {
+	return matchesToolPatterns(opts.AsyncTools, toolName, resolver)
 }
 
-func (r *Runtime) runToolJob(tc models.ToolCall, job *jobs.Job, toolExec *ToolExecutor) {
-	if job == nil || r.opts.JobStore == nil {
+func (r *Runtime) runToolJob(tc models.ToolCall, job *jobs.Job, toolExec *ToolExecutor, jobStore jobs.Store) {
+	if job == nil || jobStore == nil {
 		return
 	}
 	ctx := context.Background()
 	job.Status = jobs.StatusRunning
 	job.StartedAt = time.Now()
-	if err := r.opts.JobStore.Update(ctx, job); err != nil {
+	if err := jobStore.Update(ctx, job); err != nil {
 		_ = err
 	}
 
@@ -1447,7 +1572,7 @@ func (r *Runtime) runToolJob(tc models.ToolCall, job *jobs.Job, toolExec *ToolEx
 		job.Result = &result
 	}
 	job.FinishedAt = time.Now()
-	if err := r.opts.JobStore.Update(ctx, job); err != nil {
+	if err := jobStore.Update(ctx, job); err != nil {
 		_ = err
 	}
 }
@@ -1457,6 +1582,19 @@ func normalizeToolName(name string, resolver *policy.Resolver) string {
 		return policy.NormalizeTool(name)
 	}
 	return resolver.CanonicalName(name)
+}
+
+func matchesToolPatterns(patterns []string, toolName string, resolver *policy.Resolver) bool {
+	if len(patterns) == 0 {
+		return false
+	}
+	name := normalizeToolName(toolName, resolver)
+	for _, pattern := range patterns {
+		if matchToolPattern(normalizeToolName(pattern, resolver), name) {
+			return true
+		}
+	}
+	return false
 }
 
 func matchToolPattern(pattern, toolName string) bool {

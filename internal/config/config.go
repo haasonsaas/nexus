@@ -318,6 +318,7 @@ type ToolsConfig struct {
 	Notes        string              `yaml:"notes"`
 	NotesFile    string              `yaml:"notes_file"`
 	Execution    ToolExecutionConfig `yaml:"execution"`
+	Elevated     ElevatedConfig      `yaml:"elevated"`
 	Jobs         ToolJobsConfig      `yaml:"jobs"`
 }
 
@@ -363,16 +364,30 @@ type ApprovalConfig struct {
 	SafeBins []string `yaml:"safe_bins"`
 
 	// SkillAllowlist auto-allows tools defined by enabled skills.
-	SkillAllowlist bool `yaml:"skill_allowlist"`
+	SkillAllowlist *bool `yaml:"skill_allowlist"`
 
 	// AskFallback queues approval when UI is unavailable instead of denying.
-	AskFallback bool `yaml:"ask_fallback"`
+	AskFallback *bool `yaml:"ask_fallback"`
 
 	// DefaultDecision when no rule matches: "allowed", "denied", or "pending".
 	DefaultDecision string `yaml:"default_decision"`
 
 	// RequestTTL is how long approval requests remain valid.
 	RequestTTL time.Duration `yaml:"request_ttl"`
+}
+
+// ElevatedConfig controls elevated tool execution behavior and allowlists.
+type ElevatedConfig struct {
+	// Enabled gates elevated execution. When nil, elevated is disabled by default.
+	Enabled *bool `yaml:"enabled"`
+
+	// AllowFrom maps channel/provider to allowed sender identifiers.
+	// Example: {"telegram": ["12345", "67890"], "discord": ["*"]}
+	AllowFrom map[string][]string `yaml:"allow_from"`
+
+	// Tools lists tool patterns that elevated-full can bypass approvals for.
+	// If empty, defaults to ["execute_code"] in gateway logic.
+	Tools []string `yaml:"tools"`
 }
 
 type SandboxConfig struct {

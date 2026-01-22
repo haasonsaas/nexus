@@ -73,19 +73,6 @@ func (s *Server) ensureRuntime(ctx context.Context) (*agent.Runtime, error) {
 	if system := buildSystemPrompt(s.config, SystemPromptOptions{}); system != "" {
 		runtime.SetSystemPrompt(system)
 	}
-	runtime.SetOptions(agent.RuntimeOptions{
-		MaxIterations:     s.config.Tools.Execution.MaxIterations,
-		ToolParallelism:   s.config.Tools.Execution.Parallelism,
-		ToolTimeout:       s.config.Tools.Execution.Timeout,
-		ToolMaxAttempts:   s.config.Tools.Execution.MaxAttempts,
-		ToolRetryBackoff:  s.config.Tools.Execution.RetryBackoff,
-		DisableToolEvents: s.config.Tools.Execution.DisableEvents,
-		MaxToolCalls:      s.config.Tools.Execution.MaxToolCalls,
-		RequireApproval:   s.config.Tools.Execution.RequireApproval,
-		AsyncTools:        s.config.Tools.Execution.Async,
-		JobStore:          s.jobStore,
-		Logger:            s.logger,
-	})
 	if err := s.registerTools(ctx, runtime); err != nil {
 		return nil, err
 	}
@@ -95,6 +82,29 @@ func (s *Server) ensureRuntime(ctx context.Context) (*agent.Runtime, error) {
 		}
 	}
 	s.registerMCPSamplingHandler()
+
+	if s.approvalChecker == nil {
+		basePolicy := buildApprovalPolicy(s.config.Tools.Execution, s.toolPolicyResolver)
+		checker := agent.NewApprovalChecker(basePolicy)
+		checker.SetStore(agent.NewMemoryApprovalStore())
+		s.approvalChecker = checker
+	}
+	elevatedTools := effectiveElevatedTools(s.config.Tools.Elevated, nil)
+	runtime.SetOptions(agent.RuntimeOptions{
+		MaxIterations:     s.config.Tools.Execution.MaxIterations,
+		ToolParallelism:   s.config.Tools.Execution.Parallelism,
+		ToolTimeout:       s.config.Tools.Execution.Timeout,
+		ToolMaxAttempts:   s.config.Tools.Execution.MaxAttempts,
+		ToolRetryBackoff:  s.config.Tools.Execution.RetryBackoff,
+		DisableToolEvents: s.config.Tools.Execution.DisableEvents,
+		MaxToolCalls:      s.config.Tools.Execution.MaxToolCalls,
+		RequireApproval:   s.config.Tools.Execution.RequireApproval,
+		ApprovalChecker:   s.approvalChecker,
+		ElevatedTools:     elevatedTools,
+		AsyncTools:        s.config.Tools.Execution.Async,
+		JobStore:          s.jobStore,
+		Logger:            s.logger,
+	})
 
 	// Initialize broadcast manager if configured
 	if s.broadcastManager == nil && s.config.Gateway.Broadcast.Groups != nil && len(s.config.Gateway.Broadcast.Groups) > 0 {

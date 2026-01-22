@@ -33,6 +33,12 @@ type RuntimeOptions struct {
 	// RequireApproval lists tool names/patterns that require approval.
 	RequireApproval []string
 
+	// ApprovalChecker evaluates approval policy for tool calls when set.
+	ApprovalChecker *ApprovalChecker
+
+	// ElevatedTools lists tool patterns eligible for elevated full bypass.
+	ElevatedTools []string
+
 	// AsyncTools lists tool names to execute asynchronously as jobs.
 	AsyncTools []string
 
@@ -82,6 +88,12 @@ func mergeRuntimeOptions(base RuntimeOptions, override RuntimeOptions) RuntimeOp
 	}
 	if len(override.RequireApproval) > 0 {
 		merged.RequireApproval = override.RequireApproval
+	}
+	if override.ApprovalChecker != nil {
+		merged.ApprovalChecker = override.ApprovalChecker
+	}
+	if len(override.ElevatedTools) > 0 {
+		merged.ElevatedTools = override.ElevatedTools
 	}
 	if len(override.AsyncTools) > 0 {
 		merged.AsyncTools = override.AsyncTools

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
+
 	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/haasonsaas/nexus/internal/rag/index"
 	"github.com/haasonsaas/nexus/pkg/models"
@@ -95,6 +97,10 @@ func (t *UploadTool) Schema() json.RawMessage {
     "description": {
       "type": "string",
       "description": "Brief description of the document"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "description": "Optional key for idempotent uploads (same key updates the same document)"
     }
   },
   "required": ["name", "content"]
@@ -108,6 +114,8 @@ type uploadInput struct {
 	ContentType string   `json:"content_type,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
 	Description string   `json:"description,omitempty"`
+	// IdempotencyKey ensures repeated uploads update the same document.
+	IdempotencyKey string `json:"idempotency_key,omitempty"`
 }
 
 // uploadOutput represents the upload result.
@@ -134,6 +142,12 @@ func (t *UploadTool) Execute(ctx context.Context, params json.RawMessage) (*agen
 	if name == "" {
 		return &agent.ToolResult{
 			Content: "Document name is required",
+			IsError: true,
+		}, nil
+	}
+	if containsUnsafeName(name) {
+		return &agent.ToolResult{
+			Content: "Document name must not contain path separators or traversal sequences",
 			IsError: true,
 		}, nil
 	}
@@ -196,8 +210,14 @@ func (t *UploadTool) Execute(ctx context.Context, params json.RawMessage) (*agen
 		}
 	}
 
+	documentID := ""
+	if key := strings.TrimSpace(input.IdempotencyKey); key != "" {
+		documentID = idempotencyDocumentID(key, metadata)
+	}
+
 	// Index the document
 	req := &index.IndexRequest{
+		DocumentID:  documentID,
 		Name:        name,
 		Source:      t.config.DefaultSource,
 		ContentType: contentType,
@@ -233,6 +253,33 @@ func (t *UploadTool) Execute(ctx context.Context, params json.RawMessage) (*agen
 	return &agent.ToolResult{
 		Content: string(outputJSON),
 	}, nil
+}
+
+func containsUnsafeName(name string) bool {
+	if strings.Contains(name, "..") {
+		return true
+	}
+	return strings.ContainsAny(name, `/\`)
+}
+
+func idempotencyDocumentID(key string, metadata *models.DocumentMetadata) string {
+	var sb strings.Builder
+	sb.WriteString(strings.TrimSpace(key))
+	if metadata != nil {
+		if metadata.AgentID != "" {
+			sb.WriteString("|agent:")
+			sb.WriteString(metadata.AgentID)
+		}
+		if metadata.SessionID != "" {
+			sb.WriteString("|session:")
+			sb.WriteString(metadata.SessionID)
+		}
+		if metadata.ChannelID != "" {
+			sb.WriteString("|channel:")
+			sb.WriteString(metadata.ChannelID)
+		}
+	}
+	return uuid.NewSHA1(uuid.NameSpaceOID, []byte(sb.String())).String()
 }
 
 // ListTool implements agent.Tool for listing indexed documents.

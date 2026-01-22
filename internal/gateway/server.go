@@ -84,6 +84,7 @@ type Server struct {
 	llmProvider        agent.LLMProvider
 	defaultModel       string
 	jobStore           jobs.Store
+	approvalChecker    *agent.ApprovalChecker
 
 	broadcastManager *BroadcastManager
 	hooksRegistry    *hooks.Registry

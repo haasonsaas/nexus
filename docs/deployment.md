@@ -275,7 +275,21 @@ data:
         disable_events: false
         max_tool_calls: 0
         require_approval: []
+        approval:
+          profile: coding
+          allowlist: []
+          denylist: []
+          safe_bins: []
+          skill_allowlist: true
+          ask_fallback: true
+          default_decision: pending
+          request_ttl: 5m
         async: []
+      elevated:
+        enabled: false
+        allow_from:
+          telegram: ["123456789"]
+        tools: ["execute_code"]
 
     plugins:
       load:

@@ -107,3 +107,5 @@ Why it matters for Nexus:
 ## Notes
 - Clawdbot’s test suite is exhaustive around config semantics. Emulate with targeted unit tests for each policy precedence rule.
 - Many safety behaviors default to deny/allowlist in group contexts; worth aligning Nexus defaults for public deployments.
+## Updates
+- 2026-01-22: Elevated allowFrom gating + approval policy wiring landed in Nexus (see `docs/shortcomings-plan.md`).

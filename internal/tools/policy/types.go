@@ -106,6 +106,9 @@ var ToolAliases = map[string]string{
 	"shell":       "exec",
 	"apply-patch": "edit",
 	"apply_patch": "edit",
+	"sandbox":     "execute_code",
+	"websearch":   "web_search",
+	"webfetch":    "web_fetch",
 }
 
 // NormalizeTool normalizes a tool name to its canonical form by converting

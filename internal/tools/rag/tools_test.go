@@ -62,9 +62,12 @@ type recordingStore struct {
 	lastDoc    *models.Document
 	addErr     error
 	searchErr  error
+	searchResp *models.DocumentSearchResponse
+	addCount   int
 }
 
 func (s *recordingStore) AddDocument(ctx context.Context, doc *models.Document, chunks []*models.DocumentChunk) error {
+	s.addCount++
 	s.lastDoc = doc
 	return s.addErr
 }
@@ -94,6 +97,9 @@ func (s *recordingStore) Search(ctx context.Context, req *models.DocumentSearchR
 	s.lastSearch = &copyReq
 	if s.searchErr != nil {
 		return nil, s.searchErr
+	}
+	if s.searchResp != nil {
+		return s.searchResp, nil
 	}
 	return &models.DocumentSearchResponse{}, nil
 }
@@ -156,6 +162,122 @@ func TestSearchToolNoResults(t *testing.T) {
 	}
 	if result.Content == "" || result.Content == "[]" {
 		t.Fatalf("expected friendly no-results message")
+	}
+}
+
+func TestSearchToolSkipsInvalidResults(t *testing.T) {
+	store := &recordingStore{
+		searchResp: &models.DocumentSearchResponse{
+			Results: []*models.DocumentSearchResult{
+				nil,
+				{Chunk: nil, Score: 0.9},
+				{
+					Chunk: &models.DocumentChunk{
+						ID:      "chunk-1",
+						Content: "valid",
+						Metadata: models.ChunkMetadata{
+							DocumentName:   "Doc",
+							DocumentSource: "unit",
+						},
+					},
+					Score: 0.8,
+				},
+			},
+		},
+	}
+	manager := index.NewManager(store, stubEmbedder{dim: 3}, nil)
+	tool := NewSearchTool(manager, nil)
+
+	params := json.RawMessage(`{"query":"test"}`)
+	result, err := tool.Execute(context.Background(), params)
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("expected non-error result: %s", result.Content)
+	}
+	if strings.Contains(result.Content, "No relevant documents") {
+		t.Fatalf("expected valid results to be returned")
+	}
+
+	var payload struct {
+		Count   int `json:"count"`
+		Results []struct {
+			DocumentName string  `json:"document_name"`
+			Score        float32 `json:"score"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal([]byte(result.Content), &payload); err != nil {
+		t.Fatalf("failed to parse results: %v", err)
+	}
+	if payload.Count != 1 || len(payload.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", payload.Count)
+	}
+	if payload.Results[0].DocumentName != "Doc" {
+		t.Fatalf("unexpected document name: %q", payload.Results[0].DocumentName)
+	}
+}
+
+func TestSearchToolOrdersResultsByScore(t *testing.T) {
+	store := &recordingStore{
+		searchResp: &models.DocumentSearchResponse{
+			Results: []*models.DocumentSearchResult{
+				{
+					Chunk: &models.DocumentChunk{
+						ID:      "chunk-low",
+						Content: "low",
+						Metadata: models.ChunkMetadata{
+							DocumentName: "Low",
+						},
+					},
+					Score: 0.1,
+				},
+				{
+					Chunk: &models.DocumentChunk{
+						ID:      "chunk-high",
+						Content: "high",
+						Metadata: models.ChunkMetadata{
+							DocumentName: "High",
+						},
+					},
+					Score: 0.9,
+				},
+				{
+					Chunk: &models.DocumentChunk{
+						ID:      "chunk-mid",
+						Content: "mid",
+						Metadata: models.ChunkMetadata{
+							DocumentName: "Mid",
+						},
+					},
+					Score: 0.5,
+				},
+			},
+		},
+	}
+	manager := index.NewManager(store, stubEmbedder{dim: 3}, nil)
+	tool := NewSearchTool(manager, nil)
+
+	params := json.RawMessage(`{"query":"order"}`)
+	result, err := tool.Execute(context.Background(), params)
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+
+	var payload struct {
+		Results []struct {
+			Score float32 `json:"score"`
+			Name  string  `json:"document_name"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal([]byte(result.Content), &payload); err != nil {
+		t.Fatalf("failed to parse results: %v", err)
+	}
+	if len(payload.Results) != 3 {
+		t.Fatalf("expected 3 results, got %d", len(payload.Results))
+	}
+	if payload.Results[0].Score < payload.Results[1].Score || payload.Results[1].Score < payload.Results[2].Score {
+		t.Fatalf("expected descending scores, got %+v", payload.Results)
 	}
 }
 
@@ -275,6 +397,24 @@ func TestUploadToolRejectsContentType(t *testing.T) {
 	}
 }
 
+func TestUploadToolRejectsPathTraversalName(t *testing.T) {
+	store := &recordingStore{}
+	manager := index.NewManager(store, stubEmbedder{dim: 3}, nil)
+	tool := NewUploadTool(manager, nil)
+
+	params := json.RawMessage(`{"name":"../secret","content":"hello","content_type":"text/plain"}`)
+	result, err := tool.Execute(context.Background(), params)
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatalf("expected error result for unsafe name")
+	}
+	if store.lastDoc != nil {
+		t.Fatalf("expected no document stored for unsafe name")
+	}
+}
+
 func TestUploadToolStoreError(t *testing.T) {
 	store := &recordingStore{addErr: context.DeadlineExceeded}
 	manager := index.NewManager(store, stubEmbedder{dim: 3}, nil)
@@ -313,5 +453,40 @@ func TestUploadToolEmbedderError(t *testing.T) {
 	}
 	if store.lastDoc != nil {
 		t.Fatalf("expected no document stored on embedder error")
+	}
+}
+
+func TestUploadToolIdempotencyKeyUsesStableID(t *testing.T) {
+	store := &recordingStore{}
+	manager := index.NewManager(store, stubEmbedder{dim: 3}, nil)
+	tool := NewUploadTool(manager, nil)
+
+	params := json.RawMessage(`{"name":"Doc","content":"hello","content_type":"text/plain","idempotency_key":"stable-key"}`)
+	result1, err := tool.Execute(context.Background(), params)
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	result2, err := tool.Execute(context.Background(), params)
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+
+	var output1, output2 struct {
+		DocumentID string `json:"document_id"`
+	}
+	if err := json.Unmarshal([]byte(result1.Content), &output1); err != nil {
+		t.Fatalf("failed to parse first result: %v", err)
+	}
+	if err := json.Unmarshal([]byte(result2.Content), &output2); err != nil {
+		t.Fatalf("failed to parse second result: %v", err)
+	}
+	if output1.DocumentID == "" || output2.DocumentID == "" {
+		t.Fatalf("expected document IDs to be set")
+	}
+	if output1.DocumentID != output2.DocumentID {
+		t.Fatalf("expected stable document IDs, got %q and %q", output1.DocumentID, output2.DocumentID)
+	}
+	if store.addCount != 2 {
+		t.Fatalf("expected two store writes, got %d", store.addCount)
 	}
 }

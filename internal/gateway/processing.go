@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/agent"
+	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
@@ -107,13 +108,83 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		}
 	}
 
+	var agentModel *models.Agent
+	if s.stores.Agents != nil {
+		var err error
+		agentModel, err = s.stores.Agents.Get(ctx, agentID)
+		if err != nil {
+			s.logger.Warn("failed to load agent config", "error", err)
+		}
+	}
+	overrides := parseAgentToolOverrides(agentModel)
+
+	var agentElevatedCfg *config.ElevatedConfig
+	if overrides.HasElevated {
+		agentElevatedCfg = &overrides.Elevated
+	}
+	elevatedAllowed, elevatedReason := resolveElevatedPermission(s.config.Tools.Elevated, agentElevatedCfg, msg)
+	inlineElevatedSet := false
+	inlineElevatedMode := agent.ElevatedOff
+
+	if directive, ok := parseElevatedDirective(msg.Content); ok {
+		switch directive.Scope {
+		case elevatedScopeStatus:
+			s.sendImmediateReply(ctx, session, msg, formatElevatedStatus(elevatedModeFromSession(session), elevatedAllowed, elevatedReason))
+			return
+		case elevatedScopeSession:
+			if !elevatedAllowed {
+				s.sendImmediateReply(ctx, session, msg, formatElevatedUnavailable(elevatedReason))
+				return
+			}
+			setSessionElevatedMode(session, directive.Mode)
+			if err := s.sessions.Update(ctx, session); err != nil {
+				s.logger.Error("failed to persist elevated mode", "error", err)
+			}
+			s.sendImmediateReply(ctx, session, msg, formatElevatedSet(directive.Mode))
+			return
+		case elevatedScopeInline:
+			if directive.Cleaned != "" {
+				msg.Content = directive.Cleaned
+			}
+			if elevatedAllowed {
+				inlineElevatedMode = directive.Mode
+				inlineElevatedSet = true
+			}
+		}
+	}
+
+	effectiveElevated := elevatedModeFromSession(session)
+	if inlineElevatedSet {
+		effectiveElevated = inlineElevatedMode
+	}
+	if !elevatedAllowed {
+		effectiveElevated = agent.ElevatedOff
+	}
+
 	promptCtx := ctx
 	if systemPrompt := s.systemPromptForMessage(ctx, session, msg); systemPrompt != "" {
 		promptCtx = agent.WithSystemPrompt(promptCtx, systemPrompt)
 	}
+	if effectiveElevated != agent.ElevatedOff {
+		promptCtx = agent.WithElevated(promptCtx, effectiveElevated)
+	}
+	if overrides.HasExecution || overrides.HasElevated {
+		override := runtimeOptionsOverrideFromExecution(overrides.Execution)
+		if overrides.HasElevated {
+			override.ElevatedTools = effectiveElevatedTools(s.config.Tools.Elevated, agentElevatedCfg)
+		}
+		promptCtx = agent.WithRuntimeOptions(promptCtx, override)
+	}
 	if s.toolPolicyResolver != nil {
-		if toolPolicy := s.toolPolicyForAgent(ctx, agentID); toolPolicy != nil {
+		if toolPolicy := toolPolicyFromAgent(agentModel); toolPolicy != nil {
 			promptCtx = agent.WithToolPolicy(promptCtx, s.toolPolicyResolver, toolPolicy)
+		}
+	}
+	if s.approvalChecker != nil {
+		basePolicy := s.approvalChecker.PolicyFor("")
+		policy := approvalPolicyForAgent(basePolicy, overrides, s.toolPolicyResolver)
+		if policy != nil && policy != basePolicy {
+			s.approvalChecker.SetAgentPolicy(agentID, policy)
 		}
 	}
 
@@ -179,6 +250,35 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 			if err := s.sessions.Update(ctx, session); err != nil {
 				s.logger.Error("failed to update memory flush confirmation", "error", err)
 			}
+		}
+	}
+}
+
+func (s *Server) sendImmediateReply(ctx context.Context, session *models.Session, inbound *models.Message, content string) {
+	if strings.TrimSpace(content) == "" {
+		return
+	}
+	adapter, ok := s.channels.GetOutbound(inbound.Channel)
+	if !ok {
+		s.logger.Error("no adapter registered for channel", "channel", inbound.Channel)
+		return
+	}
+	outbound := &models.Message{
+		SessionID: session.ID,
+		Channel:   inbound.Channel,
+		Direction: models.DirectionOutbound,
+		Role:      models.RoleAssistant,
+		Content:   content,
+		Metadata:  s.buildReplyMetadata(inbound),
+		CreatedAt: time.Now(),
+	}
+	if err := adapter.Send(ctx, outbound); err != nil {
+		s.logger.Error("failed to send outbound message", "error", err)
+		return
+	}
+	if s.memoryLogger != nil {
+		if err := s.memoryLogger.Append(outbound); err != nil {
+			s.logger.Error("failed to write memory log", "error", err)
 		}
 	}
 }

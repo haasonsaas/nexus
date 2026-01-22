@@ -8,9 +8,9 @@ import (
 )
 
 func TestApprovalChecker_Allowlist(t *testing.T) {
-	checker := NewApprovalChecker(&ApprovalPolicy{
-		Allowlist: []string{"read_file", "list_*"},
-	})
+	policy := DefaultApprovalPolicy()
+	policy.Allowlist = []string{"read_file", "list_*"}
+	checker := NewApprovalChecker(policy)
 
 	tests := []struct {
 		name     string
@@ -34,10 +34,10 @@ func TestApprovalChecker_Allowlist(t *testing.T) {
 }
 
 func TestApprovalChecker_Denylist(t *testing.T) {
-	checker := NewApprovalChecker(&ApprovalPolicy{
-		Allowlist: []string{"*"}, // allow everything except denylist
-		Denylist:  []string{"rm", "delete_*"},
-	})
+	policy := DefaultApprovalPolicy()
+	policy.Allowlist = []string{"*"} // allow everything except denylist
+	policy.Denylist = []string{"rm", "delete_*"}
+	checker := NewApprovalChecker(policy)
 
 	tests := []struct {
 		name     string
@@ -60,9 +60,9 @@ func TestApprovalChecker_Denylist(t *testing.T) {
 }
 
 func TestApprovalChecker_SafeBins(t *testing.T) {
-	checker := NewApprovalChecker(&ApprovalPolicy{
-		SafeBins: []string{"cat", "head", "tail"},
-	})
+	policy := DefaultApprovalPolicy()
+	policy.SafeBins = []string{"cat", "head", "tail"}
+	checker := NewApprovalChecker(policy)
 
 	tests := []struct {
 		name     string
@@ -85,9 +85,9 @@ func TestApprovalChecker_SafeBins(t *testing.T) {
 }
 
 func TestApprovalChecker_SkillTools(t *testing.T) {
-	checker := NewApprovalChecker(&ApprovalPolicy{
-		SkillAllowlist: true,
-	})
+	policy := DefaultApprovalPolicy()
+	policy.SkillAllowlist = true
+	checker := NewApprovalChecker(policy)
 	checker.RegisterSkillTools([]string{"skill_tool_1", "skill_tool_2"})
 
 	tests := []struct {
@@ -111,15 +111,15 @@ func TestApprovalChecker_SkillTools(t *testing.T) {
 }
 
 func TestApprovalChecker_PerAgentPolicy(t *testing.T) {
-	checker := NewApprovalChecker(&ApprovalPolicy{
-		DefaultDecision: ApprovalPending,
-	})
-	checker.SetAgentPolicy("agent-1", &ApprovalPolicy{
-		Allowlist: []string{"bash"},
-	})
-	checker.SetAgentPolicy("agent-2", &ApprovalPolicy{
-		Denylist: []string{"bash"},
-	})
+	policy := DefaultApprovalPolicy()
+	policy.DefaultDecision = ApprovalPending
+	checker := NewApprovalChecker(policy)
+	agent1 := DefaultApprovalPolicy()
+	agent1.Allowlist = []string{"bash"}
+	checker.SetAgentPolicy("agent-1", agent1)
+	agent2 := DefaultApprovalPolicy()
+	agent2.Denylist = []string{"bash"}
+	checker.SetAgentPolicy("agent-2", agent2)
 
 	// Agent 1 can use bash
 	decision, _ := checker.Check(context.Background(), "agent-1", models.ToolCall{Name: "bash"})
@@ -141,17 +141,17 @@ func TestApprovalChecker_PerAgentPolicy(t *testing.T) {
 }
 
 func TestApprovalChecker_MCPPattern(t *testing.T) {
-	checker := NewApprovalChecker(&ApprovalPolicy{
-		Allowlist: []string{"mcp:*"},
-	})
+	policy := DefaultApprovalPolicy()
+	policy.Allowlist = []string{"mcp:*"}
+	checker := NewApprovalChecker(policy)
 
 	tests := []struct {
 		name     string
 		tool     string
 		expected ApprovalDecision
 	}{
-		{"mcp tool allowed", "mcp_server_tool", ApprovalAllowed},
-		{"mcp tool 2", "mcp_another_tool", ApprovalAllowed},
+		{"mcp tool allowed", "mcp:github.search", ApprovalAllowed},
+		{"mcp tool 2", "mcp:slack.send", ApprovalAllowed},
 		{"non-mcp pending", "other_tool", ApprovalPending},
 	}
 
@@ -167,9 +167,9 @@ func TestApprovalChecker_MCPPattern(t *testing.T) {
 
 func TestApprovalChecker_CreateAndDecide(t *testing.T) {
 	store := NewMemoryApprovalStore()
-	checker := NewApprovalChecker(&ApprovalPolicy{
-		RequireApproval: []string{"dangerous_tool"},
-	})
+	policy := DefaultApprovalPolicy()
+	policy.RequireApproval = []string{"dangerous_tool"}
+	checker := NewApprovalChecker(policy)
 	checker.SetStore(store)
 
 	ctx := context.Background()
@@ -217,6 +217,18 @@ func TestApprovalChecker_CreateAndDecide(t *testing.T) {
 	}
 }
 
+func TestApprovalChecker_DeniesWhenUIUnavailableAndAskFallbackOff(t *testing.T) {
+	checker := NewApprovalChecker(&ApprovalPolicy{
+		RequireApproval: []string{"dangerous_tool"},
+		AskFallback:     false,
+	})
+
+	decision, reason := checker.Check(context.Background(), "agent-1", models.ToolCall{Name: "dangerous_tool"})
+	if decision != ApprovalDenied {
+		t.Fatalf("expected denied when UI unavailable, got %v (%s)", decision, reason)
+	}
+}
+
 func TestMatchesPattern(t *testing.T) {
 	tests := []struct {
 		patterns []string
@@ -231,7 +243,7 @@ func TestMatchesPattern(t *testing.T) {
 		{[]string{"*bar"}, "foobar", true},
 		{[]string{"*bar"}, "bar", true},
 		{[]string{"*bar"}, "barfoo", false},
-		{[]string{"mcp:*"}, "mcp_tool", true},
+		{[]string{"mcp:*"}, "mcp:github.search", true},
 		{[]string{"mcp:*"}, "other_tool", false},
 		{[]string{""}, "anything", false},
 	}

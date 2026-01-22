@@ -85,6 +85,10 @@ func (m *Manager) WithChunker(c chunker.Chunker) *Manager {
 
 // IndexRequest contains parameters for indexing a document.
 type IndexRequest struct {
+	// DocumentID is an optional deterministic ID to use for idempotent uploads.
+	// If empty, a new UUID is generated.
+	DocumentID string
+
 	// Name is the document name.
 	Name string
 
@@ -161,8 +165,12 @@ func (m *Manager) Index(ctx context.Context, req *IndexRequest) (*IndexResult, e
 	}
 
 	// Create document
+	docID := strings.TrimSpace(req.DocumentID)
+	if docID == "" {
+		docID = uuid.New().String()
+	}
 	doc := &models.Document{
-		ID:          uuid.New().String(),
+		ID:          docID,
 		Name:        req.Name,
 		Source:      req.Source,
 		SourceURI:   req.SourceURI,

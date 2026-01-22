@@ -5,7 +5,7 @@ package policy
 // Based on Clawdbot patterns for consistent tool categorization.
 var ToolGroups = map[string][]string{
 	// Runtime/execution tools - commands that run code or processes
-	"group:runtime": {"exec", "bash", "process", "sandbox"},
+	"group:runtime": {"exec", "bash", "process", "sandbox", "execute_code"},
 
 	// Filesystem tools - read/write/modify files
 	"group:fs": {"read", "write", "edit", "apply_patch"},
@@ -32,16 +32,16 @@ var ToolGroups = map[string][]string{
 	"group:messaging": {"message", "send_message"},
 
 	// Web tools - search and fetch from the web
-	"group:web": {"websearch", "webfetch"},
+	"group:web": {"websearch", "webfetch", "web_search", "web_fetch"},
 
 	// All built-in Nexus tools
 	"group:nexus": {
 		// Runtime
-		"exec", "bash", "process", "sandbox",
+		"exec", "bash", "process", "sandbox", "execute_code",
 		// Filesystem
 		"read", "write", "edit", "apply_patch",
 		// Web
-		"websearch", "webfetch",
+		"websearch", "webfetch", "web_search", "web_fetch",
 		// Memory
 		"memory_search", "memory_get",
 		// Browser
@@ -57,7 +57,7 @@ var ToolGroups = map[string][]string{
 	// Read-only tools - safe tools that don't modify state
 	"group:readonly": {
 		"read",
-		"websearch", "webfetch",
+		"websearch", "webfetch", "web_search", "web_fetch",
 		"memory_search", "memory_get",
 		"sessions_list", "sessions_history", "session_status",
 		"job_status",

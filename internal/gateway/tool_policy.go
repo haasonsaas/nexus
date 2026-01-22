@@ -5,22 +5,30 @@ import (
 	"encoding/json"
 
 	"github.com/haasonsaas/nexus/internal/tools/policy"
+	"github.com/haasonsaas/nexus/pkg/models"
 )
 
 func (s *Server) toolPolicyForAgent(ctx context.Context, agentID string) *policy.Policy {
 	if s == nil || s.stores.Agents == nil || agentID == "" {
 		return nil
 	}
-	agent, err := s.stores.Agents.Get(ctx, agentID)
-	if err != nil || agent == nil {
+	agentModel, err := s.stores.Agents.Get(ctx, agentID)
+	if err != nil || agentModel == nil {
 		return nil
 	}
-	toolPolicy := parseAgentToolPolicy(agent.Config)
-	if toolPolicy == nil && len(agent.Tools) == 0 {
+	return toolPolicyFromAgent(agentModel)
+}
+
+func toolPolicyFromAgent(agentModel *models.Agent) *policy.Policy {
+	if agentModel == nil {
 		return nil
 	}
-	if len(agent.Tools) > 0 {
-		toolPolicy = policy.Merge(toolPolicy, &policy.Policy{Allow: agent.Tools})
+	toolPolicy := parseAgentToolPolicy(agentModel.Config)
+	if toolPolicy == nil && len(agentModel.Tools) == 0 {
+		return nil
+	}
+	if len(agentModel.Tools) > 0 {
+		toolPolicy = policy.Merge(toolPolicy, &policy.Policy{Allow: agentModel.Tools})
 	}
 	return toolPolicy
 }

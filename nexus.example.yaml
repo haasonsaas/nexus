@@ -208,6 +208,30 @@ tools:
     provider: searxng
     # SearXNG instance URL
     url: ${SEARXNG_URL:-http://localhost:8888}
+  execution:
+    max_iterations: 4
+    parallelism: 2
+    timeout: 0s
+    max_attempts: 1
+    retry_backoff: 0s
+    disable_events: false
+    max_tool_calls: 0
+    require_approval: []
+    approval:
+      profile: coding
+      allowlist: []
+      denylist: []
+      safe_bins: []
+      skill_allowlist: true
+      ask_fallback: true
+      default_decision: pending
+      request_ttl: 5m
+    async: []
+  elevated:
+    enabled: false
+    allow_from:
+      telegram: ["123456789"]
+    tools: ["execute_code"]
 
 transcription:
   enabled: false

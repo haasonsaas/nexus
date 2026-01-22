@@ -1,5 +1,7 @@
 # Nexus
 
+[![CI](https://github.com/haasonsaas/nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/haasonsaas/nexus/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/haasonsaas/nexus/branch/main/graph/badge.svg)](https://codecov.io/gh/haasonsaas/nexus)
 [![Go Version](https://img.shields.io/badge/go-1.24+-blue.svg)](https://golang.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 

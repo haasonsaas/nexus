@@ -9,12 +9,12 @@ import (
 	"github.com/haasonsaas/nexus/internal/jobs"
 )
 
-// CancelTool allows cancelling a running job.
+// CancelTool allows cancelling a running or queued job via tool call.
 type CancelTool struct {
 	store jobs.Store
 }
 
-// NewCancelTool returns a job cancel tool.
+// NewCancelTool creates a job cancel tool that operates on the given store.
 func NewCancelTool(store jobs.Store) *CancelTool {
 	return &CancelTool{store: store}
 }
@@ -68,12 +68,12 @@ func (t *CancelTool) Execute(ctx context.Context, params json.RawMessage) (*agen
 	}, nil
 }
 
-// ListTool lists jobs with optional filtering.
+// ListTool lists jobs with optional filtering by status via tool call.
 type ListTool struct {
 	store jobs.Store
 }
 
-// NewListTool returns a job list tool.
+// NewListTool creates a job list tool that queries the given store.
 func NewListTool(store jobs.Store) *ListTool {
 	return &ListTool{store: store}
 }

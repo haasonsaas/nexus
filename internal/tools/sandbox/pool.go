@@ -9,6 +9,7 @@ import (
 )
 
 // Pool manages a pool of sandbox executors for efficient reuse.
+// It maintains separate pools for each language with configurable sizing.
 type Pool struct {
 	config    *Config
 	executors map[string]*languagePool
@@ -26,7 +27,8 @@ type languagePool struct {
 	config    *Config
 }
 
-// NewPool creates a new executor pool.
+// NewPool creates a new executor pool with the given configuration.
+// It pre-warms pools for each supported language (Python, Node.js, Go, Bash).
 func NewPool(config *Config) (*Pool, error) {
 	if config == nil {
 		return nil, errors.New("config cannot be nil")
@@ -63,6 +65,7 @@ func NewPool(config *Config) (*Pool, error) {
 }
 
 // Get retrieves an executor from the pool for the specified language.
+// It creates a new executor if none is available and the pool has capacity.
 func (p *Pool) Get(ctx context.Context, language string) (RuntimeExecutor, error) {
 	p.mu.RLock()
 	if p.closed {
@@ -112,7 +115,8 @@ func (p *Pool) Get(ctx context.Context, language string) (RuntimeExecutor, error
 	}
 }
 
-// Put returns an executor to the pool.
+// Put returns an executor to the pool for reuse.
+// If the pool is full, the executor is closed immediately.
 func (p *Pool) Put(executor RuntimeExecutor) {
 	if executor == nil {
 		return
@@ -145,7 +149,7 @@ func (p *Pool) Put(executor RuntimeExecutor) {
 	}
 }
 
-// Close shuts down the pool and all executors.
+// Close shuts down the pool and closes all executors across all languages.
 func (p *Pool) Close() error {
 	p.mu.Lock()
 	if p.closed {
@@ -242,8 +246,8 @@ func (f *firecrackerExecutorWrapper) Close() error {
 	return nil
 }
 
-// InitFirecrackerBackend initializes the Firecracker backend.
-// This should be called during application startup if Firecracker support is desired.
+// InitFirecrackerBackend initializes the shared Firecracker backend for microVM execution.
+// This must be called during application startup if Firecracker support is desired.
 func InitFirecrackerBackend(backend interface {
 	Run(ctx context.Context, params *ExecuteParams, workspace string) (*ExecuteResult, error)
 	Close() error
@@ -254,7 +258,7 @@ func InitFirecrackerBackend(backend interface {
 	})
 }
 
-// Stats returns statistics about the pool.
+// Stats returns statistics about the pool for each language.
 func (p *Pool) Stats() map[string]PoolStats {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -274,7 +278,7 @@ func (p *Pool) Stats() map[string]PoolStats {
 	return stats
 }
 
-// PoolStats contains statistics about a language pool.
+// PoolStats contains statistics about a language-specific executor pool.
 type PoolStats struct {
 	Language  string `json:"language"`
 	Available int    `json:"available"`
@@ -282,7 +286,7 @@ type PoolStats struct {
 	MaxSize   int    `json:"max_size"`
 }
 
-// Warmup pre-warms the pool by creating executors.
+// Warmup pre-warms the pool by creating the specified number of executors.
 func (p *Pool) Warmup(ctx context.Context, language string, count int) error {
 	p.mu.RLock()
 	if p.closed {
@@ -345,7 +349,7 @@ func (p *Pool) Warmup(ctx context.Context, language string, count int) error {
 	return nil
 }
 
-// Shrink reduces the pool size by closing idle executors.
+// Shrink reduces the pool size by closing up to count idle executors.
 func (p *Pool) Shrink(language string, count int) error {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -375,7 +379,7 @@ func (p *Pool) Shrink(language string, count int) error {
 	return nil
 }
 
-// Health checks the health of the pool.
+// Health checks the health of the pool by verifying each language has executors.
 func (p *Pool) Health() error {
 	p.mu.RLock()
 	defer p.mu.RUnlock()

@@ -8,7 +8,8 @@ import (
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
-// LoopConfig configures the agentic loop behavior.
+// LoopConfig configures the agentic loop behavior including iteration limits,
+// token budgets, and tool execution settings.
 type LoopConfig struct {
 	// MaxIterations limits the number of tool use iterations
 	// Default: 10
@@ -78,7 +79,8 @@ type AgenticLoop struct {
 	defaultSystem string
 }
 
-// NewAgenticLoop creates a new agentic loop.
+// NewAgenticLoop creates a new agentic loop with the given provider, tool registry, and session store.
+// If config is nil, DefaultLoopConfig is used.
 func NewAgenticLoop(provider LLMProvider, registry *ToolRegistry, sessions sessions.Store, config *LoopConfig) *AgenticLoop {
 	if config == nil {
 		config = DefaultLoopConfig()
@@ -94,22 +96,23 @@ func NewAgenticLoop(provider LLMProvider, registry *ToolRegistry, sessions sessi
 	}
 }
 
-// SetDefaultModel sets the default model for completions.
+// SetDefaultModel sets the default model used when requests do not specify one.
 func (l *AgenticLoop) SetDefaultModel(model string) {
 	l.defaultModel = model
 }
 
-// SetDefaultSystem sets the default system prompt.
+// SetDefaultSystem sets the default system prompt used when requests do not specify one.
 func (l *AgenticLoop) SetDefaultSystem(system string) {
 	l.defaultSystem = system
 }
 
-// ConfigureTool sets per-tool configuration.
+// ConfigureTool sets per-tool configuration overrides for timeout, retry, and priority.
 func (l *AgenticLoop) ConfigureTool(name string, config *ToolConfig) {
 	l.executor.ConfigureTool(name, config)
 }
 
-// LoopState tracks the current state of an agentic loop execution.
+// LoopState tracks the current state of an agentic loop execution including
+// phase, iteration count, accumulated messages, and pending tool operations.
 type LoopState struct {
 	Phase           LoopPhase
 	Iteration       int
@@ -121,7 +124,8 @@ type LoopState struct {
 	BranchID        string // Current branch for branch-aware loops
 }
 
-// Run executes the agentic loop and streams results.
+// Run executes the agentic loop and streams results through a channel.
+// The channel is closed when the loop completes or an error occurs.
 func (l *AgenticLoop) Run(ctx context.Context, session *models.Session, msg *models.Message) (<-chan *ResponseChunk, error) {
 	chunks := make(chan *ResponseChunk, processBufferSize)
 
@@ -262,7 +266,8 @@ func (l *AgenticLoop) initializeState(ctx context.Context, session *models.Sessi
 	return nil
 }
 
-// RunWithBranch executes the agentic loop on a specific branch.
+// RunWithBranch executes the agentic loop on a specific conversation branch.
+// The branchID is set on the message before processing.
 func (l *AgenticLoop) RunWithBranch(ctx context.Context, session *models.Session, msg *models.Message, branchID string) (<-chan *ResponseChunk, error) {
 	// Set branch ID on message for initializeState
 	msg.BranchID = branchID
@@ -373,12 +378,13 @@ func (l *AgenticLoop) continuePhase(state *LoopState, toolCalls []models.ToolCal
 	state.ToolResults = nil
 }
 
-// AgenticRuntime wraps the AgenticLoop with the Runtime interface for compatibility.
+// AgenticRuntime wraps the AgenticLoop to provide a Runtime-compatible interface.
+// This allows the loop to be used interchangeably with the standard Runtime.
 type AgenticRuntime struct {
 	loop *AgenticLoop
 }
 
-// NewAgenticRuntime creates a new agentic runtime.
+// NewAgenticRuntime creates a new agentic runtime wrapping an AgenticLoop.
 func NewAgenticRuntime(provider LLMProvider, sessions sessions.Store, config *LoopConfig) *AgenticRuntime {
 	registry := NewToolRegistry()
 	loop := NewAgenticLoop(provider, registry, sessions, config)
@@ -388,32 +394,32 @@ func NewAgenticRuntime(provider LLMProvider, sessions sessions.Store, config *Lo
 	}
 }
 
-// SetDefaultModel configures the fallback model.
+// SetDefaultModel configures the fallback model used when not specified in requests.
 func (r *AgenticRuntime) SetDefaultModel(model string) {
 	r.loop.SetDefaultModel(model)
 }
 
-// SetSystemPrompt configures the fallback system prompt.
+// SetSystemPrompt configures the fallback system prompt used when not specified in requests.
 func (r *AgenticRuntime) SetSystemPrompt(system string) {
 	r.loop.SetDefaultSystem(system)
 }
 
-// RegisterTool adds a tool to the runtime.
+// RegisterTool adds a tool to the runtime's tool registry.
 func (r *AgenticRuntime) RegisterTool(tool Tool) {
 	r.loop.executor.registry.Register(tool)
 }
 
-// ConfigureTool sets per-tool configuration.
+// ConfigureTool sets per-tool configuration for timeout, retry, and priority.
 func (r *AgenticRuntime) ConfigureTool(name string, config *ToolConfig) {
 	r.loop.ConfigureTool(name, config)
 }
 
-// Process handles an incoming message using the agentic loop.
+// Process handles an incoming message using the agentic loop and streams results.
 func (r *AgenticRuntime) Process(ctx context.Context, session *models.Session, msg *models.Message) (<-chan *ResponseChunk, error) {
 	return r.loop.Run(ctx, session, msg)
 }
 
-// ExecutorMetrics returns metrics from the tool executor.
+// ExecutorMetrics returns a snapshot of metrics from the tool executor.
 func (r *AgenticRuntime) ExecutorMetrics() *ExecutorMetricsSnapshot {
 	return r.loop.executor.Metrics()
 }

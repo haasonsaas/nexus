@@ -1,11 +1,14 @@
 // Package policy provides tool authorization and access control.
+// It defines profiles, policies, and groups for managing which tools
+// agents are allowed to use.
 package policy
 
 import (
 	"strings"
 )
 
-// Profile defines a pre-configured tool access profile.
+// Profile defines a pre-configured tool access profile that provides
+// sensible defaults for common use cases like coding, messaging, or full access.
 type Profile string
 
 const (
@@ -22,7 +25,8 @@ const (
 	ProfileFull Profile = "full"
 )
 
-// Policy defines tool access rules for an agent.
+// Policy defines tool access rules for an agent combining profiles with
+// explicit allow and deny lists. Deny rules always take precedence over allow rules.
 type Policy struct {
 	// Profile is a pre-configured access level.
 	Profile Profile `json:"profile,omitempty" yaml:"profile"`
@@ -34,7 +38,7 @@ type Policy struct {
 	Deny []string `json:"deny,omitempty" yaml:"deny"`
 }
 
-// ToolGroup defines a named group of tools.
+// ToolGroup defines a named group of tools for convenient bulk permissions.
 type ToolGroup struct {
 	Name  string
 	Tools []string
@@ -99,7 +103,8 @@ var ToolAliases = map[string]string{
 	"apply_patch": "edit",
 }
 
-// NormalizeTool normalizes a tool name to its canonical form.
+// NormalizeTool normalizes a tool name to its canonical form by converting
+// to lowercase and resolving known aliases.
 func NormalizeTool(name string) string {
 	normalized := strings.ToLower(strings.TrimSpace(name))
 	if alias, ok := ToolAliases[normalized]; ok {
@@ -108,7 +113,7 @@ func NormalizeTool(name string) string {
 	return normalized
 }
 
-// NormalizeTools normalizes a list of tool names.
+// NormalizeTools normalizes a list of tool names to their canonical forms.
 func NormalizeTools(names []string) []string {
 	result := make([]string, 0, len(names))
 	for _, name := range names {

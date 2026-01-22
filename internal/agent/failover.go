@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// FailoverConfig configures the failover orchestrator.
+// FailoverConfig configures the failover orchestrator's retry, backoff, and circuit breaker behavior.
 type FailoverConfig struct {
 	// MaxRetries is the maximum number of retry attempts per provider
 	MaxRetries int
@@ -32,7 +32,7 @@ type FailoverConfig struct {
 	CircuitBreakerTimeout time.Duration
 }
 
-// DefaultFailoverConfig returns sensible defaults for failover.
+// DefaultFailoverConfig returns sensible defaults for failover with circuit breaker enabled.
 func DefaultFailoverConfig() *FailoverConfig {
 	return &FailoverConfig{
 		MaxRetries:              2,
@@ -45,7 +45,7 @@ func DefaultFailoverConfig() *FailoverConfig {
 	}
 }
 
-// ProviderState tracks the health of a provider.
+// ProviderState tracks the health and circuit breaker status of an LLM provider.
 type ProviderState struct {
 	Name          string
 	Failures      int
@@ -54,7 +54,7 @@ type ProviderState struct {
 	CircuitOpenAt time.Time
 }
 
-// IsAvailable returns true if the provider can accept requests.
+// IsAvailable returns true if the provider can accept requests based on circuit breaker state.
 func (s *ProviderState) IsAvailable(cfg *FailoverConfig) bool {
 	if !s.CircuitOpen {
 		return true
@@ -66,7 +66,8 @@ func (s *ProviderState) IsAvailable(cfg *FailoverConfig) bool {
 	return false
 }
 
-// FailoverOrchestrator manages multiple LLM providers with automatic failover.
+// FailoverOrchestrator manages multiple LLM providers with automatic failover,
+// circuit breaking, and retry logic. It implements the LLMProvider interface.
 type FailoverOrchestrator struct {
 	providers []LLMProvider
 	config    *FailoverConfig
@@ -75,7 +76,7 @@ type FailoverOrchestrator struct {
 	metrics   *FailoverMetrics
 }
 
-// FailoverMetrics tracks failover statistics.
+// FailoverMetrics tracks failover statistics including requests, failovers, retries, and circuit breaks.
 type FailoverMetrics struct {
 	mu               sync.Mutex
 	TotalRequests    int64
@@ -85,7 +86,8 @@ type FailoverMetrics struct {
 	CircuitBreaks    int64
 }
 
-// NewFailoverOrchestrator creates a new failover orchestrator.
+// NewFailoverOrchestrator creates a new failover orchestrator with the given primary provider.
+// If config is nil, DefaultFailoverConfig is used.
 func NewFailoverOrchestrator(primary LLMProvider, config *FailoverConfig) *FailoverOrchestrator {
 	if config == nil {
 		config = DefaultFailoverConfig()
@@ -101,14 +103,15 @@ func NewFailoverOrchestrator(primary LLMProvider, config *FailoverConfig) *Failo
 	}
 }
 
-// AddProvider adds a fallback provider.
+// AddProvider adds a fallback provider to the orchestrator's provider list.
 func (o *FailoverOrchestrator) AddProvider(p LLMProvider) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.providers = append(o.providers, p)
 }
 
-// Complete implements LLMProvider with failover support.
+// Complete implements LLMProvider with failover support, trying providers in order
+// until one succeeds or all fail.
 func (o *FailoverOrchestrator) Complete(ctx context.Context, req *CompletionRequest) (<-chan *CompletionChunk, error) {
 	o.metrics.mu.Lock()
 	o.metrics.TotalRequests++
@@ -421,7 +424,7 @@ func (o *FailoverOrchestrator) SupportsTools() bool {
 	return false
 }
 
-// Metrics returns a snapshot of failover metrics.
+// Metrics returns a copy-safe snapshot of failover metrics.
 func (o *FailoverOrchestrator) Metrics() FailoverMetrics {
 	o.metrics.mu.Lock()
 	defer o.metrics.mu.Unlock()
@@ -441,7 +444,7 @@ func (o *FailoverOrchestrator) Metrics() FailoverMetrics {
 	}
 }
 
-// ProviderStates returns the current state of all providers.
+// ProviderStates returns a copy of the current state of all registered providers.
 func (o *FailoverOrchestrator) ProviderStates() []ProviderState {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
@@ -453,7 +456,7 @@ func (o *FailoverOrchestrator) ProviderStates() []ProviderState {
 	return states
 }
 
-// ResetCircuitBreaker resets the circuit breaker for a provider.
+// ResetCircuitBreaker resets the circuit breaker for the named provider, allowing it to accept requests again.
 func (o *FailoverOrchestrator) ResetCircuitBreaker(name string) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -464,7 +467,7 @@ func (o *FailoverOrchestrator) ResetCircuitBreaker(name string) {
 	}
 }
 
-// ResetAllCircuitBreakers resets all circuit breakers.
+// ResetAllCircuitBreakers resets circuit breakers for all providers.
 func (o *FailoverOrchestrator) ResetAllCircuitBreakers() {
 	o.mu.Lock()
 	defer o.mu.Unlock()

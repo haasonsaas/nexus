@@ -23,7 +23,7 @@ const (
 	BroadcastSequential BroadcastStrategy = "sequential"
 )
 
-// BroadcastConfig configures broadcast groups for message routing.
+// BroadcastConfig configures broadcast groups for routing messages to multiple agents.
 type BroadcastConfig struct {
 	// Strategy defines how messages are processed: "parallel" or "sequential".
 	Strategy BroadcastStrategy `yaml:"strategy"`
@@ -34,7 +34,7 @@ type BroadcastConfig struct {
 	Groups map[string][]string `yaml:"groups"`
 }
 
-// BroadcastResult contains the result of processing a message by a single agent.
+// BroadcastResult contains the result of processing a message by a single agent in a broadcast group.
 type BroadcastResult struct {
 	AgentID   string
 	SessionID string
@@ -42,7 +42,7 @@ type BroadcastResult struct {
 	Error     error
 }
 
-// BroadcastManager handles routing messages to multiple agents.
+// BroadcastManager handles routing messages to multiple agents in broadcast groups.
 type BroadcastManager struct {
 	config   BroadcastConfig
 	sessions sessions.Store
@@ -50,7 +50,8 @@ type BroadcastManager struct {
 	logger   *slog.Logger
 }
 
-// NewBroadcastManager creates a new broadcast manager.
+// NewBroadcastManager creates a new broadcast manager with the given configuration.
+// If logger is nil, slog.Default() is used.
 func NewBroadcastManager(config BroadcastConfig, sessionStore sessions.Store, runtime *agent.Runtime, logger *slog.Logger) *BroadcastManager {
 	if logger == nil {
 		logger = slog.Default()
@@ -63,7 +64,7 @@ func NewBroadcastManager(config BroadcastConfig, sessionStore sessions.Store, ru
 	}
 }
 
-// IsBroadcastPeer checks if a peer_id is configured for broadcast routing.
+// IsBroadcastPeer returns true if the peer_id is configured for broadcast routing.
 func (m *BroadcastManager) IsBroadcastPeer(peerID string) bool {
 	if m == nil || m.config.Groups == nil {
 		return false
@@ -72,7 +73,7 @@ func (m *BroadcastManager) IsBroadcastPeer(peerID string) bool {
 	return ok && len(agents) > 0
 }
 
-// GetAgentsForPeer returns the list of agent IDs configured for a peer.
+// GetAgentsForPeer returns the list of agent IDs configured for a peer, or nil if not found.
 func (m *BroadcastManager) GetAgentsForPeer(peerID string) []string {
 	if m == nil || m.config.Groups == nil {
 		return nil

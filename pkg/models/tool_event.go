@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// ToolEventStage describes the lifecycle stage of a tool invocation.
+// ToolEventStage describes the lifecycle stage of a tool invocation for observability.
 type ToolEventStage string
 
 const (
@@ -18,7 +18,7 @@ const (
 	ToolEventApprovalRequired ToolEventStage = "approval_required"
 )
 
-// ToolEvent represents a lifecycle event for a tool call.
+// ToolEvent represents a lifecycle event for a tool call including timing and results.
 type ToolEvent struct {
 	ToolCallID   string          `json:"tool_call_id"`
 	ToolName     string          `json:"tool_name"`

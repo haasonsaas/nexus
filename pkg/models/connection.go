@@ -13,7 +13,7 @@ const (
 	ConnectionStatusConnecting   ConnectionStatus = "connecting"
 )
 
-// ChannelConnection tracks a user's channel connection.
+// ChannelConnection tracks a user's connection to a messaging channel.
 type ChannelConnection struct {
 	ID             string           `json:"id"`
 	UserID         string           `json:"user_id"`

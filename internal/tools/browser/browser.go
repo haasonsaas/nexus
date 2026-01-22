@@ -11,29 +11,32 @@ import (
 	"github.com/playwright-community/playwright-go"
 )
 
-// BrowserTool implements the agent.Tool interface for browser automation
+// BrowserTool implements the agent.Tool interface for browser automation.
+// It provides capabilities for web navigation, element interaction, screenshots,
+// content extraction, and JavaScript execution using a pooled Playwright browser.
 type BrowserTool struct {
 	pool *Pool
 }
 
-// NewBrowserTool creates a new browser automation tool
+// NewBrowserTool creates a new browser automation tool with the given pool.
+// The pool manages browser instance lifecycle and reuse for efficiency.
 func NewBrowserTool(pool *Pool) *BrowserTool {
 	return &BrowserTool{
 		pool: pool,
 	}
 }
 
-// Name returns the tool name
+// Name returns the tool name for registration with the agent runtime.
 func (b *BrowserTool) Name() string {
 	return "browser"
 }
 
-// Description returns the tool description
+// Description returns a human-readable description of the tool's capabilities.
 func (b *BrowserTool) Description() string {
 	return "Automate web browser interactions including navigation, clicking, form filling, screenshots, content extraction, and JavaScript execution. Supports headless browsing with configurable timeouts and session management."
 }
 
-// Schema returns the JSON schema for the tool parameters
+// Schema returns the JSON schema for the tool parameters used by LLMs.
 func (b *BrowserTool) Schema() json.RawMessage {
 	schema := `{
 		"type": "object",
@@ -73,7 +76,9 @@ func (b *BrowserTool) Schema() json.RawMessage {
 	return json.RawMessage(schema)
 }
 
-// Execute runs the browser tool with the given parameters
+// Execute runs the browser tool with the given parameters.
+// It acquires a browser instance from the pool, routes to the appropriate
+// action handler based on the "action" parameter, and releases the instance.
 func (b *BrowserTool) Execute(ctx context.Context, params json.RawMessage) (*agent.ToolResult, error) {
 	var baseParams struct {
 		Action string `json:"action"`

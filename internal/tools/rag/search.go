@@ -13,12 +13,14 @@ import (
 )
 
 // SearchTool implements agent.Tool for semantic document search.
+// It uses vector embeddings to find relevant document chunks from indexed documents.
 type SearchTool struct {
 	manager *index.Manager
 	config  SearchToolConfig
 }
 
-// SearchToolConfig configures the document search tool.
+// SearchToolConfig configures the document search tool behavior including
+// result limits, similarity thresholds, and content formatting.
 type SearchToolConfig struct {
 	// DefaultLimit is the default number of results to return.
 	// Default: 5
@@ -42,7 +44,8 @@ type SearchToolConfig struct {
 	MaxContentLength int
 }
 
-// DefaultSearchToolConfig returns the default search tool configuration.
+// DefaultSearchToolConfig returns sensible defaults for the search tool
+// with 5 results, 0.7 threshold, and 500 character content limit.
 func DefaultSearchToolConfig() SearchToolConfig {
 	return SearchToolConfig{
 		DefaultLimit:     5,
@@ -53,7 +56,8 @@ func DefaultSearchToolConfig() SearchToolConfig {
 	}
 }
 
-// NewSearchTool creates a new document search tool.
+// NewSearchTool creates a new document search tool with the given index manager
+// and configuration, applying defaults for any unset values.
 func NewSearchTool(manager *index.Manager, cfg *SearchToolConfig) *SearchTool {
 	config := DefaultSearchToolConfig()
 	if cfg != nil {
@@ -143,7 +147,8 @@ type searchOutput struct {
 	Score        float32 `json:"score"`
 }
 
-// Execute runs the document search.
+// Execute runs the document search with the given query parameters,
+// returning matching chunks with their similarity scores.
 func (t *SearchTool) Execute(ctx context.Context, params json.RawMessage) (*agent.ToolResult, error) {
 	var input searchInput
 	if err := json.Unmarshal(params, &input); err != nil {

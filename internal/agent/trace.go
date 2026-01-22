@@ -23,7 +23,7 @@ type TracePlugin struct {
 	started  bool
 }
 
-// TraceHeader contains metadata written as the first line of a trace file.
+// TraceHeader contains metadata written as the first line of a trace file for versioning and context.
 type TraceHeader struct {
 	Version     int       `json:"version"`     // Schema version (1)
 	RunID       string    `json:"run_id"`      // Unique run identifier
@@ -32,21 +32,21 @@ type TraceHeader struct {
 	Environment string    `json:"environment"` // Environment name (optional)
 }
 
-// Redactor is an optional function to redact sensitive data from events.
-// It receives the event before serialization and can modify it in place.
+// Redactor is an optional function to redact sensitive data from events before writing to trace.
+// It receives a pointer to the event and can modify it in place.
 type Redactor func(e *models.AgentEvent)
 
-// TraceOption configures a TracePlugin.
+// TraceOption configures a TracePlugin using the functional options pattern.
 type TraceOption func(*TracePlugin)
 
-// WithRedactor sets a custom redactor function.
+// WithRedactor sets a custom redactor function for removing sensitive data from events.
 func WithRedactor(r Redactor) TraceOption {
 	return func(p *TracePlugin) {
 		p.redactor = r
 	}
 }
 
-// WithAppVersion sets the app version in the trace header.
+// WithAppVersion sets the application version in the trace header for debugging.
 func WithAppVersion(version string) TraceOption {
 	return func(p *TracePlugin) {
 		if p.header != nil {
@@ -55,7 +55,7 @@ func WithAppVersion(version string) TraceOption {
 	}
 }
 
-// WithEnvironment sets the environment name in the trace header.
+// WithEnvironment sets the environment name (e.g., production, staging) in the trace header.
 func WithEnvironment(env string) TraceOption {
 	return func(p *TracePlugin) {
 		if p.header != nil {
@@ -64,7 +64,7 @@ func WithEnvironment(env string) TraceOption {
 	}
 }
 
-// NewTracePlugin creates a new trace plugin that writes to the given writer.
+// NewTracePlugin creates a new trace plugin that writes JSONL events to the given writer.
 func NewTracePlugin(w io.Writer, runID string, opts ...TraceOption) *TracePlugin {
 	p := &TracePlugin{
 		writer: w,
@@ -83,7 +83,7 @@ func NewTracePlugin(w io.Writer, runID string, opts ...TraceOption) *TracePlugin
 }
 
 // NewTracePluginFile creates a new trace plugin that writes to the given file path.
-// The file is created or truncated. Caller should call Close() when done.
+// The file is created or truncated. The caller must call Close() when done.
 func NewTracePluginFile(path string, runID string, opts ...TraceOption) (*TracePlugin, error) {
 	f, err := os.Create(path)
 	if err != nil {
@@ -96,7 +96,7 @@ func NewTracePluginFile(path string, runID string, opts ...TraceOption) (*TraceP
 	return p, nil
 }
 
-// OnEvent implements the Plugin interface.
+// OnEvent implements the Plugin interface by writing the event as JSONL.
 func (p *TracePlugin) OnEvent(ctx context.Context, e models.AgentEvent) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -157,7 +157,7 @@ func (p *TracePlugin) writeHeader() {
 	}
 }
 
-// Close closes the trace file if one was opened.
+// Close closes the underlying trace file if one was opened by NewTracePluginFile.
 func (p *TracePlugin) Close() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -168,14 +168,14 @@ func (p *TracePlugin) Close() error {
 	return nil
 }
 
-// TraceReader reads events from a JSONL trace file.
+// TraceReader reads AgentEvents from a JSONL trace file for replay or analysis.
 type TraceReader struct {
 	decoder *json.Decoder
 	header  *TraceHeader
 }
 
-// NewTraceReader creates a new trace reader from the given reader.
-// It reads and validates the header automatically.
+// NewTraceReader creates a new trace reader from the given reader and validates the header.
+// Returns an error if the header is missing or has an unsupported version.
 func NewTraceReader(r io.Reader) (*TraceReader, error) {
 	decoder := json.NewDecoder(r)
 
@@ -195,13 +195,13 @@ func NewTraceReader(r io.Reader) (*TraceReader, error) {
 	}, nil
 }
 
-// Header returns the trace header.
+// Header returns the trace header containing run metadata.
 func (r *TraceReader) Header() *TraceHeader {
 	return r.header
 }
 
-// ReadEvent reads the next event from the trace.
-// Returns io.EOF when no more events are available.
+// ReadEvent reads the next event from the trace file.
+// Returns io.EOF when all events have been read.
 func (r *TraceReader) ReadEvent() (*models.AgentEvent, error) {
 	var event models.AgentEvent
 	if err := r.decoder.Decode(&event); err != nil {
@@ -210,7 +210,7 @@ func (r *TraceReader) ReadEvent() (*models.AgentEvent, error) {
 	return &event, nil
 }
 
-// ReadAll reads all events from the trace.
+// ReadAll reads all remaining events from the trace into a slice.
 func (r *TraceReader) ReadAll() ([]models.AgentEvent, error) {
 	var events []models.AgentEvent
 	for {
@@ -226,10 +226,8 @@ func (r *TraceReader) ReadAll() ([]models.AgentEvent, error) {
 	return events, nil
 }
 
-// DefaultRedactor provides basic redaction for common sensitive fields.
-// It redacts:
-// - Tool inputs (replaces with placeholder)
-// - Tool outputs (replaces with placeholder)
+// DefaultRedactor provides basic redaction for common sensitive fields in events.
+// It redacts tool inputs and outputs by replacing them with "[REDACTED]" placeholders.
 func DefaultRedactor(e *models.AgentEvent) {
 	if e.Tool != nil {
 		if len(e.Tool.ArgsJSON) > 0 {
@@ -250,7 +248,7 @@ func DefaultRedactor(e *models.AgentEvent) {
 // Replay Harness
 // =============================================================================
 
-// TraceReplayer replays events from a trace to a sink for testing.
+// TraceReplayer replays events from a trace file to an EventSink for testing or analysis.
 type TraceReplayer struct {
 	reader  *TraceReader
 	sink    EventSink
@@ -259,17 +257,17 @@ type TraceReplayer struct {
 	toSeq   uint64  // stop at this sequence (0 = end)
 }
 
-// ReplayOption configures the replayer.
+// ReplayOption configures the replayer using the functional options pattern.
 type ReplayOption func(*TraceReplayer)
 
-// WithSpeed sets the replay speed (1.0 = real-time, 0 = instant).
+// WithSpeed sets the replay speed multiplier. 1.0 is real-time, 0 replays as fast as possible.
 func WithSpeed(speed float64) ReplayOption {
 	return func(r *TraceReplayer) {
 		r.speed = speed
 	}
 }
 
-// WithSequenceRange limits replay to events in the given sequence range.
+// WithSequenceRange limits replay to events within the given sequence number range.
 func WithSequenceRange(from, to uint64) ReplayOption {
 	return func(r *TraceReplayer) {
 		r.fromSeq = from
@@ -277,7 +275,7 @@ func WithSequenceRange(from, to uint64) ReplayOption {
 	}
 }
 
-// NewTraceReplayer creates a new replayer for the given reader and sink.
+// NewTraceReplayer creates a new replayer that reads from reader and emits to sink.
 func NewTraceReplayer(reader *TraceReader, sink EventSink, opts ...ReplayOption) *TraceReplayer {
 	r := &TraceReplayer{
 		reader: reader,
@@ -292,8 +290,7 @@ func NewTraceReplayer(reader *TraceReader, sink EventSink, opts ...ReplayOption)
 	return r
 }
 
-// Replay plays all events from the trace to the sink.
-// Returns ReplayStats with information about the replay.
+// Replay plays all events from the trace to the sink and returns statistics about the replay.
 func (r *TraceReplayer) Replay(ctx context.Context) (*ReplayStats, error) {
 	stats := &ReplayStats{
 		Header: r.reader.Header(),
@@ -387,7 +384,7 @@ func (r *TraceReplayer) validateTrace(events []models.AgentEvent) []string {
 	return errors
 }
 
-// ReplayStats contains information about a replay operation.
+// ReplayStats contains statistics and validation results from a replay operation.
 type ReplayStats struct {
 	Header        *TraceHeader // Original trace header
 	EventCount    int          // Number of events replayed
@@ -396,12 +393,12 @@ type ReplayStats struct {
 	Errors        []string     // Validation errors
 }
 
-// Valid returns true if the trace passed all validation checks.
+// Valid returns true if the trace passed all validation checks with no errors.
 func (s *ReplayStats) Valid() bool {
 	return len(s.Errors) == 0
 }
 
-// ReplayToStats replays a trace and recomputes stats, useful for verification.
+// ReplayToStats replays a trace through a StatsCollector and returns the computed statistics.
 func ReplayToStats(reader *TraceReader) (*models.RunStats, error) {
 	collector := NewStatsCollector(reader.Header().RunID)
 	replayer := NewTraceReplayer(reader, NewCallbackSink(collector.OnEvent))

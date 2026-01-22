@@ -9,12 +9,13 @@ import (
 	"github.com/haasonsaas/nexus/internal/jobs"
 )
 
-// StatusTool exposes job status via tool call.
+// StatusTool exposes job status via tool call, allowing agents
+// to check the status and results of async jobs.
 type StatusTool struct {
 	store jobs.Store
 }
 
-// NewStatusTool returns a job status tool.
+// NewStatusTool creates a job status tool that queries the given store.
 func NewStatusTool(store jobs.Store) *StatusTool {
 	return &StatusTool{store: store}
 }

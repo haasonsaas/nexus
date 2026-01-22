@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// MemoryEntry represents a memory item stored in the vector database.
+// MemoryEntry represents a memory item stored in the vector database for semantic search.
 type MemoryEntry struct {
 	ID        string `json:"id"`
 	SessionID string `json:"session_id,omitempty"`
@@ -42,7 +42,7 @@ const (
 	ScopeGlobal MemoryScope = "global"
 )
 
-// SearchRequest defines parameters for memory search.
+// SearchRequest defines parameters for semantic memory search.
 type SearchRequest struct {
 	Query     string         `json:"query"`
 	Scope     MemoryScope    `json:"scope"`

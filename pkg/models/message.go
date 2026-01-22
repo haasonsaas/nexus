@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// ChannelType represents a messaging platform.
+// ChannelType represents a messaging platform that Nexus can connect to.
 type ChannelType string
 
 const (
@@ -38,6 +38,7 @@ const (
 )
 
 // Message is the unified message format across all channels.
+// It represents both inbound user messages and outbound assistant responses.
 type Message struct {
 	ID          string         `json:"id"`
 	SessionID   string         `json:"session_id"`
@@ -79,7 +80,7 @@ type ToolResult struct {
 	IsError    bool   `json:"is_error,omitempty"`
 }
 
-// Session represents a conversation thread.
+// Session represents a conversation thread between a user and an agent.
 type Session struct {
 	ID        string         `json:"id"`
 	AgentID   string         `json:"agent_id"`
@@ -104,7 +105,7 @@ type User struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
-// Agent represents a configured AI agent.
+// Agent represents a configured AI agent with its model, tools, and system prompt.
 type Agent struct {
 	ID           string         `json:"id"`
 	UserID       string         `json:"user_id"`

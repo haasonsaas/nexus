@@ -13,13 +13,15 @@ import (
 	"github.com/haasonsaas/nexus/internal/agent"
 )
 
-// Executor implements the agent.Tool interface for code execution.
+// Executor implements the agent.Tool interface for secure sandboxed code execution.
+// It supports Python, Node.js, Go, and Bash with configurable resource limits.
 type Executor struct {
 	pool           *Pool
 	useFirecracker bool
 }
 
-// ExecuteParams defines the input parameters for code execution.
+// ExecuteParams defines the input parameters for code execution including
+// the code, language, optional input, additional files, and resource limits.
 type ExecuteParams struct {
 	Language string            `json:"language"` // python, nodejs, go, bash
 	Code     string            `json:"code"`
@@ -30,7 +32,8 @@ type ExecuteParams struct {
 	MemLimit int               `json:"mem_limit,omitempty"` // MB, default 512
 }
 
-// ExecuteResult contains the execution output.
+// ExecuteResult contains the execution output including stdout, stderr,
+// exit code, and any error or timeout information.
 type ExecuteResult struct {
 	Stdout   string `json:"stdout"`
 	Stderr   string `json:"stderr"`
@@ -39,7 +42,8 @@ type ExecuteResult struct {
 	Timeout  bool   `json:"timeout,omitempty"`
 }
 
-// NewExecutor creates a new sandbox executor.
+// NewExecutor creates a new sandbox executor with the given options.
+// It initializes the executor pool and configures the backend (Docker or Firecracker).
 func NewExecutor(opts ...Option) (*Executor, error) {
 	config := &Config{
 		Backend:        BackendDocker,
@@ -311,12 +315,13 @@ func formatExecutionResult(result *ExecuteResult) string {
 	return sb.String()
 }
 
-// Close shuts down the executor and releases resources.
+// Close shuts down the executor pool and releases all resources.
 func (e *Executor) Close() error {
 	return e.pool.Close()
 }
 
-// RuntimeExecutor is the interface for language-specific executors.
+// RuntimeExecutor is the interface for language-specific code executors.
+// Implementations handle running code in isolated environments for specific languages.
 type RuntimeExecutor interface {
 	Run(ctx context.Context, params *ExecuteParams, workspace string) (*ExecuteResult, error)
 	Language() string
@@ -446,7 +451,8 @@ func getRunCommand(language string) []string {
 	}
 }
 
-// Config holds executor configuration.
+// Config holds executor configuration including backend type, pool sizing,
+// resource limits, and network access settings.
 type Config struct {
 	Backend        Backend
 	PoolSize       int
@@ -457,7 +463,7 @@ type Config struct {
 	NetworkEnabled bool
 }
 
-// Backend represents the sandbox backend.
+// Backend represents the sandbox backend technology (Docker or Firecracker).
 type Backend string
 
 const (
@@ -465,7 +471,7 @@ const (
 	BackendDocker      Backend = "docker"
 )
 
-// Option is a functional option for configuring the executor.
+// Option is a functional option for configuring the executor at creation time.
 type Option func(*Config)
 
 // WithBackend sets the sandbox backend.

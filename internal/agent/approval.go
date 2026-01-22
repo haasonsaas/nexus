@@ -8,7 +8,7 @@ import (
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
-// ApprovalDecision represents the result of an approval check.
+// ApprovalDecision represents the result of an approval check for a tool call.
 type ApprovalDecision string
 
 const (
@@ -20,7 +20,7 @@ const (
 	ApprovalPending ApprovalDecision = "pending"
 )
 
-// ApprovalRequest represents a pending approval request.
+// ApprovalRequest represents a pending approval request for a tool call that requires user authorization.
 type ApprovalRequest struct {
 	ID         string           `json:"id"`
 	ToolCallID string           `json:"tool_call_id"`
@@ -36,7 +36,8 @@ type ApprovalRequest struct {
 	DecidedBy  string           `json:"decided_by,omitempty"`
 }
 
-// ApprovalPolicy configures approval behavior for tool execution.
+// ApprovalPolicy configures approval behavior for tool execution including
+// allow/deny lists and default decisions.
 type ApprovalPolicy struct {
 	// Allowlist contains tools that are always allowed (no approval needed).
 	// Supports patterns like "mcp:*", "read_*", etc.
@@ -64,7 +65,7 @@ type ApprovalPolicy struct {
 	RequestTTL time.Duration `yaml:"request_ttl" json:"request_ttl"`
 }
 
-// DefaultApprovalPolicy returns sensible defaults.
+// DefaultApprovalPolicy returns sensible defaults with common safe binaries allowed.
 func DefaultApprovalPolicy() *ApprovalPolicy {
 	return &ApprovalPolicy{
 		Allowlist:       []string{},
@@ -78,7 +79,8 @@ func DefaultApprovalPolicy() *ApprovalPolicy {
 	}
 }
 
-// ApprovalChecker evaluates tool calls against approval policies.
+// ApprovalChecker evaluates tool calls against approval policies to determine
+// if they should be allowed, denied, or require user approval.
 type ApprovalChecker struct {
 	mu            sync.RWMutex
 	agentPolicies map[string]*ApprovalPolicy // per-agent policies
@@ -88,7 +90,7 @@ type ApprovalChecker struct {
 	uiAvailable   func() bool // callback to check if UI can handle approvals
 }
 
-// ApprovalStore persists pending approval requests.
+// ApprovalStore persists pending approval requests for tools requiring user authorization.
 type ApprovalStore interface {
 	Create(ctx context.Context, req *ApprovalRequest) error
 	Get(ctx context.Context, id string) (*ApprovalRequest, error)
@@ -97,7 +99,8 @@ type ApprovalStore interface {
 	Prune(ctx context.Context, olderThan time.Duration) (int64, error)
 }
 
-// NewApprovalChecker creates a new approval checker.
+// NewApprovalChecker creates a new approval checker with the given default policy.
+// If defaultPolicy is nil, DefaultApprovalPolicy is used.
 func NewApprovalChecker(defaultPolicy *ApprovalPolicy) *ApprovalChecker {
 	if defaultPolicy == nil {
 		defaultPolicy = DefaultApprovalPolicy()
@@ -109,28 +112,29 @@ func NewApprovalChecker(defaultPolicy *ApprovalPolicy) *ApprovalChecker {
 	}
 }
 
-// SetStore sets the approval request store.
+// SetStore sets the approval request store for persisting pending requests.
 func (c *ApprovalChecker) SetStore(store ApprovalStore) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.pendingStore = store
 }
 
-// SetUIAvailableCheck sets the callback for checking UI availability.
+// SetUIAvailableCheck sets the callback used to determine if a UI is available to handle approval requests.
 func (c *ApprovalChecker) SetUIAvailableCheck(fn func() bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.uiAvailable = fn
 }
 
-// SetAgentPolicy sets the approval policy for a specific agent.
+// SetAgentPolicy sets a custom approval policy for a specific agent, overriding the default.
 func (c *ApprovalChecker) SetAgentPolicy(agentID string, policy *ApprovalPolicy) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.agentPolicies[agentID] = policy
 }
 
-// RegisterSkillTools registers tools provided by skills (for auto-allowlist).
+// RegisterSkillTools registers tools provided by skills for automatic allowlisting
+// when SkillAllowlist is enabled in the policy.
 func (c *ApprovalChecker) RegisterSkillTools(tools []string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -140,6 +144,7 @@ func (c *ApprovalChecker) RegisterSkillTools(tools []string) {
 }
 
 // Check evaluates whether a tool call should be allowed, denied, or requires approval.
+// Returns the decision and a reason string explaining the decision.
 func (c *ApprovalChecker) Check(ctx context.Context, agentID string, toolCall models.ToolCall) (ApprovalDecision, string) {
 	c.mu.RLock()
 	policy := c.agentPolicies[agentID]
@@ -185,7 +190,7 @@ func (c *ApprovalChecker) Check(ctx context.Context, agentID string, toolCall mo
 	return policy.DefaultDecision, "default policy"
 }
 
-// CreateApprovalRequest creates a pending approval request.
+// CreateApprovalRequest creates and persists a pending approval request for a tool call.
 func (c *ApprovalChecker) CreateApprovalRequest(ctx context.Context, agentID, sessionID string, toolCall models.ToolCall, reason string) (*ApprovalRequest, error) {
 	c.mu.RLock()
 	policy := c.agentPolicies[agentID]
@@ -222,7 +227,7 @@ func (c *ApprovalChecker) CreateApprovalRequest(ctx context.Context, agentID, se
 	return req, nil
 }
 
-// Approve approves a pending request.
+// Approve approves a pending approval request, allowing the tool call to proceed.
 func (c *ApprovalChecker) Approve(ctx context.Context, requestID, decidedBy string) error {
 	c.mu.RLock()
 	store := c.pendingStore
@@ -246,7 +251,7 @@ func (c *ApprovalChecker) Approve(ctx context.Context, requestID, decidedBy stri
 	return store.Update(ctx, req)
 }
 
-// Deny denies a pending request.
+// Deny denies a pending approval request, preventing the tool call from executing.
 func (c *ApprovalChecker) Deny(ctx context.Context, requestID, decidedBy string) error {
 	c.mu.RLock()
 	store := c.pendingStore
@@ -270,7 +275,7 @@ func (c *ApprovalChecker) Deny(ctx context.Context, requestID, decidedBy string)
 	return store.Update(ctx, req)
 }
 
-// GetPendingRequests returns pending approval requests for an agent.
+// GetPendingRequests returns all pending approval requests for the specified agent.
 func (c *ApprovalChecker) GetPendingRequests(ctx context.Context, agentID string) ([]*ApprovalRequest, error) {
 	c.mu.RLock()
 	store := c.pendingStore
@@ -282,7 +287,7 @@ func (c *ApprovalChecker) GetPendingRequests(ctx context.Context, agentID string
 	return store.ListPending(ctx, agentID)
 }
 
-// IsUIAvailable returns whether the UI can handle approval requests.
+// IsUIAvailable returns whether a UI is available to handle approval requests.
 func (c *ApprovalChecker) IsUIAvailable() bool {
 	c.mu.RLock()
 	fn := c.uiAvailable
@@ -330,20 +335,20 @@ func matchesPattern(patterns []string, toolName string) bool {
 	return false
 }
 
-// MemoryApprovalStore is an in-memory approval store.
+// MemoryApprovalStore is a thread-safe in-memory implementation of ApprovalStore.
 type MemoryApprovalStore struct {
 	mu       sync.RWMutex
 	requests map[string]*ApprovalRequest
 }
 
-// NewMemoryApprovalStore creates a new in-memory approval store.
+// NewMemoryApprovalStore creates a new in-memory approval store for testing or single-instance deployments.
 func NewMemoryApprovalStore() *MemoryApprovalStore {
 	return &MemoryApprovalStore{
 		requests: make(map[string]*ApprovalRequest),
 	}
 }
 
-// Create stores an approval request.
+// Create stores an approval request in memory.
 func (s *MemoryApprovalStore) Create(ctx context.Context, req *ApprovalRequest) error {
 	if req == nil {
 		return nil
@@ -354,14 +359,14 @@ func (s *MemoryApprovalStore) Create(ctx context.Context, req *ApprovalRequest) 
 	return nil
 }
 
-// Get returns an approval request by ID.
+// Get returns an approval request by ID, or nil if not found.
 func (s *MemoryApprovalStore) Get(ctx context.Context, id string) (*ApprovalRequest, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.requests[id], nil
 }
 
-// Update updates an approval request.
+// Update updates an existing approval request in memory.
 func (s *MemoryApprovalStore) Update(ctx context.Context, req *ApprovalRequest) error {
 	if req == nil {
 		return nil
@@ -372,7 +377,7 @@ func (s *MemoryApprovalStore) Update(ctx context.Context, req *ApprovalRequest) 
 	return nil
 }
 
-// ListPending returns pending approval requests for an agent.
+// ListPending returns all pending, non-expired approval requests for the specified agent.
 func (s *MemoryApprovalStore) ListPending(ctx context.Context, agentID string) ([]*ApprovalRequest, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -394,7 +399,7 @@ func (s *MemoryApprovalStore) ListPending(ctx context.Context, agentID string) (
 	return result, nil
 }
 
-// Prune removes expired or old approval requests.
+// Prune removes approval requests older than the specified duration and returns the count removed.
 func (s *MemoryApprovalStore) Prune(ctx context.Context, olderThan time.Duration) (int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

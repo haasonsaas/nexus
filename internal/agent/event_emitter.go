@@ -23,7 +23,8 @@ type EventEmitter struct {
 	sink EventSink
 }
 
-// NewEventEmitter creates a new event emitter for an agent run.
+// NewEventEmitter creates a new event emitter for an agent run with the given sink.
+// If sink is nil, a NopSink is used.
 func NewEventEmitter(runID string, sink EventSink) *EventEmitter {
 	if sink == nil {
 		sink = NopSink{}
@@ -35,17 +36,17 @@ func NewEventEmitter(runID string, sink EventSink) *EventEmitter {
 }
 
 // NewEventEmitterWithPlugins creates a new event emitter that dispatches to a plugin registry.
-// This is a convenience constructor for backwards compatibility.
+// This is a convenience constructor that wraps the registry in a PluginSink.
 func NewEventEmitterWithPlugins(runID string, plugins *PluginRegistry) *EventEmitter {
 	return NewEventEmitter(runID, NewPluginSink(plugins))
 }
 
-// SetTurn updates the current turn index.
+// SetTurn updates the current turn index for subsequent events.
 func (e *EventEmitter) SetTurn(turnIndex int) {
 	e.turnIndex = turnIndex
 }
 
-// SetIter updates the current iteration index.
+// SetIter updates the current iteration index for subsequent events.
 func (e *EventEmitter) SetIter(iterIndex int) {
 	e.iterIndex = iterIndex
 }
@@ -75,14 +76,14 @@ func (e *EventEmitter) emit(ctx context.Context, event models.AgentEvent) {
 	}
 }
 
-// RunStarted emits a run.started event.
+// RunStarted emits a run.started event indicating the agent run has begun.
 func (e *EventEmitter) RunStarted(ctx context.Context) models.AgentEvent {
 	event := e.base(models.AgentEventRunStarted)
 	e.emit(ctx, event)
 	return event
 }
 
-// RunFinished emits a run.finished event with stats.
+// RunFinished emits a run.finished event with accumulated run statistics.
 func (e *EventEmitter) RunFinished(ctx context.Context, stats *models.RunStats) models.AgentEvent {
 	event := e.base(models.AgentEventRunFinished)
 	if stats != nil {
@@ -92,7 +93,7 @@ func (e *EventEmitter) RunFinished(ctx context.Context, stats *models.RunStats) 
 	return event
 }
 
-// RunError emits a run.error event.
+// RunError emits a run.error event with the given error and retriability flag.
 func (e *EventEmitter) RunError(ctx context.Context, err error, retriable bool) models.AgentEvent {
 	event := e.base(models.AgentEventRunError)
 	event.Error = &models.ErrorEventPayload{
@@ -104,7 +105,7 @@ func (e *EventEmitter) RunError(ctx context.Context, err error, retriable bool) 
 	return event
 }
 
-// RunCancelled emits a run.cancelled event when context is explicitly cancelled.
+// RunCancelled emits a run.cancelled event when the context is explicitly cancelled.
 func (e *EventEmitter) RunCancelled(ctx context.Context) models.AgentEvent {
 	event := e.base(models.AgentEventRunCancelled)
 	event.Error = &models.ErrorEventPayload{
@@ -116,7 +117,7 @@ func (e *EventEmitter) RunCancelled(ctx context.Context) models.AgentEvent {
 	return event
 }
 
-// RunTimedOut emits a run.timed_out event when wall time limit is exceeded.
+// RunTimedOut emits a run.timed_out event when the wall time limit is exceeded.
 func (e *EventEmitter) RunTimedOut(ctx context.Context, limit time.Duration) models.AgentEvent {
 	event := e.base(models.AgentEventRunTimedOut)
 	event.Error = &models.ErrorEventPayload{
@@ -127,21 +128,21 @@ func (e *EventEmitter) RunTimedOut(ctx context.Context, limit time.Duration) mod
 	return event
 }
 
-// IterStarted emits an iter.started event.
+// IterStarted emits an iter.started event at the beginning of a loop iteration.
 func (e *EventEmitter) IterStarted(ctx context.Context) models.AgentEvent {
 	event := e.base(models.AgentEventIterStarted)
 	e.emit(ctx, event)
 	return event
 }
 
-// IterFinished emits an iter.finished event.
+// IterFinished emits an iter.finished event at the end of a loop iteration.
 func (e *EventEmitter) IterFinished(ctx context.Context) models.AgentEvent {
 	event := e.base(models.AgentEventIterFinished)
 	e.emit(ctx, event)
 	return event
 }
 
-// ModelDelta emits a model.delta event for streaming text.
+// ModelDelta emits a model.delta event containing streaming text from the LLM.
 func (e *EventEmitter) ModelDelta(ctx context.Context, delta string) models.AgentEvent {
 	event := e.base(models.AgentEventModelDelta)
 	event.Stream = &models.StreamEventPayload{
@@ -151,7 +152,7 @@ func (e *EventEmitter) ModelDelta(ctx context.Context, delta string) models.Agen
 	return event
 }
 
-// ModelCompleted emits a model.completed event.
+// ModelCompleted emits a model.completed event with provider and token usage information.
 func (e *EventEmitter) ModelCompleted(ctx context.Context, provider, model string, inputTokens, outputTokens int) models.AgentEvent {
 	event := e.base(models.AgentEventModelCompleted)
 	event.Stream = &models.StreamEventPayload{
@@ -164,7 +165,7 @@ func (e *EventEmitter) ModelCompleted(ctx context.Context, provider, model strin
 	return event
 }
 
-// ToolStarted emits a tool.started event.
+// ToolStarted emits a tool.started event when a tool execution begins.
 func (e *EventEmitter) ToolStarted(ctx context.Context, callID, name string, argsJSON []byte) models.AgentEvent {
 	event := e.base(models.AgentEventToolStarted)
 	event.Tool = &models.ToolEventPayload{
@@ -176,7 +177,7 @@ func (e *EventEmitter) ToolStarted(ctx context.Context, callID, name string, arg
 	return event
 }
 
-// ToolStdout emits a tool.stdout event for streaming tool output.
+// ToolStdout emits a tool.stdout event containing streaming standard output from a tool.
 func (e *EventEmitter) ToolStdout(ctx context.Context, callID, name, chunk string) models.AgentEvent {
 	event := e.base(models.AgentEventToolStdout)
 	event.Tool = &models.ToolEventPayload{
@@ -188,7 +189,7 @@ func (e *EventEmitter) ToolStdout(ctx context.Context, callID, name, chunk strin
 	return event
 }
 
-// ToolStderr emits a tool.stderr event for streaming tool errors.
+// ToolStderr emits a tool.stderr event containing streaming standard error from a tool.
 func (e *EventEmitter) ToolStderr(ctx context.Context, callID, name, chunk string) models.AgentEvent {
 	event := e.base(models.AgentEventToolStderr)
 	event.Tool = &models.ToolEventPayload{
@@ -200,7 +201,7 @@ func (e *EventEmitter) ToolStderr(ctx context.Context, callID, name, chunk strin
 	return event
 }
 
-// ToolFinished emits a tool.finished event.
+// ToolFinished emits a tool.finished event when a tool execution completes.
 func (e *EventEmitter) ToolFinished(ctx context.Context, callID, name string, success bool, resultJSON []byte, elapsed time.Duration) models.AgentEvent {
 	event := e.base(models.AgentEventToolFinished)
 	event.Tool = &models.ToolEventPayload{
@@ -214,7 +215,7 @@ func (e *EventEmitter) ToolFinished(ctx context.Context, callID, name string, su
 	return event
 }
 
-// ToolTimedOut emits a tool.timed_out event when a tool exceeds its timeout.
+// ToolTimedOut emits a tool.timed_out event when a tool execution exceeds its timeout.
 func (e *EventEmitter) ToolTimedOut(ctx context.Context, callID, name string, timeout time.Duration) models.AgentEvent {
 	event := e.base(models.AgentEventToolTimedOut)
 	event.Tool = &models.ToolEventPayload{
@@ -231,7 +232,7 @@ func (e *EventEmitter) ToolTimedOut(ctx context.Context, callID, name string, ti
 	return event
 }
 
-// ContextPacked emits a context.packed event with diagnostics.
+// ContextPacked emits a context.packed event with packing diagnostics including usage and dropped items.
 func (e *EventEmitter) ContextPacked(ctx context.Context, diag *models.ContextEventPayload) models.AgentEvent {
 	event := e.base(models.AgentEventContextPacked)
 	event.Context = diag
@@ -245,14 +246,15 @@ func (e *EventEmitter) ContextPacked(ctx context.Context, diag *models.ContextEv
 	return event
 }
 
-// StatsCollector accumulates statistics from events.
+// StatsCollector accumulates run statistics by processing AgentEvents.
+// It tracks iterations, tokens, tool calls, timing, and errors.
 type StatsCollector struct {
 	stats      models.RunStats
 	modelStart time.Time
 	toolStarts map[string]time.Time
 }
 
-// NewStatsCollector creates a new stats collector.
+// NewStatsCollector creates a new stats collector for the given run ID.
 func NewStatsCollector(runID string) *StatsCollector {
 	return &StatsCollector{
 		stats: models.RunStats{
@@ -263,7 +265,7 @@ func NewStatsCollector(runID string) *StatsCollector {
 	}
 }
 
-// OnEvent processes an event and updates stats.
+// OnEvent processes an event and updates the accumulated statistics accordingly.
 func (c *StatsCollector) OnEvent(ctx context.Context, e models.AgentEvent) {
 	switch e.Type {
 	case models.AgentEventRunStarted:
@@ -333,7 +335,7 @@ func (c *StatsCollector) OnEvent(ctx context.Context, e models.AgentEvent) {
 	}
 }
 
-// Stats returns the accumulated statistics.
+// Stats returns a copy of the accumulated statistics.
 func (c *StatsCollector) Stats() *models.RunStats {
 	// Copy to avoid mutation
 	stats := c.stats

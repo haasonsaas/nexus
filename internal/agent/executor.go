@@ -11,7 +11,8 @@ import (
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
-// ExecutorConfig configures the parallel tool executor.
+// ExecutorConfig configures the parallel tool executor behavior including
+// concurrency limits, timeouts, and retry strategies.
 type ExecutorConfig struct {
 	// MaxConcurrency limits the number of parallel tool executions
 	// Default: 5
@@ -45,7 +46,7 @@ func DefaultExecutorConfig() *ExecutorConfig {
 	}
 }
 
-// ToolConfig holds per-tool configuration overrides.
+// ToolConfig holds per-tool configuration overrides for timeout, retry, and priority settings.
 type ToolConfig struct {
 	// Timeout overrides the default timeout for this tool
 	Timeout time.Duration
@@ -61,7 +62,8 @@ type ToolConfig struct {
 	Priority int
 }
 
-// Executor manages parallel tool execution with retry and backpressure.
+// Executor manages parallel tool execution with retry and backpressure handling.
+// It provides concurrency limiting via semaphores and tracks execution metrics.
 type Executor struct {
 	registry   *ToolRegistry
 	config     *ExecutorConfig
@@ -75,7 +77,8 @@ type Executor struct {
 	metrics *ExecutorMetrics
 }
 
-// ExecutorMetrics tracks executor performance.
+// ExecutorMetrics tracks executor performance metrics including execution counts,
+// retries, failures, timeouts, and panics.
 type ExecutorMetrics struct {
 	mu              sync.Mutex
 	TotalExecutions int64
@@ -85,7 +88,8 @@ type ExecutorMetrics struct {
 	TotalPanics     int64
 }
 
-// NewExecutor creates a new parallel tool executor.
+// NewExecutor creates a new parallel tool executor with the given registry and configuration.
+// If config is nil, DefaultExecutorConfig is used.
 func NewExecutor(registry *ToolRegistry, config *ExecutorConfig) *Executor {
 	if config == nil {
 		config = DefaultExecutorConfig()
@@ -100,7 +104,7 @@ func NewExecutor(registry *ToolRegistry, config *ExecutorConfig) *Executor {
 	}
 }
 
-// ConfigureTool sets per-tool configuration.
+// ConfigureTool sets per-tool configuration overrides for the named tool.
 func (e *Executor) ConfigureTool(name string, config *ToolConfig) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -117,7 +121,8 @@ func (e *Executor) getToolConfig(name string) *ToolConfig {
 	return nil
 }
 
-// ExecutionResult holds the result of a single tool execution.
+// ExecutionResult holds the result of a single tool execution including
+// timing information and retry attempts.
 type ExecutionResult struct {
 	ToolCallID string
 	ToolName   string
@@ -127,7 +132,8 @@ type ExecutionResult struct {
 	Attempts   int
 }
 
-// ExecuteAll executes multiple tool calls in parallel.
+// ExecuteAll executes multiple tool calls in parallel with concurrency limits.
+// Results are returned in the same order as the input calls.
 func (e *Executor) ExecuteAll(ctx context.Context, calls []models.ToolCall) []*ExecutionResult {
 	if len(calls) == 0 {
 		return nil
@@ -148,7 +154,8 @@ func (e *Executor) ExecuteAll(ctx context.Context, calls []models.ToolCall) []*E
 	return results
 }
 
-// Execute executes a single tool call with retry logic.
+// Execute executes a single tool call with retry logic and timeout handling.
+// Acquires a semaphore slot for backpressure control before execution.
 func (e *Executor) Execute(ctx context.Context, call models.ToolCall) *ExecutionResult {
 	start := time.Now()
 	result := &ExecutionResult{
@@ -312,7 +319,7 @@ func (e *Executor) executeWithTimeout(ctx context.Context, call models.ToolCall,
 	}
 }
 
-// Metrics returns a snapshot of the executor metrics.
+// Metrics returns a copy-safe snapshot of the executor metrics.
 func (e *Executor) Metrics() *ExecutorMetricsSnapshot {
 	e.metrics.mu.Lock()
 	defer e.metrics.mu.Unlock()
@@ -325,7 +332,7 @@ func (e *Executor) Metrics() *ExecutorMetricsSnapshot {
 	}
 }
 
-// ExecutorMetricsSnapshot is a copy-safe snapshot of executor metrics.
+// ExecutorMetricsSnapshot is a thread-safe copy of executor metrics at a point in time.
 type ExecutorMetricsSnapshot struct {
 	TotalExecutions int64
 	TotalRetries    int64
@@ -334,7 +341,8 @@ type ExecutorMetricsSnapshot struct {
 	TotalPanics     int64
 }
 
-// ResultsToMessages converts execution results to tool result messages.
+// ResultsToMessages converts execution results to tool result messages suitable for
+// including in conversation history.
 func ResultsToMessages(results []*ExecutionResult) []models.ToolResult {
 	toolResults := make([]models.ToolResult, len(results))
 
@@ -357,7 +365,7 @@ func ResultsToMessages(results []*ExecutionResult) []models.ToolResult {
 	return toolResults
 }
 
-// AnyErrors returns true if any execution result contains an error.
+// AnyErrors returns true if any execution result contains an error or failure.
 func AnyErrors(results []*ExecutionResult) bool {
 	for _, r := range results {
 		if r.Error != nil {
@@ -367,7 +375,7 @@ func AnyErrors(results []*ExecutionResult) bool {
 	return false
 }
 
-// AsJSON converts tool input to JSON if it isn't already.
+// AsJSON converts tool input to JSON if it is not already a json.RawMessage, []byte, or string.
 func AsJSON(input any) json.RawMessage {
 	switch v := input.(type) {
 	case json.RawMessage:

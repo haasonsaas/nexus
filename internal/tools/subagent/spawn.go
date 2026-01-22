@@ -15,7 +15,8 @@ import (
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
-// SubAgent represents a spawned sub-agent.
+// SubAgent represents a spawned sub-agent with its own session and task.
+// It tracks status, results, and tool permissions for the delegated work.
 type SubAgent struct {
 	ID           string    `json:"id"`
 	ParentID     string    `json:"parent_id"`
@@ -31,7 +32,8 @@ type SubAgent struct {
 	DeniedTools  []string  `json:"denied_tools,omitempty"`
 }
 
-// Manager manages sub-agent lifecycle.
+// Manager manages sub-agent lifecycle including spawning, tracking, and cancellation.
+// It enforces concurrency limits and provides status lookups.
 type Manager struct {
 	mu          sync.RWMutex
 	agents      map[string]*SubAgent
@@ -41,7 +43,8 @@ type Manager struct {
 	announcer   func(ctx context.Context, parentSession string, msg string) error
 }
 
-// NewManager creates a new sub-agent manager.
+// NewManager creates a new sub-agent manager with the given runtime and
+// maximum concurrent sub-agent limit.
 func NewManager(runtime *agent.Runtime, maxActive int) *Manager {
 	if maxActive <= 0 {
 		maxActive = 5
@@ -53,14 +56,15 @@ func NewManager(runtime *agent.Runtime, maxActive int) *Manager {
 	}
 }
 
-// SetAnnouncer sets the function to announce sub-agent spawns.
+// SetAnnouncer sets the callback function to announce sub-agent spawns to users.
 func (m *Manager) SetAnnouncer(fn func(ctx context.Context, parentSession string, msg string) error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.announcer = fn
 }
 
-// Spawn creates and starts a new sub-agent.
+// Spawn creates and starts a new sub-agent to work on a specific task.
+// It runs asynchronously and returns immediately with the sub-agent ID for tracking.
 func (m *Manager) Spawn(ctx context.Context, parentID, parentSession, name, task string, allowedTools, deniedTools []string) (*SubAgent, error) {
 	// Check concurrency limit
 	if atomic.LoadInt64(&m.activeCount) >= int64(m.maxActive) {
@@ -172,7 +176,7 @@ func (m *Manager) completeSubAgent(id, result, errMsg string) {
 	}
 }
 
-// Get returns a sub-agent by ID.
+// Get returns a sub-agent by ID, or false if not found.
 func (m *Manager) Get(id string) (*SubAgent, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -180,7 +184,7 @@ func (m *Manager) Get(id string) (*SubAgent, bool) {
 	return sa, ok
 }
 
-// List returns all sub-agents for a parent.
+// List returns all sub-agents spawned by the given parent agent.
 func (m *Manager) List(parentID string) []*SubAgent {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -194,7 +198,7 @@ func (m *Manager) List(parentID string) []*SubAgent {
 	return result
 }
 
-// Cancel cancels a running sub-agent.
+// Cancel cancels a running sub-agent by ID, returning an error if not found or not running.
 func (m *Manager) Cancel(id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -213,17 +217,17 @@ func (m *Manager) Cancel(id string) error {
 	return nil
 }
 
-// ActiveCount returns the number of active sub-agents.
+// ActiveCount returns the number of currently running sub-agents.
 func (m *Manager) ActiveCount() int {
 	return int(atomic.LoadInt64(&m.activeCount))
 }
 
-// SpawnTool is a tool for spawning sub-agents.
+// SpawnTool is an agent tool for spawning sub-agents to handle delegated tasks.
 type SpawnTool struct {
 	manager *Manager
 }
 
-// NewSpawnTool creates a new spawn tool.
+// NewSpawnTool creates a spawn tool that uses the given manager.
 func NewSpawnTool(manager *Manager) *SpawnTool {
 	return &SpawnTool{manager: manager}
 }
@@ -301,12 +305,12 @@ func (t *SpawnTool) Execute(ctx context.Context, input json.RawMessage) (string,
 	return fmt.Sprintf("Sub-agent '%s' spawned with ID: %s\nTask: %s\nUse subagent_status to check progress.", params.Name, sa.ID, params.Task), nil
 }
 
-// StatusTool is a tool for checking sub-agent status.
+// StatusTool is an agent tool for checking sub-agent status and listing sub-agents.
 type StatusTool struct {
 	manager *Manager
 }
 
-// NewStatusTool creates a new status tool.
+// NewStatusTool creates a status tool that queries the given manager.
 func NewStatusTool(manager *Manager) *StatusTool {
 	return &StatusTool{manager: manager}
 }
@@ -377,12 +381,12 @@ func (t *StatusTool) Execute(ctx context.Context, input json.RawMessage) (string
 	return result, nil
 }
 
-// CancelTool is a tool for cancelling sub-agents.
+// CancelTool is an agent tool for cancelling running sub-agents.
 type CancelTool struct {
 	manager *Manager
 }
 
-// NewCancelTool creates a new cancel tool.
+// NewCancelTool creates a cancel tool that operates on the given manager.
 func NewCancelTool(manager *Manager) *CancelTool {
 	return &CancelTool{manager: manager}
 }

@@ -9,7 +9,8 @@ import (
 	"github.com/playwright-community/playwright-go"
 )
 
-// BrowserInstance represents a browser instance with its page
+// BrowserInstance represents a browser instance with its associated context and page.
+// It wraps Playwright browser components for a single browsing session.
 type BrowserInstance struct {
 	Browser playwright.Browser
 	Context playwright.BrowserContext
@@ -17,7 +18,9 @@ type BrowserInstance struct {
 	ID      string
 }
 
-// Pool manages a pool of browser instances
+// Pool manages a pool of browser instances for efficient reuse.
+// It handles instance creation, acquisition, release, and cleanup with
+// configurable pool size and user agent rotation.
 type Pool struct {
 	config    PoolConfig
 	instances chan *BrowserInstance
@@ -28,7 +31,7 @@ type Pool struct {
 	created   int // Number of live instances
 }
 
-// PoolConfig configures the browser pool
+// PoolConfig configures the browser pool behavior and resource limits.
 type PoolConfig struct {
 	MaxInstances   int           // Maximum number of browser instances
 	Timeout        time.Duration // Default timeout for operations
@@ -37,7 +40,8 @@ type PoolConfig struct {
 	ViewportHeight int           // Viewport height (default: 1080)
 }
 
-// NewPool creates a new browser instance pool
+// NewPool creates a new browser instance pool with the given configuration.
+// It installs Playwright if needed and initializes the pool with default settings.
 func NewPool(config PoolConfig) (*Pool, error) {
 	// Set defaults
 	if config.MaxInstances == 0 {
@@ -81,7 +85,8 @@ func NewPool(config PoolConfig) (*Pool, error) {
 	return pool, nil
 }
 
-// Acquire gets a browser instance from the pool or creates a new one
+// Acquire gets a browser instance from the pool or creates a new one.
+// It blocks if the pool is at capacity until an instance is available or context is cancelled.
 func (p *Pool) Acquire(ctx context.Context) (*BrowserInstance, error) {
 	for {
 		p.mu.Lock()
@@ -118,7 +123,8 @@ func (p *Pool) Acquire(ctx context.Context) (*BrowserInstance, error) {
 	}
 }
 
-// Release returns a browser instance to the pool
+// Release returns a browser instance to the pool for reuse.
+// If the pool is full or closed, the instance is cleaned up immediately.
 func (p *Pool) Release(instance *BrowserInstance) {
 	if instance == nil {
 		return
@@ -145,7 +151,8 @@ func (p *Pool) Release(instance *BrowserInstance) {
 	}
 }
 
-// Close closes all browser instances and shuts down the pool
+// Close closes all browser instances and shuts down the Playwright runtime.
+// After Close is called, the pool cannot be used.
 func (p *Pool) Close() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -257,27 +264,27 @@ func (instance *BrowserInstance) cleanup() {
 	}
 }
 
-// SetCookie sets a cookie in the browser context
+// SetCookie sets one or more cookies in the browser context for session management.
 func (instance *BrowserInstance) SetCookie(cookies ...playwright.OptionalCookie) error {
 	return instance.Context.AddCookies(cookies)
 }
 
-// GetCookies gets all cookies from the browser context
+// GetCookies retrieves all cookies from the browser context.
 func (instance *BrowserInstance) GetCookies() ([]playwright.Cookie, error) {
 	return instance.Context.Cookies()
 }
 
-// ClearCookies clears all cookies from the browser context
+// ClearCookies removes all cookies from the browser context.
 func (instance *BrowserInstance) ClearCookies() error {
 	return instance.Context.ClearCookies()
 }
 
-// SetViewport sets the viewport size for the page
+// SetViewport sets the viewport size for the page to simulate different screen sizes.
 func (instance *BrowserInstance) SetViewport(width, height int) error {
 	return instance.Page.SetViewportSize(width, height)
 }
 
-// GetStats returns pool statistics
+// GetStats returns current pool statistics including capacity and availability.
 func (p *Pool) GetStats() PoolStats {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -289,7 +296,7 @@ func (p *Pool) GetStats() PoolStats {
 	}
 }
 
-// PoolStats contains pool statistics
+// PoolStats contains pool statistics for monitoring and debugging.
 type PoolStats struct {
 	MaxInstances       int
 	AvailableInstances int

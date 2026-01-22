@@ -13,7 +13,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/agent"
 )
 
-// SearchBackend represents the type of search backend to use.
+// SearchBackend represents the type of search backend to use for web queries.
 type SearchBackend string
 
 const (
@@ -22,7 +22,7 @@ const (
 	BackendBraveSearch SearchBackend = "brave"
 )
 
-// SearchType represents the type of search to perform.
+// SearchType represents the type of search to perform (web, image, or news).
 type SearchType string
 
 const (
@@ -31,7 +31,8 @@ const (
 	SearchTypeNews  SearchType = "news"
 )
 
-// Config holds configuration for the web search tool.
+// Config holds configuration for the web search tool including backend
+// credentials, caching settings, and default behavior.
 type Config struct {
 	// SearXNG configuration
 	SearXNGURL string `json:"searxng_url,omitempty"`
@@ -52,7 +53,8 @@ type Config struct {
 	CacheTTL int `json:"cache_ttl"`
 }
 
-// SearchParams represents the parameters for a search query.
+// SearchParams represents the parameters for a search query including
+// the query text, search type, result count, and optional content extraction.
 type SearchParams struct {
 	Query          string        `json:"query"`
 	Type           SearchType    `json:"type,omitempty"`
@@ -61,7 +63,8 @@ type SearchParams struct {
 	Backend        SearchBackend `json:"backend,omitempty"`
 }
 
-// SearchResult represents a single search result.
+// SearchResult represents a single search result with title, URL, snippet,
+// and optional full content or image URL depending on search type.
 type SearchResult struct {
 	Title       string `json:"title"`
 	URL         string `json:"url"`
@@ -71,7 +74,8 @@ type SearchResult struct {
 	PublishedAt string `json:"published_at,omitempty"`
 }
 
-// SearchResponse represents the complete search response.
+// SearchResponse represents the complete search response including
+// the original query, results, and which backend was used.
 type SearchResponse struct {
 	Query       string         `json:"query"`
 	Type        SearchType     `json:"type"`
@@ -87,6 +91,8 @@ type cacheEntry struct {
 }
 
 // WebSearchTool implements the agent.Tool interface for web searching.
+// It supports multiple backends (SearXNG, DuckDuckGo, Brave) with caching
+// and optional full content extraction from result URLs.
 type WebSearchTool struct {
 	config     *Config
 	httpClient *http.Client
@@ -96,6 +102,7 @@ type WebSearchTool struct {
 }
 
 // NewWebSearchTool creates a new web search tool with the given configuration.
+// It applies default values and initializes the content extractor and cache.
 func NewWebSearchTool(config *Config) *WebSearchTool {
 	if config.DefaultResultCount == 0 {
 		config.DefaultResultCount = 5
@@ -121,7 +128,7 @@ func NewWebSearchTool(config *Config) *WebSearchTool {
 	}
 }
 
-// Name returns the tool name for LLM function calling.
+// Name returns the tool name for registration with the agent runtime.
 func (t *WebSearchTool) Name() string {
 	return "web_search"
 }
@@ -131,7 +138,7 @@ func (t *WebSearchTool) Description() string {
 	return "Search the web for information. Supports web search, image search, and news search. Can optionally extract full content from result URLs."
 }
 
-// Schema returns the JSON schema for parameters.
+// Schema returns the JSON schema for tool parameters used by LLMs.
 func (t *WebSearchTool) Schema() json.RawMessage {
 	schema := map[string]interface{}{
 		"type": "object",
@@ -171,7 +178,8 @@ func (t *WebSearchTool) Schema() json.RawMessage {
 	return schemaBytes
 }
 
-// Execute runs the tool with given parameters.
+// Execute runs the search with given parameters, checking cache first
+// and falling back to DuckDuckGo if the primary backend fails.
 func (t *WebSearchTool) Execute(ctx context.Context, params json.RawMessage) (*agent.ToolResult, error) {
 	var searchParams SearchParams
 	if err := json.Unmarshal(params, &searchParams); err != nil {

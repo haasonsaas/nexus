@@ -11,7 +11,7 @@ import (
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
-// CompactionState tracks compaction status for a session.
+// CompactionState tracks the current compaction status for a conversation session.
 type CompactionState string
 
 const (
@@ -25,7 +25,8 @@ const (
 	CompactionInProgress CompactionState = "in_progress"
 )
 
-// CompactionConfig configures automatic compaction behavior.
+// CompactionConfig configures automatic context compaction behavior including
+// thresholds, prompts, and timeout handling.
 type CompactionConfig struct {
 	// Enabled turns on automatic compaction monitoring.
 	Enabled bool
@@ -46,7 +47,7 @@ type CompactionConfig struct {
 	AutoCompactOnTimeout bool
 }
 
-// DefaultCompactionConfig returns sensible defaults.
+// DefaultCompactionConfig returns sensible defaults with 80% threshold and 5 minute timeout.
 func DefaultCompactionConfig() *CompactionConfig {
 	return &CompactionConfig{
 		Enabled:              true,
@@ -57,7 +58,7 @@ func DefaultCompactionConfig() *CompactionConfig {
 	}
 }
 
-// CompactionManager monitors context usage and triggers compaction.
+// CompactionManager monitors context usage and triggers compaction when thresholds are exceeded.
 type CompactionManager struct {
 	mu       sync.RWMutex
 	config   *CompactionConfig
@@ -77,7 +78,8 @@ type sessionCompaction struct {
 	usagePercent int
 }
 
-// NewCompactionManager creates a new compaction manager.
+// NewCompactionManager creates a new compaction manager with the given configuration and packer.
+// If config is nil, DefaultCompactionConfig is used.
 func NewCompactionManager(config *CompactionConfig, packer *agentctx.Packer) *CompactionManager {
 	if config == nil {
 		config = DefaultCompactionConfig()
@@ -89,22 +91,22 @@ func NewCompactionManager(config *CompactionConfig, packer *agentctx.Packer) *Co
 	}
 }
 
-// SetFlushCallback sets the function called when flush is required.
+// SetFlushCallback sets the function called when a memory flush is required before compaction.
 func (m *CompactionManager) SetFlushCallback(fn func(ctx context.Context, sessionID string, prompt string) error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.onFlushRequired = fn
 }
 
-// SetCompactionCallback sets the function called when compaction completes.
+// SetCompactionCallback sets the function called when compaction completes successfully.
 func (m *CompactionManager) SetCompactionCallback(fn func(ctx context.Context, sessionID string, dropped int) error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.onCompactionComplete = fn
 }
 
-// Check evaluates context usage and triggers flush if needed.
-// Returns true if compaction was triggered.
+// Check evaluates context usage and triggers a flush if the threshold is exceeded.
+// Returns true if compaction was triggered, false otherwise.
 func (m *CompactionManager) Check(ctx context.Context, sessionID string, history []*models.Message, incoming *models.Message, summary *models.Message) (bool, error) {
 	if !m.config.Enabled || m.packer == nil {
 		return false, nil
@@ -165,7 +167,7 @@ func (m *CompactionManager) Check(ctx context.Context, sessionID string, history
 	return false, nil
 }
 
-// ConfirmFlush confirms that memory flush is complete.
+// ConfirmFlush confirms that memory flush is complete and proceeds with compaction.
 func (m *CompactionManager) ConfirmFlush(ctx context.Context, sessionID string) error {
 	m.mu.Lock()
 	session := m.sessions[sessionID]
@@ -186,7 +188,7 @@ func (m *CompactionManager) ConfirmFlush(ctx context.Context, sessionID string) 
 	return nil
 }
 
-// RejectFlush rejects the flush request (user doesn't want to save anything).
+// RejectFlush rejects the flush request and proceeds with compaction without saving.
 func (m *CompactionManager) RejectFlush(ctx context.Context, sessionID string) error {
 	m.mu.Lock()
 	session := m.sessions[sessionID]
@@ -202,7 +204,7 @@ func (m *CompactionManager) RejectFlush(ctx context.Context, sessionID string) e
 	return nil
 }
 
-// GetState returns the compaction state for a session.
+// GetState returns the current compaction state for a session.
 func (m *CompactionManager) GetState(sessionID string) CompactionState {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -214,7 +216,7 @@ func (m *CompactionManager) GetState(sessionID string) CompactionState {
 	return session.state
 }
 
-// GetUsage returns the last known context usage percentage.
+// GetUsage returns the last known context usage percentage (0-100) for a session.
 func (m *CompactionManager) GetUsage(sessionID string) int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -244,14 +246,14 @@ func (m *CompactionManager) performCompaction(ctx context.Context, sessionID str
 	return true, nil
 }
 
-// Reset clears the compaction state for a session.
+// Reset clears all compaction state for a session, returning it to idle.
 func (m *CompactionManager) Reset(sessionID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.sessions, sessionID)
 }
 
-// CompactionInfo returns diagnostic info about compaction state.
+// CompactionInfo contains diagnostic information about a session's compaction state.
 type CompactionInfo struct {
 	SessionID    string          `json:"session_id"`
 	State        CompactionState `json:"state"`
@@ -261,7 +263,7 @@ type CompactionInfo struct {
 	Threshold    int             `json:"threshold"`
 }
 
-// GetInfo returns diagnostic information for a session.
+// GetInfo returns detailed diagnostic information about a session's compaction state.
 func (m *CompactionManager) GetInfo(sessionID string) *CompactionInfo {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -284,7 +286,7 @@ func (m *CompactionManager) GetInfo(sessionID string) *CompactionInfo {
 	}
 }
 
-// IsFlushResponse checks if a message is responding to a flush prompt.
+// IsFlushResponse checks if a message content contains patterns indicating a flush response.
 func IsFlushResponse(content string) bool {
 	// Check for common acknowledgment patterns
 	lowerContent := content
@@ -312,27 +314,27 @@ func containsFlushPattern(s, substr string) bool {
 	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 }
 
-// CompactionTool provides a tool for managing compaction.
+// CompactionTool provides a Tool interface for querying compaction status from within the agent.
 type CompactionTool struct {
 	manager *CompactionManager
 }
 
-// NewCompactionTool creates a tool for compaction management.
+// NewCompactionTool creates a tool for querying compaction status.
 func NewCompactionTool(manager *CompactionManager) *CompactionTool {
 	return &CompactionTool{manager: manager}
 }
 
-// Name returns the tool name.
+// Name returns the tool name for LLM function calling.
 func (t *CompactionTool) Name() string {
 	return "compaction_status"
 }
 
-// Description returns the tool description.
+// Description returns a natural language description of the tool for LLM guidance.
 func (t *CompactionTool) Description() string {
 	return "Check context compaction status and usage. Use to monitor when memory flush may be needed."
 }
 
-// Schema returns the tool input schema.
+// Schema returns the JSON Schema for tool parameters (empty for this tool).
 func (t *CompactionTool) Schema() map[string]any {
 	return map[string]any{
 		"type":       "object",
@@ -340,7 +342,7 @@ func (t *CompactionTool) Schema() map[string]any {
 	}
 }
 
-// Execute returns compaction status.
+// Execute returns the current compaction status for the session in context.
 func (t *CompactionTool) Execute(ctx context.Context, input []byte) (string, error) {
 	session := SessionFromContext(ctx)
 	if session == nil {

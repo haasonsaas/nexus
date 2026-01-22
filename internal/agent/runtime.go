@@ -1285,9 +1285,12 @@ func (p *llmSummaryProvider) Summarize(ctx context.Context, messages []*models.M
 	return strings.TrimSpace(b.String()), nil
 }
 
+// processBufferSize is the default buffer size for response chunk channels.
 const processBufferSize = 10
 
-// ResponseChunk is a streaming response chunk from the runtime.
+// ResponseChunk represents a streaming response chunk from the runtime.
+// Each chunk may contain text, tool results, tool events, runtime events, or errors.
+// Consumers should check each field and handle accordingly.
 type ResponseChunk struct {
 	Text       string               `json:"text,omitempty"`
 	ToolResult *models.ToolResult   `json:"tool_result,omitempty"`
@@ -1296,27 +1299,29 @@ type ResponseChunk struct {
 	Error      error                `json:"-"`
 }
 
-// ToolRegistry manages available tools.
+// ToolRegistry manages available tools with thread-safe registration and lookup.
+// Tools are registered by name and can be retrieved for execution during agent conversations.
 type ToolRegistry struct {
 	mu    sync.RWMutex
 	tools map[string]Tool
 }
 
-// NewToolRegistry creates a new tool registry.
+// NewToolRegistry creates a new empty tool registry ready for tool registration.
 func NewToolRegistry() *ToolRegistry {
 	return &ToolRegistry{
 		tools: make(map[string]Tool),
 	}
 }
 
-// Register adds a tool to the registry.
+// Register adds a tool to the registry by its name.
+// If a tool with the same name already exists, it is replaced.
 func (r *ToolRegistry) Register(tool Tool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.tools[tool.Name()] = tool
 }
 
-// Get returns a tool by name.
+// Get returns a tool by name and a boolean indicating if it was found.
 func (r *ToolRegistry) Get(name string) (Tool, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -1324,7 +1329,8 @@ func (r *ToolRegistry) Get(name string) (Tool, bool) {
 	return tool, ok
 }
 
-// Execute runs a tool by name.
+// Execute runs a tool by name with the given JSON parameters.
+// Returns an error result if the tool is not found.
 func (r *ToolRegistry) Execute(ctx context.Context, name string, params json.RawMessage) (*ToolResult, error) {
 	r.mu.RLock()
 	tool, ok := r.tools[name]
@@ -1338,7 +1344,7 @@ func (r *ToolRegistry) Execute(ctx context.Context, name string, params json.Raw
 	return tool.Execute(ctx, params)
 }
 
-// AsLLMTools converts registered tools to LLM tool format.
+// AsLLMTools returns all registered tools as a slice for passing to LLM providers.
 func (r *ToolRegistry) AsLLMTools() []Tool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

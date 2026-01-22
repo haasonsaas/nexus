@@ -11,7 +11,8 @@ import (
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
-// ToolExecConfig configures tool execution behavior.
+// ToolExecConfig configures tool execution behavior including concurrency,
+// timeouts, and retry settings.
 type ToolExecConfig struct {
 	// Concurrency is the maximum number of concurrent tool executions.
 	// Default: 4.
@@ -28,7 +29,8 @@ type ToolExecConfig struct {
 	RetryBackoff time.Duration
 }
 
-// DefaultToolExecConfig returns sensible defaults for tool execution.
+// DefaultToolExecConfig returns sensible defaults for tool execution with
+// 4 concurrent tools and 30 second timeout.
 func DefaultToolExecConfig() ToolExecConfig {
 	return ToolExecConfig{
 		Concurrency:    4,
@@ -38,13 +40,14 @@ func DefaultToolExecConfig() ToolExecConfig {
 	}
 }
 
-// ToolExecutor handles concurrent tool execution with timeouts.
+// ToolExecutor handles concurrent tool execution with timeouts and retry logic.
 type ToolExecutor struct {
 	registry *ToolRegistry
 	config   ToolExecConfig
 }
 
-// NewToolExecutor creates a new tool executor.
+// NewToolExecutor creates a new tool executor with the given registry and configuration.
+// Default values are applied if config fields are zero.
 func NewToolExecutor(registry *ToolRegistry, config ToolExecConfig) *ToolExecutor {
 	if config.Concurrency <= 0 {
 		config.Concurrency = 4
@@ -61,7 +64,7 @@ func NewToolExecutor(registry *ToolRegistry, config ToolExecConfig) *ToolExecuto
 	}
 }
 
-// ToolExecResult contains the result of a tool execution.
+// ToolExecResult contains the result of a tool execution including timing and timeout information.
 type ToolExecResult struct {
 	Index     int
 	ToolCall  models.ToolCall
@@ -71,7 +74,7 @@ type ToolExecResult struct {
 	TimedOut  bool
 }
 
-// EventCallback is a non-blocking callback for tool lifecycle events.
+// EventCallback is a non-blocking callback invoked for tool lifecycle events during execution.
 type EventCallback func(*models.RuntimeEvent)
 
 // ExecuteConcurrently executes multiple tool calls with concurrency limits and timeouts.
@@ -235,7 +238,8 @@ func (e *ToolExecutor) executeWithTimeout(ctx context.Context, call models.ToolC
 	}
 }
 
-// ExecuteSequentially executes tool calls one at a time (for backward compatibility).
+// ExecuteSequentially executes tool calls one at a time in order.
+// Results are returned in the same order as the input calls.
 func (e *ToolExecutor) ExecuteSequentially(ctx context.Context, toolCalls []models.ToolCall) []ToolExecResult {
 	results := make([]ToolExecResult, len(toolCalls))
 
@@ -282,7 +286,7 @@ func (e *ToolExecutor) ExecuteSequentially(ctx context.Context, toolCalls []mode
 	return results
 }
 
-// ExecuteSingle executes a single tool call with timeout.
+// ExecuteSingle executes a single tool call by name with timeout and retry logic.
 func (e *ToolExecutor) ExecuteSingle(ctx context.Context, name string, input json.RawMessage) (*ToolResult, error) {
 	maxAttempts := e.config.MaxAttempts
 	if maxAttempts <= 0 {

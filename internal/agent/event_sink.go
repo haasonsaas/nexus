@@ -15,24 +15,25 @@ type EventSink interface {
 	Emit(ctx context.Context, e models.AgentEvent)
 }
 
-// PluginSink dispatches events to a plugin registry.
+// PluginSink dispatches events to a plugin registry, bridging the EventSink
+// and Plugin interfaces.
 type PluginSink struct {
 	registry *PluginRegistry
 }
 
-// NewPluginSink creates a sink that dispatches to plugins.
+// NewPluginSink creates a sink that dispatches events to all plugins in the registry.
 func NewPluginSink(registry *PluginRegistry) *PluginSink {
 	return &PluginSink{registry: registry}
 }
 
-// Emit dispatches the event to all registered plugins.
+// Emit dispatches the event to all plugins registered in the underlying registry.
 func (s *PluginSink) Emit(ctx context.Context, e models.AgentEvent) {
 	if s.registry != nil {
 		s.registry.Emit(ctx, e)
 	}
 }
 
-// ChanSink sends events to a channel (non-blocking with fallback).
+// ChanSink sends events to a channel with non-blocking behavior when the channel is full.
 type ChanSink struct {
 	ch chan<- models.AgentEvent
 }
@@ -53,12 +54,13 @@ func (s *ChanSink) Emit(ctx context.Context, e models.AgentEvent) {
 	}
 }
 
-// MultiSink fans out events to multiple sinks.
+// MultiSink fans out events to multiple sinks, calling each sink's Emit method.
 type MultiSink struct {
 	sinks []EventSink
 }
 
-// NewMultiSink creates a sink that dispatches to multiple sinks.
+// NewMultiSink creates a sink that dispatches events to multiple sinks.
+// Nil sinks are filtered out automatically.
 func NewMultiSink(sinks ...EventSink) *MultiSink {
 	// Filter out nil sinks
 	filtered := make([]EventSink, 0, len(sinks))
@@ -77,12 +79,12 @@ func (s *MultiSink) Emit(ctx context.Context, e models.AgentEvent) {
 	}
 }
 
-// CallbackSink wraps a function as an EventSink.
+// CallbackSink wraps a function as an EventSink for inline event handling.
 type CallbackSink struct {
 	fn func(ctx context.Context, e models.AgentEvent)
 }
 
-// NewCallbackSink creates a sink from a callback function.
+// NewCallbackSink creates a sink that calls the provided function for each event.
 func NewCallbackSink(fn func(ctx context.Context, e models.AgentEvent)) *CallbackSink {
 	return &CallbackSink{fn: fn}
 }
@@ -94,13 +96,14 @@ func (s *CallbackSink) Emit(ctx context.Context, e models.AgentEvent) {
 	}
 }
 
-// NopSink discards all events (useful for testing).
+// NopSink discards all events silently. Useful for testing or when event handling is not needed.
 type NopSink struct{}
 
 // Emit does nothing.
 func (NopSink) Emit(ctx context.Context, e models.AgentEvent) {}
 
-// BackpressureConfig configures the backpressure sink behavior.
+// BackpressureConfig configures the backpressure sink buffer sizes for
+// high-priority and low-priority event lanes.
 type BackpressureConfig struct {
 	// HighPriBuffer is the buffer size for non-droppable events.
 	// Default: 32.
@@ -221,7 +224,7 @@ func (s *BackpressureSink) Emit(ctx context.Context, e models.AgentEvent) {
 	}
 }
 
-// DroppedCount returns the number of events dropped due to backpressure.
+// DroppedCount returns the number of low-priority events dropped due to backpressure.
 func (s *BackpressureSink) DroppedCount() uint64 {
 	return atomic.LoadUint64(&s.dropped)
 }
@@ -352,7 +355,7 @@ func eventToChunk(e models.AgentEvent) *ResponseChunk {
 	return nil
 }
 
-// AgentError implements error for agent-level errors.
+// AgentError implements the error interface for agent-level errors.
 type AgentError struct {
 	Message string
 }

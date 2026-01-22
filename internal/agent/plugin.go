@@ -20,28 +20,31 @@ type Plugin interface {
 	OnEvent(ctx context.Context, e models.AgentEvent)
 }
 
-// PluginFunc is an adapter to allow ordinary functions to be used as plugins.
+// PluginFunc is an adapter that allows ordinary functions to be used as plugins.
+// This enables inline plugin definitions without creating a separate type.
 type PluginFunc func(ctx context.Context, e models.AgentEvent)
 
-// OnEvent calls the function.
+// OnEvent implements the Plugin interface by calling the underlying function.
 func (f PluginFunc) OnEvent(ctx context.Context, e models.AgentEvent) {
 	f(ctx, e)
 }
 
-// PluginRegistry manages registered plugins and dispatches events.
+// PluginRegistry manages registered plugins and dispatches events to them.
+// It is thread-safe for concurrent registration and event dispatch.
 type PluginRegistry struct {
 	mu      sync.RWMutex
 	plugins []Plugin
 }
 
-// NewPluginRegistry creates a new plugin registry.
+// NewPluginRegistry creates a new empty plugin registry ready for plugin registration.
 func NewPluginRegistry() *PluginRegistry {
 	return &PluginRegistry{
 		plugins: make([]Plugin, 0),
 	}
 }
 
-// Use registers a plugin. Plugins are called in registration order.
+// Use registers a plugin to receive events. Plugins are called in registration order.
+// Nil plugins are silently ignored.
 func (r *PluginRegistry) Use(p Plugin) {
 	if p == nil {
 		return
@@ -74,14 +77,14 @@ func (r *PluginRegistry) Emit(ctx context.Context, e models.AgentEvent) {
 	}
 }
 
-// Count returns the number of registered plugins.
+// Count returns the current number of registered plugins.
 func (r *PluginRegistry) Count() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return len(r.plugins)
 }
 
-// Clear removes all registered plugins.
+// Clear removes all registered plugins from the registry.
 func (r *PluginRegistry) Clear() {
 	r.mu.Lock()
 	defer r.mu.Unlock()

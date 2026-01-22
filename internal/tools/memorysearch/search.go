@@ -15,7 +15,8 @@ import (
 	"github.com/haasonsaas/nexus/internal/agent"
 )
 
-// Config configures memory search.
+// Config configures memory search including file paths, result limits,
+// search mode (lexical, vector, or hybrid), and optional embeddings.
 type Config struct {
 	Directory     string
 	MemoryFile    string
@@ -27,12 +28,14 @@ type Config struct {
 }
 
 // MemorySearchTool implements agent.Tool for searching memory files.
+// It supports lexical, vector (TF-IDF or embeddings), and hybrid search modes.
 type MemorySearchTool struct {
 	config   Config
 	embedder embedder
 }
 
-// NewMemorySearchTool creates a new memory search tool.
+// NewMemorySearchTool creates a new memory search tool with the given configuration.
+// It initializes the embedder if embeddings are configured.
 func NewMemorySearchTool(cfg *Config) *MemorySearchTool {
 	config := Config{}
 	if cfg != nil {
@@ -152,6 +155,8 @@ func resolvePath(base, path string) string {
 	return filepath.Join(base, path)
 }
 
+// SearchResult represents a single memory search result with file path,
+// matched snippet, match count, and relevance score.
 type SearchResult struct {
 	File    string  `json:"file"`
 	Snippet string  `json:"snippet"`

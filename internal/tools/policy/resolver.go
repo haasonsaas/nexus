@@ -4,21 +4,24 @@ import (
 	"strings"
 )
 
-// Resolver resolves tool access based on policies.
+// Resolver resolves tool access based on policies by evaluating profiles,
+// groups, allow lists, and deny lists. It supports MCP server tool registration
+// and custom tool aliases.
 type Resolver struct {
 	groups     map[string][]string
 	mcpServers map[string][]string // serverID -> tool names
 	aliases    map[string]string   // alias -> canonical tool name
 }
 
-// Decision explains why a tool was allowed or denied.
+// Decision explains why a tool was allowed or denied, providing
+// the reason string for debugging and audit purposes.
 type Decision struct {
 	Allowed bool
 	Tool    string
 	Reason  string
 }
 
-// NewResolver creates a new policy resolver.
+// NewResolver creates a new policy resolver with default groups initialized.
 func NewResolver() *Resolver {
 	return &Resolver{
 		groups:     DefaultGroups,
@@ -27,19 +30,21 @@ func NewResolver() *Resolver {
 	}
 }
 
-// AddGroup adds a custom tool group.
+// AddGroup adds a custom tool group that can be referenced in policies.
 func (r *Resolver) AddGroup(name string, tools []string) {
 	r.groups[name] = tools
 }
 
-// RegisterMCPServer registers tools from an MCP server.
+// RegisterMCPServer registers tools from an MCP server, making them available
+// for policy rules and creating a group "mcp:serverID" for convenience.
 func (r *Resolver) RegisterMCPServer(serverID string, tools []string) {
 	r.mcpServers[serverID] = tools
 	// Also add as a group
 	r.groups["mcp:"+serverID] = tools
 }
 
-// RegisterAlias registers an alias that resolves to a canonical tool name.
+// RegisterAlias registers an alias that resolves to a canonical tool name,
+// allowing alternative names like "bash" for "exec".
 func (r *Resolver) RegisterAlias(alias string, canonical string) {
 	alias = NormalizeTool(alias)
 	canonical = NormalizeTool(canonical)
@@ -49,7 +54,7 @@ func (r *Resolver) RegisterAlias(alias string, canonical string) {
 	r.aliases[alias] = canonical
 }
 
-// CanonicalName resolves tool aliases to their canonical names.
+// CanonicalName resolves a tool name to its canonical form via registered aliases.
 func (r *Resolver) CanonicalName(name string) string {
 	normalized := NormalizeTool(name)
 	if canonical, ok := r.aliases[normalized]; ok {
@@ -58,7 +63,8 @@ func (r *Resolver) CanonicalName(name string) string {
 	return normalized
 }
 
-// ExpandGroups expands group references in a tool list.
+// ExpandGroups expands group references (e.g., "group:fs") and MCP wildcards
+// (e.g., "mcp:server.*") in a tool list to their constituent tools.
 func (r *Resolver) ExpandGroups(items []string) []string {
 	var result []string
 	seen := make(map[string]bool)
@@ -102,12 +108,13 @@ func (r *Resolver) ExpandGroups(items []string) []string {
 	return result
 }
 
-// IsAllowed checks if a tool is allowed by the given policy.
+// IsAllowed checks if a tool is allowed by the given policy and returns a boolean.
 func (r *Resolver) IsAllowed(policy *Policy, toolName string) bool {
 	return r.Decide(policy, toolName).Allowed
 }
 
-// Decide returns an allow/deny decision with a reason string.
+// Decide returns an allow/deny decision with a detailed reason string
+// explaining which rule caused the decision.
 func (r *Resolver) Decide(policy *Policy, toolName string) Decision {
 	normalized := r.CanonicalName(toolName)
 	decision := Decision{Allowed: false, Tool: normalized, Reason: "no matching allow rule"}
@@ -189,7 +196,8 @@ func matchMCPPattern(pattern, toolName string) bool {
 	return pattern == toolName
 }
 
-// FilterAllowed filters a list of tools to only those allowed by the policy.
+// FilterAllowed filters a list of tools to only those allowed by the policy,
+// useful for presenting available tools to an agent.
 func (r *Resolver) FilterAllowed(policy *Policy, tools []string) []string {
 	var result []string
 	for _, tool := range tools {
@@ -200,12 +208,13 @@ func (r *Resolver) FilterAllowed(policy *Policy, tools []string) []string {
 	return result
 }
 
-// GetDenied returns the list of explicitly denied tools.
+// GetDenied returns the list of explicitly denied tools with groups expanded.
 func (r *Resolver) GetDenied(policy *Policy) []string {
 	return r.ExpandGroups(policy.Deny)
 }
 
-// GetAllowed returns the list of explicitly allowed tools.
+// GetAllowed returns the list of explicitly allowed tools including
+// profile defaults with groups expanded.
 func (r *Resolver) GetAllowed(policy *Policy) []string {
 	var allowed []string
 
@@ -224,8 +233,8 @@ func (r *Resolver) GetAllowed(policy *Policy) []string {
 	return allowed
 }
 
-// Merge merges multiple policies into one.
-// Later policies override earlier ones.
+// Merge merges multiple policies into one combined policy.
+// Later policies override earlier ones for profile, and allow/deny lists are accumulated.
 func Merge(policies ...*Policy) *Policy {
 	result := &Policy{}
 
@@ -249,18 +258,18 @@ func Merge(policies ...*Policy) *Policy {
 	return result
 }
 
-// NewPolicy creates a policy with the given profile.
+// NewPolicy creates a new policy with the given profile as a base.
 func NewPolicy(profile Profile) *Policy {
 	return &Policy{Profile: profile}
 }
 
-// WithAllow adds tools to the allow list.
+// WithAllow adds tools to the allow list and returns the policy for chaining.
 func (p *Policy) WithAllow(tools ...string) *Policy {
 	p.Allow = append(p.Allow, tools...)
 	return p
 }
 
-// WithDeny adds tools to the deny list.
+// WithDeny adds tools to the deny list and returns the policy for chaining.
 func (p *Policy) WithDeny(tools ...string) *Policy {
 	p.Deny = append(p.Deny, tools...)
 	return p

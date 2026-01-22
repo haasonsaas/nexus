@@ -88,6 +88,8 @@ type Server struct {
 	approvalChecker    *agent.ApprovalChecker
 	commandRegistry    *commands.Registry
 	commandParser      *commands.Parser
+	activeRuns         map[string]activeRun
+	activeRunsMu       sync.Mutex
 
 	broadcastManager *BroadcastManager
 	hooksRegistry    *hooks.Registry
@@ -298,6 +300,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		hooksRegistry:      hooksRegistry,
 		commandRegistry:    commandRegistry,
 		commandParser:      commandParser,
+		activeRuns:         make(map[string]activeRun),
 	}
 	grpcSvc := newGRPCService(server)
 	proto.RegisterNexusGatewayServer(grpcServer, grpcSvc)

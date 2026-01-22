@@ -195,7 +195,14 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		}
 	}
 
-	chunks, err := runtime.Process(promptCtx, session, msg)
+	runCtx, cancel := context.WithCancel(promptCtx)
+	runToken := s.registerActiveRun(session.ID, cancel)
+	defer func() {
+		cancel()
+		s.finishActiveRun(session.ID, runToken)
+	}()
+
+	chunks, err := runtime.Process(runCtx, session, msg)
 	if err != nil {
 		s.logger.Error("runtime processing failed", "error", err)
 		return

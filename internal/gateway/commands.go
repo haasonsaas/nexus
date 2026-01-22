@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/haasonsaas/nexus/internal/commands"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
@@ -53,10 +54,12 @@ func (s *Server) buildCommandInvocation(session *models.Session, msg *models.Mes
 		UserID:     extractSenderID(msg),
 		IsAdmin:    isAdminMessage(msg),
 		Context: map[string]any{
-			"session_id": session.ID,
-			"agent_id":   session.AgentID,
-			"channel":    session.Channel,
-			"channel_id": session.ChannelID,
+			"session_id":     session.ID,
+			"agent_id":       session.AgentID,
+			"channel":        string(session.Channel),
+			"channel_id":     session.ChannelID,
+			"user_id":        extractSenderID(msg),
+			"has_active_run": s.hasActiveRun(session.ID),
 		},
 	}
 
@@ -75,9 +78,29 @@ func (s *Server) applyCommandActions(ctx context.Context, session *models.Sessio
 	}
 	action, _ := result.Data["action"].(string)
 	switch strings.ToLower(strings.TrimSpace(action)) {
+	case "abort":
+		s.cancelActiveRun(session.ID)
 	case "new_session":
+		s.cancelActiveRun(session.ID)
 		if err := s.sessions.Delete(ctx, session.ID); err != nil {
 			s.logger.Error("failed to reset session", "error", err)
+		}
+		newSession, err := s.sessions.GetOrCreate(ctx, session.Key, session.AgentID, session.Channel, session.ChannelID)
+		if err != nil {
+			s.logger.Error("failed to create new session", "error", err)
+			return
+		}
+		if model, ok := result.Data["model"].(string); ok {
+			model = strings.TrimSpace(model)
+			if model != "" {
+				if newSession.Metadata == nil {
+					newSession.Metadata = map[string]any{}
+				}
+				newSession.Metadata["model"] = model
+				if err := s.sessions.Update(ctx, newSession); err != nil {
+					s.logger.Error("failed to set model for new session", "error", err)
+				}
+			}
 		}
 	case "set_model":
 		model, _ := result.Data["model"].(string)
@@ -129,4 +152,72 @@ func isAdminMessage(msg *models.Message) bool {
 		}
 	}
 	return false
+}
+
+type activeRun struct {
+	token  string
+	cancel context.CancelFunc
+}
+
+func (s *Server) registerActiveRun(sessionID string, cancel context.CancelFunc) string {
+	if s == nil || sessionID == "" || cancel == nil {
+		return ""
+	}
+	token := uuid.NewString()
+	s.activeRunsMu.Lock()
+	defer s.activeRunsMu.Unlock()
+	if s.activeRuns == nil {
+		s.activeRuns = make(map[string]activeRun)
+	}
+	if existing, ok := s.activeRuns[sessionID]; ok && existing.cancel != nil {
+		existing.cancel()
+	}
+	s.activeRuns[sessionID] = activeRun{token: token, cancel: cancel}
+	return token
+}
+
+func (s *Server) finishActiveRun(sessionID, token string) {
+	if s == nil || sessionID == "" || token == "" {
+		return
+	}
+	s.activeRunsMu.Lock()
+	defer s.activeRunsMu.Unlock()
+	if s.activeRuns == nil {
+		return
+	}
+	if current, ok := s.activeRuns[sessionID]; ok && current.token == token {
+		delete(s.activeRuns, sessionID)
+	}
+}
+
+func (s *Server) cancelActiveRun(sessionID string) bool {
+	if s == nil || sessionID == "" {
+		return false
+	}
+	s.activeRunsMu.Lock()
+	if s.activeRuns == nil {
+		s.activeRunsMu.Unlock()
+		return false
+	}
+	run, ok := s.activeRuns[sessionID]
+	s.activeRunsMu.Unlock()
+	if !ok || run.cancel == nil {
+		return false
+	}
+	run.cancel()
+	return true
+}
+
+func (s *Server) hasActiveRun(sessionID string) bool {
+	if s == nil || sessionID == "" {
+		return false
+	}
+	s.activeRunsMu.Lock()
+	if s.activeRuns == nil {
+		s.activeRunsMu.Unlock()
+		return false
+	}
+	_, ok := s.activeRuns[sessionID]
+	s.activeRunsMu.Unlock()
+	return ok
 }

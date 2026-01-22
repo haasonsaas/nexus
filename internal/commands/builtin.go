@@ -18,7 +18,7 @@ func RegisterBuiltins(r *Registry) {
 	// Help command
 	mustRegister(&Command{
 		Name:        "help",
-		Aliases:     []string{"h", "?"},
+		Aliases:     []string{"h", "?", "commands"},
 		Description: "Show available commands",
 		Usage:       "/help [command]",
 		AcceptsArgs: true,
@@ -46,14 +46,21 @@ func RegisterBuiltins(r *Registry) {
 		Name:        "new",
 		Aliases:     []string{"reset", "clear"},
 		Description: "Start a new conversation",
+		Usage:       "/new [model]",
+		AcceptsArgs: true,
 		Category:    "session",
 		Source:      "builtin",
 		Handler: func(ctx context.Context, inv *Invocation) (*Result, error) {
+			model := strings.TrimSpace(inv.Args)
+			data := map[string]any{
+				"action": "new_session",
+			}
+			if model != "" {
+				data["model"] = model
+			}
 			return &Result{
 				Text: "Starting new conversation...",
-				Data: map[string]any{
-					"action": "new_session",
-				},
+				Data: data,
 			}, nil
 		},
 	})
@@ -106,11 +113,47 @@ func RegisterBuiltins(r *Registry) {
 		Category:    "control",
 		Source:      "builtin",
 		Handler: func(ctx context.Context, inv *Invocation) (*Result, error) {
+			if inv.Context != nil {
+				if active, ok := inv.Context["has_active_run"].(bool); ok && !active {
+					return &Result{
+						Text: "No active run to stop.",
+					}, nil
+				}
+			}
 			return &Result{
 				Text: "Stopping...",
 				Data: map[string]any{
 					"action": "abort",
 				},
+			}, nil
+		},
+	})
+
+	// Whoami command
+	mustRegister(&Command{
+		Name:        "whoami",
+		Aliases:     []string{"id"},
+		Description: "Show sender identity",
+		Category:    "system",
+		Source:      "builtin",
+		Handler: func(ctx context.Context, inv *Invocation) (*Result, error) {
+			var parts []string
+			if inv.Context != nil {
+				if channel, ok := inv.Context["channel"].(string); ok && strings.TrimSpace(channel) != "" {
+					parts = append(parts, "Channel: "+strings.TrimSpace(channel))
+				}
+				if channelID, ok := inv.Context["channel_id"].(string); ok && strings.TrimSpace(channelID) != "" {
+					parts = append(parts, "Channel ID: "+strings.TrimSpace(channelID))
+				}
+				if userID, ok := inv.Context["user_id"].(string); ok && strings.TrimSpace(userID) != "" {
+					parts = append(parts, "Sender ID: "+strings.TrimSpace(userID))
+				}
+			}
+			if len(parts) == 0 {
+				return &Result{Text: "Sender identity unavailable."}, nil
+			}
+			return &Result{
+				Text: strings.Join(parts, "\n"),
 			}, nil
 		},
 	})

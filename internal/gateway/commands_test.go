@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/haasonsaas/nexus/internal/channels"
@@ -20,6 +21,36 @@ type countingProvider struct {
 	calls     int
 	lastModel string
 }
+
+type blockingProvider struct {
+	started chan struct{}
+	done    chan struct{}
+}
+
+func (p *blockingProvider) Complete(ctx context.Context, req *agent.CompletionRequest) (<-chan *agent.CompletionChunk, error) {
+	if p.started != nil {
+		select {
+		case <-p.started:
+		default:
+			close(p.started)
+		}
+	}
+	ch := make(chan *agent.CompletionChunk)
+	go func() {
+		<-ctx.Done()
+		if p.done != nil {
+			close(p.done)
+		}
+		close(ch)
+	}()
+	return ch, nil
+}
+
+func (p *blockingProvider) Name() string { return "blocking" }
+
+func (p *blockingProvider) Models() []agent.Model { return nil }
+
+func (p *blockingProvider) SupportsTools() bool { return false }
 
 func (p *countingProvider) Complete(ctx context.Context, req *agent.CompletionRequest) (<-chan *agent.CompletionChunk, error) {
 	p.mu.Lock()
@@ -158,5 +189,130 @@ func TestHandleMessageCommandModelSetsOverride(t *testing.T) {
 
 	if calls, lastModel := provider.stats(); calls != 1 || lastModel != "gpt-4" {
 		t.Fatalf("expected model override applied (calls=1, model=gpt-4), got calls=%d model=%q", calls, lastModel)
+	}
+}
+
+func TestHandleMessageCommandStopCancelsRun(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	cfg := &config.Config{}
+	server, err := NewServer(cfg, logger)
+	if err != nil {
+		t.Fatalf("NewServer() error = %v", err)
+	}
+
+	store := sessions.NewMemoryStore()
+	provider := &blockingProvider{
+		started: make(chan struct{}),
+		done:    make(chan struct{}),
+	}
+	runtime := agent.NewRuntime(provider, store)
+	server.sessions = store
+	server.runtime = runtime
+
+	adapter := &recordingAdapter{}
+	registry := channels.NewRegistry()
+	registry.Register(adapter)
+	server.channels = registry
+
+	msg := &models.Message{
+		ID:        "long_run",
+		Channel:   models.ChannelTelegram,
+		ChannelID: "1",
+		Direction: models.DirectionInbound,
+		Role:      models.RoleUser,
+		Content:   "long task",
+		Metadata: map[string]any{
+			"chat_id": int64(77),
+		},
+	}
+
+	go server.handleMessage(context.Background(), msg)
+
+	select {
+	case <-provider.started:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("timed out waiting for provider to start")
+	}
+
+	stopMsg := &models.Message{
+		ID:        "stop_cmd",
+		Channel:   models.ChannelTelegram,
+		ChannelID: "2",
+		Direction: models.DirectionInbound,
+		Role:      models.RoleUser,
+		Content:   "/stop",
+		Metadata: map[string]any{
+			"chat_id": int64(77),
+		},
+	}
+	server.handleMessage(context.Background(), stopMsg)
+
+	select {
+	case <-provider.done:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("expected /stop to cancel active run")
+	}
+
+	adapter.mu.Lock()
+	defer adapter.mu.Unlock()
+	found := false
+	for _, sent := range adapter.messages {
+		if strings.Contains(sent.Content, "Stopping") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected stop acknowledgement, got %#v", adapter.messages)
+	}
+}
+
+func TestHandleMessageCommandNewSetsModelForNewSession(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	cfg := &config.Config{
+		Session: config.SessionConfig{
+			DefaultAgentID: "agent-test",
+		},
+	}
+	server, err := NewServer(cfg, logger)
+	if err != nil {
+		t.Fatalf("NewServer() error = %v", err)
+	}
+
+	store := sessions.NewMemoryStore()
+	provider := &countingProvider{}
+	runtime := agent.NewRuntime(provider, store)
+	server.sessions = store
+	server.runtime = runtime
+
+	adapter := &recordingAdapter{}
+	registry := channels.NewRegistry()
+	registry.Register(adapter)
+	server.channels = registry
+
+	cmdMsg := &models.Message{
+		ID:        "cmd_new",
+		Channel:   models.ChannelTelegram,
+		ChannelID: "1",
+		Direction: models.DirectionInbound,
+		Role:      models.RoleUser,
+		Content:   "/new gpt-4",
+		Metadata: map[string]any{
+			"chat_id": int64(55),
+		},
+	}
+	server.handleMessage(context.Background(), cmdMsg)
+
+	if calls, _ := provider.stats(); calls != 0 {
+		t.Fatalf("expected runtime not to run for /new, got calls=%d", calls)
+	}
+
+	sessionKey := sessions.SessionKey("agent-test", models.ChannelTelegram, "55")
+	session, err := store.GetByKey(context.Background(), sessionKey)
+	if err != nil {
+		t.Fatalf("failed to load session: %v", err)
+	}
+	if session.Metadata == nil || session.Metadata["model"] != "gpt-4" {
+		t.Fatalf("expected new session model override to be set, got %#v", session.Metadata)
 	}
 }

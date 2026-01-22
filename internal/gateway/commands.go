@@ -90,7 +90,10 @@ func (s *Server) applyCommandActions(ctx context.Context, session *models.Sessio
 	if result == nil || result.Data == nil || session == nil {
 		return
 	}
-	action, _ := result.Data["action"].(string)
+	action, ok := result.Data["action"].(string)
+	if !ok {
+		return
+	}
 	switch strings.ToLower(strings.TrimSpace(action)) {
 	case "abort":
 		s.cancelActiveRun(session.ID)
@@ -117,7 +120,10 @@ func (s *Server) applyCommandActions(ctx context.Context, session *models.Sessio
 			}
 		}
 	case "set_model":
-		model, _ := result.Data["model"].(string)
+		model, ok := result.Data["model"].(string)
+		if !ok {
+			return
+		}
 		model = strings.TrimSpace(model)
 		if model == "" {
 			return

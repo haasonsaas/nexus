@@ -66,10 +66,7 @@ func isPrivateOrReservedIP(ip net.IP) bool {
 	}
 	// Check for cloud metadata endpoint (169.254.169.254)
 	metadataIP := net.ParseIP("169.254.169.254")
-	if ip.Equal(metadataIP) {
-		return true
-	}
-	return false
+	return ip.Equal(metadataIP)
 }
 
 // validateURLForSSRF validates a URL to prevent SSRF attacks.

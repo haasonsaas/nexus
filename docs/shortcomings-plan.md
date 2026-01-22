@@ -134,3 +134,5 @@
 - 2026-01-22: Completed remaining designs: job DB persistence with pruning, Clawdbot-style exec approvals (allowlist/denylist/safe_bins/skill_allowlist), sub-agent spawn tool with announce/policy, tool cancellation hooks, and automated compaction with flush confirmation.
 - 2026-01-22: Wired approval policies into runtime with per-agent overrides, added elevated allow-from gating and directives, and expanded RAG tool tests for failure modes + idempotency.
 - 2026-01-22: Analyzed Clawdbot patterns for future adoption; created `docs/clawdbot-patterns-adoption.md` covering hooks, broadcast groups, session scoping, tool groups, and sandbox modes.
+- 2026-01-22: Pulled latest upstream tests; fixed approval defaults (pending vs denied) and executor test race; added command allowlists + inline shortcuts, updated configs/docs, and normalized allowlist handling.
+- 2026-01-22: Claude CLI timeouts traced to expired OAuth token (`claude auth status` returns 401); fix via interactive `/login` and longer command timeouts for long prompts.

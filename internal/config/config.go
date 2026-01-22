@@ -20,6 +20,7 @@ import (
 type Config struct {
 	Server        ServerConfig              `yaml:"server"`
 	Gateway       GatewayConfig             `yaml:"gateway"`
+	Commands      CommandsConfig            `yaml:"commands"`
 	Database      DatabaseConfig            `yaml:"database"`
 	Auth          AuthConfig                `yaml:"auth"`
 	Session       SessionConfig             `yaml:"session"`
@@ -45,6 +46,23 @@ type Config struct {
 // GatewayConfig configures gateway-level message routing and processing.
 type GatewayConfig struct {
 	Broadcast BroadcastConfig `yaml:"broadcast"`
+}
+
+// CommandsConfig configures gateway command handling.
+type CommandsConfig struct {
+	// Enabled toggles text command handling. Defaults to true.
+	Enabled *bool `yaml:"enabled"`
+
+	// AllowFrom restricts command-only messages by channel/provider.
+	// Example: {"telegram": ["12345", "67890"], "discord": ["*"]}
+	AllowFrom map[string][]string `yaml:"allow_from"`
+
+	// InlineAllowFrom restricts inline command shortcuts by channel/provider.
+	// When empty, inline commands are disabled by default.
+	InlineAllowFrom map[string][]string `yaml:"inline_allow_from"`
+
+	// InlineCommands lists command names that can run inline (without leading slash).
+	InlineCommands []string `yaml:"inline_commands"`
 }
 
 // BroadcastConfig configures broadcast groups for message routing.
@@ -693,6 +711,7 @@ func applyDefaults(cfg *Config) {
 	applyServerDefaults(&cfg.Server)
 	applyDatabaseDefaults(&cfg.Database)
 	applyAuthDefaults(&cfg.Auth)
+	applyCommandsDefaults(&cfg.Commands)
 	applySessionDefaults(&cfg.Session)
 	applyWorkspaceDefaults(&cfg.Workspace)
 	applyToolsDefaults(cfg)
@@ -730,6 +749,19 @@ func applyDatabaseDefaults(cfg *DatabaseConfig) {
 func applyAuthDefaults(cfg *AuthConfig) {
 	if cfg.TokenExpiry == 0 {
 		cfg.TokenExpiry = 24 * time.Hour
+	}
+}
+
+func applyCommandsDefaults(cfg *CommandsConfig) {
+	if cfg == nil {
+		return
+	}
+	if cfg.Enabled == nil {
+		enabled := true
+		cfg.Enabled = &enabled
+	}
+	if len(cfg.InlineCommands) == 0 {
+		cfg.InlineCommands = []string{"help", "commands", "status", "whoami", "id"}
 	}
 }
 

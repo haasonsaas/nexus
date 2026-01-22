@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"sort"
 	"strings"
 
 	"github.com/google/uuid"
@@ -13,6 +14,9 @@ func (s *Server) maybeHandleCommand(ctx context.Context, session *models.Session
 	if s.commandParser == nil || s.commandRegistry == nil || session == nil || msg == nil {
 		return false
 	}
+	if !s.commandsEnabled() {
+		return false
+	}
 
 	detection := s.commandParser.Parse(msg.Content)
 	if detection == nil || detection.Primary == nil || !detection.IsControlCommand {
@@ -22,6 +26,10 @@ func (s *Server) maybeHandleCommand(ctx context.Context, session *models.Session
 	trimmed := strings.TrimSpace(msg.Content)
 	if detection.Primary.StartPos != 0 || detection.Primary.EndPos != len(strings.TrimSpace(trimmed)) {
 		return false
+	}
+
+	if !s.commandAllowlistAllows(msg) {
+		return true
 	}
 
 	inv := s.buildCommandInvocation(session, msg, detection.Primary)
@@ -45,10 +53,15 @@ func (s *Server) maybeHandleCommand(ctx context.Context, session *models.Session
 }
 
 func (s *Server) buildCommandInvocation(session *models.Session, msg *models.Message, parsed *commands.ParsedCommand) *commands.Invocation {
+	rawText := strings.TrimSpace(msg.Content)
+	if parsed != nil && parsed.StartPos >= 0 && parsed.EndPos > parsed.StartPos && parsed.EndPos <= len(msg.Content) {
+		rawText = strings.TrimSpace(msg.Content[parsed.StartPos:parsed.EndPos])
+	}
+
 	inv := &commands.Invocation{
 		Name:       parsed.Name,
 		Args:       parsed.Args,
-		RawText:    strings.TrimSpace(msg.Content),
+		RawText:    rawText,
 		SessionKey: session.Key,
 		ChannelID:  session.ChannelID,
 		UserID:     extractSenderID(msg),
@@ -220,4 +233,183 @@ func (s *Server) hasActiveRun(sessionID string) bool {
 	_, ok := s.activeRuns[sessionID]
 	s.activeRunsMu.Unlock()
 	return ok
+}
+
+func (s *Server) maybeHandleInlineCommands(ctx context.Context, session *models.Session, msg *models.Message) bool {
+	if s.commandParser == nil || s.commandRegistry == nil || session == nil || msg == nil {
+		return false
+	}
+	if !s.commandsEnabled() {
+		return false
+	}
+	if !s.inlineAllowlistAllows(msg) {
+		return false
+	}
+
+	detection := s.commandParser.Parse(msg.Content)
+	if detection == nil || !detection.HasCommand || len(detection.Commands) == 0 {
+		return false
+	}
+
+	var inline []commands.ParsedCommand
+	for _, cmd := range detection.Commands {
+		if !cmd.Inline {
+			continue
+		}
+		if !s.isInlineCommandAllowed(cmd.Name) {
+			continue
+		}
+		inline = append(inline, cmd)
+	}
+
+	if len(inline) == 0 {
+		return false
+	}
+
+	for _, cmd := range inline {
+		inlineCmd := cmd
+		inlineCmd.Args = ""
+		inv := s.buildCommandInvocation(session, msg, &inlineCmd)
+		result, err := s.commandRegistry.Execute(ctx, inv)
+		if err != nil {
+			s.sendImmediateReply(ctx, session, msg, "Command failed: "+err.Error())
+			continue
+		}
+		if result == nil {
+			continue
+		}
+		if result.Error != "" {
+			s.sendImmediateReply(ctx, session, msg, result.Error)
+			continue
+		}
+		if !result.Suppress && strings.TrimSpace(result.Text) != "" {
+			s.sendImmediateReply(ctx, session, msg, result.Text)
+		}
+		s.applyCommandActions(ctx, session, result)
+	}
+
+	msg.Content = stripInlineCommands(msg.Content, inline)
+	return true
+}
+
+func (s *Server) commandsEnabled() bool {
+	if s == nil || s.config == nil {
+		return true
+	}
+	if s.config.Commands.Enabled == nil {
+		return true
+	}
+	return *s.config.Commands.Enabled
+}
+
+func (s *Server) commandAllowlistAllows(msg *models.Message) bool {
+	if s == nil || s.config == nil {
+		return true
+	}
+	if len(s.config.Commands.AllowFrom) == 0 {
+		return true
+	}
+	return allowlistMatches(s.config.Commands.AllowFrom, msg.Channel, extractSenderID(msg))
+}
+
+func (s *Server) inlineAllowlistAllows(msg *models.Message) bool {
+	if s == nil || s.config == nil {
+		return false
+	}
+	if len(s.config.Commands.InlineAllowFrom) == 0 {
+		return false
+	}
+	return allowlistMatches(s.config.Commands.InlineAllowFrom, msg.Channel, extractSenderID(msg))
+}
+
+func (s *Server) isInlineCommandAllowed(name string) bool {
+	name = normalizeCommandName(name)
+	if name == "" {
+		return false
+	}
+	allowed := s.inlineCommandsAllowlist()
+	if _, ok := allowed[name]; ok {
+		return true
+	}
+	if s.commandRegistry == nil {
+		return false
+	}
+	if cmd, ok := s.commandRegistry.Get(name); ok && cmd != nil {
+		if _, ok := allowed[normalizeCommandName(cmd.Name)]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Server) inlineCommandsAllowlist() map[string]struct{} {
+	allowed := make(map[string]struct{})
+	if s == nil || s.config == nil {
+		return allowed
+	}
+	entries := s.config.Commands.InlineCommands
+	if len(entries) == 0 {
+		entries = []string{"help", "commands", "status", "whoami", "id"}
+	}
+	for _, entry := range entries {
+		name := normalizeCommandName(entry)
+		if name == "" {
+			continue
+		}
+		allowed[name] = struct{}{}
+	}
+	return allowed
+}
+
+func normalizeCommandName(value string) string {
+	name := strings.TrimSpace(value)
+	if name == "" {
+		return ""
+	}
+	name = strings.TrimPrefix(name, "/")
+	name = strings.TrimPrefix(name, "!")
+	return strings.ToLower(strings.TrimSpace(name))
+}
+
+func stripInlineCommands(content string, inline []commands.ParsedCommand) string {
+	if len(inline) == 0 || content == "" {
+		return content
+	}
+	commandsCopy := append([]commands.ParsedCommand(nil), inline...)
+	sort.Slice(commandsCopy, func(i, j int) bool {
+		return commandsCopy[i].StartPos < commandsCopy[j].StartPos
+	})
+
+	cursor := 0
+	var out strings.Builder
+	for _, cmd := range commandsCopy {
+		start := cmd.StartPos
+		end := cmd.EndPos
+		if cmd.Inline {
+			end = cmd.StartPos + len(cmd.Prefix) + len(cmd.Name)
+			if end < len(content) && content[end] == ':' {
+				end++
+			}
+		}
+		if start < cursor || start < 0 || end > len(content) || end <= start {
+			continue
+		}
+		removedLeading := false
+		if start > 0 && content[start-1] == ' ' {
+			start--
+			removedLeading = true
+		}
+		if !removedLeading && end < len(content) && content[end] == ' ' {
+			end++
+		}
+		if start < cursor {
+			start = cursor
+		}
+		out.WriteString(content[cursor:start])
+		cursor = end
+	}
+	if cursor < len(content) {
+		out.WriteString(content[cursor:])
+	}
+	return strings.TrimSpace(out.String())
 }

@@ -105,54 +105,10 @@ func extractSenderID(msg *models.Message) string {
 }
 
 func allowFromMatches(cfg config.ElevatedConfig, channel models.ChannelType, senderID string) bool {
-	if senderID == "" {
-		return false
-	}
 	if len(cfg.AllowFrom) == 0 {
 		return false
 	}
-	channelKey := strings.ToLower(string(channel))
-	allow := cfg.AllowFrom[channelKey]
-	if len(allow) == 0 {
-		allow = cfg.AllowFrom["default"]
-	}
-	if len(allow) == 0 {
-		return false
-	}
-	return senderMatchesAllowlist(senderID, allow)
-}
-
-func senderMatchesAllowlist(senderID string, allow []string) bool {
-	normalizedSender := normalizeAllowToken(senderID)
-	if normalizedSender == "" {
-		return false
-	}
-	for _, entry := range allow {
-		token := normalizeAllowToken(entry)
-		if token == "" {
-			continue
-		}
-		if token == "*" {
-			return true
-		}
-		if token == normalizedSender {
-			return true
-		}
-	}
-	return false
-}
-
-func normalizeAllowToken(value string) string {
-	token := strings.TrimSpace(value)
-	if token == "" {
-		return ""
-	}
-	token = strings.TrimPrefix(token, "@")
-	token = strings.TrimPrefix(token, "#")
-	if idx := strings.Index(token, ":"); idx >= 0 {
-		token = token[idx+1:]
-	}
-	return strings.ToLower(strings.TrimSpace(token))
+	return allowlistMatches(cfg.AllowFrom, channel, senderID)
 }
 
 func resolveElevatedPermission(global config.ElevatedConfig, agentCfg *config.ElevatedConfig, msg *models.Message) (bool, string) {

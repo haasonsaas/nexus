@@ -93,6 +93,15 @@ func (r *Router) Route(ctx context.Context, msg *Message) (*Session, error) {
 }
 ```
 
+### Commands
+
+The gateway can intercept slash-style commands before messages reach the runtime:
+
+- Command-only messages (`/help`) run immediately.
+- Inline shortcuts can run inside normal text (e.g., `hey /status`), then the remaining text continues to the model.
+- Command allowlists live under `commands.allow_from`; inline shortcuts require `commands.inline_allow_from`.
+- Allowed inline commands are configured via `commands.inline_commands`.
+
 ---
 
 ## 2. Channel Adapters

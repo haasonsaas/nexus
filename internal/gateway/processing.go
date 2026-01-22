@@ -101,6 +101,11 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 	if s.maybeHandleCommand(ctx, session, msg) {
 		return
 	}
+	if s.maybeHandleInlineCommands(ctx, session, msg) {
+		if strings.TrimSpace(msg.Content) == "" {
+			return
+		}
+	}
 
 	s.enrichMessageWithMedia(ctx, msg)
 

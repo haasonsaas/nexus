@@ -316,3 +316,215 @@ func TestHandleMessageCommandNewSetsModelForNewSession(t *testing.T) {
 		t.Fatalf("expected new session model override to be set, got %#v", session.Metadata)
 	}
 }
+
+func TestHandleMessageCommandBlockedByAllowlist(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	cfg := &config.Config{
+		Commands: config.CommandsConfig{
+			Enabled:   boolPtr(true),
+			AllowFrom: map[string][]string{"telegram": {"999"}},
+		},
+	}
+	server, err := NewServer(cfg, logger)
+	if err != nil {
+		t.Fatalf("NewServer() error = %v", err)
+	}
+
+	store := sessions.NewMemoryStore()
+	provider := &countingProvider{}
+	runtime := agent.NewRuntime(provider, store)
+	server.sessions = store
+	server.runtime = runtime
+
+	adapter := &recordingAdapter{}
+	registry := channels.NewRegistry()
+	registry.Register(adapter)
+	server.channels = registry
+
+	msg := &models.Message{
+		ID:        "cmd_help",
+		Channel:   models.ChannelTelegram,
+		ChannelID: "1",
+		Direction: models.DirectionInbound,
+		Role:      models.RoleUser,
+		Content:   "/help",
+		Metadata: map[string]any{
+			"chat_id": int64(42),
+			"user_id": int64(123),
+		},
+	}
+
+	server.handleMessage(context.Background(), msg)
+
+	if calls, _ := provider.stats(); calls != 0 {
+		t.Fatalf("expected runtime not to run for blocked /help, got calls=%d", calls)
+	}
+
+	adapter.mu.Lock()
+	defer adapter.mu.Unlock()
+	if len(adapter.messages) != 0 {
+		t.Fatalf("expected no reply for blocked command, got %d", len(adapter.messages))
+	}
+}
+
+func TestHandleMessageInlineCommandStripsAndRuns(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	cfg := &config.Config{
+		Commands: config.CommandsConfig{
+			Enabled:         boolPtr(true),
+			InlineAllowFrom: map[string][]string{"telegram": {"123"}},
+		},
+	}
+	server, err := NewServer(cfg, logger)
+	if err != nil {
+		t.Fatalf("NewServer() error = %v", err)
+	}
+
+	store := sessions.NewMemoryStore()
+	provider := &countingProvider{}
+	runtime := agent.NewRuntime(provider, store)
+	server.sessions = store
+	server.runtime = runtime
+
+	adapter := &recordingAdapter{}
+	registry := channels.NewRegistry()
+	registry.Register(adapter)
+	server.channels = registry
+
+	msg := &models.Message{
+		ID:        "inline_status",
+		Channel:   models.ChannelTelegram,
+		ChannelID: "1",
+		Direction: models.DirectionInbound,
+		Role:      models.RoleUser,
+		Content:   "hello /status there",
+		Metadata: map[string]any{
+			"chat_id": int64(77),
+			"user_id": "123",
+		},
+	}
+
+	server.handleMessage(context.Background(), msg)
+
+	if calls, _ := provider.stats(); calls != 1 {
+		t.Fatalf("expected runtime to run once, got calls=%d", calls)
+	}
+
+	sessionKey := sessions.SessionKey("main", models.ChannelTelegram, "77")
+	session, err := store.GetByKey(context.Background(), sessionKey)
+	if err != nil {
+		t.Fatalf("failed to load session: %v", err)
+	}
+	history, err := store.GetHistory(context.Background(), session.ID, 10)
+	if err != nil {
+		t.Fatalf("failed to load history: %v", err)
+	}
+	var inbound *models.Message
+	for _, entry := range history {
+		if entry.Role == models.RoleUser {
+			inbound = entry
+			break
+		}
+	}
+	if inbound == nil {
+		t.Fatal("expected inbound message in history")
+	}
+	if strings.Contains(inbound.Content, "/status") {
+		t.Fatalf("expected inline command stripped, got %q", inbound.Content)
+	}
+	if strings.TrimSpace(inbound.Content) != "hello there" {
+		t.Fatalf("expected stripped content 'hello there', got %q", inbound.Content)
+	}
+
+	adapter.mu.Lock()
+	defer adapter.mu.Unlock()
+	if len(adapter.messages) != 2 {
+		t.Fatalf("expected 2 outbound messages (status + reply), got %d", len(adapter.messages))
+	}
+	foundStatus := false
+	for _, sent := range adapter.messages {
+		if strings.Contains(sent.Content, "Session active") {
+			foundStatus = true
+			break
+		}
+	}
+	if !foundStatus {
+		t.Fatalf("expected inline /status reply, got %#v", adapter.messages)
+	}
+}
+
+func TestHandleMessageInlineCommandIgnoredWithoutAllowlist(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	cfg := &config.Config{
+		Commands: config.CommandsConfig{
+			Enabled: boolPtr(true),
+		},
+	}
+	server, err := NewServer(cfg, logger)
+	if err != nil {
+		t.Fatalf("NewServer() error = %v", err)
+	}
+
+	store := sessions.NewMemoryStore()
+	provider := &countingProvider{}
+	runtime := agent.NewRuntime(provider, store)
+	server.sessions = store
+	server.runtime = runtime
+
+	adapter := &recordingAdapter{}
+	registry := channels.NewRegistry()
+	registry.Register(adapter)
+	server.channels = registry
+
+	msg := &models.Message{
+		ID:        "inline_blocked",
+		Channel:   models.ChannelTelegram,
+		ChannelID: "1",
+		Direction: models.DirectionInbound,
+		Role:      models.RoleUser,
+		Content:   "hello /status there",
+		Metadata: map[string]any{
+			"chat_id": int64(88),
+			"user_id": int64(321),
+		},
+	}
+
+	server.handleMessage(context.Background(), msg)
+
+	if calls, _ := provider.stats(); calls != 1 {
+		t.Fatalf("expected runtime to run once, got calls=%d", calls)
+	}
+
+	sessionKey := sessions.SessionKey("main", models.ChannelTelegram, "88")
+	session, err := store.GetByKey(context.Background(), sessionKey)
+	if err != nil {
+		t.Fatalf("failed to load session: %v", err)
+	}
+	history, err := store.GetHistory(context.Background(), session.ID, 10)
+	if err != nil {
+		t.Fatalf("failed to load history: %v", err)
+	}
+	var inbound *models.Message
+	for _, entry := range history {
+		if entry.Role == models.RoleUser {
+			inbound = entry
+			break
+		}
+	}
+	if inbound == nil {
+		t.Fatal("expected inbound message in history")
+	}
+	if !strings.Contains(inbound.Content, "/status") {
+		t.Fatalf("expected inline command preserved, got %q", inbound.Content)
+	}
+
+	adapter.mu.Lock()
+	defer adapter.mu.Unlock()
+	if len(adapter.messages) != 1 {
+		t.Fatalf("expected 1 outbound message (model reply), got %d", len(adapter.messages))
+	}
+}
+
+func boolPtr(value bool) *bool {
+	return &value
+}

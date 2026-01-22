@@ -151,6 +151,16 @@ data:
       http_port: 8080
       metrics_port: 9090
 
+    commands:
+      enabled: true
+      allow_from:
+        # telegram:
+        #   - "12345678"
+      inline_allow_from:
+        # telegram:
+        #   - "12345678"
+      inline_commands: ["help", "commands", "status", "whoami", "id"]
+
     database:
       url: postgres://root@cockroachdb-public:26257/nexus?sslmode=disable
       max_connections: 25

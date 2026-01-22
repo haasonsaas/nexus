@@ -7,6 +7,26 @@ server:
   http_port: 8080
   metrics_port: 9090
 
+commands:
+  # Enable text command handling
+  enabled: true
+  # Optional allowlist for command-only messages (empty = allow all)
+  allow_from:
+    # telegram:
+    #   - "12345678"
+    #   - "*"
+  # Inline command shortcuts require an explicit allowlist
+  inline_allow_from:
+    # telegram:
+    #   - "12345678"
+  # Inline commands allowed to run inside normal messages
+  inline_commands:
+    - help
+    - commands
+    - status
+    - whoami
+    - id
+
 database:
   # CockroachDB connection string
   # For local dev: postgres://root@localhost:26257/nexus?sslmode=disable

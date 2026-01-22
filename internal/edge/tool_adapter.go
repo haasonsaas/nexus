@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/agent"
+	"github.com/haasonsaas/nexus/internal/observability"
 	"github.com/haasonsaas/nexus/internal/tools/naming"
 )
 
@@ -45,7 +46,7 @@ func (a *ToolAdapter) Schema() json.RawMessage {
 // Execute runs the tool on the edge.
 func (a *ToolAdapter) Execute(ctx context.Context, params json.RawMessage) (*agent.ToolResult, error) {
 	// Get run context for tracing
-	runID := ""
+	runID := observability.GetRunID(ctx)
 	sessionID := ""
 	if session := agent.SessionFromContext(ctx); session != nil {
 		sessionID = session.ID

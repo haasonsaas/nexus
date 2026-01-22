@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -80,6 +81,16 @@ func (s *Server) ensureRuntime(ctx context.Context) (*agent.Runtime, error) {
 	if s.runtimePlugins != nil {
 		if err := s.runtimePlugins.LoadTools(s.config, runtime); err != nil {
 			return nil, fmt.Errorf("load runtime plugins: %w", err)
+		}
+	}
+
+	if traceDir := strings.TrimSpace(os.Getenv("NEXUS_TRACE_DIR")); traceDir != "" {
+		tracePlugin, err := agent.NewTraceDirectoryPlugin(traceDir)
+		if err != nil {
+			s.logger.Warn("failed to initialize trace directory", "error", err, "trace_dir", traceDir)
+		} else {
+			runtime.Use(tracePlugin)
+			s.logger.Info("trace capture enabled", "trace_dir", traceDir)
 		}
 	}
 	s.registerMCPSamplingHandler()

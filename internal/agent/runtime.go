@@ -72,7 +72,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -80,6 +79,7 @@ import (
 	"github.com/google/uuid"
 	agentctx "github.com/haasonsaas/nexus/internal/agent/context"
 	"github.com/haasonsaas/nexus/internal/jobs"
+	"github.com/haasonsaas/nexus/internal/observability"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/tools/policy"
 	"github.com/haasonsaas/nexus/pkg/models"
@@ -798,12 +798,18 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 
 		// Pass chunks channel via context for direct tool event emission
 		// Cast to send-only to match the type assertion in run()
-		runCtx := context.WithValue(ctx, chunksChanKey{}, (chan<- *ResponseChunk)(chunks))
+		runCtx := observability.AddRunID(ctx, runID)
+		runCtx = observability.AddSessionID(runCtx, session.ID)
+		runCtx = observability.AddMessageID(runCtx, msg.ID)
+		if session.AgentID != "" {
+			runCtx = observability.AddAgentID(runCtx, session.AgentID)
+		}
+		runCtx = context.WithValue(runCtx, chunksChanKey{}, (chan<- *ResponseChunk)(chunks))
 
 		// Run the core agentic loop
 		// Errors are emitted as run.error events which ChunkAdapterSink converts to ResponseChunk.Error
 		if err := r.run(runCtx, session, msg, emitter); err != nil {
-			slog.Debug("agentic loop completed with error", "error", err, "session_id", session.ID)
+			r.opts.Logger.Debug("agentic loop completed with error", "error", err, "session_id", session.ID, "run_id", runID)
 		}
 	}()
 
@@ -826,6 +832,7 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 	}
 
 	ctx = WithSession(ctx, session)
+	runID := observability.GetRunID(ctx)
 
 	runOpts := r.opts
 	if override, ok := runtimeOptionsFromContext(ctx); ok {
@@ -1065,7 +1072,14 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 				// Persist tool call event immediately (best-effort)
 				if r.toolEvents != nil {
 					if err := r.toolEvents.AddToolCall(ctx, session.ID, assistantMsgID, &tc); err != nil {
-						slog.Debug("failed to persist tool call event", "error", err, "tool", tc.Name, "session_id", session.ID)
+						r.opts.Logger.Debug(
+							"failed to persist tool call event",
+							"error", err,
+							"tool", tc.Name,
+							"tool_call_id", tc.ID,
+							"session_id", session.ID,
+							"run_id", runID,
+						)
 					}
 				}
 			}
@@ -1134,7 +1148,14 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 				// Persist (best-effort)
 				if r.toolEvents != nil {
 					if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res); err != nil {
-						slog.Debug("failed to persist tool result event", "error", err, "tool", tc.Name, "session_id", session.ID)
+						r.opts.Logger.Debug(
+							"failed to persist tool result event",
+							"error", err,
+							"tool", tc.Name,
+							"tool_call_id", tc.ID,
+							"session_id", session.ID,
+							"run_id", runID,
+						)
 					}
 				}
 				continue
@@ -1160,7 +1181,14 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 					emitter.ToolFinished(ctx, tc.ID, tc.Name, false, []byte(res.Content), 0)
 					if r.toolEvents != nil {
 						if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res); err != nil {
-							slog.Debug("failed to persist tool result event", "error", err, "tool", tc.Name, "session_id", session.ID)
+							r.opts.Logger.Debug(
+								"failed to persist tool result event",
+								"error", err,
+								"tool", tc.Name,
+								"tool_call_id", tc.ID,
+								"session_id", session.ID,
+								"run_id", runID,
+							)
 						}
 					}
 					continue
@@ -1197,7 +1225,14 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 
 					if r.toolEvents != nil {
 						if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res); err != nil {
-							slog.Debug("failed to persist tool result event", "error", err, "tool", tc.Name, "session_id", session.ID)
+							r.opts.Logger.Debug(
+								"failed to persist tool result event",
+								"error", err,
+								"tool", tc.Name,
+								"tool_call_id", tc.ID,
+								"session_id", session.ID,
+								"run_id", runID,
+							)
 						}
 					}
 					continue
@@ -1229,7 +1264,14 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 
 					if r.toolEvents != nil {
 						if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res); err != nil {
-							slog.Debug("failed to persist tool result event", "error", err, "tool", tc.Name, "session_id", session.ID)
+							r.opts.Logger.Debug(
+								"failed to persist tool result event",
+								"error", err,
+								"tool", tc.Name,
+								"tool_call_id", tc.ID,
+								"session_id", session.ID,
+								"run_id", runID,
+							)
 						}
 					}
 					continue
@@ -1246,7 +1288,14 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 					CreatedAt:  time.Now(),
 				}
 				if err := runOpts.JobStore.Create(context.Background(), job); err != nil {
-					slog.Warn("failed to create async job", "error", err, "job_id", job.ID, "tool", tc.Name)
+					r.opts.Logger.Warn(
+						"failed to create async job",
+						"error", err,
+						"job_id", job.ID,
+						"tool", tc.Name,
+						"tool_call_id", tc.ID,
+						"run_id", runID,
+					)
 				}
 
 				payload, err := json.Marshal(map[string]any{
@@ -1273,7 +1322,14 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 
 				if r.toolEvents != nil {
 					if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res); err != nil {
-						slog.Debug("failed to persist tool result event", "error", err, "tool", tc.Name, "session_id", session.ID)
+						r.opts.Logger.Debug(
+							"failed to persist tool result event",
+							"error", err,
+							"tool", tc.Name,
+							"tool_call_id", tc.ID,
+							"session_id", session.ID,
+							"run_id", runID,
+						)
 					}
 				}
 
@@ -1285,7 +1341,13 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 						r.runToolJob(tc, job, toolExec, runOpts.JobStore)
 					}()
 				default:
-					slog.Warn("async job queue full, running synchronously", "tool", tc.Name, "job_id", job.ID)
+					r.opts.Logger.Warn(
+						"async job queue full, running synchronously",
+						"tool", tc.Name,
+						"job_id", job.ID,
+						"tool_call_id", tc.ID,
+						"run_id", runID,
+					)
 					r.runToolJob(tc, job, toolExec, runOpts.JobStore)
 				}
 				continue
@@ -1311,7 +1373,14 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 				tc := toolCalls[origIdx]
 				res := results[origIdx]
 				if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res); err != nil {
-					slog.Debug("failed to persist tool result event", "error", err, "tool", tc.Name, "session_id", session.ID)
+					r.opts.Logger.Debug(
+						"failed to persist tool result event",
+						"error", err,
+						"tool", tc.Name,
+						"tool_call_id", tc.ID,
+						"session_id", session.ID,
+						"run_id", runID,
+					)
 				}
 			}
 		}
@@ -1452,12 +1521,19 @@ func (r *Runtime) ProcessStream(ctx context.Context, session *models.Session, ms
 		combinedSink := NewMultiSink(sink, statsSink)
 		emitter := NewEventEmitter(runID, combinedSink)
 
+		runCtx := observability.AddRunID(ctx, runID)
+		runCtx = observability.AddSessionID(runCtx, session.ID)
+		runCtx = observability.AddMessageID(runCtx, msg.ID)
+		if session.AgentID != "" {
+			runCtx = observability.AddAgentID(runCtx, session.AgentID)
+		}
+
 		// Emit run started
-		emitter.RunStarted(ctx)
+		emitter.RunStarted(runCtx)
 
 		// Run the core agentic loop
-		if err := r.run(ctx, session, msg, emitter); err != nil {
-			slog.Debug("agentic loop completed with error", "error", err, "session_id", session.ID)
+		if err := r.run(runCtx, session, msg, emitter); err != nil {
+			r.opts.Logger.Debug("agentic loop completed with error", "error", err, "session_id", session.ID, "run_id", runID)
 		}
 
 		// Get accumulated stats and add dropped events count
@@ -1649,7 +1725,12 @@ func (r *Runtime) runToolJob(tc models.ToolCall, job *jobs.Job, toolExec *ToolEx
 	job.Status = jobs.StatusRunning
 	job.StartedAt = time.Now()
 	if err := jobStore.Update(ctx, job); err != nil {
-		slog.Warn("failed to update job status to running", "error", err, "job_id", job.ID)
+		r.opts.Logger.Warn(
+			"failed to update job status to running",
+			"error", err,
+			"job_id", job.ID,
+			"tool_call_id", tc.ID,
+		)
 	}
 
 	var result models.ToolResult
@@ -1687,7 +1768,13 @@ func (r *Runtime) runToolJob(tc models.ToolCall, job *jobs.Job, toolExec *ToolEx
 	}
 	job.FinishedAt = time.Now()
 	if err := jobStore.Update(ctx, job); err != nil {
-		slog.Warn("failed to update job status on completion", "error", err, "job_id", job.ID, "status", job.Status)
+		r.opts.Logger.Warn(
+			"failed to update job status on completion",
+			"error", err,
+			"job_id", job.ID,
+			"status", job.Status,
+			"tool_call_id", tc.ID,
+		)
 	}
 }
 

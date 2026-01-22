@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/haasonsaas/nexus/internal/observability"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
@@ -211,9 +212,15 @@ func (e *ToolExecutor) executeWithTimeout(ctx context.Context, call models.ToolC
 		case resultChan <- execResult{result: result, err: err}:
 		default:
 			// Context cancelled/timed out before execution completed - log for observability
-			slog.Warn("tool execution completed after timeout, result discarded",
+			runID := observability.GetRunID(ctx)
+			sessionID := observability.GetSessionID(ctx)
+			slog.Warn(
+				"tool execution completed after timeout, result discarded",
 				"tool", call.Name,
-				"tool_call_id", call.ID)
+				"tool_call_id", call.ID,
+				"run_id", runID,
+				"session_id", sessionID,
+			)
 		}
 	}()
 

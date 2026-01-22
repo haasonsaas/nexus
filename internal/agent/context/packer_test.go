@@ -348,3 +348,198 @@ func TestGetMessagesToSummarize(t *testing.T) {
 		}
 	}
 }
+
+// =============================================================================
+// Diagnostics Tests
+// =============================================================================
+
+func TestPackWithDiagnostics_BasicCounts(t *testing.T) {
+	packer := NewPacker(DefaultPackOptions())
+	history := []*models.Message{
+		{ID: "1", Role: models.RoleUser, Content: "Hello"},
+		{ID: "2", Role: models.RoleAssistant, Content: "Hi there"},
+	}
+	incoming := &models.Message{ID: "3", Role: models.RoleUser, Content: "How are you?"}
+
+	result := packer.PackWithDiagnostics(history, incoming, nil)
+
+	if result.Diagnostics == nil {
+		t.Fatal("expected diagnostics")
+	}
+
+	diag := result.Diagnostics
+	if diag.Candidates != 2 {
+		t.Errorf("expected 2 candidates (history), got %d", diag.Candidates)
+	}
+	if diag.Included != 2 {
+		t.Errorf("expected 2 included, got %d", diag.Included)
+	}
+	if diag.Dropped != 0 {
+		t.Errorf("expected 0 dropped, got %d", diag.Dropped)
+	}
+	if diag.SummaryUsed {
+		t.Error("expected SummaryUsed=false")
+	}
+}
+
+func TestPackWithDiagnostics_BudgetTracking(t *testing.T) {
+	opts := DefaultPackOptions()
+	opts.MaxChars = 500
+	opts.MaxMessages = 10
+	packer := NewPacker(opts)
+
+	history := []*models.Message{
+		{ID: "1", Role: models.RoleUser, Content: strings.Repeat("a", 100)},
+		{ID: "2", Role: models.RoleAssistant, Content: strings.Repeat("b", 100)},
+	}
+	incoming := &models.Message{ID: "3", Role: models.RoleUser, Content: strings.Repeat("c", 50)}
+
+	result := packer.PackWithDiagnostics(history, incoming, nil)
+	diag := result.Diagnostics
+
+	if diag.BudgetChars != 500 {
+		t.Errorf("expected BudgetChars=500, got %d", diag.BudgetChars)
+	}
+	if diag.BudgetMessages != 10 {
+		t.Errorf("expected BudgetMessages=10, got %d", diag.BudgetMessages)
+	}
+	// Used chars should be tracked
+	if diag.UsedChars <= 0 {
+		t.Errorf("expected positive UsedChars, got %d", diag.UsedChars)
+	}
+	if diag.UsedMessages != 3 { // 2 history + 1 incoming
+		t.Errorf("expected UsedMessages=3, got %d", diag.UsedMessages)
+	}
+}
+
+func TestPackWithDiagnostics_DroppedDueToOverBudget(t *testing.T) {
+	opts := DefaultPackOptions()
+	opts.MaxChars = 200 // Very small budget
+	packer := NewPacker(opts)
+
+	// Create messages that exceed budget
+	history := []*models.Message{
+		{ID: "1", Role: models.RoleUser, Content: strings.Repeat("a", 100)},
+		{ID: "2", Role: models.RoleAssistant, Content: strings.Repeat("b", 100)},
+		{ID: "3", Role: models.RoleUser, Content: strings.Repeat("c", 100)},
+	}
+	incoming := &models.Message{ID: "4", Role: models.RoleUser, Content: strings.Repeat("d", 50)}
+
+	result := packer.PackWithDiagnostics(history, incoming, nil)
+	diag := result.Diagnostics
+
+	// Should have dropped some messages
+	if diag.Dropped == 0 {
+		t.Error("expected some dropped messages due to budget")
+	}
+
+	// Check items have correct reasons
+	var overBudgetCount int
+	for _, item := range diag.Items {
+		if item.Reason == models.ContextReasonOverBudget {
+			overBudgetCount++
+			if item.Included {
+				t.Error("over_budget item should not be included")
+			}
+		}
+	}
+	if overBudgetCount == 0 {
+		t.Error("expected some items with over_budget reason")
+	}
+}
+
+func TestPackWithDiagnostics_SummaryTracking(t *testing.T) {
+	packer := NewPacker(DefaultPackOptions())
+
+	history := []*models.Message{
+		{ID: "1", Role: models.RoleUser, Content: "Hello"},
+	}
+	incoming := &models.Message{ID: "2", Role: models.RoleUser, Content: "hi"}
+	summary := &models.Message{
+		ID:      "summary",
+		Role:    models.RoleSystem,
+		Content: strings.Repeat("x", 200),
+		Metadata: map[string]any{
+			SummaryMetadataKey: true,
+		},
+	}
+
+	result := packer.PackWithDiagnostics(history, incoming, summary)
+	diag := result.Diagnostics
+
+	if !diag.SummaryUsed {
+		t.Error("expected SummaryUsed=true")
+	}
+	if diag.SummaryChars != 200 {
+		t.Errorf("expected SummaryChars=200, got %d", diag.SummaryChars)
+	}
+
+	// Check items include summary with reserved reason
+	var foundSummaryItem bool
+	for _, item := range diag.Items {
+		if item.Kind == models.ContextItemSummary {
+			foundSummaryItem = true
+			if item.Reason != models.ContextReasonReserved {
+				t.Errorf("expected summary reason=reserved, got %s", item.Reason)
+			}
+			if !item.Included {
+				t.Error("summary item should be included")
+			}
+		}
+	}
+	if !foundSummaryItem {
+		t.Error("expected summary item in diagnostics")
+	}
+}
+
+func TestPackWithDiagnostics_ItemKindClassification(t *testing.T) {
+	packer := NewPacker(DefaultPackOptions())
+
+	history := []*models.Message{
+		{ID: "1", Role: models.RoleUser, Content: "Hello"},
+		{ID: "2", Role: models.RoleAssistant, Content: "Hi", ToolCalls: []models.ToolCall{{ID: "tc1", Name: "test"}}},
+		{ID: "3", Role: models.RoleTool, ToolResults: []models.ToolResult{{ToolCallID: "tc1", Content: "result"}}},
+	}
+	incoming := &models.Message{ID: "4", Role: models.RoleUser, Content: "thanks"}
+
+	result := packer.PackWithDiagnostics(history, incoming, nil)
+	diag := result.Diagnostics
+
+	kindCounts := make(map[models.ContextItemKind]int)
+	for _, item := range diag.Items {
+		kindCounts[item.Kind]++
+	}
+
+	if kindCounts[models.ContextItemHistory] != 1 { // User message without tools
+		t.Errorf("expected 1 history item, got %d", kindCounts[models.ContextItemHistory])
+	}
+	if kindCounts[models.ContextItemTool] != 2 { // Assistant with tool calls + tool results
+		t.Errorf("expected 2 tool items, got %d", kindCounts[models.ContextItemTool])
+	}
+	if kindCounts[models.ContextItemIncoming] != 1 {
+		t.Errorf("expected 1 incoming item, got %d", kindCounts[models.ContextItemIncoming])
+	}
+}
+
+func TestPackWithDiagnostics_ItemIDs(t *testing.T) {
+	packer := NewPacker(DefaultPackOptions())
+
+	history := []*models.Message{
+		{ID: "msg-1", Role: models.RoleUser, Content: "Hello"},
+		{ID: "msg-2", Role: models.RoleAssistant, Content: "Hi"},
+	}
+	incoming := &models.Message{ID: "msg-3", Role: models.RoleUser, Content: "How are you?"}
+
+	result := packer.PackWithDiagnostics(history, incoming, nil)
+	diag := result.Diagnostics
+
+	// All items should have non-empty IDs (hashes)
+	for i, item := range diag.Items {
+		if item.ID == "" {
+			t.Errorf("item %d has empty ID", i)
+		}
+		if len(item.ID) != 12 { // Our hash is truncated to 12 chars
+			t.Errorf("item %d ID has unexpected length: %d", i, len(item.ID))
+		}
+	}
+}

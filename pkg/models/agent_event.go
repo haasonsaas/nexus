@@ -35,11 +35,12 @@ type AgentEvent struct {
 	IterIndex int `json:"iter_index,omitempty"`
 
 	// Exactly one payload should be non-nil for a given Type.
-	Text   *TextEventPayload   `json:"text,omitempty"`
-	Tool   *ToolEventPayload   `json:"tool,omitempty"`
-	Stream *StreamEventPayload `json:"stream,omitempty"`
-	Error  *ErrorEventPayload  `json:"error,omitempty"`
-	Stats  *StatsEventPayload  `json:"stats,omitempty"`
+	Text    *TextEventPayload    `json:"text,omitempty"`
+	Tool    *ToolEventPayload    `json:"tool,omitempty"`
+	Stream  *StreamEventPayload  `json:"stream,omitempty"`
+	Error   *ErrorEventPayload   `json:"error,omitempty"`
+	Stats   *StatsEventPayload   `json:"stats,omitempty"`
+	Context *ContextEventPayload `json:"context,omitempty"`
 }
 
 // AgentEventType identifies the kind of agent event.
@@ -166,3 +167,68 @@ type RunStats struct {
 	// Error count
 	Errors int `json:"errors,omitempty"`
 }
+
+// ContextEventPayload contains context packing diagnostics.
+// It explains why certain messages were included or dropped during packing.
+type ContextEventPayload struct {
+	// Budget configuration
+	BudgetChars    int `json:"budget_chars"`     // Max character budget
+	BudgetMessages int `json:"budget_messages"`  // Max message count
+	UsedChars      int `json:"used_chars"`       // Characters used
+	UsedMessages   int `json:"used_messages"`    // Messages included
+
+	// Message counts by category
+	Candidates int `json:"candidates"` // Total messages before packing
+	Included   int `json:"included"`   // Messages included
+	Dropped    int `json:"dropped"`    // Messages dropped
+
+	// Summary info
+	SummaryUsed   bool `json:"summary_used,omitempty"`   // Whether summary was included
+	SummaryChars  int  `json:"summary_chars,omitempty"`  // Characters in summary
+
+	// Per-item diagnostics (optional, only when verbose)
+	Items []ContextPackItem `json:"items,omitempty"`
+}
+
+// ContextPackItem describes a single item in the context packing decision.
+type ContextPackItem struct {
+	// ID is a hash or identifier for the message (not the content itself).
+	ID string `json:"id,omitempty"`
+
+	// Kind categorizes the message type.
+	Kind ContextItemKind `json:"kind"`
+
+	// Chars is the character count.
+	Chars int `json:"chars"`
+
+	// Included indicates whether this item was included.
+	Included bool `json:"included"`
+
+	// Reason explains why the item was included or dropped.
+	Reason ContextPackReason `json:"reason,omitempty"`
+}
+
+// ContextItemKind categorizes context items.
+type ContextItemKind string
+
+const (
+	ContextItemSystem     ContextItemKind = "system"
+	ContextItemHistory    ContextItemKind = "history"
+	ContextItemTool       ContextItemKind = "tool"
+	ContextItemSummary    ContextItemKind = "summary"
+	ContextItemIncoming   ContextItemKind = "incoming"
+)
+
+// ContextPackReason explains a packing decision.
+type ContextPackReason string
+
+const (
+	// Inclusion reasons
+	ContextReasonIncluded   ContextPackReason = "included"
+	ContextReasonReserved   ContextPackReason = "reserved"   // incoming/summary
+
+	// Exclusion reasons
+	ContextReasonOverBudget ContextPackReason = "over_budget"
+	ContextReasonTooOld     ContextPackReason = "too_old"
+	ContextReasonFiltered   ContextPackReason = "filtered"
+)

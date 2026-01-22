@@ -2847,6 +2847,7 @@ func buildTraceReplayCmd() *cobra.Command {
 		toSeq    uint64
 		filter   string
 		showTime bool
+		view     string
 	)
 
 	cmd := &cobra.Command{
@@ -2863,7 +2864,11 @@ Speed control:
   --speed 0     Instant (default)
   --speed 1     Real-time
   --speed 2     2x speed
-  --speed 0.5   Half speed`,
+  --speed 0.5   Half speed
+
+Views:
+  --view=default   Standard event replay (default)
+  --view=context   Show only context packing decisions`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			filePath := args[0]
@@ -2880,73 +2885,121 @@ Speed control:
 				return fmt.Errorf("failed to read trace: %w", err)
 			}
 
-			// Create a callback sink that prints events
-			printSink := agent.NewCallbackSink(func(_ context.Context, e models.AgentEvent) {
-				// Apply filter
-				if filter != "" && !strings.Contains(string(e.Type), filter) {
-					return
-				}
-
-				// Format output
-				var prefix string
-				if showTime {
-					prefix = fmt.Sprintf("[%s] ", e.Time.Format("15:04:05.000"))
-				}
-
-				switch e.Type {
-				case models.AgentEventRunStarted:
-					fmt.Fprintf(out, "%s▶ Run started (run_id=%s)\n", prefix, e.RunID)
-
-				case models.AgentEventRunFinished:
-					fmt.Fprintf(out, "%s■ Run finished\n", prefix)
-					if e.Stats != nil && e.Stats.Run != nil {
-						fmt.Fprintf(out, "  wall=%v iters=%d tools=%d\n",
-							e.Stats.Run.WallTime, e.Stats.Run.Iters, e.Stats.Run.ToolCalls)
+			// Create a callback sink based on view mode
+			var printSink agent.EventSink
+			if view == "context" {
+				printSink = agent.NewCallbackSink(func(_ context.Context, e models.AgentEvent) {
+					// Context view: only show context.packed events
+					if e.Type != models.AgentEventContextPacked {
+						return
 					}
 
-				case models.AgentEventRunError:
-					if e.Error != nil {
-						fmt.Fprintf(out, "%s✗ Error: %s\n", prefix, e.Error.Message)
+					var prefix string
+					if showTime {
+						prefix = fmt.Sprintf("[%s] ", e.Time.Format("15:04:05.000"))
 					}
 
-				case models.AgentEventIterStarted:
-					fmt.Fprintf(out, "%s→ Iteration %d started\n", prefix, e.IterIndex)
+					fmt.Fprintf(out, "%s📦 Context Packed (iter=%d)\n", prefix, e.IterIndex)
 
-				case models.AgentEventIterFinished:
-					fmt.Fprintf(out, "%s← Iteration %d finished\n", prefix, e.IterIndex)
-
-				case models.AgentEventToolStarted:
-					if e.Tool != nil {
-						fmt.Fprintf(out, "%s⚙ Tool: %s (call_id=%s)\n", prefix, e.Tool.Name, e.Tool.CallID)
-					}
-
-				case models.AgentEventToolFinished:
-					if e.Tool != nil {
-						status := "✓"
-						if !e.Tool.Success {
-							status = "✗"
+					if e.Context != nil {
+						ctx := e.Context
+						fmt.Fprintf(out, "   Budget:     %d/%d chars, %d/%d msgs\n",
+							ctx.UsedChars, ctx.BudgetChars, ctx.UsedMessages, ctx.BudgetMessages)
+						fmt.Fprintf(out, "   Messages:   %d candidates → %d included, %d dropped\n",
+							ctx.Candidates, ctx.Included, ctx.Dropped)
+						if ctx.SummaryUsed {
+							fmt.Fprintf(out, "   Summary:    ✓ included (%d chars)\n", ctx.SummaryChars)
 						}
-						fmt.Fprintf(out, "%s  %s %s completed (%v)\n", prefix, status, e.Tool.Name, e.Tool.Elapsed)
+
+						// Show per-item details if available
+						if len(ctx.Items) > 0 {
+							fmt.Fprintln(out, "   Items:")
+							for _, item := range ctx.Items {
+								status := "✓"
+								if !item.Included {
+									status = "✗"
+								}
+								fmt.Fprintf(out, "     %s %-8s %5d chars  %-12s  %s\n",
+									status, item.Kind, item.Chars, item.Reason, item.ID)
+							}
+						}
+					}
+					fmt.Fprintln(out)
+				})
+			} else {
+				printSink = agent.NewCallbackSink(func(_ context.Context, e models.AgentEvent) {
+					// Apply filter
+					if filter != "" && !strings.Contains(string(e.Type), filter) {
+						return
 					}
 
-				case models.AgentEventModelDelta:
-					if e.Stream != nil && e.Stream.Delta != "" {
-						// Print streaming text without newline for natural flow
-						fmt.Fprint(out, e.Stream.Delta)
+					// Format output
+					var prefix string
+					if showTime {
+						prefix = fmt.Sprintf("[%s] ", e.Time.Format("15:04:05.000"))
 					}
 
-				case models.AgentEventModelCompleted:
-					fmt.Fprintln(out) // End the streaming line
-					if e.Stream != nil {
-						fmt.Fprintf(out, "%s  [tokens: in=%d out=%d]\n",
-							prefix, e.Stream.InputTokens, e.Stream.OutputTokens)
-					}
+					switch e.Type {
+					case models.AgentEventRunStarted:
+						fmt.Fprintf(out, "%s▶ Run started (run_id=%s)\n", prefix, e.RunID)
 
-				default:
-					// Other events - print type for debugging
-					fmt.Fprintf(out, "%s  [%s] seq=%d\n", prefix, e.Type, e.Sequence)
-				}
-			})
+					case models.AgentEventRunFinished:
+						fmt.Fprintf(out, "%s■ Run finished\n", prefix)
+						if e.Stats != nil && e.Stats.Run != nil {
+							fmt.Fprintf(out, "  wall=%v iters=%d tools=%d\n",
+								e.Stats.Run.WallTime, e.Stats.Run.Iters, e.Stats.Run.ToolCalls)
+						}
+
+					case models.AgentEventRunError:
+						if e.Error != nil {
+							fmt.Fprintf(out, "%s✗ Error: %s\n", prefix, e.Error.Message)
+						}
+
+					case models.AgentEventIterStarted:
+						fmt.Fprintf(out, "%s→ Iteration %d started\n", prefix, e.IterIndex)
+
+					case models.AgentEventIterFinished:
+						fmt.Fprintf(out, "%s← Iteration %d finished\n", prefix, e.IterIndex)
+
+					case models.AgentEventToolStarted:
+						if e.Tool != nil {
+							fmt.Fprintf(out, "%s⚙ Tool: %s (call_id=%s)\n", prefix, e.Tool.Name, e.Tool.CallID)
+						}
+
+					case models.AgentEventToolFinished:
+						if e.Tool != nil {
+							status := "✓"
+							if !e.Tool.Success {
+								status = "✗"
+							}
+							fmt.Fprintf(out, "%s  %s %s completed (%v)\n", prefix, status, e.Tool.Name, e.Tool.Elapsed)
+						}
+
+					case models.AgentEventModelDelta:
+						if e.Stream != nil && e.Stream.Delta != "" {
+							// Print streaming text without newline for natural flow
+							fmt.Fprint(out, e.Stream.Delta)
+						}
+
+					case models.AgentEventModelCompleted:
+						fmt.Fprintln(out) // End the streaming line
+						if e.Stream != nil {
+							fmt.Fprintf(out, "%s  [tokens: in=%d out=%d]\n",
+								prefix, e.Stream.InputTokens, e.Stream.OutputTokens)
+						}
+
+					case models.AgentEventContextPacked:
+						if e.Context != nil {
+							fmt.Fprintf(out, "%s📦 Context: %d/%d msgs, %d dropped\n",
+								prefix, e.Context.UsedMessages, e.Context.BudgetMessages, e.Context.Dropped)
+						}
+
+					default:
+						// Other events - print type for debugging
+						fmt.Fprintf(out, "%s  [%s] seq=%d\n", prefix, e.Type, e.Sequence)
+					}
+				})
+			}
 
 			// Build replay options
 			var opts []agent.ReplayOption
@@ -2961,6 +3014,9 @@ Speed control:
 
 			fmt.Fprintf(out, "Replaying: %s\n", filePath)
 			fmt.Fprintf(out, "Run ID: %s\n", reader.Header().RunID)
+			if view == "context" {
+				fmt.Fprintln(out, "View: context packing decisions")
+			}
 			fmt.Fprintln(out, strings.Repeat("-", 40))
 
 			stats, err := replayer.Replay(cmd.Context())
@@ -2987,6 +3043,7 @@ Speed control:
 	cmd.Flags().Uint64Var(&toSeq, "to", 0, "Stop at sequence number")
 	cmd.Flags().StringVar(&filter, "filter", "", "Filter events by type substring (e.g., 'tool', 'model')")
 	cmd.Flags().BoolVar(&showTime, "time", false, "Show timestamps for each event")
+	cmd.Flags().StringVar(&view, "view", "default", "Output view (default, context)")
 
 	return cmd
 }

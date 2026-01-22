@@ -7,8 +7,20 @@
 package context
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+
 	"github.com/haasonsaas/nexus/pkg/models"
 )
+
+// PackResult contains the packed messages and diagnostic information.
+type PackResult struct {
+	// Messages is the packed message list ready for the LLM.
+	Messages []*models.Message
+
+	// Diagnostics contains detailed packing information for observability.
+	Diagnostics *models.ContextEventPayload
+}
 
 // PackOptions configures how messages are packed into context.
 type PackOptions struct {
@@ -75,24 +87,51 @@ func NewPacker(opts PackOptions) *Packer {
 // Messages are selected from the end (most recent) backwards until
 // either MaxMessages or MaxChars is reached.
 func (p *Packer) Pack(history []*models.Message, incoming *models.Message, summary *models.Message) ([]*models.Message, error) {
-	var result []*models.Message
+	result := p.PackWithDiagnostics(history, incoming, summary)
+	return result.Messages, nil
+}
+
+// PackWithDiagnostics is like Pack but returns detailed diagnostics.
+func (p *Packer) PackWithDiagnostics(history []*models.Message, incoming *models.Message, summary *models.Message) *PackResult {
+	var messages []*models.Message
+	var items []models.ContextPackItem
 
 	// Track budget
 	totalChars := 0
 	totalMsgs := 0
 
+	// Summary stats
+	summaryUsed := false
+	summaryChars := 0
+
 	// Reserve space for incoming message (only if present)
+	incomingChars := 0
 	if incoming != nil {
-		incomingChars := p.messageChars(incoming)
+		incomingChars = p.messageChars(incoming)
 		totalChars += incomingChars
 		totalMsgs++
+		items = append(items, models.ContextPackItem{
+			ID:       hashMessage(incoming),
+			Kind:     models.ContextItemIncoming,
+			Chars:    incomingChars,
+			Included: true,
+			Reason:   models.ContextReasonReserved,
+		})
 	}
 
 	// Reserve space for summary if present and enabled
 	if p.opts.IncludeSummary && summary != nil {
-		summaryChars := p.messageChars(summary)
+		summaryChars = p.messageChars(summary)
 		totalChars += summaryChars
 		totalMsgs++
+		summaryUsed = true
+		items = append(items, models.ContextPackItem{
+			ID:       hashMessage(summary),
+			Kind:     models.ContextItemSummary,
+			Chars:    summaryChars,
+			Included: true,
+			Reason:   models.ContextReasonReserved,
+		})
 	}
 
 	// Filter out summary messages from history (they're handled separately)
@@ -107,6 +146,11 @@ func (p *Packer) Pack(history []*models.Message, incoming *models.Message, summa
 		filtered = append(filtered, m)
 	}
 
+	candidates := len(filtered)
+
+	// Track which messages are selected (by index)
+	selectedIndices := make(map[int]bool)
+
 	// Select messages from the end (most recent) backwards
 	// Build in reverse order, then reverse once (O(n) instead of O(n²))
 	selectedReverse := make([]*models.Message, 0)
@@ -115,16 +159,56 @@ func (p *Packer) Pack(history []*models.Message, incoming *models.Message, summa
 		msgChars := p.messageChars(m)
 
 		// Check if we'd exceed budget
-		if totalMsgs+1 > p.opts.MaxMessages {
-			break
-		}
-		if totalChars+msgChars > p.opts.MaxChars {
-			break
+		if totalMsgs+1 > p.opts.MaxMessages || totalChars+msgChars > p.opts.MaxChars {
+			// Track as dropped due to budget
+			items = append(items, models.ContextPackItem{
+				ID:       hashMessage(m),
+				Kind:     classifyMessage(m),
+				Chars:    msgChars,
+				Included: false,
+				Reason:   models.ContextReasonOverBudget,
+			})
+			continue
 		}
 
 		selectedReverse = append(selectedReverse, m)
+		selectedIndices[i] = true
 		totalMsgs++
 		totalChars += msgChars
+
+		items = append(items, models.ContextPackItem{
+			ID:       hashMessage(m),
+			Kind:     classifyMessage(m),
+			Chars:    msgChars,
+			Included: true,
+			Reason:   models.ContextReasonIncluded,
+		})
+	}
+
+	// Track messages that were dropped because they're too old
+	// (messages before the ones we started considering)
+	for i := 0; i < len(filtered); i++ {
+		if selectedIndices[i] {
+			continue
+		}
+		// Check if already in items (budget-dropped)
+		found := false
+		for _, item := range items {
+			if item.ID == hashMessage(filtered[i]) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			m := filtered[i]
+			items = append(items, models.ContextPackItem{
+				ID:       hashMessage(m),
+				Kind:     classifyMessage(m),
+				Chars:    p.messageChars(m),
+				Included: false,
+				Reason:   models.ContextReasonTooOld,
+			})
+		}
 	}
 
 	// Reverse selectedReverse to get chronological order
@@ -136,22 +220,77 @@ func (p *Packer) Pack(history []*models.Message, incoming *models.Message, summa
 	// Build final result in order
 	// 1. Summary (if present and enabled)
 	if p.opts.IncludeSummary && summary != nil {
-		result = append(result, summary)
+		messages = append(messages, summary)
 	}
 
 	// 2. Selected history messages (now in chronological order)
 	for _, m := range selected {
 		// Truncate tool results if needed
 		packed := p.truncateToolResults(m)
-		result = append(result, packed)
+		messages = append(messages, packed)
 	}
 
 	// 3. Incoming message
 	if incoming != nil {
-		result = append(result, incoming)
+		messages = append(messages, incoming)
 	}
 
-	return result, nil
+	included := len(selected)
+	if summaryUsed {
+		included++
+	}
+	if incoming != nil {
+		included++
+	}
+
+	return &PackResult{
+		Messages: messages,
+		Diagnostics: &models.ContextEventPayload{
+			BudgetChars:    p.opts.MaxChars,
+			BudgetMessages: p.opts.MaxMessages,
+			UsedChars:      totalChars,
+			UsedMessages:   totalMsgs,
+			Candidates:     candidates,
+			Included:       len(selected),
+			Dropped:        candidates - len(selected),
+			SummaryUsed:    summaryUsed,
+			SummaryChars:   summaryChars,
+			Items:          items,
+		},
+	}
+}
+
+// hashMessage creates a short hash of a message for identification.
+func hashMessage(m *models.Message) string {
+	if m == nil {
+		return ""
+	}
+	h := sha256.New()
+	h.Write([]byte(m.ID))
+	h.Write([]byte(m.Role))
+	h.Write([]byte(m.Content[:min(100, len(m.Content))]))
+	return hex.EncodeToString(h.Sum(nil))[:12]
+}
+
+// classifyMessage determines the kind of context item.
+func classifyMessage(m *models.Message) models.ContextItemKind {
+	if m == nil {
+		return models.ContextItemHistory
+	}
+	if m.Role == models.RoleSystem {
+		return models.ContextItemSystem
+	}
+	if len(m.ToolCalls) > 0 || len(m.ToolResults) > 0 {
+		return models.ContextItemTool
+	}
+	return models.ContextItemHistory
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // messageChars estimates the character count for a message.

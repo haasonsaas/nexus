@@ -191,15 +191,13 @@ func (e *EventEmitter) ToolFinished(ctx context.Context, callID, name string, su
 }
 
 // ContextPacked emits a context.packed event with diagnostics.
-func (e *EventEmitter) ContextPacked(ctx context.Context, totalMessages, includedMessages, droppedMessages int) models.AgentEvent {
+func (e *EventEmitter) ContextPacked(ctx context.Context, diag *models.ContextEventPayload) models.AgentEvent {
 	event := e.base(models.AgentEventContextPacked)
-	event.Text = &models.TextEventPayload{
-		Text: "", // Could add summary text
-	}
-	// Store diagnostics in Stats since there's no dedicated context payload
+	event.Context = diag
+	// Also update Stats for backwards compatibility with aggregation
 	event.Stats = &models.StatsEventPayload{
 		Run: &models.RunStats{
-			DroppedItems: droppedMessages,
+			DroppedItems: diag.Dropped,
 		},
 	}
 	e.emit(ctx, event)

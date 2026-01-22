@@ -675,18 +675,11 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 	}
 	packer := agentctx.NewPacker(packOpts)
 
-	packedModels, err := packer.Pack(history, msg, summaryMsg)
-	if err != nil {
-		emitter.RunError(ctx, err, false)
-		return err
-	}
+	packResult := packer.PackWithDiagnostics(history, msg, summaryMsg)
+	packedModels := packResult.Messages
 
-	// Emit context packed event
-	droppedCount := len(history) - len(packedModels)
-	if droppedCount < 0 {
-		droppedCount = 0
-	}
-	emitter.ContextPacked(ctx, len(history), len(packedModels), droppedCount)
+	// Emit context packed event with diagnostics
+	emitter.ContextPacked(ctx, packResult.Diagnostics)
 
 	// 5) System prompt composition
 	var systemParts []string

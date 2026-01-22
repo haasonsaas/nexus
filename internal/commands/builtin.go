@@ -67,19 +67,32 @@ func RegisterBuiltins(r *Registry) {
 		Category:    "config",
 		Source:      "builtin",
 		Handler: func(ctx context.Context, inv *Invocation) (*Result, error) {
-			if inv.Args == "" {
+			modelArg := strings.TrimSpace(inv.Args)
+			if modelArg == "" {
+				currentModel := ""
+				if inv.Context != nil {
+					if value, ok := inv.Context["model"].(string); ok && strings.TrimSpace(value) != "" {
+						currentModel = value
+					} else if value, ok := inv.Context["default_model"].(string); ok && strings.TrimSpace(value) != "" {
+						currentModel = value
+					}
+				}
+				text := "Current model: (use /model <name> to change)"
+				if currentModel != "" {
+					text = fmt.Sprintf("Current model: %s", currentModel)
+				}
 				return &Result{
-					Text: "Current model: (use /model <name> to change)",
+					Text: text,
 					Data: map[string]any{
 						"action": "get_model",
 					},
 				}, nil
 			}
 			return &Result{
-				Text: fmt.Sprintf("Model changed to: %s", inv.Args),
+				Text: fmt.Sprintf("Model changed to: %s", modelArg),
 				Data: map[string]any{
 					"action": "set_model",
-					"model":  inv.Args,
+					"model":  modelArg,
 				},
 			}, nil
 		},

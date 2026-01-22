@@ -89,6 +89,7 @@ type chunksChanKey struct{}
 type sessionKey struct{}
 type runtimeOptsKey struct{}
 type elevatedKey struct{}
+type modelKey struct{}
 
 // WithSession stores a session in the context.
 func WithSession(ctx context.Context, session *models.Session) context.Context {
@@ -165,6 +166,27 @@ func WithSystemPrompt(ctx context.Context, prompt string) context.Context {
 
 func systemPromptFromContext(ctx context.Context) (string, bool) {
 	value, ok := ctx.Value(systemPromptKey{}).(string)
+	if !ok {
+		return "", false
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", false
+	}
+	return value, true
+}
+
+// WithModel stores a request-scoped model override in the context.
+func WithModel(ctx context.Context, model string) context.Context {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, modelKey{}, model)
+}
+
+func modelFromContext(ctx context.Context) (string, bool) {
+	value, ok := ctx.Value(modelKey{}).(string)
 	if !ok {
 		return "", false
 	}
@@ -921,6 +943,9 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 	}
 	if r.defaultModel != "" {
 		req.Model = r.defaultModel
+	}
+	if model, ok := modelFromContext(ctx); ok {
+		req.Model = model
 	}
 	if len(systemParts) > 0 {
 		req.System = strings.Join(systemParts, "\n\n")

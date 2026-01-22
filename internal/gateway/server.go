@@ -24,6 +24,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/haasonsaas/nexus/internal/auth"
 	"github.com/haasonsaas/nexus/internal/channels"
+	"github.com/haasonsaas/nexus/internal/commands"
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/cron"
 	"github.com/haasonsaas/nexus/internal/hooks"
@@ -85,6 +86,8 @@ type Server struct {
 	defaultModel       string
 	jobStore           jobs.Store
 	approvalChecker    *agent.ApprovalChecker
+	commandRegistry    *commands.Registry
+	commandParser      *commands.Parser
 
 	broadcastManager *BroadcastManager
 	hooksRegistry    *hooks.Registry
@@ -181,6 +184,9 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	}
 	mcpManager := mcp.NewManager(&cfg.MCP, logger)
 	toolPolicyResolver := policy.NewResolver()
+	commandRegistry := commands.NewRegistry(logger)
+	commands.RegisterBuiltins(commandRegistry)
+	commandParser := commands.NewParser(commandRegistry)
 
 	// Create job store (prefer DB when available)
 	var jobStore jobs.Store
@@ -290,6 +296,8 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		toolPolicyResolver: toolPolicyResolver,
 		jobStore:           jobStore,
 		hooksRegistry:      hooksRegistry,
+		commandRegistry:    commandRegistry,
+		commandParser:      commandParser,
 	}
 	grpcSvc := newGRPCService(server)
 	proto.RegisterNexusGatewayServer(grpcServer, grpcSvc)

@@ -98,6 +98,10 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		msg.CreatedAt = time.Now()
 	}
 
+	if s.maybeHandleCommand(ctx, session, msg) {
+		return
+	}
+
 	s.enrichMessageWithMedia(ctx, msg)
 
 	// Note: inbound message persistence is handled by runtime.Process()
@@ -164,6 +168,9 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 	promptCtx := ctx
 	if systemPrompt := s.systemPromptForMessage(ctx, session, msg); systemPrompt != "" {
 		promptCtx = agent.WithSystemPrompt(promptCtx, systemPrompt)
+	}
+	if model := sessionModelOverride(session); model != "" {
+		promptCtx = agent.WithModel(promptCtx, model)
 	}
 	if effectiveElevated != agent.ElevatedOff {
 		promptCtx = agent.WithElevated(promptCtx, effectiveElevated)

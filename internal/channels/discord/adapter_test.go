@@ -183,6 +183,54 @@ func TestAdapter_InterfaceCompliance(t *testing.T) {
 	var _ channels.OutboundAdapter = (*Adapter)(nil)
 	var _ channels.InboundAdapter = (*Adapter)(nil)
 	var _ channels.HealthAdapter = (*Adapter)(nil)
+	var _ channels.StreamingAdapter = (*Adapter)(nil)
+	var _ channels.MessageActionsAdapter = (*Adapter)(nil)
+	var _ channels.EditableAdapter = (*Adapter)(nil)
+	var _ channels.DeletableAdapter = (*Adapter)(nil)
+	var _ channels.ReactableAdapter = (*Adapter)(nil)
+	var _ channels.PinnableAdapter = (*Adapter)(nil)
+}
+
+func TestAdapter_Capabilities(t *testing.T) {
+	adapter := NewAdapterSimple("test-token")
+	caps := adapter.Capabilities()
+
+	if !caps.Send {
+		t.Error("Expected Send capability to be true")
+	}
+	if !caps.Edit {
+		t.Error("Expected Edit capability to be true")
+	}
+	if !caps.Delete {
+		t.Error("Expected Delete capability to be true")
+	}
+	if !caps.React {
+		t.Error("Expected React capability to be true")
+	}
+	if !caps.Reply {
+		t.Error("Expected Reply capability to be true")
+	}
+	if !caps.Pin {
+		t.Error("Expected Pin capability to be true")
+	}
+	if !caps.Typing {
+		t.Error("Expected Typing capability to be true")
+	}
+	if !caps.Attachments {
+		t.Error("Expected Attachments capability to be true")
+	}
+	if !caps.RichText {
+		t.Error("Expected RichText capability to be true")
+	}
+	if !caps.Threads {
+		t.Error("Expected Threads capability to be true")
+	}
+	if caps.MaxMessageLength != 2000 {
+		t.Errorf("MaxMessageLength = %d, want 2000", caps.MaxMessageLength)
+	}
+	if caps.MaxAttachmentSize != 8<<20 {
+		t.Errorf("MaxAttachmentSize = %d, want %d", caps.MaxAttachmentSize, 8<<20)
+	}
 }
 
 // =============================================================================
@@ -1196,6 +1244,22 @@ func (m *mockDiscordSession) MessageReactionAdd(channelID, messageID, emoji stri
 	return nil
 }
 
+func (m *mockDiscordSession) ChannelMessageDelete(channelID, messageID string, options ...discordgo.RequestOption) error {
+	return nil
+}
+
+func (m *mockDiscordSession) MessageReactionRemove(channelID, messageID, emoji, userID string, options ...discordgo.RequestOption) error {
+	return nil
+}
+
+func (m *mockDiscordSession) ChannelMessagePin(channelID, messageID string, options ...discordgo.RequestOption) error {
+	return nil
+}
+
+func (m *mockDiscordSession) ChannelMessageUnpin(channelID, messageID string, options ...discordgo.RequestOption) error {
+	return nil
+}
+
 func (m *mockDiscordSession) ThreadStart(channelID, name string, typ discordgo.ChannelType, archiveDuration int, options ...discordgo.RequestOption) (*discordgo.Channel, error) {
 	if m.threadStartFn != nil {
 		return m.threadStartFn(channelID, name, archiveDuration)
@@ -1306,6 +1370,22 @@ func (m *extendedMockDiscordSession) MessageReactionAdd(channelID, messageID, em
 	if m.messageReactionAddFn != nil {
 		return m.messageReactionAddFn(channelID, messageID, emoji)
 	}
+	return nil
+}
+
+func (m *extendedMockDiscordSession) ChannelMessageDelete(channelID, messageID string, options ...discordgo.RequestOption) error {
+	return nil
+}
+
+func (m *extendedMockDiscordSession) MessageReactionRemove(channelID, messageID, emoji, userID string, options ...discordgo.RequestOption) error {
+	return nil
+}
+
+func (m *extendedMockDiscordSession) ChannelMessagePin(channelID, messageID string, options ...discordgo.RequestOption) error {
+	return nil
+}
+
+func (m *extendedMockDiscordSession) ChannelMessageUnpin(channelID, messageID string, options ...discordgo.RequestOption) error {
 	return nil
 }
 

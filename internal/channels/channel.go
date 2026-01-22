@@ -102,6 +102,7 @@ type Registry struct {
 	lifecycle map[models.ChannelType]LifecycleAdapter
 	health    map[models.ChannelType]HealthAdapter
 	streaming map[models.ChannelType]StreamingAdapter
+	actions   map[models.ChannelType]MessageActionsAdapter
 }
 
 // NewRegistry creates a new channel registry.
@@ -113,6 +114,7 @@ func NewRegistry() *Registry {
 		lifecycle: make(map[models.ChannelType]LifecycleAdapter),
 		health:    make(map[models.ChannelType]HealthAdapter),
 		streaming: make(map[models.ChannelType]StreamingAdapter),
+		actions:   make(map[models.ChannelType]MessageActionsAdapter),
 	}
 }
 
@@ -153,6 +155,12 @@ func (r *Registry) Register(adapter Adapter) {
 	} else {
 		delete(r.streaming, channelType)
 	}
+
+	if actions, ok := adapter.(MessageActionsAdapter); ok {
+		r.actions[channelType] = actions
+	} else {
+		delete(r.actions, channelType)
+	}
 }
 
 // Get returns an adapter by channel type.
@@ -177,6 +185,25 @@ func (r *Registry) GetStreaming(channelType models.ChannelType) (StreamingAdapte
 	defer r.mu.RUnlock()
 	adapter, ok := r.streaming[channelType]
 	return adapter, ok
+}
+
+// GetActions returns a message actions adapter for the channel if available.
+func (r *Registry) GetActions(channelType models.ChannelType) (MessageActionsAdapter, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	adapter, ok := r.actions[channelType]
+	return adapter, ok
+}
+
+// ActionsAdapters returns a copy of registered message actions adapters.
+func (r *Registry) ActionsAdapters() map[models.ChannelType]MessageActionsAdapter {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make(map[models.ChannelType]MessageActionsAdapter, len(r.actions))
+	for channelType, adapter := range r.actions {
+		out[channelType] = adapter
+	}
+	return out
 }
 
 // HealthAdapters returns a copy of registered health adapters.

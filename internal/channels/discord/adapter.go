@@ -20,8 +20,12 @@ type discordSession interface {
 	ChannelMessageSend(channelID string, content string, options ...discordgo.RequestOption) (*discordgo.Message, error)
 	ChannelMessageSendComplex(channelID string, data *discordgo.MessageSend, options ...discordgo.RequestOption) (*discordgo.Message, error)
 	ChannelMessageEdit(channelID, messageID, content string, options ...discordgo.RequestOption) (*discordgo.Message, error)
+	ChannelMessageDelete(channelID, messageID string, options ...discordgo.RequestOption) error
 	ChannelTyping(channelID string, options ...discordgo.RequestOption) error
 	MessageReactionAdd(channelID, messageID, emoji string, options ...discordgo.RequestOption) error
+	MessageReactionRemove(channelID, messageID, emoji, userID string, options ...discordgo.RequestOption) error
+	ChannelMessagePin(channelID, messageID string, options ...discordgo.RequestOption) error
+	ChannelMessageUnpin(channelID, messageID string, options ...discordgo.RequestOption) error
 	ThreadStart(channelID, name string, typ discordgo.ChannelType, archiveDuration int, options ...discordgo.RequestOption) (*discordgo.Channel, error)
 	AddHandler(handler interface{}) func()
 	ApplicationCommandBulkOverwrite(appID, guildID string, commands []*discordgo.ApplicationCommand, options ...discordgo.RequestOption) ([]*discordgo.ApplicationCommand, error)
@@ -837,4 +841,300 @@ func (a *Adapter) extractChannelID(msg *models.Message) (string, error) {
 	}
 
 	return "", channels.ErrInvalidInput("channel_id not found in message", nil)
+}
+
+// Capabilities returns the features supported by the Discord adapter.
+// Implements the channels.MessageActionsAdapter interface.
+func (a *Adapter) Capabilities() channels.Capabilities {
+	return channels.Capabilities{
+		Send:              true,
+		Edit:              true,
+		Delete:            true,
+		React:             true,
+		Reply:             true,  // Discord supports threaded replies
+		Pin:               true,
+		Typing:            true,
+		Attachments:       true,
+		RichText:          true,  // Discord supports markdown
+		Threads:           true,
+		MaxMessageLength:  2000,  // Discord's message length limit
+		MaxAttachmentSize: 8 << 20, // 8MB for regular users
+	}
+}
+
+// ExecuteAction performs a message action on Discord.
+// Implements the channels.MessageActionsAdapter interface.
+func (a *Adapter) ExecuteAction(ctx context.Context, req *channels.MessageActionRequest) (*channels.MessageActionResult, error) {
+	if a.session == nil {
+		return nil, channels.ErrInternal("session not initialized", nil)
+	}
+
+	// Apply rate limiting
+	if err := a.rateLimiter.Wait(ctx); err != nil {
+		return nil, channels.ErrTimeout("rate limit wait cancelled", err)
+	}
+
+	switch req.Action {
+	case channels.ActionEdit:
+		return a.executeEdit(ctx, req)
+	case channels.ActionDelete:
+		return a.executeDelete(ctx, req)
+	case channels.ActionReact:
+		return a.executeReact(ctx, req)
+	case channels.ActionUnreact:
+		return a.executeUnreact(ctx, req)
+	case channels.ActionPin:
+		return a.executePin(ctx, req)
+	case channels.ActionUnpin:
+		return a.executeUnpin(ctx, req)
+	case channels.ActionTyping:
+		return a.executeTyping(ctx, req)
+	default:
+		return nil, channels.ErrInvalidInput(fmt.Sprintf("unsupported action: %s", req.Action), nil)
+	}
+}
+
+func (a *Adapter) executeEdit(ctx context.Context, req *channels.MessageActionRequest) (*channels.MessageActionResult, error) {
+	if req.ChannelID == "" || req.MessageID == "" {
+		return nil, channels.ErrInvalidInput("channel_id and message_id required for edit", nil)
+	}
+
+	_, err := a.session.ChannelMessageEdit(req.ChannelID, req.MessageID, req.Content)
+	if err != nil {
+		a.logger.Error("failed to edit message", "error", err, "channel_id", req.ChannelID, "message_id", req.MessageID)
+		return &channels.MessageActionResult{
+			Success:   false,
+			MessageID: req.MessageID,
+			Error:     err.Error(),
+		}, channels.ErrInternal("failed to edit message", err)
+	}
+
+	return &channels.MessageActionResult{
+		Success:   true,
+		MessageID: req.MessageID,
+	}, nil
+}
+
+func (a *Adapter) executeDelete(ctx context.Context, req *channels.MessageActionRequest) (*channels.MessageActionResult, error) {
+	if req.ChannelID == "" || req.MessageID == "" {
+		return nil, channels.ErrInvalidInput("channel_id and message_id required for delete", nil)
+	}
+
+	err := a.session.ChannelMessageDelete(req.ChannelID, req.MessageID)
+	if err != nil {
+		a.logger.Error("failed to delete message", "error", err, "channel_id", req.ChannelID, "message_id", req.MessageID)
+		return &channels.MessageActionResult{
+			Success:   false,
+			MessageID: req.MessageID,
+			Error:     err.Error(),
+		}, channels.ErrInternal("failed to delete message", err)
+	}
+
+	return &channels.MessageActionResult{
+		Success:   true,
+		MessageID: req.MessageID,
+	}, nil
+}
+
+func (a *Adapter) executeReact(ctx context.Context, req *channels.MessageActionRequest) (*channels.MessageActionResult, error) {
+	if req.ChannelID == "" || req.MessageID == "" || req.Reaction == "" {
+		return nil, channels.ErrInvalidInput("channel_id, message_id, and reaction required", nil)
+	}
+
+	err := a.session.MessageReactionAdd(req.ChannelID, req.MessageID, req.Reaction)
+	if err != nil {
+		a.logger.Error("failed to add reaction", "error", err, "channel_id", req.ChannelID, "message_id", req.MessageID, "reaction", req.Reaction)
+		return &channels.MessageActionResult{
+			Success:   false,
+			MessageID: req.MessageID,
+			Error:     err.Error(),
+		}, channels.ErrInternal("failed to add reaction", err)
+	}
+
+	return &channels.MessageActionResult{
+		Success:   true,
+		MessageID: req.MessageID,
+	}, nil
+}
+
+func (a *Adapter) executeUnreact(ctx context.Context, req *channels.MessageActionRequest) (*channels.MessageActionResult, error) {
+	if req.ChannelID == "" || req.MessageID == "" || req.Reaction == "" {
+		return nil, channels.ErrInvalidInput("channel_id, message_id, and reaction required", nil)
+	}
+
+	// For removing own reaction, use @me as userID
+	err := a.session.MessageReactionRemove(req.ChannelID, req.MessageID, req.Reaction, "@me")
+	if err != nil {
+		a.logger.Error("failed to remove reaction", "error", err, "channel_id", req.ChannelID, "message_id", req.MessageID, "reaction", req.Reaction)
+		return &channels.MessageActionResult{
+			Success:   false,
+			MessageID: req.MessageID,
+			Error:     err.Error(),
+		}, channels.ErrInternal("failed to remove reaction", err)
+	}
+
+	return &channels.MessageActionResult{
+		Success:   true,
+		MessageID: req.MessageID,
+	}, nil
+}
+
+func (a *Adapter) executePin(ctx context.Context, req *channels.MessageActionRequest) (*channels.MessageActionResult, error) {
+	if req.ChannelID == "" || req.MessageID == "" {
+		return nil, channels.ErrInvalidInput("channel_id and message_id required for pin", nil)
+	}
+
+	err := a.session.ChannelMessagePin(req.ChannelID, req.MessageID)
+	if err != nil {
+		a.logger.Error("failed to pin message", "error", err, "channel_id", req.ChannelID, "message_id", req.MessageID)
+		return &channels.MessageActionResult{
+			Success:   false,
+			MessageID: req.MessageID,
+			Error:     err.Error(),
+		}, channels.ErrInternal("failed to pin message", err)
+	}
+
+	return &channels.MessageActionResult{
+		Success:   true,
+		MessageID: req.MessageID,
+	}, nil
+}
+
+func (a *Adapter) executeUnpin(ctx context.Context, req *channels.MessageActionRequest) (*channels.MessageActionResult, error) {
+	if req.ChannelID == "" || req.MessageID == "" {
+		return nil, channels.ErrInvalidInput("channel_id and message_id required for unpin", nil)
+	}
+
+	err := a.session.ChannelMessageUnpin(req.ChannelID, req.MessageID)
+	if err != nil {
+		a.logger.Error("failed to unpin message", "error", err, "channel_id", req.ChannelID, "message_id", req.MessageID)
+		return &channels.MessageActionResult{
+			Success:   false,
+			MessageID: req.MessageID,
+			Error:     err.Error(),
+		}, channels.ErrInternal("failed to unpin message", err)
+	}
+
+	return &channels.MessageActionResult{
+		Success:   true,
+		MessageID: req.MessageID,
+	}, nil
+}
+
+func (a *Adapter) executeTyping(ctx context.Context, req *channels.MessageActionRequest) (*channels.MessageActionResult, error) {
+	if req.ChannelID == "" {
+		return nil, channels.ErrInvalidInput("channel_id required for typing indicator", nil)
+	}
+
+	err := a.session.ChannelTyping(req.ChannelID)
+	if err != nil {
+		// Typing indicators are best-effort, don't fail hard
+		a.logger.Debug("failed to send typing indicator", "error", err, "channel_id", req.ChannelID)
+		return &channels.MessageActionResult{
+			Success: true, // Still consider it a success since typing is best-effort
+		}, nil
+	}
+
+	return &channels.MessageActionResult{
+		Success: true,
+	}, nil
+}
+
+// EditMessage implements the channels.EditableAdapter interface.
+func (a *Adapter) EditMessage(ctx context.Context, channelID, messageID, newContent string) error {
+	result, err := a.ExecuteAction(ctx, &channels.MessageActionRequest{
+		Action:    channels.ActionEdit,
+		ChannelID: channelID,
+		MessageID: messageID,
+		Content:   newContent,
+	})
+	if err != nil {
+		return err
+	}
+	if !result.Success {
+		return channels.ErrInternal(result.Error, nil)
+	}
+	return nil
+}
+
+// DeleteMessage implements the channels.DeletableAdapter interface.
+func (a *Adapter) DeleteMessage(ctx context.Context, channelID, messageID string) error {
+	result, err := a.ExecuteAction(ctx, &channels.MessageActionRequest{
+		Action:    channels.ActionDelete,
+		ChannelID: channelID,
+		MessageID: messageID,
+	})
+	if err != nil {
+		return err
+	}
+	if !result.Success {
+		return channels.ErrInternal(result.Error, nil)
+	}
+	return nil
+}
+
+// AddReaction implements the channels.ReactableAdapter interface.
+func (a *Adapter) AddReaction(ctx context.Context, channelID, messageID, reaction string) error {
+	result, err := a.ExecuteAction(ctx, &channels.MessageActionRequest{
+		Action:    channels.ActionReact,
+		ChannelID: channelID,
+		MessageID: messageID,
+		Reaction:  reaction,
+	})
+	if err != nil {
+		return err
+	}
+	if !result.Success {
+		return channels.ErrInternal(result.Error, nil)
+	}
+	return nil
+}
+
+// RemoveReaction implements the channels.ReactableAdapter interface.
+func (a *Adapter) RemoveReaction(ctx context.Context, channelID, messageID, reaction string) error {
+	result, err := a.ExecuteAction(ctx, &channels.MessageActionRequest{
+		Action:    channels.ActionUnreact,
+		ChannelID: channelID,
+		MessageID: messageID,
+		Reaction:  reaction,
+	})
+	if err != nil {
+		return err
+	}
+	if !result.Success {
+		return channels.ErrInternal(result.Error, nil)
+	}
+	return nil
+}
+
+// PinMessage implements the channels.PinnableAdapter interface.
+func (a *Adapter) PinMessage(ctx context.Context, channelID, messageID string) error {
+	result, err := a.ExecuteAction(ctx, &channels.MessageActionRequest{
+		Action:    channels.ActionPin,
+		ChannelID: channelID,
+		MessageID: messageID,
+	})
+	if err != nil {
+		return err
+	}
+	if !result.Success {
+		return channels.ErrInternal(result.Error, nil)
+	}
+	return nil
+}
+
+// UnpinMessage implements the channels.PinnableAdapter interface.
+func (a *Adapter) UnpinMessage(ctx context.Context, channelID, messageID string) error {
+	result, err := a.ExecuteAction(ctx, &channels.MessageActionRequest{
+		Action:    channels.ActionUnpin,
+		ChannelID: channelID,
+		MessageID: messageID,
+	})
+	if err != nil {
+		return err
+	}
+	if !result.Success {
+		return channels.ErrInternal(result.Error, nil)
+	}
+	return nil
 }

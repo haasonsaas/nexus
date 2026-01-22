@@ -92,6 +92,9 @@ message AuthenticateRequest {
 
   // Protocol version for compatibility checking
   string protocol_version = 7;
+
+  // Signature of challenge for TOFU verification (second step)
+  bytes signature = 8;
 }
 
 enum AuthMethod {
@@ -116,6 +119,9 @@ message AuthenticateResponse {
 
   // Gateway capabilities and requirements
   GatewayCapabilities gateway_capabilities = 6;
+
+  // Challenge for TOFU verification (must be signed with private key)
+  bytes challenge = 7;
 }
 
 enum TrustLevel {

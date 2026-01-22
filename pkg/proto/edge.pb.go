@@ -876,8 +876,10 @@ type AuthenticateRequest struct {
 	Capabilities *EdgeCapabilities `protobuf:"bytes,6,opt,name=capabilities,proto3" json:"capabilities,omitempty"`
 	// Protocol version for compatibility checking
 	ProtocolVersion string `protobuf:"bytes,7,opt,name=protocol_version,json=protocolVersion,proto3" json:"protocol_version,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Signature of challenge for TOFU verification (second step)
+	Signature     []byte `protobuf:"bytes,8,opt,name=signature,proto3" json:"signature,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AuthenticateRequest) Reset() {
@@ -959,6 +961,13 @@ func (x *AuthenticateRequest) GetProtocolVersion() string {
 	return ""
 }
 
+func (x *AuthenticateRequest) GetSignature() []byte {
+	if x != nil {
+		return x.Signature
+	}
+	return nil
+}
+
 type AuthenticateResponse struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Success bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
@@ -971,8 +980,10 @@ type AuthenticateResponse struct {
 	ErrorCode    ErrorCode `protobuf:"varint,5,opt,name=error_code,json=errorCode,proto3,enum=nexus.edge.v1.ErrorCode" json:"error_code,omitempty"`
 	// Gateway capabilities and requirements
 	GatewayCapabilities *GatewayCapabilities `protobuf:"bytes,6,opt,name=gateway_capabilities,json=gatewayCapabilities,proto3" json:"gateway_capabilities,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// Challenge for TOFU verification (must be signed with private key)
+	Challenge     []byte `protobuf:"bytes,7,opt,name=challenge,proto3" json:"challenge,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AuthenticateResponse) Reset() {
@@ -1043,6 +1054,13 @@ func (x *AuthenticateResponse) GetErrorCode() ErrorCode {
 func (x *AuthenticateResponse) GetGatewayCapabilities() *GatewayCapabilities {
 	if x != nil {
 		return x.GatewayCapabilities
+	}
+	return nil
+}
+
+func (x *AuthenticateResponse) GetChallenge() []byte {
+	if x != nil {
+		return x.Challenge
 	}
 	return nil
 }
@@ -2669,7 +2687,7 @@ const file_pkg_proto_edge_proto_rawDesc = "" +
 	"\rstatus_update\x18\x05 \x01(\v2\".nexus.edge.v1.GatewayStatusUpdateH\x00R\fstatusUpdate\x12@\n" +
 	"\theartbeat\x18\x06 \x01(\v2 .nexus.edge.v1.HeartbeatResponseH\x00R\theartbeat\x124\n" +
 	"\x05error\x18\a \x01(\v2\x1c.nexus.edge.v1.ErrorResponseH\x00R\x05errorB\t\n" +
-	"\amessage\"\xbb\x02\n" +
+	"\amessage\"\xd9\x02\n" +
 	"\x13AuthenticateRequest\x12\x17\n" +
 	"\aedge_id\x18\x01 \x01(\tR\x06edgeId\x12\x1b\n" +
 	"\tedge_name\x18\x02 \x01(\tR\bedgeName\x12:\n" +
@@ -2679,7 +2697,8 @@ const file_pkg_proto_edge_proto_rawDesc = "" +
 	"\n" +
 	"public_key\x18\x05 \x01(\fR\tpublicKey\x12C\n" +
 	"\fcapabilities\x18\x06 \x01(\v2\x1f.nexus.edge.v1.EdgeCapabilitiesR\fcapabilities\x12)\n" +
-	"\x10protocol_version\x18\a \x01(\tR\x0fprotocolVersion\"\xc6\x02\n" +
+	"\x10protocol_version\x18\a \x01(\tR\x0fprotocolVersion\x12\x1c\n" +
+	"\tsignature\x18\b \x01(\fR\tsignature\"\xe4\x02\n" +
 	"\x14AuthenticateResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12#\n" +
 	"\rsession_token\x18\x02 \x01(\tR\fsessionToken\x12:\n" +
@@ -2688,7 +2707,8 @@ const file_pkg_proto_edge_proto_rawDesc = "" +
 	"\rerror_message\x18\x04 \x01(\tR\ferrorMessage\x127\n" +
 	"\n" +
 	"error_code\x18\x05 \x01(\x0e2\x18.nexus.edge.v1.ErrorCodeR\terrorCode\x12U\n" +
-	"\x14gateway_capabilities\x18\x06 \x01(\v2\".nexus.edge.v1.GatewayCapabilitiesR\x13gatewayCapabilities\"\xa4\x01\n" +
+	"\x14gateway_capabilities\x18\x06 \x01(\v2\".nexus.edge.v1.GatewayCapabilitiesR\x13gatewayCapabilities\x12\x1c\n" +
+	"\tchallenge\x18\a \x01(\fR\tchallenge\"\xa4\x01\n" +
 	"\x14RegisterToolsRequest\x12\x17\n" +
 	"\aedge_id\x18\x01 \x01(\tR\x06edgeId\x12#\n" +
 	"\rsession_token\x18\x02 \x01(\tR\fsessionToken\x12-\n" +

@@ -20,6 +20,12 @@ type ToolExecConfig struct {
 	// PerToolTimeout is the timeout for individual tool executions.
 	// Default: 30 seconds.
 	PerToolTimeout time.Duration
+
+	// MaxAttempts is the number of attempts per tool call (default 1).
+	MaxAttempts int
+
+	// RetryBackoff waits between retries.
+	RetryBackoff time.Duration
 }
 
 // DefaultToolExecConfig returns sensible defaults for tool execution.
@@ -27,6 +33,8 @@ func DefaultToolExecConfig() ToolExecConfig {
 	return ToolExecConfig{
 		Concurrency:    4,
 		PerToolTimeout: 30 * time.Second,
+		MaxAttempts:    1,
+		RetryBackoff:   0,
 	}
 }
 
@@ -44,6 +52,9 @@ func NewToolExecutor(registry *ToolRegistry, config ToolExecConfig) *ToolExecuto
 	if config.PerToolTimeout <= 0 {
 		config.PerToolTimeout = 30 * time.Second
 	}
+	if config.MaxAttempts <= 0 {
+		config.MaxAttempts = 1
+	}
 	return &ToolExecutor{
 		registry: registry,
 		config:   config,
@@ -52,12 +63,12 @@ func NewToolExecutor(registry *ToolRegistry, config ToolExecConfig) *ToolExecuto
 
 // ToolExecResult contains the result of a tool execution.
 type ToolExecResult struct {
-	Index      int
-	ToolCall   models.ToolCall
-	Result     models.ToolResult
-	StartTime  time.Time
-	EndTime    time.Time
-	TimedOut   bool
+	Index     int
+	ToolCall  models.ToolCall
+	Result    models.ToolResult
+	StartTime time.Time
+	EndTime   time.Time
+	TimedOut  bool
 }
 
 // EventCallback is a non-blocking callback for tool lifecycle events.
@@ -95,16 +106,59 @@ func (e *ToolExecutor) ExecuteConcurrently(ctx context.Context, toolCalls []mode
 				return
 			}
 
-			// Emit tool_started event
-			if emit != nil {
-				emit(models.NewToolEvent(models.EventToolStarted, call.Name, call.ID))
+			startTime := time.Now()
+			var result models.ToolResult
+			var timedOut bool
+			maxAttempts := e.config.MaxAttempts
+			if maxAttempts <= 0 {
+				maxAttempts = 1
 			}
 
-			// Execute with timeout
-			startTime := time.Now()
-			toolCtx, cancel := context.WithTimeout(ctx, e.config.PerToolTimeout)
-			result, timedOut := e.executeWithTimeout(toolCtx, call)
-			cancel()
+			for attempt := 1; attempt <= maxAttempts; attempt++ {
+				// Emit tool_started event
+				if emit != nil {
+					emit(models.NewToolEvent(models.EventToolStarted, call.Name, call.ID).
+						WithMeta("attempt", attempt))
+				}
+
+				// Execute with timeout
+				toolCtx, cancel := context.WithTimeout(ctx, e.config.PerToolTimeout)
+				result, timedOut = e.executeWithTimeout(toolCtx, call)
+				cancel()
+
+				if !result.IsError {
+					break
+				}
+
+				if attempt < maxAttempts {
+					if emit != nil {
+						eventType := models.EventToolFailed
+						if timedOut {
+							eventType = models.EventToolTimeout
+						}
+						emit(models.NewToolEvent(eventType, call.Name, call.ID).
+							WithMeta("attempt", attempt).
+							WithMeta("retrying", true))
+					}
+					if e.config.RetryBackoff > 0 {
+						canceled := false
+						select {
+						case <-time.After(e.config.RetryBackoff):
+						case <-ctx.Done():
+							result = models.ToolResult{
+								ToolCallID: call.ID,
+								Content:    "tool execution canceled",
+								IsError:    true,
+							}
+							canceled = true
+						}
+						if canceled {
+							break
+						}
+					}
+				}
+			}
+
 			endTime := time.Now()
 
 			results[idx] = ToolExecResult{
@@ -187,9 +241,32 @@ func (e *ToolExecutor) ExecuteSequentially(ctx context.Context, toolCalls []mode
 
 	for i, tc := range toolCalls {
 		startTime := time.Now()
-		toolCtx, cancel := context.WithTimeout(ctx, e.config.PerToolTimeout)
-		result, timedOut := e.executeWithTimeout(toolCtx, tc)
-		cancel()
+		maxAttempts := e.config.MaxAttempts
+		if maxAttempts <= 0 {
+			maxAttempts = 1
+		}
+		var result models.ToolResult
+		var timedOut bool
+		for attempt := 1; attempt <= maxAttempts; attempt++ {
+			toolCtx, cancel := context.WithTimeout(ctx, e.config.PerToolTimeout)
+			result, timedOut = e.executeWithTimeout(toolCtx, tc)
+			cancel()
+			if !result.IsError {
+				break
+			}
+			if attempt < maxAttempts && e.config.RetryBackoff > 0 {
+				select {
+				case <-time.After(e.config.RetryBackoff):
+				case <-ctx.Done():
+					result = models.ToolResult{
+						ToolCallID: tc.ID,
+						Content:    "tool execution canceled",
+						IsError:    true,
+					}
+					break
+				}
+			}
+		}
 		endTime := time.Now()
 
 		results[i] = ToolExecResult{
@@ -207,7 +284,26 @@ func (e *ToolExecutor) ExecuteSequentially(ctx context.Context, toolCalls []mode
 
 // ExecuteSingle executes a single tool call with timeout.
 func (e *ToolExecutor) ExecuteSingle(ctx context.Context, name string, input json.RawMessage) (*ToolResult, error) {
-	toolCtx, cancel := context.WithTimeout(ctx, e.config.PerToolTimeout)
-	defer cancel()
-	return e.registry.Execute(toolCtx, name, input)
+	maxAttempts := e.config.MaxAttempts
+	if maxAttempts <= 0 {
+		maxAttempts = 1
+	}
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		toolCtx, cancel := context.WithTimeout(ctx, e.config.PerToolTimeout)
+		result, err := e.registry.Execute(toolCtx, name, input)
+		cancel()
+		if err == nil {
+			return result, nil
+		}
+		lastErr = err
+		if attempt < maxAttempts && e.config.RetryBackoff > 0 {
+			select {
+			case <-time.After(e.config.RetryBackoff):
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+	}
+	return nil, lastErr
 }

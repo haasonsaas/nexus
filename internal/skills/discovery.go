@@ -20,6 +20,11 @@ type DiscoverySource interface {
 	Discover(ctx context.Context) ([]*SkillEntry, error)
 }
 
+// WatchableSource exposes paths for file watching.
+type WatchableSource interface {
+	WatchPaths() []string
+}
+
 // LocalSource discovers skills from a local directory.
 type LocalSource struct {
 	path       string
@@ -118,6 +123,11 @@ func (s *LocalSource) Discover(ctx context.Context) ([]*SkillEntry, error) {
 		"path", s.path)
 
 	return skills, nil
+}
+
+// WatchPaths returns the directory to watch for skill changes.
+func (s *LocalSource) WatchPaths() []string {
+	return []string{s.path}
 }
 
 // DiscoverAll discovers skills from multiple sources with precedence.

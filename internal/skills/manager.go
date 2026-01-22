@@ -8,13 +8,16 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"time"
+
+	"github.com/fsnotify/fsnotify"
 )
 
 // Manager manages skill discovery, loading, and eligibility.
 type Manager struct {
-	sources  []DiscoverySource
-	config   *SkillsConfig
-	logger   *slog.Logger
+	sources []DiscoverySource
+	config  *SkillsConfig
+	logger  *slog.Logger
 
 	// All discovered skills
 	skills   map[string]*SkillEntry
@@ -26,6 +29,13 @@ type Manager struct {
 
 	// Gating context
 	gatingCtx *GatingContext
+
+	watcher       *fsnotify.Watcher
+	watchPaths    map[string]struct{}
+	watchMu       sync.Mutex
+	watchWg       sync.WaitGroup
+	watchCancel   context.CancelFunc
+	watchDebounce time.Duration
 }
 
 // NewManager creates a new skill manager.
@@ -50,20 +60,26 @@ func NewManager(cfg *SkillsConfig, workspacePath string, configValues map[string
 		switch srcCfg.Type {
 		case SourceLocal, SourceExtra:
 			sources = append(sources, NewLocalSource(srcCfg.Path, srcCfg.Type, PriorityExtra))
-		// TODO: Add git and registry sources
+			// TODO: Add git and registry sources
 		}
+	}
+
+	watchDebounce := 250 * time.Millisecond
+	if cfg.Load != nil && cfg.Load.WatchDebounceMs > 0 {
+		watchDebounce = time.Duration(cfg.Load.WatchDebounceMs) * time.Millisecond
 	}
 
 	// Create gating context
 	gatingCtx := NewGatingContext(cfg.Entries, configValues)
 
 	return &Manager{
-		sources:   sources,
-		config:    cfg,
-		logger:    slog.Default().With("component", "skills"),
-		skills:    make(map[string]*SkillEntry),
-		eligible:  make(map[string]*SkillEntry),
-		gatingCtx: gatingCtx,
+		sources:       sources,
+		config:        cfg,
+		logger:        slog.Default().With("component", "skills"),
+		skills:        make(map[string]*SkillEntry),
+		eligible:      make(map[string]*SkillEntry),
+		gatingCtx:     gatingCtx,
+		watchDebounce: watchDebounce,
 	}, nil
 }
 
@@ -84,7 +100,15 @@ func (m *Manager) Discover(ctx context.Context) error {
 	m.logger.Info("discovered skills", "count", len(skills))
 
 	// Refresh eligible list
-	return m.RefreshEligible()
+	if err := m.RefreshEligible(); err != nil {
+		return err
+	}
+
+	if err := m.refreshWatches(); err != nil {
+		m.logger.Warn("refresh skill watches failed", "error", err)
+	}
+
+	return nil
 }
 
 // RefreshEligible updates the list of eligible skills based on gating.
@@ -258,15 +282,220 @@ func (m *Manager) InjectEnv(skillNames []string) (restore func()) {
 	}
 }
 
+// StartWatching enables file watching for skill changes.
+func (m *Manager) StartWatching(ctx context.Context) error {
+	if m.config == nil || m.config.Load == nil || !m.config.Load.Watch {
+		return nil
+	}
+
+	m.watchMu.Lock()
+	if m.watcher != nil {
+		m.watchMu.Unlock()
+		return nil
+	}
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		m.watchMu.Unlock()
+		return err
+	}
+	m.watcher = watcher
+	if m.watchPaths == nil {
+		m.watchPaths = make(map[string]struct{})
+	}
+	watchCtx, cancel := context.WithCancel(ctx)
+	m.watchCancel = cancel
+	debounce := m.watchDebounce
+	m.watchMu.Unlock()
+
+	if err := m.refreshWatches(); err != nil {
+		m.logger.Warn("initial skill watch refresh failed", "error", err)
+	}
+
+	m.watchWg.Add(1)
+	go m.watchLoop(watchCtx, debounce)
+	return nil
+}
+
+// Close stops any active watchers.
+func (m *Manager) Close() error {
+	m.watchMu.Lock()
+	if m.watchCancel != nil {
+		m.watchCancel()
+		m.watchCancel = nil
+	}
+	watcher := m.watcher
+	m.watcher = nil
+	m.watchMu.Unlock()
+
+	if watcher != nil {
+		_ = watcher.Close()
+	}
+	m.watchWg.Wait()
+	return nil
+}
+
+func (m *Manager) watchLoop(ctx context.Context, debounce time.Duration) {
+	defer m.watchWg.Done()
+	m.watchMu.Lock()
+	watcher := m.watcher
+	m.watchMu.Unlock()
+	if watcher == nil {
+		return
+	}
+
+	if debounce <= 0 {
+		debounce = 250 * time.Millisecond
+	}
+
+	var mu sync.Mutex
+	var timer *time.Timer
+	scheduleRefresh := func() {
+		mu.Lock()
+		defer mu.Unlock()
+		if timer != nil {
+			timer.Stop()
+		}
+		timer = time.AfterFunc(debounce, func() {
+			if err := m.Discover(context.Background()); err != nil {
+				m.logger.Warn("skill discovery failed during watch refresh", "error", err)
+			}
+		})
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return
+			}
+			if event.Op&(fsnotify.Create|fsnotify.Write|fsnotify.Remove|fsnotify.Rename) != 0 {
+				if event.Op&fsnotify.Create != 0 {
+					if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
+						_ = m.addWatchPath(event.Name)
+					}
+				}
+				scheduleRefresh()
+			}
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				return
+			}
+			m.logger.Warn("skill watch error", "error", err)
+		}
+	}
+}
+
+func (m *Manager) refreshWatches() error {
+	m.watchMu.Lock()
+	watcher := m.watcher
+	m.watchMu.Unlock()
+	if watcher == nil {
+		return nil
+	}
+
+	desired := m.computeWatchPaths()
+	desiredSet := make(map[string]struct{}, len(desired))
+	for _, path := range desired {
+		desiredSet[path] = struct{}{}
+	}
+
+	m.watchMu.Lock()
+	defer m.watchMu.Unlock()
+
+	for path := range desiredSet {
+		if _, ok := m.watchPaths[path]; ok {
+			continue
+		}
+		if err := watcher.Add(path); err != nil {
+			m.logger.Debug("failed to watch skills path", "path", path, "error", err)
+			continue
+		}
+		m.watchPaths[path] = struct{}{}
+	}
+
+	for path := range m.watchPaths {
+		if _, ok := desiredSet[path]; ok {
+			continue
+		}
+		if err := watcher.Remove(path); err != nil {
+			m.logger.Debug("failed to unwatch skills path", "path", path, "error", err)
+		}
+		delete(m.watchPaths, path)
+	}
+
+	return nil
+}
+
+func (m *Manager) addWatchPath(path string) error {
+	cleaned, ok := normalizeWatchPath(path)
+	if !ok {
+		return nil
+	}
+	m.watchMu.Lock()
+	watcher := m.watcher
+	if watcher == nil {
+		m.watchMu.Unlock()
+		return nil
+	}
+	if _, exists := m.watchPaths[cleaned]; exists {
+		m.watchMu.Unlock()
+		return nil
+	}
+	m.watchMu.Unlock()
+
+	if err := watcher.Add(cleaned); err != nil {
+		return err
+	}
+
+	m.watchMu.Lock()
+	m.watchPaths[cleaned] = struct{}{}
+	m.watchMu.Unlock()
+	return nil
+}
+
+func (m *Manager) computeWatchPaths() []string {
+	paths := make(map[string]struct{})
+	for _, source := range m.sources {
+		if watchable, ok := source.(WatchableSource); ok {
+			for _, path := range watchable.WatchPaths() {
+				if cleaned, ok := normalizeWatchPath(path); ok {
+					paths[cleaned] = struct{}{}
+				}
+			}
+		}
+	}
+	m.skillsMu.RLock()
+	for _, skill := range m.skills {
+		if cleaned, ok := normalizeWatchPath(skill.Path); ok {
+			paths[cleaned] = struct{}{}
+		}
+	}
+	m.skillsMu.RUnlock()
+
+	result := make([]string, 0, len(paths))
+	for path := range paths {
+		result = append(result, path)
+	}
+	sort.Strings(result)
+	return result
+}
+
+func normalizeWatchPath(path string) (string, bool) {
+	if path == "" {
+		return "", false
+	}
+	info, err := os.Stat(path)
+	if err != nil || !info.IsDir() {
+		return "", false
+	}
+	return filepath.Clean(path), true
+}
+
 // sortSkills sorts skills alphabetically by name.
 func sortSkills(skills []*SkillEntry) {
 	sort.Slice(skills, func(i, j int) bool {
 		return skills[i].Name < skills[j].Name
 	})
-}
-
-// Close cleans up manager resources.
-func (m *Manager) Close() error {
-	// TODO: Stop file watcher if enabled
-	return nil
 }

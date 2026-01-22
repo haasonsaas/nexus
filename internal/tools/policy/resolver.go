@@ -11,6 +11,13 @@ type Resolver struct {
 	aliases    map[string]string   // alias -> canonical tool name
 }
 
+// Decision explains why a tool was allowed or denied.
+type Decision struct {
+	Allowed bool
+	Tool    string
+	Reason  string
+}
+
 // NewResolver creates a new policy resolver.
 func NewResolver() *Resolver {
 	return &Resolver{
@@ -97,7 +104,18 @@ func (r *Resolver) ExpandGroups(items []string) []string {
 
 // IsAllowed checks if a tool is allowed by the given policy.
 func (r *Resolver) IsAllowed(policy *Policy, toolName string) bool {
+	return r.Decide(policy, toolName).Allowed
+}
+
+// Decide returns an allow/deny decision with a reason string.
+func (r *Resolver) Decide(policy *Policy, toolName string) Decision {
 	normalized := r.CanonicalName(toolName)
+	decision := Decision{Allowed: false, Tool: normalized, Reason: "no matching allow rule"}
+
+	if policy == nil {
+		decision.Reason = "no policy configured"
+		return decision
+	}
 
 	// Build effective allow list
 	var allowed []string
@@ -120,31 +138,37 @@ func (r *Resolver) IsAllowed(policy *Policy, toolName string) bool {
 	// Check denial first (deny always wins)
 	for _, d := range denied {
 		if d == normalized {
-			return false
+			decision.Reason = "denied by rule: " + d
+			return decision
 		}
-		// Handle MCP tool denial
 		if strings.HasPrefix(normalized, "mcp:") && matchMCPPattern(d, normalized) {
-			return false
+			decision.Reason = "denied by rule: " + d
+			return decision
 		}
 	}
 
 	// Full profile allows everything not denied
 	if policy.Profile == ProfileFull {
-		return true
+		decision.Allowed = true
+		decision.Reason = "allowed by profile full"
+		return decision
 	}
 
 	// Check allow list
 	for _, a := range allowed {
 		if a == normalized {
-			return true
+			decision.Allowed = true
+			decision.Reason = "allowed by rule: " + a
+			return decision
 		}
-		// Handle MCP tool patterns
 		if strings.HasPrefix(normalized, "mcp:") && matchMCPPattern(a, normalized) {
-			return true
+			decision.Allowed = true
+			decision.Reason = "allowed by rule: " + a
+			return decision
 		}
 	}
 
-	return false
+	return decision
 }
 
 // matchMCPPattern checks if a pattern matches an MCP tool name.

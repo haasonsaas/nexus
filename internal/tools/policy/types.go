@@ -60,6 +60,9 @@ var DefaultGroups = map[string][]string{
 	// Messaging
 	"group:messaging": {"send_message"},
 
+	// Jobs
+	"group:jobs": {"job_status"},
+
 	// All built-in nexus tools
 	"group:nexus": {
 		"read", "write", "edit", "exec",
@@ -68,6 +71,7 @@ var DefaultGroups = map[string][]string{
 		"memory_search",
 		"browser",
 		"send_message",
+		"job_status",
 	},
 }
 

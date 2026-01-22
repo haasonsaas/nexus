@@ -58,6 +58,7 @@
    - [x] Auto-restart services after install/repair.
    - [x] Implement auth service + API key/JWT gRPC middleware (design doc section 6).
    - [x] Add OAuth provider scaffolding + callback handler and env overrides for config.
+   - [x] Implement gRPC services (stream + session/agent/channel/health) and in-memory session store.
 
 5) Testing improvements
    - [x] Add unit test for buffered runtime response channel.
@@ -101,3 +102,4 @@
 - 2026-01-21: Added profiles + skills + channel login CLI, NEXUS_PROFILE support, memory search remote embeddings + cache, and service auto-restart hooks.
 - 2026-01-21: Implemented auth service package (JWT + API keys) and gRPC middleware wiring per design docs.
 - 2026-01-21: Added OAuth provider scaffolding, callback handler, and config env overrides.
+- 2026-01-21: Implemented gRPC services + in-memory session store; added tests.

@@ -30,16 +30,18 @@ import (
 	"github.com/haasonsaas/nexus/internal/tools/sandbox"
 	"github.com/haasonsaas/nexus/internal/tools/websearch"
 	"github.com/haasonsaas/nexus/pkg/models"
+	proto "github.com/haasonsaas/nexus/pkg/proto"
 )
 
 // Server is the main Nexus gateway server.
 type Server struct {
-	config   *config.Config
-	grpc     *grpc.Server
-	channels *channels.Registry
-	logger   *slog.Logger
-	wg       sync.WaitGroup
-	cancel   context.CancelFunc
+	config    *config.Config
+	grpc      *grpc.Server
+	channels  *channels.Registry
+	logger    *slog.Logger
+	wg        sync.WaitGroup
+	cancel    context.CancelFunc
+	startTime time.Time
 
 	handleMessageHook func(context.Context, *models.Message)
 
@@ -127,6 +129,12 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		skillsManager:  skillsMgr,
 		vectorMemory:   vectorMem,
 	}
+	grpcSvc := newGRPCService(server)
+	proto.RegisterNexusGatewayServer(grpcServer, grpcSvc)
+	proto.RegisterSessionServiceServer(grpcServer, grpcSvc)
+	proto.RegisterAgentServiceServer(grpcServer, grpcSvc)
+	proto.RegisterChannelServiceServer(grpcServer, grpcSvc)
+	proto.RegisterHealthServiceServer(grpcServer, grpcSvc)
 	registerBuiltinChannelPlugins(server.channelPlugins)
 
 	if err := server.registerChannelsFromConfig(); err != nil {
@@ -143,6 +151,7 @@ func (s *Server) Channels() *channels.Registry {
 
 // Start begins serving requests.
 func (s *Server) Start(ctx context.Context) error {
+	s.startTime = time.Now()
 	// Start channel adapters
 	if err := s.channels.StartAll(ctx); err != nil {
 		return fmt.Errorf("failed to start channels: %w", err)

@@ -12,6 +12,7 @@ const (
 	ChannelTelegram ChannelType = "telegram"
 	ChannelDiscord  ChannelType = "discord"
 	ChannelSlack    ChannelType = "slack"
+	ChannelAPI      ChannelType = "api"
 )
 
 // Direction indicates if a message is inbound or outbound.
@@ -34,18 +35,18 @@ const (
 
 // Message is the unified message format across all channels.
 type Message struct {
-	ID          string            `json:"id"`
-	SessionID   string            `json:"session_id"`
-	Channel     ChannelType       `json:"channel"`
-	ChannelID   string            `json:"channel_id"`   // Platform-specific message ID
-	Direction   Direction         `json:"direction"`
-	Role        Role              `json:"role"`
-	Content     string            `json:"content"`
-	Attachments []Attachment      `json:"attachments,omitempty"`
-	ToolCalls   []ToolCall        `json:"tool_calls,omitempty"`
-	ToolResults []ToolResult      `json:"tool_results,omitempty"`
-	Metadata    map[string]any    `json:"metadata,omitempty"`
-	CreatedAt   time.Time         `json:"created_at"`
+	ID          string         `json:"id"`
+	SessionID   string         `json:"session_id"`
+	Channel     ChannelType    `json:"channel"`
+	ChannelID   string         `json:"channel_id"` // Platform-specific message ID
+	Direction   Direction      `json:"direction"`
+	Role        Role           `json:"role"`
+	Content     string         `json:"content"`
+	Attachments []Attachment   `json:"attachments,omitempty"`
+	ToolCalls   []ToolCall     `json:"tool_calls,omitempty"`
+	ToolResults []ToolResult   `json:"tool_results,omitempty"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
+	CreatedAt   time.Time      `json:"created_at"`
 }
 
 // Attachment represents a file or media attachment.
@@ -60,9 +61,9 @@ type Attachment struct {
 
 // ToolCall represents an LLM's request to execute a tool.
 type ToolCall struct {
-	ID       string          `json:"id"`
-	Name     string          `json:"name"`
-	Input    json.RawMessage `json:"input"`
+	ID    string          `json:"id"`
+	Name  string          `json:"name"`
+	Input json.RawMessage `json:"input"`
 }
 
 // ToolResult represents the output of a tool execution.
@@ -74,15 +75,15 @@ type ToolResult struct {
 
 // Session represents a conversation thread.
 type Session struct {
-	ID        string            `json:"id"`
-	AgentID   string            `json:"agent_id"`
-	Channel   ChannelType       `json:"channel"`
-	ChannelID string            `json:"channel_id"`
-	Key       string            `json:"key"`
-	Title     string            `json:"title,omitempty"`
-	Metadata  map[string]any    `json:"metadata,omitempty"`
-	CreatedAt time.Time         `json:"created_at"`
-	UpdatedAt time.Time         `json:"updated_at"`
+	ID        string         `json:"id"`
+	AgentID   string         `json:"agent_id"`
+	Channel   ChannelType    `json:"channel"`
+	ChannelID string         `json:"channel_id"`
+	Key       string         `json:"key"`
+	Title     string         `json:"title,omitempty"`
+	Metadata  map[string]any `json:"metadata,omitempty"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
 }
 
 // User represents an authenticated user.

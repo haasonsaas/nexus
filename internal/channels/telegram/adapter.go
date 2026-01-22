@@ -250,8 +250,11 @@ func (a *Adapter) run(ctx context.Context) error {
 func (a *Adapter) runLongPolling(ctx context.Context) error {
 	a.logger.Info("starting long polling mode")
 
-	// Register message handler
+	// Register text message handler
 	a.botClient.RegisterHandler(bot.HandlerTypeMessageText, "", bot.MatchTypePrefix, a.handleMessage)
+
+	// Register handler for voice and media messages (these don't have text)
+	a.botClient.RegisterHandlerMatchFunc(a.matchMediaMessage, a.handleMessage)
 
 	// Start bot (this blocks until context is cancelled)
 	a.botClient.Start(ctx)
@@ -272,8 +275,11 @@ func (a *Adapter) runWebhook(ctx context.Context) error {
 		return channels.ErrConnection("failed to set webhook", err)
 	}
 
-	// Register message handler
+	// Register text message handler
 	a.botClient.RegisterHandler(bot.HandlerTypeMessageText, "", bot.MatchTypePrefix, a.handleMessage)
+
+	// Register handler for voice and media messages (these don't have text)
+	a.botClient.RegisterHandlerMatchFunc(a.matchMediaMessage, a.handleMessage)
 
 	// Start webhook server
 	go a.botClient.StartWebhook(ctx)
@@ -282,6 +288,24 @@ func (a *Adapter) runWebhook(ctx context.Context) error {
 	<-ctx.Done()
 
 	return nil
+}
+
+// matchMediaMessage is a custom match function that matches messages with media
+// content (voice, photo, document, audio) but no text. This ensures we handle
+// voice messages and other media that the text handler won't catch.
+func (a *Adapter) matchMediaMessage(update *models.Update) bool {
+	if update.Message == nil {
+		return false
+	}
+	// Skip if there's text - the text handler will handle it
+	if update.Message.Text != "" {
+		return false
+	}
+	// Match if there's any media content
+	return update.Message.Voice != nil ||
+		update.Message.Audio != nil ||
+		len(update.Message.Photo) > 0 ||
+		update.Message.Document != nil
 }
 
 // handleMessage processes incoming Telegram messages.

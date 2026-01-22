@@ -35,6 +35,10 @@ type BotClient interface {
 	// RegisterHandler registers a handler for a specific message type.
 	RegisterHandler(handlerType bot.HandlerType, pattern string, matchType bot.MatchType, handler bot.HandlerFunc)
 
+	// RegisterHandlerMatchFunc registers a handler with a custom match function.
+	// This is useful for matching non-text message types like voice, photo, etc.
+	RegisterHandlerMatchFunc(matchFunc bot.MatchFunc, handler bot.HandlerFunc)
+
 	// Start begins the bot (for long polling mode).
 	Start(ctx context.Context)
 
@@ -88,6 +92,10 @@ func (r *realBotClient) SetWebhook(ctx context.Context, params *bot.SetWebhookPa
 
 func (r *realBotClient) RegisterHandler(handlerType bot.HandlerType, pattern string, matchType bot.MatchType, handler bot.HandlerFunc) {
 	r.bot.RegisterHandler(handlerType, pattern, matchType, handler)
+}
+
+func (r *realBotClient) RegisterHandlerMatchFunc(matchFunc bot.MatchFunc, handler bot.HandlerFunc) {
+	r.bot.RegisterHandlerMatchFunc(matchFunc, handler)
 }
 
 func (r *realBotClient) Start(ctx context.Context) {

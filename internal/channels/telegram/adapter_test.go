@@ -139,6 +139,12 @@ func (m *mockBotClient) RegisterHandler(handlerType bot.HandlerType, pattern str
 	m.registerHandlers = append(m.registerHandlers, handler)
 }
 
+func (m *mockBotClient) RegisterHandlerMatchFunc(matchFunc bot.MatchFunc, handler bot.HandlerFunc) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.registerHandlers = append(m.registerHandlers, handler)
+}
+
 func (m *mockBotClient) Start(ctx context.Context) {
 	if m.startFunc != nil {
 		m.startFunc(ctx)

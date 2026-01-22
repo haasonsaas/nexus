@@ -16,13 +16,13 @@ import (
 
 // Backend implements the sandbox.RuntimeExecutor interface using Firecracker microVMs.
 type Backend struct {
-	pool           *VMPool
-	overlayManager *OverlayManager
+	pool            *VMPool
+	overlayManager  *OverlayManager
 	snapshotManager *SnapshotManager
-	config         *BackendConfig
-	language       string
-	mu             sync.RWMutex
-	closed         bool
+	config          *BackendConfig
+	language        string
+	mu              sync.RWMutex
+	closed          bool
 }
 
 // BackendConfig contains configuration for the Firecracker backend.

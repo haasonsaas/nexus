@@ -314,15 +314,15 @@ func (l *Logger) redactString(s string) string {
 func (l *Logger) redactMap(m map[string]any) map[string]any {
 	result := make(map[string]any, len(m))
 	sensitiveKeys := map[string]bool{
-		"password":    true,
-		"passwd":      true,
-		"secret":      true,
-		"token":       true,
-		"api_key":     true,
-		"apikey":      true,
-		"private_key": true,
-		"privatekey":  true,
-		"auth":        true,
+		"password":      true,
+		"passwd":        true,
+		"secret":        true,
+		"token":         true,
+		"api_key":       true,
+		"apikey":        true,
+		"private_key":   true,
+		"privatekey":    true,
+		"auth":          true,
 		"authorization": true,
 	}
 

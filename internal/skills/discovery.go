@@ -610,10 +610,10 @@ func DiscoverAll(ctx context.Context, sources []DiscoverySource) ([]*SkillEntry,
 // DefaultSourcePriorities defines the default priority order.
 // Higher numbers = higher priority (wins in conflicts).
 const (
-	PriorityExtra     = 10  // skills.load.extraDirs
-	PriorityBundled   = 20  // Shipped with binary
-	PriorityLocal     = 30  // ~/.nexus/skills/
-	PriorityWorkspace = 40  // <workspace>/skills/
+	PriorityExtra     = 10 // skills.load.extraDirs
+	PriorityBundled   = 20 // Shipped with binary
+	PriorityLocal     = 30 // ~/.nexus/skills/
+	PriorityWorkspace = 40 // <workspace>/skills/
 )
 
 // BuildDefaultSources creates the default discovery sources.

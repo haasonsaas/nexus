@@ -26,20 +26,20 @@ const (
 type Capability string
 
 const (
-	CapVision       Capability = "vision"         // Can process images
-	CapTools        Capability = "tools"          // Supports function calling
-	CapStreaming    Capability = "streaming"      // Supports streaming responses
-	CapJSON         Capability = "json"           // Supports JSON mode
-	CapCode         Capability = "code"           // Optimized for code
-	CapReasoning    Capability = "reasoning"      // Extended reasoning (o1, etc)
-	CapAudio        Capability = "audio"          // Can process audio
-	CapVideo        Capability = "video"          // Can process video
-	CapEmbeddings   Capability = "embeddings"     // Can generate embeddings
-	CapFineTunable  Capability = "fine_tunable"   // Can be fine-tuned
-	CapPDFInput     Capability = "pdf_input"      // Can process PDFs directly
-	CapLongContext  Capability = "long_context"   // 100k+ context window
-	CapBatch        Capability = "batch"          // Supports batch API
-	CapCaching      Capability = "caching"        // Supports prompt caching
+	CapVision      Capability = "vision"       // Can process images
+	CapTools       Capability = "tools"        // Supports function calling
+	CapStreaming   Capability = "streaming"    // Supports streaming responses
+	CapJSON        Capability = "json"         // Supports JSON mode
+	CapCode        Capability = "code"         // Optimized for code
+	CapReasoning   Capability = "reasoning"    // Extended reasoning (o1, etc)
+	CapAudio       Capability = "audio"        // Can process audio
+	CapVideo       Capability = "video"        // Can process video
+	CapEmbeddings  Capability = "embeddings"   // Can generate embeddings
+	CapFineTunable Capability = "fine_tunable" // Can be fine-tuned
+	CapPDFInput    Capability = "pdf_input"    // Can process PDFs directly
+	CapLongContext Capability = "long_context" // 100k+ context window
+	CapBatch       Capability = "batch"        // Supports batch API
+	CapCaching     Capability = "caching"      // Supports prompt caching
 )
 
 // Tier identifies a model's quality/cost tier.
@@ -124,9 +124,9 @@ func (m *Model) SupportsStreaming() bool {
 
 // Catalog manages a collection of models.
 type Catalog struct {
-	models   map[string]*Model // id -> model
-	aliases  map[string]string // alias -> id
-	mu       sync.RWMutex
+	models  map[string]*Model // id -> model
+	aliases map[string]string // alias -> id
+	mu      sync.RWMutex
 }
 
 // NewCatalog creates a new model catalog.
@@ -299,11 +299,11 @@ func tierRank(t Tier) int {
 func (c *Catalog) registerBuiltinModels() {
 	// Anthropic models
 	c.Register(&Model{
-		ID:            "claude-opus-4",
-		Name:          "Claude Opus 4",
-		Provider:      ProviderAnthropic,
-		Tier:          TierFlagship,
-		ContextWindow: 200000,
+		ID:              "claude-opus-4",
+		Name:            "Claude Opus 4",
+		Provider:        ProviderAnthropic,
+		Tier:            TierFlagship,
+		ContextWindow:   200000,
 		MaxOutputTokens: 32000,
 		Capabilities: []Capability{
 			CapVision, CapTools, CapStreaming, CapJSON, CapCode,
@@ -316,11 +316,11 @@ func (c *Catalog) registerBuiltinModels() {
 	})
 
 	c.Register(&Model{
-		ID:            "claude-3-5-sonnet-latest",
-		Name:          "Claude 3.5 Sonnet",
-		Provider:      ProviderAnthropic,
-		Tier:          TierStandard,
-		ContextWindow: 200000,
+		ID:              "claude-3-5-sonnet-latest",
+		Name:            "Claude 3.5 Sonnet",
+		Provider:        ProviderAnthropic,
+		Tier:            TierStandard,
+		ContextWindow:   200000,
 		MaxOutputTokens: 8192,
 		Capabilities: []Capability{
 			CapVision, CapTools, CapStreaming, CapJSON, CapCode,
@@ -333,11 +333,11 @@ func (c *Catalog) registerBuiltinModels() {
 	})
 
 	c.Register(&Model{
-		ID:            "claude-3-5-haiku-latest",
-		Name:          "Claude 3.5 Haiku",
-		Provider:      ProviderAnthropic,
-		Tier:          TierFast,
-		ContextWindow: 200000,
+		ID:              "claude-3-5-haiku-latest",
+		Name:            "Claude 3.5 Haiku",
+		Provider:        ProviderAnthropic,
+		Tier:            TierFast,
+		ContextWindow:   200000,
 		MaxOutputTokens: 8192,
 		Capabilities: []Capability{
 			CapVision, CapTools, CapStreaming, CapJSON, CapCode,
@@ -351,11 +351,11 @@ func (c *Catalog) registerBuiltinModels() {
 
 	// OpenAI models
 	c.Register(&Model{
-		ID:            "gpt-4o",
-		Name:          "GPT-4o",
-		Provider:      ProviderOpenAI,
-		Tier:          TierStandard,
-		ContextWindow: 128000,
+		ID:              "gpt-4o",
+		Name:            "GPT-4o",
+		Provider:        ProviderOpenAI,
+		Tier:            TierStandard,
+		ContextWindow:   128000,
 		MaxOutputTokens: 16384,
 		Capabilities: []Capability{
 			CapVision, CapTools, CapStreaming, CapJSON, CapCode,
@@ -368,11 +368,11 @@ func (c *Catalog) registerBuiltinModels() {
 	})
 
 	c.Register(&Model{
-		ID:            "gpt-4o-mini",
-		Name:          "GPT-4o Mini",
-		Provider:      ProviderOpenAI,
-		Tier:          TierFast,
-		ContextWindow: 128000,
+		ID:              "gpt-4o-mini",
+		Name:            "GPT-4o Mini",
+		Provider:        ProviderOpenAI,
+		Tier:            TierFast,
+		ContextWindow:   128000,
 		MaxOutputTokens: 16384,
 		Capabilities: []Capability{
 			CapVision, CapTools, CapStreaming, CapJSON, CapCode,
@@ -385,11 +385,11 @@ func (c *Catalog) registerBuiltinModels() {
 	})
 
 	c.Register(&Model{
-		ID:            "o1",
-		Name:          "o1",
-		Provider:      ProviderOpenAI,
-		Tier:          TierFlagship,
-		ContextWindow: 200000,
+		ID:              "o1",
+		Name:            "o1",
+		Provider:        ProviderOpenAI,
+		Tier:            TierFlagship,
+		ContextWindow:   200000,
 		MaxOutputTokens: 100000,
 		Capabilities: []Capability{
 			CapVision, CapTools, CapReasoning, CapJSON, CapCode,
@@ -402,11 +402,11 @@ func (c *Catalog) registerBuiltinModels() {
 	})
 
 	c.Register(&Model{
-		ID:            "o3-mini",
-		Name:          "o3-mini",
-		Provider:      ProviderOpenAI,
-		Tier:          TierStandard,
-		ContextWindow: 200000,
+		ID:              "o3-mini",
+		Name:            "o3-mini",
+		Provider:        ProviderOpenAI,
+		Tier:            TierStandard,
+		ContextWindow:   200000,
 		MaxOutputTokens: 100000,
 		Capabilities: []Capability{
 			CapTools, CapReasoning, CapJSON, CapCode, CapLongContext,
@@ -419,11 +419,11 @@ func (c *Catalog) registerBuiltinModels() {
 
 	// Google models
 	c.Register(&Model{
-		ID:            "gemini-2.0-flash-exp",
-		Name:          "Gemini 2.0 Flash",
-		Provider:      ProviderGoogle,
-		Tier:          TierFast,
-		ContextWindow: 1048576,
+		ID:              "gemini-2.0-flash-exp",
+		Name:            "Gemini 2.0 Flash",
+		Provider:        ProviderGoogle,
+		Tier:            TierFast,
+		ContextWindow:   1048576,
 		MaxOutputTokens: 8192,
 		Capabilities: []Capability{
 			CapVision, CapTools, CapStreaming, CapJSON, CapCode,
@@ -436,11 +436,11 @@ func (c *Catalog) registerBuiltinModels() {
 	})
 
 	c.Register(&Model{
-		ID:            "gemini-1.5-pro-latest",
-		Name:          "Gemini 1.5 Pro",
-		Provider:      ProviderGoogle,
-		Tier:          TierStandard,
-		ContextWindow: 2097152,
+		ID:              "gemini-1.5-pro-latest",
+		Name:            "Gemini 1.5 Pro",
+		Provider:        ProviderGoogle,
+		Tier:            TierStandard,
+		ContextWindow:   2097152,
 		MaxOutputTokens: 8192,
 		Capabilities: []Capability{
 			CapVision, CapTools, CapStreaming, CapJSON, CapCode,

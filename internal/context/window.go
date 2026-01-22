@@ -25,31 +25,31 @@ const (
 // ModelContextWindows maps model IDs to their context window sizes.
 var ModelContextWindows = map[string]int{
 	// Anthropic models
-	"claude-3-opus":          200000,
-	"claude-3-sonnet":        200000,
-	"claude-3-haiku":         200000,
-	"claude-3-5-sonnet":      200000,
-	"claude-3-5-haiku":       200000,
-	"claude-opus-4":          200000,
+	"claude-3-opus":     200000,
+	"claude-3-sonnet":   200000,
+	"claude-3-haiku":    200000,
+	"claude-3-5-sonnet": 200000,
+	"claude-3-5-haiku":  200000,
+	"claude-opus-4":     200000,
 
 	// OpenAI models
-	"gpt-4":                  8192,
-	"gpt-4-32k":              32768,
-	"gpt-4-turbo":            128000,
-	"gpt-4o":                 128000,
-	"gpt-4o-mini":            128000,
-	"gpt-3.5-turbo":          16385,
-	"gpt-3.5-turbo-16k":      16385,
-	"o1":                     200000,
-	"o1-mini":                128000,
-	"o1-preview":             128000,
-	"o3-mini":                200000,
+	"gpt-4":             8192,
+	"gpt-4-32k":         32768,
+	"gpt-4-turbo":       128000,
+	"gpt-4o":            128000,
+	"gpt-4o-mini":       128000,
+	"gpt-3.5-turbo":     16385,
+	"gpt-3.5-turbo-16k": 16385,
+	"o1":                200000,
+	"o1-mini":           128000,
+	"o1-preview":        128000,
+	"o3-mini":           200000,
 
 	// Google models
-	"gemini-pro":             32768,
-	"gemini-1.5-pro":         2097152,
-	"gemini-1.5-flash":       1048576,
-	"gemini-2.0-flash":       1048576,
+	"gemini-pro":       32768,
+	"gemini-1.5-pro":   2097152,
+	"gemini-1.5-flash": 1048576,
+	"gemini-2.0-flash": 1048576,
 }
 
 // WindowInfo holds information about a context window.

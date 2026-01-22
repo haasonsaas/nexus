@@ -33,12 +33,12 @@ const (
 
 // Replayer replays a recorded tape for testing.
 type Replayer struct {
-	tape        *Tape
-	mode        ReplayMode
-	turnIdx     int
-	toolRunIdx  map[int]int // turnIndex -> next tool run index for that turn
-	mu          sync.Mutex
-	mismatches  []Mismatch
+	tape       *Tape
+	mode       ReplayMode
+	turnIdx    int
+	toolRunIdx map[int]int // turnIndex -> next tool run index for that turn
+	mu         sync.Mutex
+	mismatches []Mismatch
 }
 
 // Mismatch records a difference between expected and actual values.
@@ -169,9 +169,9 @@ func (r *Replayer) CurrentTurn() int {
 
 // ReplayTool wraps a tool to return recorded results.
 type ReplayTool struct {
-	replayer  *Replayer
-	name      string
-	schema    json.RawMessage
+	replayer *Replayer
+	name     string
+	schema   json.RawMessage
 }
 
 // NewReplayTool creates a tool that returns recorded results.

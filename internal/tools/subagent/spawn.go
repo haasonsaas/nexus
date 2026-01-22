@@ -17,18 +17,18 @@ import (
 
 // SubAgent represents a spawned sub-agent.
 type SubAgent struct {
-	ID            string    `json:"id"`
-	ParentID      string    `json:"parent_id"`
-	SessionID     string    `json:"session_id"`
-	Name          string    `json:"name"`
-	Task          string    `json:"task"`
-	Status        string    `json:"status"` // running, completed, failed, cancelled
-	CreatedAt     time.Time `json:"created_at"`
-	CompletedAt   time.Time `json:"completed_at,omitempty"`
-	Result        string    `json:"result,omitempty"`
-	Error         string    `json:"error,omitempty"`
-	AllowedTools  []string  `json:"allowed_tools,omitempty"`
-	DeniedTools   []string  `json:"denied_tools,omitempty"`
+	ID           string    `json:"id"`
+	ParentID     string    `json:"parent_id"`
+	SessionID    string    `json:"session_id"`
+	Name         string    `json:"name"`
+	Task         string    `json:"task"`
+	Status       string    `json:"status"` // running, completed, failed, cancelled
+	CreatedAt    time.Time `json:"created_at"`
+	CompletedAt  time.Time `json:"completed_at,omitempty"`
+	Result       string    `json:"result,omitempty"`
+	Error        string    `json:"error,omitempty"`
+	AllowedTools []string  `json:"allowed_tools,omitempty"`
+	DeniedTools  []string  `json:"denied_tools,omitempty"`
 }
 
 // Manager manages sub-agent lifecycle.

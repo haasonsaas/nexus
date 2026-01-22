@@ -1,4 +1,5 @@
 // Package imessage provides an iMessage channel adapter for macOS.
+//go:build darwin
 // +build darwin
 
 package imessage

@@ -229,11 +229,11 @@ func (a *Adapter) Status() map[string]any {
 	defer a.mu.RUnlock()
 
 	return map[string]any{
-		"running":     a.running,
-		"homeserver":  a.config.Homeserver,
-		"user_id":     a.config.UserID,
-		"device_id":   a.client.DeviceID,
-		"metrics":     a.metrics.Snapshot(),
+		"running":    a.running,
+		"homeserver": a.config.Homeserver,
+		"user_id":    a.config.UserID,
+		"device_id":  a.client.DeviceID,
+		"metrics":    a.metrics.Snapshot(),
 	}
 }
 

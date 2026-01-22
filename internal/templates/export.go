@@ -147,17 +147,17 @@ func (e *Exporter) ExportAll(opts ExportOptions) ([]byte, error) {
 
 // templateExport is the export structure for a template.
 type templateExport struct {
-	Name        string              `json:"name" yaml:"name"`
-	Version     string              `json:"version,omitempty" yaml:"version,omitempty"`
-	Description string              `json:"description" yaml:"description"`
-	Author      string              `json:"author,omitempty" yaml:"author,omitempty"`
-	Homepage    string              `json:"homepage,omitempty" yaml:"homepage,omitempty"`
-	Tags        []string            `json:"tags,omitempty" yaml:"tags,omitempty"`
-	Variables   []TemplateVariable  `json:"variables,omitempty" yaml:"variables,omitempty"`
-	Agent       AgentTemplateSpec   `json:"agent" yaml:"agent"`
-	Content     string              `json:"content,omitempty" yaml:"content,omitempty"`
-	Source      SourceType          `json:"source,omitempty" yaml:"source,omitempty"`
-	Path        string              `json:"path,omitempty" yaml:"path,omitempty"`
+	Name        string             `json:"name" yaml:"name"`
+	Version     string             `json:"version,omitempty" yaml:"version,omitempty"`
+	Description string             `json:"description" yaml:"description"`
+	Author      string             `json:"author,omitempty" yaml:"author,omitempty"`
+	Homepage    string             `json:"homepage,omitempty" yaml:"homepage,omitempty"`
+	Tags        []string           `json:"tags,omitempty" yaml:"tags,omitempty"`
+	Variables   []TemplateVariable `json:"variables,omitempty" yaml:"variables,omitempty"`
+	Agent       AgentTemplateSpec  `json:"agent" yaml:"agent"`
+	Content     string             `json:"content,omitempty" yaml:"content,omitempty"`
+	Source      SourceType         `json:"source,omitempty" yaml:"source,omitempty"`
+	Path        string             `json:"path,omitempty" yaml:"path,omitempty"`
 }
 
 // prepareForExport creates an export-friendly copy of a template.
@@ -215,14 +215,14 @@ func exportMarkdown(tmpl *AgentTemplate, opts ExportOptions) ([]byte, error) {
 
 	// Create frontmatter structure (without content)
 	frontmatter := struct {
-		Name        string              `yaml:"name"`
-		Version     string              `yaml:"version,omitempty"`
-		Description string              `yaml:"description"`
-		Author      string              `yaml:"author,omitempty"`
-		Homepage    string              `yaml:"homepage,omitempty"`
-		Tags        []string            `yaml:"tags,omitempty"`
-		Variables   []TemplateVariable  `yaml:"variables,omitempty"`
-		Agent       AgentTemplateSpec   `yaml:"agent"`
+		Name        string             `yaml:"name"`
+		Version     string             `yaml:"version,omitempty"`
+		Description string             `yaml:"description"`
+		Author      string             `yaml:"author,omitempty"`
+		Homepage    string             `yaml:"homepage,omitempty"`
+		Tags        []string           `yaml:"tags,omitempty"`
+		Variables   []TemplateVariable `yaml:"variables,omitempty"`
+		Agent       AgentTemplateSpec  `yaml:"agent"`
 	}{
 		Name:        tmpl.Name,
 		Version:     tmpl.Version,

@@ -439,11 +439,11 @@ type signalEnvelope struct {
 }
 
 type signalDataMessage struct {
-	Timestamp   int64                 `json:"timestamp"`
-	Message     string                `json:"message"`
-	GroupInfo   *signalGroupInfo      `json:"groupInfo"`
-	Attachments []signalAttachment    `json:"attachments"`
-	Quote       *signalQuote          `json:"quote"`
+	Timestamp   int64              `json:"timestamp"`
+	Message     string             `json:"message"`
+	GroupInfo   *signalGroupInfo   `json:"groupInfo"`
+	Attachments []signalAttachment `json:"attachments"`
+	Quote       *signalQuote       `json:"quote"`
 }
 
 type signalGroupInfo struct {

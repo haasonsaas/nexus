@@ -48,7 +48,6 @@ func (m *mockDiscordSession) ChannelMessageSendComplex(channelID string, data *d
 	}, nil
 }
 
-
 func (m *mockDiscordSession) MessageReactionAdd(channelID, messageID, emoji string, options ...discordgo.RequestOption) error {
 	if m.messageReactionAddFn != nil {
 		return m.messageReactionAddFn(channelID, messageID, emoji)
@@ -159,11 +158,11 @@ func TestConvertDiscordMessage(t *testing.T) {
 				Timestamp: time.Date(2024, 1, 20, 12, 0, 0, 0, time.UTC),
 			},
 			expected: &models.Message{
-				Channel:    models.ChannelDiscord,
-				ChannelID:  "discord-msg-123",
-				Direction:  models.DirectionInbound,
-				Role:       models.RoleUser,
-				Content:    "Hello, world!",
+				Channel:   models.ChannelDiscord,
+				ChannelID: "discord-msg-123",
+				Direction: models.DirectionInbound,
+				Role:      models.RoleUser,
+				Content:   "Hello, world!",
 				Metadata: map[string]any{
 					"discord_channel_id": "channel-456",
 					"discord_user_id":    "user-789",
@@ -319,7 +318,7 @@ func TestAdapter_Send(t *testing.T) {
 				ChannelID: "channel-123",
 				Content:   "Check this out",
 				Metadata: map[string]any{
-					"discord_channel_id": "channel-123",
+					"discord_channel_id":  "channel-123",
 					"discord_embed_title": "Important",
 					"discord_embed_color": 0x00FF00,
 				},
@@ -347,7 +346,7 @@ func TestAdapter_Send(t *testing.T) {
 				ChannelID: "channel-123",
 				Content:   "Thread starter",
 				Metadata: map[string]any{
-					"discord_channel_id":   "channel-123",
+					"discord_channel_id":    "channel-123",
 					"discord_create_thread": true,
 					"discord_thread_name":   "Discussion",
 				},

@@ -175,16 +175,16 @@ func (p *echoProvider) Complete(ctx context.Context, req *agent.CompletionReques
 	return ch, nil
 }
 
-func (p *echoProvider) Name() string        { return "echo" }
+func (p *echoProvider) Name() string          { return "echo" }
 func (p *echoProvider) Models() []agent.Model { return nil }
-func (p *echoProvider) SupportsTools() bool { return false }
+func (p *echoProvider) SupportsTools() bool   { return false }
 
 // orderTrackingProvider tracks the order of processing.
 type orderTrackingProvider struct {
-	delay    time.Duration
-	counter  *int32
-	order    *[]int32
-	orderMu  *sync.Mutex
+	delay   time.Duration
+	counter *int32
+	order   *[]int32
+	orderMu *sync.Mutex
 }
 
 func (p *orderTrackingProvider) Complete(ctx context.Context, req *agent.CompletionRequest) (<-chan *agent.CompletionChunk, error) {
@@ -213,9 +213,9 @@ func (p *orderTrackingProvider) Complete(ctx context.Context, req *agent.Complet
 	return ch, nil
 }
 
-func (p *orderTrackingProvider) Name() string        { return "order" }
+func (p *orderTrackingProvider) Name() string          { return "order" }
 func (p *orderTrackingProvider) Models() []agent.Model { return nil }
-func (p *orderTrackingProvider) SupportsTools() bool { return false }
+func (p *orderTrackingProvider) SupportsTools() bool   { return false }
 
 func TestBroadcastManager_IsBroadcastPeer(t *testing.T) {
 	tests := []struct {

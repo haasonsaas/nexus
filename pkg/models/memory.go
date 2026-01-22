@@ -7,10 +7,10 @@ import (
 
 // MemoryEntry represents a memory item stored in the vector database.
 type MemoryEntry struct {
-	ID        string    `json:"id"`
-	SessionID string    `json:"session_id,omitempty"`
-	ChannelID string    `json:"channel_id,omitempty"`
-	AgentID   string    `json:"agent_id,omitempty"`
+	ID        string `json:"id"`
+	SessionID string `json:"session_id,omitempty"`
+	ChannelID string `json:"channel_id,omitempty"`
+	AgentID   string `json:"agent_id,omitempty"`
 
 	Content  string         `json:"content"`
 	Metadata MemoryMetadata `json:"metadata"`

@@ -15,7 +15,7 @@ func Example_basicSearch() {
 	config := &websearch.Config{
 		DefaultBackend:     websearch.BackendDuckDuckGo,
 		DefaultResultCount: 5,
-		CacheTTL:          300,
+		CacheTTL:           300,
 	}
 	tool := websearch.NewWebSearchTool(config)
 

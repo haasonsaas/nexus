@@ -80,7 +80,7 @@ type Event struct {
 	Context map[string]any `json:"context,omitempty"`
 
 	// Error if this is an error event
-	Error error `json:"-"`
+	Error    error  `json:"-"`
 	ErrorMsg string `json:"error,omitempty"`
 }
 

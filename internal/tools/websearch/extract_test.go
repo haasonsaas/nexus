@@ -219,33 +219,33 @@ func TestContentExtractor_ExtractMetaDescription(t *testing.T) {
 
 func TestContentExtractor_ExtractMainContent(t *testing.T) {
 	tests := []struct {
-		name        string
-		html        string
-		shouldFind  bool
+		name         string
+		html         string
+		shouldFind   bool
 		containsText string
 	}{
 		{
-			name: "main tag",
-			html: `<html><body><main><p>Main content here with enough text to be substantial. This paragraph has more content to meet the minimum length requirement for extraction. We need at least 200 characters of text content to be extracted successfully by the content extraction algorithm.</p></main></body></html>`,
-			shouldFind: true,
+			name:         "main tag",
+			html:         `<html><body><main><p>Main content here with enough text to be substantial. This paragraph has more content to meet the minimum length requirement for extraction. We need at least 200 characters of text content to be extracted successfully by the content extraction algorithm.</p></main></body></html>`,
+			shouldFind:   true,
 			containsText: "Main content",
 		},
 		{
-			name: "article tag",
-			html: `<html><body><article><p>Article content here with enough text to be substantial. This paragraph has more content to meet the minimum length requirement for extraction. We need at least 200 characters of text content to be extracted successfully by the content extraction algorithm.</p></article></body></html>`,
-			shouldFind: true,
+			name:         "article tag",
+			html:         `<html><body><article><p>Article content here with enough text to be substantial. This paragraph has more content to meet the minimum length requirement for extraction. We need at least 200 characters of text content to be extracted successfully by the content extraction algorithm.</p></article></body></html>`,
+			shouldFind:   true,
 			containsText: "Article content",
 		},
 		{
-			name: "content class",
-			html: `<html><body><div class="content"><p>Div content here with enough text to be substantial enough. This paragraph has more content to meet the minimum length requirement for extraction. We need at least 200 characters of text to be extracted successfully.</p></div></body></html>`,
-			shouldFind: true,
+			name:         "content class",
+			html:         `<html><body><div class="content"><p>Div content here with enough text to be substantial enough. This paragraph has more content to meet the minimum length requirement for extraction. We need at least 200 characters of text to be extracted successfully.</p></div></body></html>`,
+			shouldFind:   true,
 			containsText: "Div content",
 		},
 		{
-			name: "too short content",
-			html: `<html><body><main>Short</main></body></html>`,
-			shouldFind: false,
+			name:         "too short content",
+			html:         `<html><body><main>Short</main></body></html>`,
+			shouldFind:   false,
 			containsText: "",
 		},
 	}
@@ -313,27 +313,27 @@ func TestContentExtractor_RemoveTag(t *testing.T) {
 
 func TestContentExtractor_ExtractText(t *testing.T) {
 	tests := []struct {
-		name     string
-		html     string
-		contains []string
+		name        string
+		html        string
+		contains    []string
 		notContains []string
 	}{
 		{
-			name: "paragraph text",
-			html: `<div><p>First paragraph</p><p>Second paragraph</p></div>`,
-			contains: []string{"First paragraph", "Second paragraph"},
+			name:        "paragraph text",
+			html:        `<div><p>First paragraph</p><p>Second paragraph</p></div>`,
+			contains:    []string{"First paragraph", "Second paragraph"},
 			notContains: []string{"<p>", "</p>"},
 		},
 		{
-			name: "heading text",
-			html: `<div><h1>Title</h1><h2>Subtitle</h2><p>Content</p></div>`,
-			contains: []string{"Title", "Subtitle", "Content"},
+			name:        "heading text",
+			html:        `<div><h1>Title</h1><h2>Subtitle</h2><p>Content</p></div>`,
+			contains:    []string{"Title", "Subtitle", "Content"},
 			notContains: []string{"<h1>", "<h2>"},
 		},
 		{
-			name: "remove tags",
-			html: `<div><span>Text with <strong>bold</strong> and <em>italic</em></span></div>`,
-			contains: []string{"Text with bold and italic"},
+			name:        "remove tags",
+			html:        `<div><span>Text with <strong>bold</strong> and <em>italic</em></span></div>`,
+			contains:    []string{"Text with bold and italic"},
 			notContains: []string{"<strong>", "<em>"},
 		},
 	}

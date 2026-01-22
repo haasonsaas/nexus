@@ -10,8 +10,8 @@ func TestMemoryToolEventStore_AddToolCall(t *testing.T) {
 	store := NewMemoryToolEventStore()
 
 	call := &ToolCall{
-		ID:       "call-1",
-		ToolName: "search",
+		ID:        "call-1",
+		ToolName:  "search",
 		InputJSON: json.RawMessage(`{"query": "test"}`),
 	}
 

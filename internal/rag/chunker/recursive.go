@@ -22,28 +22,28 @@ type RecursiveCharacterTextSplitter struct {
 // DefaultSeparators returns the default separator hierarchy.
 // Splits are attempted in order, from largest semantic units to smallest.
 var DefaultSeparators = []string{
-	"\n\n",  // Paragraph break
-	"\n",    // Line break
-	". ",    // Sentence end
-	"? ",    // Question end
-	"! ",    // Exclamation end
-	"; ",    // Semicolon
-	": ",    // Colon
-	", ",    // Comma
-	" ",     // Space
-	"",      // Character (last resort)
+	"\n\n", // Paragraph break
+	"\n",   // Line break
+	". ",   // Sentence end
+	"? ",   // Question end
+	"! ",   // Exclamation end
+	"; ",   // Semicolon
+	": ",   // Colon
+	", ",   // Comma
+	" ",    // Space
+	"",     // Character (last resort)
 }
 
 // MarkdownSeparators are separators optimized for Markdown documents.
 var MarkdownSeparators = []string{
-	"\n## ",  // H2 heading
-	"\n### ", // H3 heading
-	"\n#### ",// H4 heading
-	"\n\n",   // Paragraph break
-	"\n",     // Line break
-	". ",     // Sentence end
-	" ",      // Space
-	"",       // Character
+	"\n## ",   // H2 heading
+	"\n### ",  // H3 heading
+	"\n#### ", // H4 heading
+	"\n\n",    // Paragraph break
+	"\n",      // Line break
+	". ",      // Sentence end
+	" ",       // Space
+	"",        // Character
 }
 
 // NewRecursiveCharacterTextSplitter creates a new recursive text splitter.

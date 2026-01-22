@@ -131,9 +131,9 @@ func TestDefaultProcessor_Process_ImageResize(t *testing.T) {
 	}
 
 	opts := ProcessingOptions{
-		MaxImageSize:  1000,
-		EnableVision:  true,
-		MaxFileSize:   50 * 1024 * 1024,
+		MaxImageSize: 1000,
+		EnableVision: true,
+		MaxFileSize:  50 * 1024 * 1024,
 	}
 
 	result, err := processor.Process(attachment, opts)

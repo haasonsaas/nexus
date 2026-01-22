@@ -158,13 +158,13 @@ func (t *Tape) Summary() TapeSummary {
 	}
 
 	return TapeSummary{
-		Version:       t.Version,
-		CreatedAt:     t.CreatedAt,
-		Model:         t.Model,
-		TurnCount:     len(t.Turns),
-		ToolRunCount:  len(t.ToolRuns),
-		TotalChunks:   totalChunks,
-		TotalTextLen:  totalText,
+		Version:      t.Version,
+		CreatedAt:    t.CreatedAt,
+		Model:        t.Model,
+		TurnCount:    len(t.Turns),
+		ToolRunCount: len(t.ToolRuns),
+		TotalChunks:  totalChunks,
+		TotalTextLen: totalText,
 	}
 }
 

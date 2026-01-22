@@ -70,9 +70,9 @@ func (p *multiTurnProvider) Complete(ctx context.Context, req *CompletionRequest
 	return ch, nil
 }
 
-func (p *multiTurnProvider) Name() string         { return "multi-turn" }
-func (p *multiTurnProvider) Models() []Model      { return nil }
-func (p *multiTurnProvider) SupportsTools() bool  { return true }
+func (p *multiTurnProvider) Name() string        { return "multi-turn" }
+func (p *multiTurnProvider) Models() []Model     { return nil }
+func (p *multiTurnProvider) SupportsTools() bool { return true }
 
 // =============================================================================
 // In-Memory Session Store for Integration Tests
@@ -159,15 +159,15 @@ func (s *memoryStore) getMessages(sessionID string) []*models.Message {
 // =============================================================================
 
 type integrationTool struct {
-	name        string
-	execFunc    func(ctx context.Context, params json.RawMessage) (*ToolResult, error)
-	execCount   int
-	mu          sync.Mutex
+	name      string
+	execFunc  func(ctx context.Context, params json.RawMessage) (*ToolResult, error)
+	execCount int
+	mu        sync.Mutex
 }
 
-func (t *integrationTool) Name() string             { return t.name }
-func (t *integrationTool) Description() string      { return "integration test tool" }
-func (t *integrationTool) Schema() json.RawMessage  { return json.RawMessage(`{"type":"object"}`) }
+func (t *integrationTool) Name() string            { return t.name }
+func (t *integrationTool) Description() string     { return "integration test tool" }
+func (t *integrationTool) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
 
 func (t *integrationTool) Execute(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
 	t.mu.Lock()
@@ -1243,9 +1243,9 @@ type slowTool struct {
 	delay time.Duration
 }
 
-func (t *slowTool) Name() string             { return t.name }
-func (t *slowTool) Description() string      { return "slow tool for testing" }
-func (t *slowTool) Schema() json.RawMessage  { return json.RawMessage(`{"type":"object"}`) }
+func (t *slowTool) Name() string            { return t.name }
+func (t *slowTool) Description() string     { return "slow tool for testing" }
+func (t *slowTool) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
 
 func (t *slowTool) Execute(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
 	select {
@@ -1454,9 +1454,9 @@ type chattyTool struct {
 	eventCount int
 }
 
-func (t *chattyTool) Name() string             { return t.name }
-func (t *chattyTool) Description() string      { return "chatty tool for backpressure testing" }
-func (t *chattyTool) Schema() json.RawMessage  { return json.RawMessage(`{"type":"object"}`) }
+func (t *chattyTool) Name() string            { return t.name }
+func (t *chattyTool) Description() string     { return "chatty tool for backpressure testing" }
+func (t *chattyTool) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
 
 func (t *chattyTool) Execute(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
 	// This tool doesn't actually emit stdout events directly - we need to test
@@ -1535,7 +1535,7 @@ func (p *chattyProvider) Complete(ctx context.Context, req *CompletionRequest) (
 }
 
 func (p *chattyProvider) Name() string        { return "chatty" }
-func (p *chattyProvider) Models() []Model      { return nil }
+func (p *chattyProvider) Models() []Model     { return nil }
 func (p *chattyProvider) SupportsTools() bool { return false }
 
 // TestProcessStream_BackpressureDropsLowPriorityEvents verifies that under heavy

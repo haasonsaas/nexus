@@ -53,10 +53,10 @@ type Message struct {
 
 // Truncator handles message truncation strategies.
 type Truncator struct {
-	strategy   TruncationStrategy
-	maxTokens  int
-	keepFirst  int // Number of messages to always keep at start
-	keepLast   int // Number of messages to always keep at end
+	strategy  TruncationStrategy
+	maxTokens int
+	keepFirst int // Number of messages to always keep at start
+	keepLast  int // Number of messages to always keep at end
 }
 
 // NewTruncator creates a new truncator with the given strategy.

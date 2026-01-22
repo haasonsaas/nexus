@@ -338,9 +338,9 @@ func TestWebSearchTool_SearchTypes(t *testing.T) {
 	})
 
 	tests := []struct {
-		name         string
-		searchType   SearchType
-		expectedCat  string
+		name        string
+		searchType  SearchType
+		expectedCat string
 	}{
 		{"web search", SearchTypeWeb, "general"},
 		{"image search", SearchTypeImage, "images"},
@@ -417,8 +417,8 @@ func TestWebSearchTool_ResultCountLimit(t *testing.T) {
 
 func TestWebSearchTool_DefaultBackendSelection(t *testing.T) {
 	tests := []struct {
-		name           string
-		config         *Config
+		name            string
+		config          *Config
 		expectedBackend SearchBackend
 	}{
 		{
@@ -429,8 +429,8 @@ func TestWebSearchTool_DefaultBackendSelection(t *testing.T) {
 			expectedBackend: BackendSearXNG,
 		},
 		{
-			name:           "DuckDuckGo when no config",
-			config:         &Config{},
+			name:            "DuckDuckGo when no config",
+			config:          &Config{},
 			expectedBackend: BackendDuckDuckGo,
 		},
 		{

@@ -62,10 +62,10 @@ type Section struct {
 
 // Registry manages available parsers.
 type Registry struct {
-	mu               sync.RWMutex
-	parsersByType    map[string]Parser
-	parsersByExt     map[string]Parser
-	defaultParser    Parser
+	mu            sync.RWMutex
+	parsersByType map[string]Parser
+	parsersByExt  map[string]Parser
+	defaultParser Parser
 }
 
 // NewRegistry creates a new parser registry.

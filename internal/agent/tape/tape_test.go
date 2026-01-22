@@ -167,9 +167,9 @@ func (m *mockProvider) Complete(ctx context.Context, req *agent.CompletionReques
 	return ch, nil
 }
 
-func (m *mockProvider) Name() string              { return "mock" }
-func (m *mockProvider) Models() []agent.Model     { return nil }
-func (m *mockProvider) SupportsTools() bool       { return true }
+func (m *mockProvider) Name() string          { return "mock" }
+func (m *mockProvider) Models() []agent.Model { return nil }
+func (m *mockProvider) SupportsTools() bool   { return true }
 
 func TestRecorder_RecordsResponses(t *testing.T) {
 	provider := &mockProvider{

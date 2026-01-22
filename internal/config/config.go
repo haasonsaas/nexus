@@ -86,12 +86,12 @@ type APIKeyConfig struct {
 }
 
 type SessionConfig struct {
-	DefaultAgentID string            `yaml:"default_agent_id"`
-	SlackScope     string            `yaml:"slack_scope"`
-	DiscordScope   string            `yaml:"discord_scope"`
-	Memory         MemoryConfig      `yaml:"memory"`
-	Heartbeat      HeartbeatConfig   `yaml:"heartbeat"`
-	MemoryFlush    MemoryFlushConfig `yaml:"memory_flush"`
+	DefaultAgentID string             `yaml:"default_agent_id"`
+	SlackScope     string             `yaml:"slack_scope"`
+	DiscordScope   string             `yaml:"discord_scope"`
+	Memory         MemoryConfig       `yaml:"memory"`
+	Heartbeat      HeartbeatConfig    `yaml:"heartbeat"`
+	MemoryFlush    MemoryFlushConfig  `yaml:"memory_flush"`
 	Scoping        SessionScopeConfig `yaml:"scoping"`
 }
 
@@ -331,15 +331,15 @@ type ToolJobsConfig struct {
 
 // ToolExecutionConfig controls runtime tool execution behavior.
 type ToolExecutionConfig struct {
-	MaxIterations   int           `yaml:"max_iterations"`
-	Parallelism     int           `yaml:"parallelism"`
-	Timeout         time.Duration `yaml:"timeout"`
-	MaxAttempts     int           `yaml:"max_attempts"`
-	RetryBackoff    time.Duration `yaml:"retry_backoff"`
-	DisableEvents   bool          `yaml:"disable_events"`
-	MaxToolCalls    int           `yaml:"max_tool_calls"`
-	RequireApproval []string      `yaml:"require_approval"`
-	Async           []string      `yaml:"async"`
+	MaxIterations   int            `yaml:"max_iterations"`
+	Parallelism     int            `yaml:"parallelism"`
+	Timeout         time.Duration  `yaml:"timeout"`
+	MaxAttempts     int            `yaml:"max_attempts"`
+	RetryBackoff    time.Duration  `yaml:"retry_backoff"`
+	DisableEvents   bool           `yaml:"disable_events"`
+	MaxToolCalls    int            `yaml:"max_tool_calls"`
+	RequireApproval []string       `yaml:"require_approval"`
+	Async           []string       `yaml:"async"`
 	Approval        ApprovalConfig `yaml:"approval"`
 }
 

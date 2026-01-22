@@ -47,11 +47,11 @@ func DefaultFailoverConfig() *FailoverConfig {
 
 // ProviderState tracks the health of a provider.
 type ProviderState struct {
-	Name           string
-	Failures       int
-	LastFailure    time.Time
-	CircuitOpen    bool
-	CircuitOpenAt  time.Time
+	Name          string
+	Failures      int
+	LastFailure   time.Time
+	CircuitOpen   bool
+	CircuitOpenAt time.Time
 }
 
 // IsAvailable returns true if the provider can accept requests.
@@ -77,12 +77,12 @@ type FailoverOrchestrator struct {
 
 // FailoverMetrics tracks failover statistics.
 type FailoverMetrics struct {
-	mu                sync.Mutex
-	TotalRequests     int64
-	TotalFailovers    int64
-	TotalRetries      int64
-	ProviderFailures  map[string]int64
-	CircuitBreaks     int64
+	mu               sync.Mutex
+	TotalRequests    int64
+	TotalFailovers   int64
+	TotalRetries     int64
+	ProviderFailures map[string]int64
+	CircuitBreaks    int64
 }
 
 // NewFailoverOrchestrator creates a new failover orchestrator.

@@ -116,9 +116,9 @@ for i in range(5):
     print(f"Iteration {i}")
     time.sleep(0.1)
 `,
-		Timeout:  5,     // 5 second timeout
-		CPULimit: 500,   // 0.5 cores
-		MemLimit: 256,   // 256 MB
+		Timeout:  5,   // 5 second timeout
+		CPULimit: 500, // 0.5 cores
+		MemLimit: 256, // 256 MB
 	}
 
 	paramsJSON, _ := json.Marshal(params)

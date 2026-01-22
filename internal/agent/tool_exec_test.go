@@ -17,9 +17,9 @@ type testExecTool struct {
 	execFunc func(ctx context.Context, params json.RawMessage) (*ToolResult, error)
 }
 
-func (m *testExecTool) Name() string                { return m.name }
-func (m *testExecTool) Description() string         { return "test exec tool" }
-func (m *testExecTool) Schema() json.RawMessage     { return json.RawMessage(`{}`) }
+func (m *testExecTool) Name() string            { return m.name }
+func (m *testExecTool) Description() string     { return "test exec tool" }
+func (m *testExecTool) Schema() json.RawMessage { return json.RawMessage(`{}`) }
 func (m *testExecTool) Execute(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
 	return m.execFunc(ctx, params)
 }

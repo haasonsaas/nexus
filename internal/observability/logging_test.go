@@ -29,7 +29,7 @@ func TestNewLogger(t *testing.T) {
 			},
 		},
 		{
-			name: "defaults",
+			name:   "defaults",
 			config: LogConfig{},
 		},
 	}

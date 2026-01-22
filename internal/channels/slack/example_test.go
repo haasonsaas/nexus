@@ -14,7 +14,7 @@ import (
 func Example() {
 	// Configure the adapter with bot and app tokens
 	cfg := slack.Config{
-		BotToken: "xoxb-your-bot-token",      // Bot token for API calls
+		BotToken: "xoxb-your-bot-token",       // Bot token for API calls
 		AppToken: "xapp-your-app-level-token", // App token for Socket Mode
 	}
 

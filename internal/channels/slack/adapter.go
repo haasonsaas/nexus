@@ -65,22 +65,22 @@ func (c *Config) Validate() error {
 // It provides production-ready Slack integration using Socket Mode with
 // structured logging, metrics collection, rate limiting, and graceful degradation.
 type Adapter struct {
-	cfg           Config
-	client        *slack.Client
-	socketClient  *socketmode.Client
-	messages      chan *models.Message
-	status        channels.Status
-	statusMu      sync.RWMutex
-	ctx           context.Context
-	cancel        context.CancelFunc
-	wg            sync.WaitGroup
-	botUserID     string
-	botUserIDMu   sync.RWMutex
-	rateLimiter   *channels.RateLimiter
-	metrics       *channels.Metrics
-	logger        *slog.Logger
-	degraded      bool
-	degradedMu    sync.RWMutex
+	cfg          Config
+	client       *slack.Client
+	socketClient *socketmode.Client
+	messages     chan *models.Message
+	status       channels.Status
+	statusMu     sync.RWMutex
+	ctx          context.Context
+	cancel       context.CancelFunc
+	wg           sync.WaitGroup
+	botUserID    string
+	botUserIDMu  sync.RWMutex
+	rateLimiter  *channels.RateLimiter
+	metrics      *channels.Metrics
+	logger       *slog.Logger
+	degraded     bool
+	degradedMu   sync.RWMutex
 }
 
 // NewAdapter creates a new Slack adapter with the given configuration.

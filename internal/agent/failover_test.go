@@ -10,9 +10,9 @@ import (
 
 // failingProvider always fails with the given error
 type failingProvider struct {
-	name       string
-	err        error
-	callCount  atomic.Int32
+	name      string
+	err       error
+	callCount atomic.Int32
 }
 
 func (p *failingProvider) Complete(ctx context.Context, req *CompletionRequest) (<-chan *CompletionChunk, error) {
@@ -20,9 +20,9 @@ func (p *failingProvider) Complete(ctx context.Context, req *CompletionRequest) 
 	return nil, p.err
 }
 
-func (p *failingProvider) Name() string              { return p.name }
-func (p *failingProvider) Models() []Model           { return nil }
-func (p *failingProvider) SupportsTools() bool       { return true }
+func (p *failingProvider) Name() string        { return p.name }
+func (p *failingProvider) Models() []Model     { return nil }
+func (p *failingProvider) SupportsTools() bool { return true }
 
 // successProvider always succeeds
 type successProvider struct {
@@ -38,9 +38,9 @@ func (p *successProvider) Complete(ctx context.Context, req *CompletionRequest) 
 	return ch, nil
 }
 
-func (p *successProvider) Name() string              { return p.name }
-func (p *successProvider) Models() []Model           { return nil }
-func (p *successProvider) SupportsTools() bool       { return true }
+func (p *successProvider) Name() string        { return p.name }
+func (p *successProvider) Models() []Model     { return nil }
+func (p *successProvider) SupportsTools() bool { return true }
 
 func TestFailoverOrchestrator_PrimarySuccess(t *testing.T) {
 	primary := &successProvider{name: "primary"}
@@ -359,6 +359,6 @@ func (p *mockProviderWithModels) Complete(ctx context.Context, req *CompletionRe
 	return ch, nil
 }
 
-func (p *mockProviderWithModels) Name() string              { return p.name }
-func (p *mockProviderWithModels) Models() []Model           { return p.models }
-func (p *mockProviderWithModels) SupportsTools() bool       { return true }
+func (p *mockProviderWithModels) Name() string        { return p.name }
+func (p *mockProviderWithModels) Models() []Model     { return p.models }
+func (p *mockProviderWithModels) SupportsTools() bool { return true }

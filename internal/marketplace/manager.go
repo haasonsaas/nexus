@@ -232,14 +232,14 @@ func (m *Manager) Info() *MarketplaceInfo {
 	}
 
 	return &MarketplaceInfo{
-		StorePath:      m.store.BasePath(),
-		Registries:     m.registry.Registries(),
-		InstalledCount: len(installed),
-		EnabledCount:   enabled,
+		StorePath:       m.store.BasePath(),
+		Registries:      m.registry.Registries(),
+		InstalledCount:  len(installed),
+		EnabledCount:    enabled,
 		AutoUpdateCount: autoUpdate,
-		HasTrustedKeys: m.verifier.HasTrustedKeys(),
+		HasTrustedKeys:  m.verifier.HasTrustedKeys(),
 		TrustedKeyNames: m.verifier.TrustedKeyNames(),
-		Platform:       fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
+		Platform:        fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
 	}
 }
 

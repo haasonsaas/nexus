@@ -181,10 +181,10 @@ type RunStats struct {
 // It explains why certain messages were included or dropped during packing.
 type ContextEventPayload struct {
 	// Budget configuration
-	BudgetChars    int `json:"budget_chars"`     // Max character budget
-	BudgetMessages int `json:"budget_messages"`  // Max message count
-	UsedChars      int `json:"used_chars"`       // Characters used
-	UsedMessages   int `json:"used_messages"`    // Messages included
+	BudgetChars    int `json:"budget_chars"`    // Max character budget
+	BudgetMessages int `json:"budget_messages"` // Max message count
+	UsedChars      int `json:"used_chars"`      // Characters used
+	UsedMessages   int `json:"used_messages"`   // Messages included
 
 	// Message counts by category
 	Candidates int `json:"candidates"` // Total messages before packing
@@ -192,8 +192,8 @@ type ContextEventPayload struct {
 	Dropped    int `json:"dropped"`    // Messages dropped
 
 	// Summary info
-	SummaryUsed   bool `json:"summary_used,omitempty"`   // Whether summary was included
-	SummaryChars  int  `json:"summary_chars,omitempty"`  // Characters in summary
+	SummaryUsed  bool `json:"summary_used,omitempty"`  // Whether summary was included
+	SummaryChars int  `json:"summary_chars,omitempty"` // Characters in summary
 
 	// Per-item diagnostics (optional, only when verbose)
 	Items []ContextPackItem `json:"items,omitempty"`
@@ -221,11 +221,11 @@ type ContextPackItem struct {
 type ContextItemKind string
 
 const (
-	ContextItemSystem     ContextItemKind = "system"
-	ContextItemHistory    ContextItemKind = "history"
-	ContextItemTool       ContextItemKind = "tool"
-	ContextItemSummary    ContextItemKind = "summary"
-	ContextItemIncoming   ContextItemKind = "incoming"
+	ContextItemSystem   ContextItemKind = "system"
+	ContextItemHistory  ContextItemKind = "history"
+	ContextItemTool     ContextItemKind = "tool"
+	ContextItemSummary  ContextItemKind = "summary"
+	ContextItemIncoming ContextItemKind = "incoming"
 )
 
 // ContextPackReason explains a packing decision.
@@ -233,8 +233,8 @@ type ContextPackReason string
 
 const (
 	// Inclusion reasons
-	ContextReasonIncluded   ContextPackReason = "included"
-	ContextReasonReserved   ContextPackReason = "reserved"   // incoming/summary
+	ContextReasonIncluded ContextPackReason = "included"
+	ContextReasonReserved ContextPackReason = "reserved" // incoming/summary
 
 	// Exclusion reasons
 	ContextReasonOverBudget ContextPackReason = "over_budget"

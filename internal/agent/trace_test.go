@@ -336,10 +336,10 @@ func TestTraceReplayer_SequenceRange(t *testing.T) {
 
 func TestTraceReplayer_Validation(t *testing.T) {
 	tests := []struct {
-		name        string
-		events      []models.AgentEvent
-		wantValid   bool
-		wantErrors  int
+		name       string
+		events     []models.AgentEvent
+		wantValid  bool
+		wantErrors int
 	}{
 		{
 			name: "valid trace",

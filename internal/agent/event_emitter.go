@@ -247,9 +247,9 @@ func (e *EventEmitter) ContextPacked(ctx context.Context, diag *models.ContextEv
 
 // StatsCollector accumulates statistics from events.
 type StatsCollector struct {
-	stats       models.RunStats
-	modelStart  time.Time
-	toolStarts  map[string]time.Time
+	stats      models.RunStats
+	modelStart time.Time
+	toolStarts map[string]time.Time
 }
 
 // NewStatsCollector creates a new stats collector.

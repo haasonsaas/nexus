@@ -312,10 +312,10 @@ type GitSource struct {
 	CacheDir        string
 	RefreshInterval time.Duration
 
-	priority   int
-	logger     *slog.Logger
-	mu         sync.Mutex
-	lastPull   time.Time
+	priority int
+	logger   *slog.Logger
+	mu       sync.Mutex
+	lastPull time.Time
 }
 
 // NewGitSource creates a Git repository discovery source.

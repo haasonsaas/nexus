@@ -80,12 +80,12 @@ func DefaultApprovalPolicy() *ApprovalPolicy {
 
 // ApprovalChecker evaluates tool calls against approval policies.
 type ApprovalChecker struct {
-	mu             sync.RWMutex
-	agentPolicies  map[string]*ApprovalPolicy // per-agent policies
-	defaultPolicy  *ApprovalPolicy
-	skillTools     map[string]struct{} // tools provided by skills
-	pendingStore   ApprovalStore
-	uiAvailable    func() bool // callback to check if UI can handle approvals
+	mu            sync.RWMutex
+	agentPolicies map[string]*ApprovalPolicy // per-agent policies
+	defaultPolicy *ApprovalPolicy
+	skillTools    map[string]struct{} // tools provided by skills
+	pendingStore  ApprovalStore
+	uiAvailable   func() bool // callback to check if UI can handle approvals
 }
 
 // ApprovalStore persists pending approval requests.

@@ -133,9 +133,9 @@ func (p *presenceManager) MarkRead(ctx context.Context, peerID string, messageID
 	req := map[string]any{
 		"method": "sendReceipt",
 		"params": map[string]any{
-			"recipient":     peerID,
+			"recipient":       peerID,
 			"targetTimestamp": messageID,
-			"type":           "read",
+			"type":            "read",
 		},
 	}
 

@@ -10,10 +10,10 @@ var DefaultPrefixes = []string{"/", "!"}
 
 // Parser detects and parses commands from message text.
 type Parser struct {
-	prefixes   []string
-	registry   *Registry
-	inlineRe   *regexp.Regexp
-	controlRe  *regexp.Regexp
+	prefixes  []string
+	registry  *Registry
+	inlineRe  *regexp.Regexp
+	controlRe *regexp.Regexp
 }
 
 // NewParser creates a new command parser.

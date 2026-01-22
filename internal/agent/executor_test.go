@@ -20,9 +20,9 @@ type mockTool struct {
 	execCount   atomic.Int32
 }
 
-func (m *mockTool) Name() string             { return m.name }
-func (m *mockTool) Description() string      { return m.description }
-func (m *mockTool) Schema() json.RawMessage  { return m.schema }
+func (m *mockTool) Name() string            { return m.name }
+func (m *mockTool) Description() string     { return m.description }
+func (m *mockTool) Schema() json.RawMessage { return m.schema }
 func (m *mockTool) Execute(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
 	m.execCount.Add(1)
 	if m.execFunc != nil {
@@ -323,8 +323,8 @@ func TestToolConfig(t *testing.T) {
 
 	// Configure tool with custom settings
 	executor.ConfigureTool("custom_tool", &ToolConfig{
-		Timeout: 100 * time.Millisecond,
-		Retries: 5,
+		Timeout:  100 * time.Millisecond,
+		Retries:  5,
 		Priority: 10,
 	})
 

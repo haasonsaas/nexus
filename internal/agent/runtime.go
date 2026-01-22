@@ -553,7 +553,20 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 			return
 		}
 
-		// Add the new user message
+		// Add and persist the new user message
+		if msg.ID == "" {
+			msg.ID = uuid.NewString()
+		}
+		if msg.SessionID == "" {
+			msg.SessionID = session.ID
+		}
+		if msg.CreatedAt.IsZero() {
+			msg.CreatedAt = time.Now()
+		}
+		if err := r.sessions.AppendMessage(ctx, session.ID, msg); err != nil {
+			chunks <- &ResponseChunk{Error: fmt.Errorf("failed to persist user message: %w", err)}
+			return
+		}
 		messages = append(messages, CompletionMessage{
 			Role:        string(msg.Role),
 			Content:     msg.Content,
@@ -615,12 +628,20 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 					chunks <- &ResponseChunk{Error: chunk.Error}
 					return
 				}
+				if chunk.Done {
+					break
+				}
 				if chunk.Text != "" {
 					textBuilder.WriteString(chunk.Text)
 					chunks <- &ResponseChunk{Text: chunk.Text}
 				}
 				if chunk.ToolCall != nil {
-					toolCalls = append(toolCalls, *chunk.ToolCall)
+					tc := *chunk.ToolCall
+					toolCalls = append(toolCalls, tc)
+					// Persist tool call event immediately when received
+					if r.toolEvents != nil {
+						_ = r.toolEvents.AddToolCall(ctx, session.ID, "", &tc)
+					}
 				}
 			}
 
@@ -654,7 +675,9 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 
 			// Execute tools and collect results
 			var toolResults []models.ToolResult
-			for _, tc := range toolCalls {
+			for i := range toolCalls {
+				tc := toolCalls[i] // Shadow to avoid range variable pointer bug
+
 				// Check policy at execution time
 				if resolver != nil && toolPolicy != nil {
 					if !resolver.IsAllowed(toolPolicy, tc.Name) {
@@ -665,14 +688,11 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 						}
 						toolResults = append(toolResults, result)
 						chunks <- &ResponseChunk{ToolResult: &result}
+						// Persist tool result event even for denied tools
+						if r.toolEvents != nil {
+							_ = r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &result)
+						}
 						continue
-					}
-				}
-
-				// Persist tool call event
-				if r.toolEvents != nil {
-					if err := r.toolEvents.AddToolCall(ctx, session.ID, assistantMsg.ID, &tc); err != nil {
-						// Log but don't fail - tool event persistence is best-effort
 					}
 				}
 
@@ -698,9 +718,7 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 
 				// Persist tool result event
 				if r.toolEvents != nil {
-					if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &result); err != nil {
-						// Log but don't fail
-					}
+					_ = r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &result)
 				}
 			}
 

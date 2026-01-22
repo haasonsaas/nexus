@@ -1486,6 +1486,7 @@ allowing you to trace exactly what happened during a run.`,
 func buildEventsShowCmd() *cobra.Command {
 	var configPath string
 	var format string
+	var traceDir string
 	cmd := &cobra.Command{
 		Use:   "show <run-id>",
 		Short: "Show event timeline for a run",
@@ -1501,14 +1502,18 @@ The timeline shows all events in chronological order including:
   nexus events show run_123456
 
   # Show events in JSON format
-  nexus events show run_123456 --format json`,
+  nexus events show run_123456 --format json
+
+  # Show events from trace files
+  nexus events show run_123456 --trace-dir ./traces`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runEventsShow(cmd, configPath, args[0], format)
+			return runEventsShow(cmd, configPath, args[0], format, traceDir)
 		},
 	}
 	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
 	cmd.Flags().StringVarP(&format, "format", "f", "text", "Output format (text, json)")
+	cmd.Flags().StringVar(&traceDir, "trace-dir", "", "Directory containing trace files (defaults to NEXUS_TRACE_DIR)")
 	return cmd
 }
 

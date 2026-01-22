@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,6 +33,23 @@ type TraceHeader struct {
 	StartedAt   time.Time `json:"started_at"`  // When the trace started
 	AppVersion  string    `json:"app_version"` // Application version (optional)
 	Environment string    `json:"environment"` // Environment name (optional)
+}
+
+var traceFileSanitizer = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
+
+// TraceFileName returns a safe file name for storing a run trace.
+func TraceFileName(runID string) string {
+	cleaned := traceFileSanitizer.ReplaceAllString(runID, "_")
+	cleaned = strings.Trim(cleaned, "_")
+	if cleaned == "" {
+		cleaned = "run"
+	}
+	return cleaned + ".jsonl"
+}
+
+// TraceFilePath returns the trace file path for a given directory and run ID.
+func TraceFilePath(dir, runID string) string {
+	return filepath.Join(dir, TraceFileName(runID))
 }
 
 // Redactor is an optional function to redact sensitive data from events before writing to trace.
@@ -166,6 +186,70 @@ func (p *TracePlugin) Close() error {
 		return p.file.Close()
 	}
 	return nil
+}
+
+// TraceDirectoryPlugin writes per-run trace files into a directory.
+// Each run is written to <dir>/<run_id>.jsonl using the same format as TracePlugin.
+type TraceDirectoryPlugin struct {
+	dir    string
+	opts   []TraceOption
+	mu     sync.Mutex
+	traces map[string]*TracePlugin
+}
+
+// NewTraceDirectoryPlugin creates a plugin that writes traces to the given directory.
+func NewTraceDirectoryPlugin(dir string, opts ...TraceOption) (*TraceDirectoryPlugin, error) {
+	if strings.TrimSpace(dir) == "" {
+		return nil, fmt.Errorf("trace directory is empty")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, fmt.Errorf("create trace directory: %w", err)
+	}
+	return &TraceDirectoryPlugin{
+		dir:    dir,
+		opts:   opts,
+		traces: make(map[string]*TracePlugin),
+	}, nil
+}
+
+// OnEvent writes the event to the per-run trace file.
+func (p *TraceDirectoryPlugin) OnEvent(ctx context.Context, e models.AgentEvent) {
+	if e.RunID == "" {
+		return
+	}
+
+	p.mu.Lock()
+	trace, ok := p.traces[e.RunID]
+	if !ok {
+		path := TraceFilePath(p.dir, e.RunID)
+		var err error
+		trace, err = NewTracePluginFile(path, e.RunID, p.opts...)
+		if err != nil {
+			p.mu.Unlock()
+			return
+		}
+		p.traces[e.RunID] = trace
+	}
+	p.mu.Unlock()
+
+	trace.OnEvent(ctx, e)
+}
+
+// Close closes all open trace files.
+func (p *TraceDirectoryPlugin) Close() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	var firstErr error
+	for runID, trace := range p.traces {
+		if trace == nil {
+			continue
+		}
+		if err := trace.Close(); err != nil && firstErr == nil {
+			firstErr = fmt.Errorf("close trace %s: %w", runID, err)
+		}
+	}
+	return firstErr
 }
 
 // TraceReader reads AgentEvents from a JSONL trace file for replay or analysis.

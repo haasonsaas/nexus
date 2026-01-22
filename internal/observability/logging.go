@@ -244,6 +244,21 @@ func (l *Logger) WithContext(ctx context.Context) *Logger {
 	if sessionID, ok := ctx.Value(SessionIDKey).(string); ok && sessionID != "" {
 		attrs = append(attrs, slog.String("session_id", sessionID))
 	}
+	if runID := GetRunID(ctx); runID != "" {
+		attrs = append(attrs, slog.String("run_id", runID))
+	}
+	if toolCallID := GetToolCallID(ctx); toolCallID != "" {
+		attrs = append(attrs, slog.String("tool_call_id", toolCallID))
+	}
+	if edgeID := GetEdgeID(ctx); edgeID != "" {
+		attrs = append(attrs, slog.String("edge_id", edgeID))
+	}
+	if agentID := GetAgentID(ctx); agentID != "" {
+		attrs = append(attrs, slog.String("agent_id", agentID))
+	}
+	if messageID := GetMessageID(ctx); messageID != "" {
+		attrs = append(attrs, slog.String("message_id", messageID))
+	}
 	if userID, ok := ctx.Value(UserIDKey).(string); ok && userID != "" {
 		attrs = append(attrs, slog.String("user_id", userID))
 	}
@@ -324,6 +339,21 @@ func (l *Logger) log(ctx context.Context, level slog.Level, msg string, args ...
 	}
 	if sessionID, ok := ctx.Value(SessionIDKey).(string); ok && sessionID != "" {
 		attrs = append(attrs, "session_id", sessionID)
+	}
+	if runID := GetRunID(ctx); runID != "" {
+		attrs = append(attrs, "run_id", runID)
+	}
+	if toolCallID := GetToolCallID(ctx); toolCallID != "" {
+		attrs = append(attrs, "tool_call_id", toolCallID)
+	}
+	if edgeID := GetEdgeID(ctx); edgeID != "" {
+		attrs = append(attrs, "edge_id", edgeID)
+	}
+	if agentID := GetAgentID(ctx); agentID != "" {
+		attrs = append(attrs, "agent_id", agentID)
+	}
+	if messageID := GetMessageID(ctx); messageID != "" {
+		attrs = append(attrs, "message_id", messageID)
 	}
 	if userID, ok := ctx.Value(UserIDKey).(string); ok && userID != "" {
 		attrs = append(attrs, "user_id", userID)

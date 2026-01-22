@@ -127,7 +127,8 @@ func NewAdapterSimple(token string) *Adapter {
 
 	adapter, err := NewAdapter(config)
 	if err != nil {
-		panic(fmt.Sprintf("NewAdapterSimple: invalid config: %v", err))
+		// Use generic error message to avoid potential token exposure in logs/panics
+		panic("NewAdapterSimple: invalid config (check token)")
 	}
 	return adapter
 }

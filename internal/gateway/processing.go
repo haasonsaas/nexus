@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/agent"
@@ -26,6 +27,9 @@ const (
 
 	// maxResponseSize is the maximum size of accumulated response text (1MB).
 	maxResponseSize = 1 << 20 // 1MB
+
+	// maxInputSize is the maximum size of input message content (1MB).
+	maxInputSize = 1 << 20 // 1MB
 
 	// maxToolResults is the maximum number of tool results per processing.
 	maxToolResults = 100
@@ -90,6 +94,15 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 	}
 	if msg.Metadata == nil {
 		msg.Metadata = map[string]any{}
+	}
+
+	// Validate input message size to prevent memory exhaustion
+	if len(msg.Content) > maxInputSize {
+		s.logger.Warn("input message too large, truncating",
+			"channel", msg.Channel,
+			"original_size", len(msg.Content),
+			"max_size", maxInputSize)
+		msg.Content = msg.Content[:maxInputSize]
 	}
 
 	runtime, err := s.ensureRuntime(ctx)
@@ -260,14 +273,16 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		CreatedAt: time.Now(),
 	}
 
-	// Streaming state
+	// Streaming state - use atomic for hasStreaming to avoid race conditions
+	var streamingEnabled atomic.Bool
+	streamingEnabled.Store(hasStreaming)
 	var streamingMsgID string
 	var lastUpdate time.Time
 	var lastTyping time.Time
 	var mu sync.Mutex
 
 	// Send initial typing indicator if streaming is supported
-	if hasStreaming {
+	if streamingEnabled.Load() {
 		if err := streamingAdapter.SendTypingIndicator(runCtx, outboundMsg); err != nil {
 			s.logger.Debug("failed to send typing indicator", "error", err)
 		}
@@ -296,7 +311,7 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 			response.WriteString(chunk.Text)
 
 			// Handle streaming updates
-			if hasStreaming {
+			if streamingEnabled.Load() {
 				mu.Lock()
 				now := time.Now()
 
@@ -305,9 +320,11 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 					var err error
 					streamingMsgID, err = streamingAdapter.StartStreamingResponse(runCtx, outboundMsg)
 					if err != nil {
-						s.logger.Debug("failed to start streaming response", "error", err)
+						s.logger.Warn("streaming fallback triggered, switching to non-streaming mode",
+							"error", err,
+							"session_id", session.ID)
 						// Fall back to non-streaming mode
-						hasStreaming = false
+						streamingEnabled.Store(false)
 					} else {
 						lastUpdate = now
 					}
@@ -332,16 +349,15 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 			toolResults = append(toolResults, *chunk.ToolResult)
 
 			// Refresh typing indicator during tool execution
-			if hasStreaming && streamingMsgID == "" {
-				mu.Lock()
-				if time.Since(lastTyping) >= streamingTypingInterval {
-					if err := streamingAdapter.SendTypingIndicator(runCtx, outboundMsg); err != nil {
-						s.logger.Debug("failed to refresh typing indicator", "error", err)
-					}
-					lastTyping = time.Now()
+			mu.Lock()
+			shouldRefreshTyping := streamingEnabled.Load() && streamingMsgID == ""
+			if shouldRefreshTyping && time.Since(lastTyping) >= streamingTypingInterval {
+				if err := streamingAdapter.SendTypingIndicator(runCtx, outboundMsg); err != nil {
+					s.logger.Debug("failed to refresh typing indicator", "error", err)
 				}
-				mu.Unlock()
+				lastTyping = time.Now()
 			}
+			mu.Unlock()
 		}
 	}
 
@@ -353,9 +369,14 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 	outboundMsg.ToolResults = toolResults
 
 	// Final update or send
-	if hasStreaming && streamingMsgID != "" {
+	mu.Lock()
+	finalStreamingMsgID := streamingMsgID
+	finalStreamingEnabled := streamingEnabled.Load()
+	mu.Unlock()
+
+	if finalStreamingEnabled && finalStreamingMsgID != "" {
 		// Do final update with complete content
-		if err := streamingAdapter.UpdateStreamingResponse(runCtx, outboundMsg, streamingMsgID, response.String()); err != nil {
+		if err := streamingAdapter.UpdateStreamingResponse(runCtx, outboundMsg, finalStreamingMsgID, response.String()); err != nil {
 			s.logger.Debug("failed to send final streaming update", "error", err)
 			// Fall back to sending a new message
 			if err := outboundAdapter.Send(ctx, outboundMsg); err != nil {

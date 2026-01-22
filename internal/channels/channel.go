@@ -241,7 +241,8 @@ func (r *Registry) StopAll(ctx context.Context) error {
 // AggregateMessages returns a channel that receives messages from all adapters.
 // The returned channel is closed when the context is cancelled or all adapters close.
 func (r *Registry) AggregateMessages(ctx context.Context) <-chan *models.Message {
-	out := make(chan *models.Message)
+	// Use buffered channel to prevent goroutine leaks if consumer stops reading
+	out := make(chan *models.Message, 100)
 	var wg sync.WaitGroup
 
 	// Copy adapters under lock before starting goroutines

@@ -119,6 +119,9 @@ func (t *StdioTransport) Connect(ctx context.Context) error {
 	return nil
 }
 
+// closeTimeout is the maximum time to wait for goroutines during Close().
+const closeTimeout = 5 * time.Second
+
 // Close stops the subprocess. Safe to call multiple times.
 func (t *StdioTransport) Close() error {
 	var closeErr error
@@ -136,7 +139,19 @@ func (t *StdioTransport) Close() error {
 			}
 		}
 
-		t.wg.Wait()
+		// Wait for goroutines with timeout to prevent indefinite blocking
+		done := make(chan struct{})
+		go func() {
+			t.wg.Wait()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+			// Goroutines exited cleanly
+		case <-time.After(closeTimeout):
+			t.logger.Warn("timeout waiting for MCP transport goroutines to exit")
+		}
 	})
 	return closeErr
 }

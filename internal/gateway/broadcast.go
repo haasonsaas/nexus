@@ -138,6 +138,17 @@ func (m *BroadcastManager) processParallel(
 	for i, agentID := range agents {
 		go func(idx int, aid string) {
 			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					m.logger.Error("panic in broadcast processing",
+						"agent_id", aid,
+						"panic", r)
+					results[idx] = BroadcastResult{
+						AgentID: aid,
+						Error:   fmt.Errorf("panic during processing: %v", r),
+					}
+				}
+			}()
 			result := m.processForAgent(ctx, aid, msg, channelID, getSystemPrompt)
 			results[idx] = result
 		}(i, agentID)

@@ -2,6 +2,7 @@ package whatsapp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -272,11 +273,14 @@ func (a *Adapter) GetConversation(ctx context.Context, peerID string) (*personal
 	}, nil
 }
 
+// ErrNotImplemented indicates the operation is not implemented for this adapter.
+var ErrNotImplemented = errors.New("operation not implemented")
+
 // ListConversations lists conversations.
 func (a *Adapter) ListConversations(ctx context.Context, opts personal.ListOptions) ([]*personal.Conversation, error) {
 	// whatsmeow doesn't have a direct conversation list API
 	// This would need to be implemented with local state tracking
-	return nil, nil
+	return nil, fmt.Errorf("ListConversations: %w", ErrNotImplemented)
 }
 
 // handleEvent processes WhatsApp events.

@@ -221,16 +221,62 @@ func (m *MemoryStore) GetHistory(ctx context.Context, sessionID string, limit in
 	return out, nil
 }
 
+// deepCloneMap creates a deep copy of a map[string]any to prevent shared references.
+func deepCloneMap(m map[string]any) map[string]any {
+	if m == nil {
+		return nil
+	}
+	clone := make(map[string]any, len(m))
+	for k, v := range m {
+		clone[k] = deepCloneValue(v)
+	}
+	return clone
+}
+
+// deepCloneValue recursively clones a value, handling nested maps and slices.
+func deepCloneValue(v any) any {
+	switch val := v.(type) {
+	case map[string]any:
+		return deepCloneMap(val)
+	case []any:
+		cloned := make([]any, len(val))
+		for i, item := range val {
+			cloned[i] = deepCloneValue(item)
+		}
+		return cloned
+	case []string:
+		cloned := make([]string, len(val))
+		copy(cloned, val)
+		return cloned
+	case []int:
+		cloned := make([]int, len(val))
+		copy(cloned, val)
+		return cloned
+	case []int64:
+		cloned := make([]int64, len(val))
+		copy(cloned, val)
+		return cloned
+	case []float64:
+		cloned := make([]float64, len(val))
+		copy(cloned, val)
+		return cloned
+	case []bool:
+		cloned := make([]bool, len(val))
+		copy(cloned, val)
+		return cloned
+	default:
+		// Primitives (string, int, bool, float64, etc.) are safe to copy by value
+		return v
+	}
+}
+
 func cloneSession(session *models.Session) *models.Session {
 	if session == nil {
 		return nil
 	}
 	clone := *session
 	if session.Metadata != nil {
-		clone.Metadata = map[string]any{}
-		for k, v := range session.Metadata {
-			clone.Metadata[k] = v
-		}
+		clone.Metadata = deepCloneMap(session.Metadata)
 	}
 	return &clone
 }
@@ -241,10 +287,7 @@ func cloneMessage(msg *models.Message) *models.Message {
 	}
 	clone := *msg
 	if msg.Metadata != nil {
-		clone.Metadata = map[string]any{}
-		for k, v := range msg.Metadata {
-			clone.Metadata[k] = v
-		}
+		clone.Metadata = deepCloneMap(msg.Metadata)
 	}
 	if len(msg.Attachments) > 0 {
 		clone.Attachments = append([]models.Attachment{}, msg.Attachments...)

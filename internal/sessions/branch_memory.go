@@ -352,8 +352,16 @@ func (s *MemoryBranchStore) CompareBranches(ctx context.Context, sourceBranchID,
 func (s *MemoryBranchStore) getFullBranchPathLocked(branchID string) *models.BranchPath {
 	var path []*models.Branch
 	currentID := branchID
+	visited := make(map[string]bool) // Cycle detection to prevent infinite loops
 
 	for currentID != "" {
+		// Check for cycle before processing
+		if visited[currentID] {
+			// Cycle detected - break to prevent infinite loop
+			break
+		}
+		visited[currentID] = true
+
 		branch, ok := s.branches[currentID]
 		if !ok {
 			if len(path) == 0 {

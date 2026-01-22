@@ -175,6 +175,13 @@ func (s *SQLToolEventStore) GetToolCallsByMessage(ctx context.Context, messageID
 	return calls, rows.Err()
 }
 
+// maxToolCalls limits the number of tool calls stored to prevent unbounded memory growth.
+// When exceeded, the oldest entries are removed.
+const maxToolCalls = 10000
+
+// maxToolResults limits the number of tool results stored to prevent unbounded memory growth.
+const maxToolResults = 10000
+
 // MemoryToolEventStore implements ToolEventStore in memory for testing.
 type MemoryToolEventStore struct {
 	mu      sync.RWMutex
@@ -201,6 +208,12 @@ func (s *MemoryToolEventStore) AddToolCall(ctx context.Context, sessionID, messa
 	tc.MessageID = messageID
 	tc.CreatedAt = time.Now()
 	s.calls = append(s.calls, tc)
+
+	// Trim old calls if limit exceeded to prevent unbounded memory growth
+	if len(s.calls) > maxToolCalls {
+		// Remove oldest half to avoid frequent trimming
+		s.calls = s.calls[len(s.calls)/2:]
+	}
 	return nil
 }
 
@@ -219,6 +232,12 @@ func (s *MemoryToolEventStore) AddToolResult(ctx context.Context, sessionID, mes
 	tr.ToolCallID = callID
 	tr.CreatedAt = time.Now()
 	s.results = append(s.results, tr)
+
+	// Trim old results if limit exceeded to prevent unbounded memory growth
+	if len(s.results) > maxToolResults {
+		// Remove oldest half to avoid frequent trimming
+		s.results = s.results[len(s.results)/2:]
+	}
 	return nil
 }
 

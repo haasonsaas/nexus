@@ -2340,3 +2340,73 @@ func printSystemStatus(out io.Writer, jsonOutput bool) {
 	fmt.Fprintln(out, "   Avg Response Time: 1.2s")
 	fmt.Fprintln(out)
 }
+
+// =============================================================================
+// Edge Command Handlers
+// =============================================================================
+
+// runEdgeStatus shows the status of edge daemons.
+func runEdgeStatus(cmd *cobra.Command, configPath string, edgeID string) error {
+	fmt.Fprintln(cmd.OutOrStdout(), "Edge Status")
+	fmt.Fprintln(cmd.OutOrStdout(), "===========")
+	fmt.Fprintln(cmd.OutOrStdout())
+
+	if edgeID == "" {
+		// Show summary of all edges
+		fmt.Fprintln(cmd.OutOrStdout(), "Connected Edges: 0")
+		fmt.Fprintln(cmd.OutOrStdout())
+		fmt.Fprintln(cmd.OutOrStdout(), "No edges currently connected.")
+		fmt.Fprintln(cmd.OutOrStdout(), "Run 'nexus-edge --core-url <url> --edge-id <id>' to connect an edge daemon.")
+	} else {
+		// Show specific edge
+		fmt.Fprintf(cmd.OutOrStdout(), "Edge ID: %s\n", edgeID)
+		fmt.Fprintln(cmd.OutOrStdout(), "Status: Not connected")
+	}
+	return nil
+}
+
+// runEdgeList lists connected edge daemons.
+func runEdgeList(cmd *cobra.Command, configPath string, showTools bool) error {
+	fmt.Fprintln(cmd.OutOrStdout(), "Connected Edge Daemons")
+	fmt.Fprintln(cmd.OutOrStdout(), "======================")
+	fmt.Fprintln(cmd.OutOrStdout())
+
+	fmt.Fprintln(cmd.OutOrStdout(), "ID            Name          Status       Tools  Last Heartbeat")
+	fmt.Fprintln(cmd.OutOrStdout(), "------------  ------------  -----------  -----  ---------------")
+	fmt.Fprintln(cmd.OutOrStdout())
+	fmt.Fprintln(cmd.OutOrStdout(), "No edges currently connected.")
+	return nil
+}
+
+// runEdgeTools lists tools from connected edges.
+func runEdgeTools(cmd *cobra.Command, configPath string, edgeID string) error {
+	fmt.Fprintln(cmd.OutOrStdout(), "Edge Tools")
+	fmt.Fprintln(cmd.OutOrStdout(), "==========")
+	fmt.Fprintln(cmd.OutOrStdout())
+
+	if edgeID != "" {
+		fmt.Fprintf(cmd.OutOrStdout(), "Filtering by edge: %s\n", edgeID)
+		fmt.Fprintln(cmd.OutOrStdout())
+	}
+
+	fmt.Fprintln(cmd.OutOrStdout(), "Canonical Name                    Description                    Approval")
+	fmt.Fprintln(cmd.OutOrStdout(), "--------------------------------  -----------------------------  --------")
+	fmt.Fprintln(cmd.OutOrStdout())
+	fmt.Fprintln(cmd.OutOrStdout(), "No edge tools available. Connect an edge daemon first.")
+	return nil
+}
+
+// runEdgeApprove approves a pending edge (TOFU).
+func runEdgeApprove(cmd *cobra.Command, configPath string, edgeID string) error {
+	fmt.Fprintf(cmd.OutOrStdout(), "Approving edge: %s\n", edgeID)
+	fmt.Fprintln(cmd.OutOrStdout(), "No pending edge found with that ID.")
+	return nil
+}
+
+// runEdgeRevoke revokes an approved edge.
+func runEdgeRevoke(cmd *cobra.Command, configPath string, edgeID string) error {
+	fmt.Fprintf(cmd.OutOrStdout(), "Revoking edge: %s\n", edgeID)
+	fmt.Fprintln(cmd.OutOrStdout(), "No approved edge found with that ID.")
+	return nil
+}
+

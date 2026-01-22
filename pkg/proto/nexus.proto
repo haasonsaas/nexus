@@ -507,3 +507,353 @@ enum ServingStatus {
   SERVING_STATUS_NOT_SERVING = 2;
   SERVING_STATUS_SERVICE_UNKNOWN = 3;
 }
+
+// =============================================================================
+// Edge Service - Protocol for edge daemon communication
+// =============================================================================
+
+// EdgeService manages edge daemon connections and tool execution.
+// Edge daemons connect from user machines to provide local capabilities
+// like device access, browser relay, and edge-only channels.
+service EdgeService {
+  // Connect establishes a bidirectional stream between edge and core.
+  // The edge sends registration, heartbeats, and tool results.
+  // The core sends tool execution requests and control messages.
+  rpc Connect(stream EdgeMessage) returns (stream CoreMessage);
+
+  // GetEdgeStatus returns the status of a connected edge.
+  rpc GetEdgeStatus(GetEdgeStatusRequest) returns (GetEdgeStatusResponse);
+
+  // ListEdges returns all connected edges.
+  rpc ListEdges(ListEdgesRequest) returns (ListEdgesResponse);
+}
+
+// =============================================================================
+// Edge Protocol Messages
+// =============================================================================
+
+// EdgeMessage represents messages sent from edge daemon to core.
+message EdgeMessage {
+  oneof message {
+    EdgeRegister register = 1;
+    EdgeHeartbeat heartbeat = 2;
+    ToolExecutionResult tool_result = 3;
+    EdgeEvent event = 4;
+  }
+}
+
+// CoreMessage represents messages sent from core to edge daemon.
+message CoreMessage {
+  oneof message {
+    EdgeRegistered registered = 1;
+    ToolExecutionRequest tool_request = 2;
+    ToolCancellation tool_cancel = 3;
+    CoreEvent event = 4;
+  }
+}
+
+// EdgeRegister is sent by the edge to register with the core.
+message EdgeRegister {
+  // Unique identifier for this edge instance.
+  string edge_id = 1;
+
+  // Human-readable name for this edge.
+  string name = 2;
+
+  // Authentication token (pre-shared secret or TOFU token).
+  string auth_token = 3;
+
+  // Tools this edge provides.
+  repeated EdgeToolDefinition tools = 4;
+
+  // Channels this edge can host (for edge-only channels like iMessage).
+  repeated string channel_types = 5;
+
+  // Capabilities flags.
+  EdgeCapabilities capabilities = 6;
+
+  // Edge version for compatibility checks.
+  string version = 7;
+
+  // Metadata about the edge environment.
+  map<string, string> metadata = 8;
+}
+
+// EdgeToolDefinition describes a tool provided by the edge.
+message EdgeToolDefinition {
+  // Tool name (will be prefixed with edge:<edge_id>.).
+  string name = 1;
+
+  // Human-readable description for the LLM.
+  string description = 2;
+
+  // JSON Schema for tool parameters.
+  string input_schema = 3;
+
+  // Whether this tool requires approval before execution.
+  bool requires_approval = 4;
+
+  // Timeout for this tool in seconds (0 = use default).
+  int32 timeout_seconds = 5;
+
+  // Whether this tool can produce artifacts (files, screenshots, etc.).
+  bool produces_artifacts = 6;
+}
+
+// EdgeCapabilities describes what the edge can do.
+message EdgeCapabilities {
+  // Can execute arbitrary tools.
+  bool tools = 1;
+
+  // Can host channel adapters.
+  bool channels = 2;
+
+  // Can stream tool execution progress.
+  bool streaming = 3;
+
+  // Can handle artifact uploads.
+  bool artifacts = 4;
+}
+
+// EdgeRegistered confirms successful registration.
+message EdgeRegistered {
+  // Whether registration was successful.
+  bool success = 1;
+
+  // Error message if registration failed.
+  string error = 2;
+
+  // Assigned edge ID (may differ from requested if conflict).
+  string edge_id = 3;
+
+  // Heartbeat interval in seconds.
+  int32 heartbeat_interval_seconds = 4;
+
+  // Core version for compatibility.
+  string core_version = 5;
+}
+
+// EdgeHeartbeat keeps the connection alive and reports status.
+message EdgeHeartbeat {
+  // Edge identifier.
+  string edge_id = 1;
+
+  // Timestamp of heartbeat.
+  google.protobuf.Timestamp timestamp = 2;
+
+  // Current load metrics.
+  EdgeMetrics metrics = 3;
+
+  // Tools currently executing.
+  repeated string active_tools = 4;
+}
+
+// EdgeMetrics reports edge daemon health.
+message EdgeMetrics {
+  // Number of tools currently executing.
+  int32 active_tool_count = 1;
+
+  // CPU usage percentage (0-100).
+  float cpu_percent = 2;
+
+  // Memory usage in bytes.
+  int64 memory_bytes = 3;
+
+  // Uptime in seconds.
+  int64 uptime_seconds = 4;
+}
+
+// ToolExecutionRequest asks the edge to execute a tool.
+message ToolExecutionRequest {
+  // Unique ID for this execution (for correlation).
+  string execution_id = 1;
+
+  // Run ID for tracing across the agent loop.
+  string run_id = 2;
+
+  // Session ID for context.
+  string session_id = 3;
+
+  // Tool name (without edge: prefix).
+  string tool_name = 4;
+
+  // JSON-encoded tool parameters.
+  string input = 5;
+
+  // Timeout in seconds.
+  int32 timeout_seconds = 6;
+
+  // Whether approval was already granted.
+  bool approved = 7;
+
+  // Metadata for the execution.
+  map<string, string> metadata = 8;
+}
+
+// ToolExecutionResult returns the result of a tool execution.
+message ToolExecutionResult {
+  // Execution ID for correlation.
+  string execution_id = 1;
+
+  // Tool output content.
+  string content = 2;
+
+  // Whether this is an error result.
+  bool is_error = 3;
+
+  // Execution duration in milliseconds.
+  int64 duration_ms = 4;
+
+  // Artifacts produced by the tool.
+  repeated Artifact artifacts = 5;
+
+  // Detailed error information if is_error is true.
+  string error_details = 6;
+}
+
+// Artifact represents a file or data produced by tool execution.
+message Artifact {
+  // Unique artifact ID.
+  string id = 1;
+
+  // Artifact type (screenshot, recording, file, etc.).
+  string type = 2;
+
+  // MIME type.
+  string mime_type = 3;
+
+  // Filename.
+  string filename = 4;
+
+  // Size in bytes.
+  int64 size = 5;
+
+  // URL or reference to retrieve the artifact.
+  string reference = 6;
+
+  // Inline data for small artifacts (< 1MB).
+  bytes data = 7;
+
+  // TTL in seconds (0 = default retention).
+  int32 ttl_seconds = 8;
+}
+
+// ToolCancellation requests cancellation of a running tool.
+message ToolCancellation {
+  // Execution ID to cancel.
+  string execution_id = 1;
+
+  // Reason for cancellation.
+  string reason = 2;
+}
+
+// EdgeEvent represents events from edge to core.
+message EdgeEvent {
+  // Edge identifier.
+  string edge_id = 1;
+
+  // Event type.
+  EdgeEventType type = 2;
+
+  // Event timestamp.
+  google.protobuf.Timestamp timestamp = 3;
+
+  // Event-specific data.
+  google.protobuf.Struct data = 4;
+}
+
+enum EdgeEventType {
+  EDGE_EVENT_TYPE_UNSPECIFIED = 0;
+  EDGE_EVENT_TYPE_TOOL_STARTED = 1;
+  EDGE_EVENT_TYPE_TOOL_PROGRESS = 2;
+  EDGE_EVENT_TYPE_TOOL_COMPLETED = 3;
+  EDGE_EVENT_TYPE_TOOL_FAILED = 4;
+  EDGE_EVENT_TYPE_TOOL_CANCELLED = 5;
+  EDGE_EVENT_TYPE_APPROVAL_REQUIRED = 6;
+  EDGE_EVENT_TYPE_ARTIFACT_READY = 7;
+  EDGE_EVENT_TYPE_CHANNEL_MESSAGE = 8;
+  EDGE_EVENT_TYPE_DISCONNECTING = 9;
+}
+
+// CoreEvent represents events from core to edge.
+message CoreEvent {
+  // Event type.
+  CoreEventType type = 1;
+
+  // Event timestamp.
+  google.protobuf.Timestamp timestamp = 2;
+
+  // Event-specific data.
+  google.protobuf.Struct data = 3;
+}
+
+enum CoreEventType {
+  CORE_EVENT_TYPE_UNSPECIFIED = 0;
+  CORE_EVENT_TYPE_APPROVAL_GRANTED = 1;
+  CORE_EVENT_TYPE_APPROVAL_DENIED = 2;
+  CORE_EVENT_TYPE_CONFIG_UPDATE = 3;
+  CORE_EVENT_TYPE_SHUTDOWN = 4;
+}
+
+// =============================================================================
+// Edge Status Messages
+// =============================================================================
+
+message GetEdgeStatusRequest {
+  string edge_id = 1;
+}
+
+message GetEdgeStatusResponse {
+  EdgeStatus status = 1;
+}
+
+message ListEdgesRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+}
+
+message ListEdgesResponse {
+  repeated EdgeStatus edges = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+// EdgeStatus describes the current state of an edge.
+message EdgeStatus {
+  // Edge identifier.
+  string edge_id = 1;
+
+  // Human-readable name.
+  string name = 2;
+
+  // Connection status.
+  EdgeConnectionStatus connection_status = 3;
+
+  // When the edge connected.
+  google.protobuf.Timestamp connected_at = 4;
+
+  // Last heartbeat received.
+  google.protobuf.Timestamp last_heartbeat = 5;
+
+  // Tools registered by this edge.
+  repeated string tools = 6;
+
+  // Channel types this edge can host.
+  repeated string channel_types = 7;
+
+  // Latest metrics.
+  EdgeMetrics metrics = 8;
+
+  // Edge version.
+  string version = 9;
+
+  // Edge metadata.
+  map<string, string> metadata = 10;
+}
+
+enum EdgeConnectionStatus {
+  EDGE_CONNECTION_STATUS_UNSPECIFIED = 0;
+  EDGE_CONNECTION_STATUS_CONNECTED = 1;
+  EDGE_CONNECTION_STATUS_DISCONNECTED = 2;
+  EDGE_CONNECTION_STATUS_RECONNECTING = 3;
+}

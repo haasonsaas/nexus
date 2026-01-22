@@ -109,6 +109,7 @@ Documentation: https://github.com/haasonsaas/nexus`,
 		buildMemoryCmd(),
 		buildMcpCmd(),
 		buildTraceCmd(),
+		buildEdgeCmd(),
 	)
 
 	return rootCmd

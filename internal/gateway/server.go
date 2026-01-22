@@ -35,6 +35,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/media"
 	"github.com/haasonsaas/nexus/internal/media/transcribe"
 	"github.com/haasonsaas/nexus/internal/memory"
+	"github.com/haasonsaas/nexus/internal/observability"
 	"github.com/haasonsaas/nexus/internal/plugins"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/skills"
@@ -100,6 +101,10 @@ type Server struct {
 
 	edgeManager *edge.Manager
 	edgeService *edge.Service
+
+	// Event timeline for observability and debugging
+	eventStore    *observability.MemoryEventStore
+	eventRecorder *observability.EventRecorder
 
 	// messageSem limits concurrent message processing to prevent unbounded goroutine growth
 	messageSem chan struct{}
@@ -323,6 +328,10 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		logger.Info("edge service initialized", "auth_mode", cfg.Edge.AuthMode)
 	}
 
+	// Initialize event store for observability timeline
+	eventStore := observability.NewMemoryEventStore(10000) // Store up to 10k events
+	eventRecorder := observability.NewEventRecorder(eventStore, nil)
+
 	startupCancelUsed = true
 	server := &Server{
 		config:             cfg,
@@ -346,6 +355,8 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		hooksRegistry:      hooksRegistry,
 		edgeManager:        edgeManager,
 		edgeService:        edgeService,
+		eventStore:         eventStore,
+		eventRecorder:      eventRecorder,
 		commandRegistry:    commandRegistry,
 		commandParser:      commandParser,
 		activeRuns:         make(map[string]activeRun),
@@ -359,6 +370,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	proto.RegisterAgentServiceServer(grpcServer, grpcSvc)
 	proto.RegisterChannelServiceServer(grpcServer, grpcSvc)
 	proto.RegisterHealthServiceServer(grpcServer, grpcSvc)
+	proto.RegisterEventServiceServer(grpcServer, newEventService(server))
 	if edgeService != nil {
 		proto.RegisterEdgeServiceServer(grpcServer, edgeService)
 	}

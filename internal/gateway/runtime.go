@@ -95,6 +95,11 @@ func (s *Server) ensureRuntime(ctx context.Context) (*agent.Runtime, error) {
 	}
 	s.registerMCPSamplingHandler()
 
+	// Register event timeline plugin for observability
+	if plugin := s.GetEventTimelinePlugin(); plugin != nil {
+		runtime.Use(plugin)
+	}
+
 	if s.approvalChecker == nil {
 		basePolicy := buildApprovalPolicy(s.config.Tools.Execution, s.toolPolicyResolver)
 		checker := agent.NewApprovalChecker(basePolicy)

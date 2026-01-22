@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package nexus.edge.v1;
+package nexus.v1;
 
 option go_package = "github.com/haasonsaas/nexus/pkg/proto;proto";
 

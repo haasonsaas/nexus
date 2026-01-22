@@ -163,15 +163,15 @@ func (c *Client) Connect(ctx context.Context) error {
 
 	// Authenticate
 	if err := c.authenticate(ctx); err != nil {
-		c.stream.CloseSend()
-		c.conn.Close()
+		_ = c.stream.CloseSend() //nolint:errcheck // best-effort cleanup
+		_ = c.conn.Close()       //nolint:errcheck // best-effort cleanup
 		return fmt.Errorf("authenticate: %w", err)
 	}
 
 	// Register tools
 	if err := c.registerTools(ctx); err != nil {
-		c.stream.CloseSend()
-		c.conn.Close()
+		_ = c.stream.CloseSend() //nolint:errcheck // best-effort cleanup
+		_ = c.conn.Close()       //nolint:errcheck // best-effort cleanup
 		return fmt.Errorf("register tools: %w", err)
 	}
 
@@ -196,10 +196,10 @@ func (c *Client) Disconnect() {
 	c.mu.Unlock()
 
 	if c.stream != nil {
-		c.stream.CloseSend()
+		_ = c.stream.CloseSend() //nolint:errcheck // best-effort cleanup
 	}
 	if c.conn != nil {
-		c.conn.Close()
+		_ = c.conn.Close() //nolint:errcheck // best-effort cleanup
 	}
 }
 
@@ -213,7 +213,7 @@ func (c *Client) IsConnected() bool {
 func (c *Client) authenticate(ctx context.Context) error {
 	var publicKey []byte
 	if c.config.AuthMethod == proto.AuthMethod_AUTH_METHOD_TOFU {
-		publicKey = c.config.PrivateKey.Public().(ed25519.PublicKey)
+		publicKey = c.config.PrivateKey.Public().(ed25519.PublicKey) //nolint:errcheck // type is guaranteed by ed25519
 	}
 
 	authReq := &proto.AuthenticateRequest{

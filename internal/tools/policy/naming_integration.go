@@ -45,7 +45,7 @@ func NewToolRegistry(resolver *Resolver) *ToolRegistry {
 
 	// Register default core aliases
 	for alias, canonical := range naming.DefaultCoreAliases() {
-		reg.naming.RegisterAlias(alias, canonical)
+		_ = reg.naming.RegisterAlias(alias, canonical) //nolint:errcheck // default aliases shouldn't fail
 	}
 
 	return reg

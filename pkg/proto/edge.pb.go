@@ -867,7 +867,7 @@ type AuthenticateRequest struct {
 	// Human-readable name for the edge device
 	EdgeName string `protobuf:"bytes,2,opt,name=edge_name,json=edgeName,proto3" json:"edge_name,omitempty"`
 	// Authentication method
-	AuthMethod AuthMethod `protobuf:"varint,3,opt,name=auth_method,json=authMethod,proto3,enum=nexus.edge.v1.AuthMethod" json:"auth_method,omitempty"`
+	AuthMethod AuthMethod `protobuf:"varint,3,opt,name=auth_method,json=authMethod,proto3,enum=nexus.v1.AuthMethod" json:"auth_method,omitempty"`
 	// Shared secret for pre-shared key auth
 	SharedSecret string `protobuf:"bytes,4,opt,name=shared_secret,json=sharedSecret,proto3" json:"shared_secret,omitempty"`
 	// TOFU public key for trust-on-first-use
@@ -974,10 +974,10 @@ type AuthenticateResponse struct {
 	// Session token for subsequent requests (if not using streaming)
 	SessionToken string `protobuf:"bytes,2,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
 	// Trust level assigned to this edge
-	TrustLevel TrustLevel `protobuf:"varint,3,opt,name=trust_level,json=trustLevel,proto3,enum=nexus.edge.v1.TrustLevel" json:"trust_level,omitempty"`
+	TrustLevel TrustLevel `protobuf:"varint,3,opt,name=trust_level,json=trustLevel,proto3,enum=nexus.v1.TrustLevel" json:"trust_level,omitempty"`
 	// Error details if authentication failed
 	ErrorMessage string    `protobuf:"bytes,4,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
-	ErrorCode    ErrorCode `protobuf:"varint,5,opt,name=error_code,json=errorCode,proto3,enum=nexus.edge.v1.ErrorCode" json:"error_code,omitempty"`
+	ErrorCode    ErrorCode `protobuf:"varint,5,opt,name=error_code,json=errorCode,proto3,enum=nexus.v1.ErrorCode" json:"error_code,omitempty"`
 	// Gateway capabilities and requirements
 	GatewayCapabilities *GatewayCapabilities `protobuf:"bytes,6,opt,name=gateway_capabilities,json=gatewayCapabilities,proto3" json:"gateway_capabilities,omitempty"`
 	// Challenge for TOFU verification (must be signed with private key)
@@ -1213,7 +1213,7 @@ type ToolRegistrationError struct {
 	state         protoimpl.MessageState    `protogen:"open.v1"`
 	ToolName      string                    `protobuf:"bytes,1,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
 	ErrorMessage  string                    `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
-	ErrorCode     ToolRegistrationErrorCode `protobuf:"varint,3,opt,name=error_code,json=errorCode,proto3,enum=nexus.edge.v1.ToolRegistrationErrorCode" json:"error_code,omitempty"`
+	ErrorCode     ToolRegistrationErrorCode `protobuf:"varint,3,opt,name=error_code,json=errorCode,proto3,enum=nexus.v1.ToolRegistrationErrorCode" json:"error_code,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1279,11 +1279,11 @@ type EdgeTool struct {
 	// JSON Schema for input parameters (as JSON string)
 	InputSchema string `protobuf:"bytes,3,opt,name=input_schema,json=inputSchema,proto3" json:"input_schema,omitempty"`
 	// Tool category for organization
-	Category ToolCategory `protobuf:"varint,4,opt,name=category,proto3,enum=nexus.edge.v1.ToolCategory" json:"category,omitempty"`
+	Category ToolCategory `protobuf:"varint,4,opt,name=category,proto3,enum=nexus.v1.ToolCategory" json:"category,omitempty"`
 	// Whether this tool requires user approval
 	RequiresApproval bool `protobuf:"varint,5,opt,name=requires_approval,json=requiresApproval,proto3" json:"requires_approval,omitempty"`
 	// Risk level for policy decisions
-	RiskLevel RiskLevel `protobuf:"varint,6,opt,name=risk_level,json=riskLevel,proto3,enum=nexus.edge.v1.RiskLevel" json:"risk_level,omitempty"`
+	RiskLevel RiskLevel `protobuf:"varint,6,opt,name=risk_level,json=riskLevel,proto3,enum=nexus.v1.RiskLevel" json:"risk_level,omitempty"`
 	// Estimated execution time (for UI feedback)
 	EstimatedDurationMs int32 `protobuf:"varint,7,opt,name=estimated_duration_ms,json=estimatedDurationMs,proto3" json:"estimated_duration_ms,omitempty"`
 	// Whether this tool supports streaming output
@@ -1403,7 +1403,7 @@ type ToolExecutionRequest struct {
 	// Whether to stream progress updates
 	StreamProgress bool `protobuf:"varint,6,opt,name=stream_progress,json=streamProgress,proto3" json:"stream_progress,omitempty"`
 	// Priority level (for queue ordering)
-	Priority      Priority `protobuf:"varint,7,opt,name=priority,proto3,enum=nexus.edge.v1.Priority" json:"priority,omitempty"`
+	Priority      Priority `protobuf:"varint,7,opt,name=priority,proto3,enum=nexus.v1.Priority" json:"priority,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1580,7 +1580,7 @@ type ToolExecutionResult struct {
 	// Error message if not successful
 	ErrorMessage string `protobuf:"bytes,4,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
 	// Error code for programmatic handling
-	ErrorCode ToolErrorCode `protobuf:"varint,5,opt,name=error_code,json=errorCode,proto3,enum=nexus.edge.v1.ToolErrorCode" json:"error_code,omitempty"`
+	ErrorCode ToolErrorCode `protobuf:"varint,5,opt,name=error_code,json=errorCode,proto3,enum=nexus.v1.ToolErrorCode" json:"error_code,omitempty"`
 	// Execution duration in milliseconds
 	DurationMs int32 `protobuf:"varint,6,opt,name=duration_ms,json=durationMs,proto3" json:"duration_ms,omitempty"`
 	// Resource usage statistics
@@ -1980,7 +1980,7 @@ type EdgeCapabilities struct {
 	// Maximum concurrent tool executions
 	MaxConcurrentExecutions int32 `protobuf:"varint,1,opt,name=max_concurrent_executions,json=maxConcurrentExecutions,proto3" json:"max_concurrent_executions,omitempty"`
 	// Supported tool categories
-	SupportedCategories []ToolCategory `protobuf:"varint,2,rep,packed,name=supported_categories,json=supportedCategories,proto3,enum=nexus.edge.v1.ToolCategory" json:"supported_categories,omitempty"`
+	SupportedCategories []ToolCategory `protobuf:"varint,2,rep,packed,name=supported_categories,json=supportedCategories,proto3,enum=nexus.v1.ToolCategory" json:"supported_categories,omitempty"`
 	// Device information
 	DeviceInfo *DeviceInfo `protobuf:"bytes,3,opt,name=device_info,json=deviceInfo,proto3" json:"device_info,omitempty"`
 	// Whether the edge supports streaming output
@@ -2161,7 +2161,7 @@ type GatewayCapabilities struct {
 	// Required heartbeat interval
 	HeartbeatIntervalMs int32 `protobuf:"varint,4,opt,name=heartbeat_interval_ms,json=heartbeatIntervalMs,proto3" json:"heartbeat_interval_ms,omitempty"`
 	// Supported auth methods
-	SupportedAuthMethods []AuthMethod `protobuf:"varint,5,rep,packed,name=supported_auth_methods,json=supportedAuthMethods,proto3,enum=nexus.edge.v1.AuthMethod" json:"supported_auth_methods,omitempty"`
+	SupportedAuthMethods []AuthMethod `protobuf:"varint,5,rep,packed,name=supported_auth_methods,json=supportedAuthMethods,proto3,enum=nexus.v1.AuthMethod" json:"supported_auth_methods,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -2235,7 +2235,7 @@ func (x *GatewayCapabilities) GetSupportedAuthMethods() []AuthMethod {
 type EdgeStatusUpdate struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Current status
-	Status EdgeStatus `protobuf:"varint,1,opt,name=status,proto3,enum=nexus.edge.v1.EdgeStatus" json:"status,omitempty"`
+	Status EdgeStatus `protobuf:"varint,1,opt,name=status,proto3,enum=nexus.v1.EdgeStatus" json:"status,omitempty"`
 	// Number of active tool executions
 	ActiveExecutions int32 `protobuf:"varint,2,opt,name=active_executions,json=activeExecutions,proto3" json:"active_executions,omitempty"`
 	// Queue depth (pending executions)
@@ -2588,7 +2588,7 @@ func (x *HeartbeatResponse) GetSessionValid() bool {
 
 type ErrorResponse struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
-	Code    ErrorCode              `protobuf:"varint,1,opt,name=code,proto3,enum=nexus.edge.v1.ErrorCode" json:"code,omitempty"`
+	Code    ErrorCode              `protobuf:"varint,1,opt,name=code,proto3,enum=nexus.v1.ErrorCode" json:"code,omitempty"`
 	Message string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
 	Details *structpb.Struct       `protobuf:"bytes,3,opt,name=details,proto3" json:"details,omitempty"`
 	// Whether this error is recoverable
@@ -2668,110 +2668,110 @@ var File_pkg_proto_edge_proto protoreflect.FileDescriptor
 
 const file_pkg_proto_edge_proto_rawDesc = "" +
 	"\n" +
-	"\x14pkg/proto/edge.proto\x12\rnexus.edge.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1cgoogle/protobuf/struct.proto\"\xcd\x03\n" +
-	"\vEdgeMessage\x12H\n" +
-	"\fauthenticate\x18\x01 \x01(\v2\".nexus.edge.v1.AuthenticateRequestH\x00R\fauthenticate\x12L\n" +
-	"\x0eregister_tools\x18\x02 \x01(\v2#.nexus.edge.v1.RegisterToolsRequestH\x00R\rregisterTools\x12E\n" +
-	"\vtool_result\x18\x03 \x01(\v2\".nexus.edge.v1.ToolExecutionResultH\x00R\n" +
-	"toolResult\x12K\n" +
-	"\rtool_progress\x18\x04 \x01(\v2$.nexus.edge.v1.ToolExecutionProgressH\x00R\ftoolProgress\x12F\n" +
-	"\rstatus_update\x18\x05 \x01(\v2\x1f.nexus.edge.v1.EdgeStatusUpdateH\x00R\fstatusUpdate\x12?\n" +
-	"\theartbeat\x18\x06 \x01(\v2\x1f.nexus.edge.v1.HeartbeatRequestH\x00R\theartbeatB\t\n" +
-	"\amessage\"\x85\x04\n" +
-	"\x0eGatewayMessage\x12I\n" +
-	"\fauthenticate\x18\x01 \x01(\v2#.nexus.edge.v1.AuthenticateResponseH\x00R\fauthenticate\x12I\n" +
-	"\fregister_ack\x18\x02 \x01(\v2$.nexus.edge.v1.RegisterToolsResponseH\x00R\vregisterAck\x12H\n" +
-	"\ftool_request\x18\x03 \x01(\v2#.nexus.edge.v1.ToolExecutionRequestH\x00R\vtoolRequest\x12E\n" +
-	"\vtool_cancel\x18\x04 \x01(\v2\".nexus.edge.v1.ToolExecutionCancelH\x00R\n" +
-	"toolCancel\x12I\n" +
-	"\rstatus_update\x18\x05 \x01(\v2\".nexus.edge.v1.GatewayStatusUpdateH\x00R\fstatusUpdate\x12@\n" +
-	"\theartbeat\x18\x06 \x01(\v2 .nexus.edge.v1.HeartbeatResponseH\x00R\theartbeat\x124\n" +
-	"\x05error\x18\a \x01(\v2\x1c.nexus.edge.v1.ErrorResponseH\x00R\x05errorB\t\n" +
-	"\amessage\"\xd9\x02\n" +
+	"\x14pkg/proto/edge.proto\x12\bnexus.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1cgoogle/protobuf/struct.proto\"\xaf\x03\n" +
+	"\vEdgeMessage\x12C\n" +
+	"\fauthenticate\x18\x01 \x01(\v2\x1d.nexus.v1.AuthenticateRequestH\x00R\fauthenticate\x12G\n" +
+	"\x0eregister_tools\x18\x02 \x01(\v2\x1e.nexus.v1.RegisterToolsRequestH\x00R\rregisterTools\x12@\n" +
+	"\vtool_result\x18\x03 \x01(\v2\x1d.nexus.v1.ToolExecutionResultH\x00R\n" +
+	"toolResult\x12F\n" +
+	"\rtool_progress\x18\x04 \x01(\v2\x1f.nexus.v1.ToolExecutionProgressH\x00R\ftoolProgress\x12A\n" +
+	"\rstatus_update\x18\x05 \x01(\v2\x1a.nexus.v1.EdgeStatusUpdateH\x00R\fstatusUpdate\x12:\n" +
+	"\theartbeat\x18\x06 \x01(\v2\x1a.nexus.v1.HeartbeatRequestH\x00R\theartbeatB\t\n" +
+	"\amessage\"\xe2\x03\n" +
+	"\x0eGatewayMessage\x12D\n" +
+	"\fauthenticate\x18\x01 \x01(\v2\x1e.nexus.v1.AuthenticateResponseH\x00R\fauthenticate\x12D\n" +
+	"\fregister_ack\x18\x02 \x01(\v2\x1f.nexus.v1.RegisterToolsResponseH\x00R\vregisterAck\x12C\n" +
+	"\ftool_request\x18\x03 \x01(\v2\x1e.nexus.v1.ToolExecutionRequestH\x00R\vtoolRequest\x12@\n" +
+	"\vtool_cancel\x18\x04 \x01(\v2\x1d.nexus.v1.ToolExecutionCancelH\x00R\n" +
+	"toolCancel\x12D\n" +
+	"\rstatus_update\x18\x05 \x01(\v2\x1d.nexus.v1.GatewayStatusUpdateH\x00R\fstatusUpdate\x12;\n" +
+	"\theartbeat\x18\x06 \x01(\v2\x1b.nexus.v1.HeartbeatResponseH\x00R\theartbeat\x12/\n" +
+	"\x05error\x18\a \x01(\v2\x17.nexus.v1.ErrorResponseH\x00R\x05errorB\t\n" +
+	"\amessage\"\xcf\x02\n" +
 	"\x13AuthenticateRequest\x12\x17\n" +
 	"\aedge_id\x18\x01 \x01(\tR\x06edgeId\x12\x1b\n" +
-	"\tedge_name\x18\x02 \x01(\tR\bedgeName\x12:\n" +
-	"\vauth_method\x18\x03 \x01(\x0e2\x19.nexus.edge.v1.AuthMethodR\n" +
+	"\tedge_name\x18\x02 \x01(\tR\bedgeName\x125\n" +
+	"\vauth_method\x18\x03 \x01(\x0e2\x14.nexus.v1.AuthMethodR\n" +
 	"authMethod\x12#\n" +
 	"\rshared_secret\x18\x04 \x01(\tR\fsharedSecret\x12\x1d\n" +
 	"\n" +
-	"public_key\x18\x05 \x01(\fR\tpublicKey\x12C\n" +
-	"\fcapabilities\x18\x06 \x01(\v2\x1f.nexus.edge.v1.EdgeCapabilitiesR\fcapabilities\x12)\n" +
+	"public_key\x18\x05 \x01(\fR\tpublicKey\x12>\n" +
+	"\fcapabilities\x18\x06 \x01(\v2\x1a.nexus.v1.EdgeCapabilitiesR\fcapabilities\x12)\n" +
 	"\x10protocol_version\x18\a \x01(\tR\x0fprotocolVersion\x12\x1c\n" +
-	"\tsignature\x18\b \x01(\fR\tsignature\"\xe4\x02\n" +
+	"\tsignature\x18\b \x01(\fR\tsignature\"\xd5\x02\n" +
 	"\x14AuthenticateResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12#\n" +
-	"\rsession_token\x18\x02 \x01(\tR\fsessionToken\x12:\n" +
-	"\vtrust_level\x18\x03 \x01(\x0e2\x19.nexus.edge.v1.TrustLevelR\n" +
+	"\rsession_token\x18\x02 \x01(\tR\fsessionToken\x125\n" +
+	"\vtrust_level\x18\x03 \x01(\x0e2\x14.nexus.v1.TrustLevelR\n" +
 	"trustLevel\x12#\n" +
-	"\rerror_message\x18\x04 \x01(\tR\ferrorMessage\x127\n" +
+	"\rerror_message\x18\x04 \x01(\tR\ferrorMessage\x122\n" +
 	"\n" +
-	"error_code\x18\x05 \x01(\x0e2\x18.nexus.edge.v1.ErrorCodeR\terrorCode\x12U\n" +
-	"\x14gateway_capabilities\x18\x06 \x01(\v2\".nexus.edge.v1.GatewayCapabilitiesR\x13gatewayCapabilities\x12\x1c\n" +
-	"\tchallenge\x18\a \x01(\fR\tchallenge\"\xa4\x01\n" +
+	"error_code\x18\x05 \x01(\x0e2\x13.nexus.v1.ErrorCodeR\terrorCode\x12P\n" +
+	"\x14gateway_capabilities\x18\x06 \x01(\v2\x1d.nexus.v1.GatewayCapabilitiesR\x13gatewayCapabilities\x12\x1c\n" +
+	"\tchallenge\x18\a \x01(\fR\tchallenge\"\x9f\x01\n" +
 	"\x14RegisterToolsRequest\x12\x17\n" +
 	"\aedge_id\x18\x01 \x01(\tR\x06edgeId\x12#\n" +
-	"\rsession_token\x18\x02 \x01(\tR\fsessionToken\x12-\n" +
-	"\x05tools\x18\x03 \x03(\v2\x17.nexus.edge.v1.EdgeToolR\x05tools\x12\x1f\n" +
+	"\rsession_token\x18\x02 \x01(\tR\fsessionToken\x12(\n" +
+	"\x05tools\x18\x03 \x03(\v2\x12.nexus.v1.EdgeToolR\x05tools\x12\x1f\n" +
 	"\vreplace_all\x18\x04 \x01(\bR\n" +
-	"replaceAll\"\xc3\x01\n" +
+	"replaceAll\"\xbe\x01\n" +
 	"\x15RegisterToolsResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12)\n" +
-	"\x10registered_count\x18\x02 \x01(\x05R\x0fregisteredCount\x12<\n" +
-	"\x06errors\x18\x03 \x03(\v2$.nexus.edge.v1.ToolRegistrationErrorR\x06errors\x12'\n" +
-	"\x0fcanonical_names\x18\x04 \x03(\tR\x0ecanonicalNames\"\xa2\x01\n" +
+	"\x10registered_count\x18\x02 \x01(\x05R\x0fregisteredCount\x127\n" +
+	"\x06errors\x18\x03 \x03(\v2\x1f.nexus.v1.ToolRegistrationErrorR\x06errors\x12'\n" +
+	"\x0fcanonical_names\x18\x04 \x03(\tR\x0ecanonicalNames\"\x9d\x01\n" +
 	"\x15ToolRegistrationError\x12\x1b\n" +
 	"\ttool_name\x18\x01 \x01(\tR\btoolName\x12#\n" +
-	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\x12G\n" +
+	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\x12B\n" +
 	"\n" +
-	"error_code\x18\x03 \x01(\x0e2(.nexus.edge.v1.ToolRegistrationErrorCodeR\terrorCode\"\xe5\x03\n" +
+	"error_code\x18\x03 \x01(\x0e2#.nexus.v1.ToolRegistrationErrorCodeR\terrorCode\"\xd6\x03\n" +
 	"\bEdgeTool\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
 	"\vdescription\x18\x02 \x01(\tR\vdescription\x12!\n" +
-	"\finput_schema\x18\x03 \x01(\tR\vinputSchema\x127\n" +
-	"\bcategory\x18\x04 \x01(\x0e2\x1b.nexus.edge.v1.ToolCategoryR\bcategory\x12+\n" +
-	"\x11requires_approval\x18\x05 \x01(\bR\x10requiresApproval\x127\n" +
+	"\finput_schema\x18\x03 \x01(\tR\vinputSchema\x122\n" +
+	"\bcategory\x18\x04 \x01(\x0e2\x16.nexus.v1.ToolCategoryR\bcategory\x12+\n" +
+	"\x11requires_approval\x18\x05 \x01(\bR\x10requiresApproval\x122\n" +
 	"\n" +
-	"risk_level\x18\x06 \x01(\x0e2\x18.nexus.edge.v1.RiskLevelR\triskLevel\x122\n" +
+	"risk_level\x18\x06 \x01(\x0e2\x13.nexus.v1.RiskLevelR\triskLevel\x122\n" +
 	"\x15estimated_duration_ms\x18\a \x01(\x05R\x13estimatedDurationMs\x12-\n" +
-	"\x12supports_streaming\x18\b \x01(\bR\x11supportsStreaming\x12A\n" +
-	"\bmetadata\x18\t \x03(\v2%.nexus.edge.v1.EdgeTool.MetadataEntryR\bmetadata\x1a;\n" +
+	"\x12supports_streaming\x18\b \x01(\bR\x11supportsStreaming\x12<\n" +
+	"\bmetadata\x18\t \x03(\v2 .nexus.v1.EdgeTool.MetadataEntryR\bmetadata\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xa0\x02\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x96\x02\n" +
 	"\x14ToolExecutionRequest\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x1b\n" +
 	"\ttool_name\x18\x02 \x01(\tR\btoolName\x12\x14\n" +
-	"\x05input\x18\x03 \x01(\tR\x05input\x129\n" +
-	"\acontext\x18\x04 \x01(\v2\x1f.nexus.edge.v1.ExecutionContextR\acontext\x12\x1d\n" +
+	"\x05input\x18\x03 \x01(\tR\x05input\x124\n" +
+	"\acontext\x18\x04 \x01(\v2\x1a.nexus.v1.ExecutionContextR\acontext\x12\x1d\n" +
 	"\n" +
 	"timeout_ms\x18\x05 \x01(\x05R\ttimeoutMs\x12'\n" +
-	"\x0fstream_progress\x18\x06 \x01(\bR\x0estreamProgress\x123\n" +
-	"\bpriority\x18\a \x01(\x0e2\x17.nexus.edge.v1.PriorityR\bpriority\"\x8c\x02\n" +
+	"\x0fstream_progress\x18\x06 \x01(\bR\x0estreamProgress\x12.\n" +
+	"\bpriority\x18\a \x01(\x0e2\x12.nexus.v1.PriorityR\bpriority\"\x87\x02\n" +
 	"\x10ExecutionContext\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x19\n" +
 	"\bagent_id\x18\x03 \x01(\tR\aagentId\x12\x1d\n" +
 	"\n" +
-	"message_id\x18\x04 \x01(\tR\tmessageId\x12I\n" +
-	"\bmetadata\x18\x05 \x03(\v2-.nexus.edge.v1.ExecutionContext.MetadataEntryR\bmetadata\x1a;\n" +
+	"message_id\x18\x04 \x01(\tR\tmessageId\x12D\n" +
+	"\bmetadata\x18\x05 \x03(\v2(.nexus.v1.ExecutionContext.MetadataEntryR\bmetadata\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xef\x02\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xe0\x02\n" +
 	"\x13ToolExecutionResult\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x18\n" +
 	"\asuccess\x18\x02 \x01(\bR\asuccess\x12\x16\n" +
 	"\x06output\x18\x03 \x01(\tR\x06output\x12#\n" +
-	"\rerror_message\x18\x04 \x01(\tR\ferrorMessage\x12;\n" +
+	"\rerror_message\x18\x04 \x01(\tR\ferrorMessage\x126\n" +
 	"\n" +
-	"error_code\x18\x05 \x01(\x0e2\x1c.nexus.edge.v1.ToolErrorCodeR\terrorCode\x12\x1f\n" +
+	"error_code\x18\x05 \x01(\x0e2\x17.nexus.v1.ToolErrorCodeR\terrorCode\x12\x1f\n" +
 	"\vduration_ms\x18\x06 \x01(\x05R\n" +
-	"durationMs\x12C\n" +
-	"\x0eresource_usage\x18\a \x01(\v2\x1c.nexus.edge.v1.ResourceUsageR\rresourceUsage\x12?\n" +
-	"\vattachments\x18\b \x03(\v2\x1d.nexus.edge.v1.ToolAttachmentR\vattachments\"\x88\x02\n" +
+	"durationMs\x12>\n" +
+	"\x0eresource_usage\x18\a \x01(\v2\x17.nexus.v1.ResourceUsageR\rresourceUsage\x12:\n" +
+	"\vattachments\x18\b \x03(\v2\x18.nexus.v1.ToolAttachmentR\vattachments\"\x88\x02\n" +
 	"\rResourceUsage\x12\x1e\n" +
 	"\vcpu_time_ms\x18\x01 \x01(\x03R\tcpuTimeMs\x12!\n" +
 	"\fmemory_bytes\x18\x02 \x01(\x03R\vmemoryBytes\x12,\n" +
@@ -2795,11 +2795,11 @@ const file_pkg_proto_edge_proto_rawDesc = "" +
 	"\x13ToolExecutionCancel\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x16\n" +
-	"\x06reason\x18\x02 \x01(\tR\x06reason\"\xd7\x02\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\"\xcd\x02\n" +
 	"\x10EdgeCapabilities\x12:\n" +
-	"\x19max_concurrent_executions\x18\x01 \x01(\x05R\x17maxConcurrentExecutions\x12N\n" +
-	"\x14supported_categories\x18\x02 \x03(\x0e2\x1b.nexus.edge.v1.ToolCategoryR\x13supportedCategories\x12:\n" +
-	"\vdevice_info\x18\x03 \x01(\v2\x19.nexus.edge.v1.DeviceInfoR\n" +
+	"\x19max_concurrent_executions\x18\x01 \x01(\x05R\x17maxConcurrentExecutions\x12I\n" +
+	"\x14supported_categories\x18\x02 \x03(\x0e2\x16.nexus.v1.ToolCategoryR\x13supportedCategories\x125\n" +
+	"\vdevice_info\x18\x03 \x01(\v2\x14.nexus.v1.DeviceInfoR\n" +
 	"deviceInfo\x12-\n" +
 	"\x12supports_streaming\x18\x04 \x01(\bR\x11supportsStreaming\x12$\n" +
 	"\x0emax_input_size\x18\x05 \x01(\x03R\fmaxInputSize\x12&\n" +
@@ -2812,31 +2812,31 @@ const file_pkg_proto_edge_proto_rawDesc = "" +
 	"\farchitecture\x18\x03 \x01(\tR\farchitecture\x12\x1a\n" +
 	"\bhostname\x18\x04 \x01(\tR\bhostname\x12!\n" +
 	"\fmemory_bytes\x18\x05 \x01(\x03R\vmemoryBytes\x12\x1b\n" +
-	"\tcpu_cores\x18\x06 \x01(\x05R\bcpuCores\"\x98\x02\n" +
+	"\tcpu_cores\x18\x06 \x01(\x05R\bcpuCores\"\x93\x02\n" +
 	"\x13GatewayCapabilities\x12)\n" +
 	"\x10protocol_version\x18\x01 \x01(\tR\x0fprotocolVersion\x12+\n" +
 	"\x12max_tools_per_edge\x18\x02 \x01(\x05R\x0fmaxToolsPerEdge\x12$\n" +
 	"\x0emax_timeout_ms\x18\x03 \x01(\x05R\fmaxTimeoutMs\x122\n" +
-	"\x15heartbeat_interval_ms\x18\x04 \x01(\x05R\x13heartbeatIntervalMs\x12O\n" +
-	"\x16supported_auth_methods\x18\x05 \x03(\x0e2\x19.nexus.edge.v1.AuthMethodR\x14supportedAuthMethods\"\x97\x03\n" +
-	"\x10EdgeStatusUpdate\x121\n" +
-	"\x06status\x18\x01 \x01(\x0e2\x19.nexus.edge.v1.EdgeStatusR\x06status\x12+\n" +
+	"\x15heartbeat_interval_ms\x18\x04 \x01(\x05R\x13heartbeatIntervalMs\x12J\n" +
+	"\x16supported_auth_methods\x18\x05 \x03(\x0e2\x14.nexus.v1.AuthMethodR\x14supportedAuthMethods\"\x8d\x03\n" +
+	"\x10EdgeStatusUpdate\x12,\n" +
+	"\x06status\x18\x01 \x01(\x0e2\x14.nexus.v1.EdgeStatusR\x06status\x12+\n" +
 	"\x11active_executions\x18\x02 \x01(\x05R\x10activeExecutions\x12\x1f\n" +
 	"\vqueue_depth\x18\x03 \x01(\x05R\n" +
 	"queueDepth\x12\x1f\n" +
 	"\vsystem_load\x18\x04 \x01(\x02R\n" +
 	"systemLoad\x12)\n" +
 	"\x10available_memory\x18\x05 \x01(\x03R\x0favailableMemory\x12%\n" +
-	"\x0euptime_seconds\x18\x06 \x01(\x03R\ruptimeSeconds\x12P\n" +
-	"\vtool_status\x18\a \x03(\v2/.nexus.edge.v1.EdgeStatusUpdate.ToolStatusEntryR\n" +
+	"\x0euptime_seconds\x18\x06 \x01(\x03R\ruptimeSeconds\x12K\n" +
+	"\vtool_status\x18\a \x03(\v2*.nexus.v1.EdgeStatusUpdate.ToolStatusEntryR\n" +
 	"toolStatus\x1a=\n" +
 	"\x0fToolStatusEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xa8\x02\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x9e\x02\n" +
 	"\x13GatewayStatusUpdate\x12-\n" +
-	"\x12accepting_requests\x18\x01 \x01(\bR\x11acceptingRequests\x12B\n" +
-	"\vmaintenance\x18\x02 \x01(\v2 .nexus.edge.v1.MaintenanceWindowR\vmaintenance\x12\\\n" +
-	"\x0econfig_updates\x18\x03 \x03(\v25.nexus.edge.v1.GatewayStatusUpdate.ConfigUpdatesEntryR\rconfigUpdates\x1a@\n" +
+	"\x12accepting_requests\x18\x01 \x01(\bR\x11acceptingRequests\x12=\n" +
+	"\vmaintenance\x18\x02 \x01(\v2\x1b.nexus.v1.MaintenanceWindowR\vmaintenance\x12W\n" +
+	"\x0econfig_updates\x18\x03 \x03(\v20.nexus.v1.GatewayStatusUpdate.ConfigUpdatesEntryR\rconfigUpdates\x1a@\n" +
 	"\x12ConfigUpdatesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x9f\x01\n" +
@@ -2844,18 +2844,18 @@ const file_pkg_proto_edge_proto_rawDesc = "" +
 	"\n" +
 	"start_time\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\tstartTime\x125\n" +
 	"\bend_time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\aendTime\x12\x18\n" +
-	"\amessage\x18\x03 \x01(\tR\amessage\"\xc3\x01\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\"\xbe\x01\n" +
 	"\x10HeartbeatRequest\x12\x17\n" +
 	"\aedge_id\x18\x01 \x01(\tR\x06edgeId\x12#\n" +
 	"\rsession_token\x18\x02 \x01(\tR\fsessionToken\x128\n" +
-	"\ttimestamp\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x127\n" +
-	"\x06status\x18\x04 \x01(\v2\x1f.nexus.edge.v1.EdgeStatusUpdateR\x06status\"\x9e\x01\n" +
+	"\ttimestamp\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x122\n" +
+	"\x06status\x18\x04 \x01(\v2\x1a.nexus.v1.EdgeStatusUpdateR\x06status\"\x9e\x01\n" +
 	"\x11HeartbeatResponse\x128\n" +
 	"\ttimestamp\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12*\n" +
 	"\x11next_heartbeat_ms\x18\x02 \x01(\x05R\x0fnextHeartbeatMs\x12#\n" +
-	"\rsession_valid\x18\x03 \x01(\bR\fsessionValid\"\xd2\x01\n" +
-	"\rErrorResponse\x12,\n" +
-	"\x04code\x18\x01 \x01(\x0e2\x18.nexus.edge.v1.ErrorCodeR\x04code\x12\x18\n" +
+	"\rsession_valid\x18\x03 \x01(\bR\fsessionValid\"\xcd\x01\n" +
+	"\rErrorResponse\x12'\n" +
+	"\x04code\x18\x01 \x01(\x0e2\x13.nexus.v1.ErrorCodeR\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x121\n" +
 	"\adetails\x18\x03 \x01(\v2\x17.google.protobuf.StructR\adetails\x12 \n" +
 	"\vrecoverable\x18\x04 \x01(\bR\vrecoverable\x12$\n" +
@@ -2924,11 +2924,11 @@ const file_pkg_proto_edge_proto_rawDesc = "" +
 	"\x10EDGE_STATUS_BUSY\x10\x02\x12\x1a\n" +
 	"\x16EDGE_STATUS_OVERLOADED\x10\x03\x12\x1b\n" +
 	"\x17EDGE_STATUS_MAINTENANCE\x10\x04\x12\x1d\n" +
-	"\x19EDGE_STATUS_SHUTTING_DOWN\x10\x052\x83\x02\n" +
-	"\vEdgeService\x12H\n" +
-	"\aConnect\x12\x1a.nexus.edge.v1.EdgeMessage\x1a\x1d.nexus.edge.v1.GatewayMessage(\x010\x01\x12N\n" +
-	"\tHeartbeat\x12\x1f.nexus.edge.v1.HeartbeatRequest\x1a .nexus.edge.v1.HeartbeatResponse\x12Z\n" +
-	"\rRegisterTools\x12#.nexus.edge.v1.RegisterToolsRequest\x1a$.nexus.edge.v1.RegisterToolsResponseB-Z+github.com/haasonsaas/nexus/pkg/proto;protob\x06proto3"
+	"\x19EDGE_STATUS_SHUTTING_DOWN\x10\x052\xe5\x01\n" +
+	"\vEdgeService\x12>\n" +
+	"\aConnect\x12\x15.nexus.v1.EdgeMessage\x1a\x18.nexus.v1.GatewayMessage(\x010\x01\x12D\n" +
+	"\tHeartbeat\x12\x1a.nexus.v1.HeartbeatRequest\x1a\x1b.nexus.v1.HeartbeatResponse\x12P\n" +
+	"\rRegisterTools\x12\x1e.nexus.v1.RegisterToolsRequest\x1a\x1f.nexus.v1.RegisterToolsResponseB-Z+github.com/haasonsaas/nexus/pkg/proto;protob\x06proto3"
 
 var (
 	file_pkg_proto_edge_proto_rawDescOnce sync.Once
@@ -2945,97 +2945,97 @@ func file_pkg_proto_edge_proto_rawDescGZIP() []byte {
 var file_pkg_proto_edge_proto_enumTypes = make([]protoimpl.EnumInfo, 9)
 var file_pkg_proto_edge_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
 var file_pkg_proto_edge_proto_goTypes = []any{
-	(AuthMethod)(0),                // 0: nexus.edge.v1.AuthMethod
-	(TrustLevel)(0),                // 1: nexus.edge.v1.TrustLevel
-	(ErrorCode)(0),                 // 2: nexus.edge.v1.ErrorCode
-	(ToolRegistrationErrorCode)(0), // 3: nexus.edge.v1.ToolRegistrationErrorCode
-	(ToolCategory)(0),              // 4: nexus.edge.v1.ToolCategory
-	(RiskLevel)(0),                 // 5: nexus.edge.v1.RiskLevel
-	(Priority)(0),                  // 6: nexus.edge.v1.Priority
-	(ToolErrorCode)(0),             // 7: nexus.edge.v1.ToolErrorCode
-	(EdgeStatus)(0),                // 8: nexus.edge.v1.EdgeStatus
-	(*EdgeMessage)(nil),            // 9: nexus.edge.v1.EdgeMessage
-	(*GatewayMessage)(nil),         // 10: nexus.edge.v1.GatewayMessage
-	(*AuthenticateRequest)(nil),    // 11: nexus.edge.v1.AuthenticateRequest
-	(*AuthenticateResponse)(nil),   // 12: nexus.edge.v1.AuthenticateResponse
-	(*RegisterToolsRequest)(nil),   // 13: nexus.edge.v1.RegisterToolsRequest
-	(*RegisterToolsResponse)(nil),  // 14: nexus.edge.v1.RegisterToolsResponse
-	(*ToolRegistrationError)(nil),  // 15: nexus.edge.v1.ToolRegistrationError
-	(*EdgeTool)(nil),               // 16: nexus.edge.v1.EdgeTool
-	(*ToolExecutionRequest)(nil),   // 17: nexus.edge.v1.ToolExecutionRequest
-	(*ExecutionContext)(nil),       // 18: nexus.edge.v1.ExecutionContext
-	(*ToolExecutionResult)(nil),    // 19: nexus.edge.v1.ToolExecutionResult
-	(*ResourceUsage)(nil),          // 20: nexus.edge.v1.ResourceUsage
-	(*ToolAttachment)(nil),         // 21: nexus.edge.v1.ToolAttachment
-	(*ToolExecutionProgress)(nil),  // 22: nexus.edge.v1.ToolExecutionProgress
-	(*ToolExecutionCancel)(nil),    // 23: nexus.edge.v1.ToolExecutionCancel
-	(*EdgeCapabilities)(nil),       // 24: nexus.edge.v1.EdgeCapabilities
-	(*DeviceInfo)(nil),             // 25: nexus.edge.v1.DeviceInfo
-	(*GatewayCapabilities)(nil),    // 26: nexus.edge.v1.GatewayCapabilities
-	(*EdgeStatusUpdate)(nil),       // 27: nexus.edge.v1.EdgeStatusUpdate
-	(*GatewayStatusUpdate)(nil),    // 28: nexus.edge.v1.GatewayStatusUpdate
-	(*MaintenanceWindow)(nil),      // 29: nexus.edge.v1.MaintenanceWindow
-	(*HeartbeatRequest)(nil),       // 30: nexus.edge.v1.HeartbeatRequest
-	(*HeartbeatResponse)(nil),      // 31: nexus.edge.v1.HeartbeatResponse
-	(*ErrorResponse)(nil),          // 32: nexus.edge.v1.ErrorResponse
-	nil,                            // 33: nexus.edge.v1.EdgeTool.MetadataEntry
-	nil,                            // 34: nexus.edge.v1.ExecutionContext.MetadataEntry
-	nil,                            // 35: nexus.edge.v1.EdgeStatusUpdate.ToolStatusEntry
-	nil,                            // 36: nexus.edge.v1.GatewayStatusUpdate.ConfigUpdatesEntry
+	(AuthMethod)(0),                // 0: nexus.v1.AuthMethod
+	(TrustLevel)(0),                // 1: nexus.v1.TrustLevel
+	(ErrorCode)(0),                 // 2: nexus.v1.ErrorCode
+	(ToolRegistrationErrorCode)(0), // 3: nexus.v1.ToolRegistrationErrorCode
+	(ToolCategory)(0),              // 4: nexus.v1.ToolCategory
+	(RiskLevel)(0),                 // 5: nexus.v1.RiskLevel
+	(Priority)(0),                  // 6: nexus.v1.Priority
+	(ToolErrorCode)(0),             // 7: nexus.v1.ToolErrorCode
+	(EdgeStatus)(0),                // 8: nexus.v1.EdgeStatus
+	(*EdgeMessage)(nil),            // 9: nexus.v1.EdgeMessage
+	(*GatewayMessage)(nil),         // 10: nexus.v1.GatewayMessage
+	(*AuthenticateRequest)(nil),    // 11: nexus.v1.AuthenticateRequest
+	(*AuthenticateResponse)(nil),   // 12: nexus.v1.AuthenticateResponse
+	(*RegisterToolsRequest)(nil),   // 13: nexus.v1.RegisterToolsRequest
+	(*RegisterToolsResponse)(nil),  // 14: nexus.v1.RegisterToolsResponse
+	(*ToolRegistrationError)(nil),  // 15: nexus.v1.ToolRegistrationError
+	(*EdgeTool)(nil),               // 16: nexus.v1.EdgeTool
+	(*ToolExecutionRequest)(nil),   // 17: nexus.v1.ToolExecutionRequest
+	(*ExecutionContext)(nil),       // 18: nexus.v1.ExecutionContext
+	(*ToolExecutionResult)(nil),    // 19: nexus.v1.ToolExecutionResult
+	(*ResourceUsage)(nil),          // 20: nexus.v1.ResourceUsage
+	(*ToolAttachment)(nil),         // 21: nexus.v1.ToolAttachment
+	(*ToolExecutionProgress)(nil),  // 22: nexus.v1.ToolExecutionProgress
+	(*ToolExecutionCancel)(nil),    // 23: nexus.v1.ToolExecutionCancel
+	(*EdgeCapabilities)(nil),       // 24: nexus.v1.EdgeCapabilities
+	(*DeviceInfo)(nil),             // 25: nexus.v1.DeviceInfo
+	(*GatewayCapabilities)(nil),    // 26: nexus.v1.GatewayCapabilities
+	(*EdgeStatusUpdate)(nil),       // 27: nexus.v1.EdgeStatusUpdate
+	(*GatewayStatusUpdate)(nil),    // 28: nexus.v1.GatewayStatusUpdate
+	(*MaintenanceWindow)(nil),      // 29: nexus.v1.MaintenanceWindow
+	(*HeartbeatRequest)(nil),       // 30: nexus.v1.HeartbeatRequest
+	(*HeartbeatResponse)(nil),      // 31: nexus.v1.HeartbeatResponse
+	(*ErrorResponse)(nil),          // 32: nexus.v1.ErrorResponse
+	nil,                            // 33: nexus.v1.EdgeTool.MetadataEntry
+	nil,                            // 34: nexus.v1.ExecutionContext.MetadataEntry
+	nil,                            // 35: nexus.v1.EdgeStatusUpdate.ToolStatusEntry
+	nil,                            // 36: nexus.v1.GatewayStatusUpdate.ConfigUpdatesEntry
 	(*timestamppb.Timestamp)(nil),  // 37: google.protobuf.Timestamp
 	(*structpb.Struct)(nil),        // 38: google.protobuf.Struct
 }
 var file_pkg_proto_edge_proto_depIdxs = []int32{
-	11, // 0: nexus.edge.v1.EdgeMessage.authenticate:type_name -> nexus.edge.v1.AuthenticateRequest
-	13, // 1: nexus.edge.v1.EdgeMessage.register_tools:type_name -> nexus.edge.v1.RegisterToolsRequest
-	19, // 2: nexus.edge.v1.EdgeMessage.tool_result:type_name -> nexus.edge.v1.ToolExecutionResult
-	22, // 3: nexus.edge.v1.EdgeMessage.tool_progress:type_name -> nexus.edge.v1.ToolExecutionProgress
-	27, // 4: nexus.edge.v1.EdgeMessage.status_update:type_name -> nexus.edge.v1.EdgeStatusUpdate
-	30, // 5: nexus.edge.v1.EdgeMessage.heartbeat:type_name -> nexus.edge.v1.HeartbeatRequest
-	12, // 6: nexus.edge.v1.GatewayMessage.authenticate:type_name -> nexus.edge.v1.AuthenticateResponse
-	14, // 7: nexus.edge.v1.GatewayMessage.register_ack:type_name -> nexus.edge.v1.RegisterToolsResponse
-	17, // 8: nexus.edge.v1.GatewayMessage.tool_request:type_name -> nexus.edge.v1.ToolExecutionRequest
-	23, // 9: nexus.edge.v1.GatewayMessage.tool_cancel:type_name -> nexus.edge.v1.ToolExecutionCancel
-	28, // 10: nexus.edge.v1.GatewayMessage.status_update:type_name -> nexus.edge.v1.GatewayStatusUpdate
-	31, // 11: nexus.edge.v1.GatewayMessage.heartbeat:type_name -> nexus.edge.v1.HeartbeatResponse
-	32, // 12: nexus.edge.v1.GatewayMessage.error:type_name -> nexus.edge.v1.ErrorResponse
-	0,  // 13: nexus.edge.v1.AuthenticateRequest.auth_method:type_name -> nexus.edge.v1.AuthMethod
-	24, // 14: nexus.edge.v1.AuthenticateRequest.capabilities:type_name -> nexus.edge.v1.EdgeCapabilities
-	1,  // 15: nexus.edge.v1.AuthenticateResponse.trust_level:type_name -> nexus.edge.v1.TrustLevel
-	2,  // 16: nexus.edge.v1.AuthenticateResponse.error_code:type_name -> nexus.edge.v1.ErrorCode
-	26, // 17: nexus.edge.v1.AuthenticateResponse.gateway_capabilities:type_name -> nexus.edge.v1.GatewayCapabilities
-	16, // 18: nexus.edge.v1.RegisterToolsRequest.tools:type_name -> nexus.edge.v1.EdgeTool
-	15, // 19: nexus.edge.v1.RegisterToolsResponse.errors:type_name -> nexus.edge.v1.ToolRegistrationError
-	3,  // 20: nexus.edge.v1.ToolRegistrationError.error_code:type_name -> nexus.edge.v1.ToolRegistrationErrorCode
-	4,  // 21: nexus.edge.v1.EdgeTool.category:type_name -> nexus.edge.v1.ToolCategory
-	5,  // 22: nexus.edge.v1.EdgeTool.risk_level:type_name -> nexus.edge.v1.RiskLevel
-	33, // 23: nexus.edge.v1.EdgeTool.metadata:type_name -> nexus.edge.v1.EdgeTool.MetadataEntry
-	18, // 24: nexus.edge.v1.ToolExecutionRequest.context:type_name -> nexus.edge.v1.ExecutionContext
-	6,  // 25: nexus.edge.v1.ToolExecutionRequest.priority:type_name -> nexus.edge.v1.Priority
-	34, // 26: nexus.edge.v1.ExecutionContext.metadata:type_name -> nexus.edge.v1.ExecutionContext.MetadataEntry
-	7,  // 27: nexus.edge.v1.ToolExecutionResult.error_code:type_name -> nexus.edge.v1.ToolErrorCode
-	20, // 28: nexus.edge.v1.ToolExecutionResult.resource_usage:type_name -> nexus.edge.v1.ResourceUsage
-	21, // 29: nexus.edge.v1.ToolExecutionResult.attachments:type_name -> nexus.edge.v1.ToolAttachment
-	4,  // 30: nexus.edge.v1.EdgeCapabilities.supported_categories:type_name -> nexus.edge.v1.ToolCategory
-	25, // 31: nexus.edge.v1.EdgeCapabilities.device_info:type_name -> nexus.edge.v1.DeviceInfo
-	0,  // 32: nexus.edge.v1.GatewayCapabilities.supported_auth_methods:type_name -> nexus.edge.v1.AuthMethod
-	8,  // 33: nexus.edge.v1.EdgeStatusUpdate.status:type_name -> nexus.edge.v1.EdgeStatus
-	35, // 34: nexus.edge.v1.EdgeStatusUpdate.tool_status:type_name -> nexus.edge.v1.EdgeStatusUpdate.ToolStatusEntry
-	29, // 35: nexus.edge.v1.GatewayStatusUpdate.maintenance:type_name -> nexus.edge.v1.MaintenanceWindow
-	36, // 36: nexus.edge.v1.GatewayStatusUpdate.config_updates:type_name -> nexus.edge.v1.GatewayStatusUpdate.ConfigUpdatesEntry
-	37, // 37: nexus.edge.v1.MaintenanceWindow.start_time:type_name -> google.protobuf.Timestamp
-	37, // 38: nexus.edge.v1.MaintenanceWindow.end_time:type_name -> google.protobuf.Timestamp
-	37, // 39: nexus.edge.v1.HeartbeatRequest.timestamp:type_name -> google.protobuf.Timestamp
-	27, // 40: nexus.edge.v1.HeartbeatRequest.status:type_name -> nexus.edge.v1.EdgeStatusUpdate
-	37, // 41: nexus.edge.v1.HeartbeatResponse.timestamp:type_name -> google.protobuf.Timestamp
-	2,  // 42: nexus.edge.v1.ErrorResponse.code:type_name -> nexus.edge.v1.ErrorCode
-	38, // 43: nexus.edge.v1.ErrorResponse.details:type_name -> google.protobuf.Struct
-	9,  // 44: nexus.edge.v1.EdgeService.Connect:input_type -> nexus.edge.v1.EdgeMessage
-	30, // 45: nexus.edge.v1.EdgeService.Heartbeat:input_type -> nexus.edge.v1.HeartbeatRequest
-	13, // 46: nexus.edge.v1.EdgeService.RegisterTools:input_type -> nexus.edge.v1.RegisterToolsRequest
-	10, // 47: nexus.edge.v1.EdgeService.Connect:output_type -> nexus.edge.v1.GatewayMessage
-	31, // 48: nexus.edge.v1.EdgeService.Heartbeat:output_type -> nexus.edge.v1.HeartbeatResponse
-	14, // 49: nexus.edge.v1.EdgeService.RegisterTools:output_type -> nexus.edge.v1.RegisterToolsResponse
+	11, // 0: nexus.v1.EdgeMessage.authenticate:type_name -> nexus.v1.AuthenticateRequest
+	13, // 1: nexus.v1.EdgeMessage.register_tools:type_name -> nexus.v1.RegisterToolsRequest
+	19, // 2: nexus.v1.EdgeMessage.tool_result:type_name -> nexus.v1.ToolExecutionResult
+	22, // 3: nexus.v1.EdgeMessage.tool_progress:type_name -> nexus.v1.ToolExecutionProgress
+	27, // 4: nexus.v1.EdgeMessage.status_update:type_name -> nexus.v1.EdgeStatusUpdate
+	30, // 5: nexus.v1.EdgeMessage.heartbeat:type_name -> nexus.v1.HeartbeatRequest
+	12, // 6: nexus.v1.GatewayMessage.authenticate:type_name -> nexus.v1.AuthenticateResponse
+	14, // 7: nexus.v1.GatewayMessage.register_ack:type_name -> nexus.v1.RegisterToolsResponse
+	17, // 8: nexus.v1.GatewayMessage.tool_request:type_name -> nexus.v1.ToolExecutionRequest
+	23, // 9: nexus.v1.GatewayMessage.tool_cancel:type_name -> nexus.v1.ToolExecutionCancel
+	28, // 10: nexus.v1.GatewayMessage.status_update:type_name -> nexus.v1.GatewayStatusUpdate
+	31, // 11: nexus.v1.GatewayMessage.heartbeat:type_name -> nexus.v1.HeartbeatResponse
+	32, // 12: nexus.v1.GatewayMessage.error:type_name -> nexus.v1.ErrorResponse
+	0,  // 13: nexus.v1.AuthenticateRequest.auth_method:type_name -> nexus.v1.AuthMethod
+	24, // 14: nexus.v1.AuthenticateRequest.capabilities:type_name -> nexus.v1.EdgeCapabilities
+	1,  // 15: nexus.v1.AuthenticateResponse.trust_level:type_name -> nexus.v1.TrustLevel
+	2,  // 16: nexus.v1.AuthenticateResponse.error_code:type_name -> nexus.v1.ErrorCode
+	26, // 17: nexus.v1.AuthenticateResponse.gateway_capabilities:type_name -> nexus.v1.GatewayCapabilities
+	16, // 18: nexus.v1.RegisterToolsRequest.tools:type_name -> nexus.v1.EdgeTool
+	15, // 19: nexus.v1.RegisterToolsResponse.errors:type_name -> nexus.v1.ToolRegistrationError
+	3,  // 20: nexus.v1.ToolRegistrationError.error_code:type_name -> nexus.v1.ToolRegistrationErrorCode
+	4,  // 21: nexus.v1.EdgeTool.category:type_name -> nexus.v1.ToolCategory
+	5,  // 22: nexus.v1.EdgeTool.risk_level:type_name -> nexus.v1.RiskLevel
+	33, // 23: nexus.v1.EdgeTool.metadata:type_name -> nexus.v1.EdgeTool.MetadataEntry
+	18, // 24: nexus.v1.ToolExecutionRequest.context:type_name -> nexus.v1.ExecutionContext
+	6,  // 25: nexus.v1.ToolExecutionRequest.priority:type_name -> nexus.v1.Priority
+	34, // 26: nexus.v1.ExecutionContext.metadata:type_name -> nexus.v1.ExecutionContext.MetadataEntry
+	7,  // 27: nexus.v1.ToolExecutionResult.error_code:type_name -> nexus.v1.ToolErrorCode
+	20, // 28: nexus.v1.ToolExecutionResult.resource_usage:type_name -> nexus.v1.ResourceUsage
+	21, // 29: nexus.v1.ToolExecutionResult.attachments:type_name -> nexus.v1.ToolAttachment
+	4,  // 30: nexus.v1.EdgeCapabilities.supported_categories:type_name -> nexus.v1.ToolCategory
+	25, // 31: nexus.v1.EdgeCapabilities.device_info:type_name -> nexus.v1.DeviceInfo
+	0,  // 32: nexus.v1.GatewayCapabilities.supported_auth_methods:type_name -> nexus.v1.AuthMethod
+	8,  // 33: nexus.v1.EdgeStatusUpdate.status:type_name -> nexus.v1.EdgeStatus
+	35, // 34: nexus.v1.EdgeStatusUpdate.tool_status:type_name -> nexus.v1.EdgeStatusUpdate.ToolStatusEntry
+	29, // 35: nexus.v1.GatewayStatusUpdate.maintenance:type_name -> nexus.v1.MaintenanceWindow
+	36, // 36: nexus.v1.GatewayStatusUpdate.config_updates:type_name -> nexus.v1.GatewayStatusUpdate.ConfigUpdatesEntry
+	37, // 37: nexus.v1.MaintenanceWindow.start_time:type_name -> google.protobuf.Timestamp
+	37, // 38: nexus.v1.MaintenanceWindow.end_time:type_name -> google.protobuf.Timestamp
+	37, // 39: nexus.v1.HeartbeatRequest.timestamp:type_name -> google.protobuf.Timestamp
+	27, // 40: nexus.v1.HeartbeatRequest.status:type_name -> nexus.v1.EdgeStatusUpdate
+	37, // 41: nexus.v1.HeartbeatResponse.timestamp:type_name -> google.protobuf.Timestamp
+	2,  // 42: nexus.v1.ErrorResponse.code:type_name -> nexus.v1.ErrorCode
+	38, // 43: nexus.v1.ErrorResponse.details:type_name -> google.protobuf.Struct
+	9,  // 44: nexus.v1.EdgeService.Connect:input_type -> nexus.v1.EdgeMessage
+	30, // 45: nexus.v1.EdgeService.Heartbeat:input_type -> nexus.v1.HeartbeatRequest
+	13, // 46: nexus.v1.EdgeService.RegisterTools:input_type -> nexus.v1.RegisterToolsRequest
+	10, // 47: nexus.v1.EdgeService.Connect:output_type -> nexus.v1.GatewayMessage
+	31, // 48: nexus.v1.EdgeService.Heartbeat:output_type -> nexus.v1.HeartbeatResponse
+	14, // 49: nexus.v1.EdgeService.RegisterTools:output_type -> nexus.v1.RegisterToolsResponse
 	47, // [47:50] is the sub-list for method output_type
 	44, // [44:47] is the sub-list for method input_type
 	44, // [44:44] is the sub-list for extension type_name

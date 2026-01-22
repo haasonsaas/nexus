@@ -183,10 +183,13 @@ func runServiceRepair(cmd *cobra.Command, configPath string, restart bool) error
 
 // runServiceStatus handles the service status command.
 func runServiceStatus(cmd *cobra.Command, configPath string) error {
-	configPath = resolveConfigPath(configPath)
-	cfg, _ := config.Load(configPath)
-	report := doctor.AuditServices(cfg)
 	out := cmd.OutOrStdout()
+	configPath = resolveConfigPath(configPath)
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		fmt.Fprintf(out, "Config load failed: %v\n", err)
+	}
+	report := doctor.AuditServices(cfg)
 	fmt.Fprintln(out, "Service audit:")
 	printAuditList(out, "systemd user", report.SystemdUser)
 	printAuditList(out, "systemd system", report.SystemdSystem)
@@ -219,7 +222,10 @@ func runProfileList(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
-	active, _ := profile.ReadActiveProfile()
+	active, err := profile.ReadActiveProfile()
+	if err != nil {
+		active = ""
+	}
 	out := cmd.OutOrStdout()
 	if len(profiles) == 0 {
 		fmt.Fprintln(out, "No profiles found.")
@@ -320,8 +326,10 @@ func runSkillsList(cmd *cobra.Command, configPath string, all bool) error {
 
 		status := "eligible"
 		if all {
-			result, _ := mgr.CheckEligibility(skill.Name)
-			if result != nil && !result.Eligible {
+			result, err := mgr.CheckEligibility(skill.Name)
+			if err != nil {
+				status = "unknown"
+			} else if result != nil && !result.Eligible {
 				status = "ineligible"
 			}
 		}
@@ -433,14 +441,16 @@ func runSkillsShow(cmd *cobra.Command, configPath, skillName string, showContent
 	}
 
 	// Eligibility
-	result, _ := mgr.CheckEligibility(skill.Name)
-	if result != nil {
+	result, err := mgr.CheckEligibility(skill.Name)
+	if err == nil && result != nil {
 		fmt.Fprintln(out)
 		if result.Eligible {
 			fmt.Fprintln(out, "Status: Eligible")
 		} else {
 			fmt.Fprintf(out, "Status: Ineligible (%s)\n", result.Reason)
 		}
+	} else if err != nil {
+		fmt.Fprintf(out, "Eligibility check failed: %v\n", err)
 	}
 
 	// Content
@@ -696,7 +706,11 @@ func runMcpServers(cmd *cobra.Command, configPath string) error {
 			return err
 		}
 	}
-	defer mgr.Stop()
+	defer func() {
+		if err := mgr.Stop(); err != nil {
+			slog.Warn("failed to stop MCP manager", "error", err)
+		}
+	}()
 
 	out := cmd.OutOrStdout()
 	statuses := mgr.Status()
@@ -724,7 +738,11 @@ func runMcpConnect(cmd *cobra.Command, configPath, serverID string) error {
 	if err != nil {
 		return err
 	}
-	defer mgr.Stop()
+	defer func() {
+		if err := mgr.Stop(); err != nil {
+			slog.Warn("failed to stop MCP manager", "error", err)
+		}
+	}()
 
 	if err := mgr.Connect(cmd.Context(), serverID); err != nil {
 		return err
@@ -739,7 +757,11 @@ func runMcpTools(cmd *cobra.Command, configPath, serverID string) error {
 	if err != nil {
 		return err
 	}
-	defer mgr.Stop()
+	defer func() {
+		if err := mgr.Stop(); err != nil {
+			slog.Warn("failed to stop MCP manager", "error", err)
+		}
+	}()
 
 	if serverID != "" {
 		if err := mgr.Connect(cmd.Context(), serverID); err != nil {

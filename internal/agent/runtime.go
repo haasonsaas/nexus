@@ -1026,7 +1026,6 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 				if err := r.opts.JobStore.Create(context.Background(), job); err != nil {
 					_ = err
 				}
-				go r.runToolJob(tc, job, toolExec)
 
 				payload, err := json.Marshal(map[string]any{
 					"job_id": job.ID,
@@ -1055,6 +1054,8 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 						_ = err
 					}
 				}
+
+				go r.runToolJob(tc, job, toolExec)
 				continue
 			}
 

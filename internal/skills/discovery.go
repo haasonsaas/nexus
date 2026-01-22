@@ -159,7 +159,10 @@ func NewGitSource(url, branch, subPath, cacheDir string, refreshInterval time.Du
 		branch = "main"
 	}
 	if cacheDir == "" {
-		homeDir, _ := os.UserHomeDir()
+		homeDir, err := os.UserHomeDir()
+		if err != nil || strings.TrimSpace(homeDir) == "" {
+			homeDir = "."
+		}
 		cacheDir = filepath.Join(homeDir, ".nexus", "cache", "skills", "git")
 	}
 	return &GitSource{
@@ -376,7 +379,10 @@ type RegistryResponse struct {
 
 // NewRegistrySource creates an HTTP registry discovery source.
 func NewRegistrySource(url, auth string, priority int) *RegistrySource {
-	homeDir, _ := os.UserHomeDir()
+	homeDir, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(homeDir) == "" {
+		homeDir = "."
+	}
 	cacheDir := filepath.Join(homeDir, ".nexus", "cache", "skills", "registry")
 
 	return &RegistrySource{
@@ -445,7 +451,10 @@ func (s *RegistrySource) fetchSkillList(ctx context.Context) ([]RegistrySkillInf
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		if readErr != nil {
+			return nil, fmt.Errorf("registry returned %d (failed reading body: %v)", resp.StatusCode, readErr)
+		}
 		return nil, fmt.Errorf("registry returned %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -519,7 +528,10 @@ func (s *RegistrySource) downloadFile(ctx context.Context, url, destPath string)
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		if readErr != nil {
+			return fmt.Errorf("download returned %d (failed reading body: %v)", resp.StatusCode, readErr)
+		}
 		return fmt.Errorf("download returned %d: %s", resp.StatusCode, string(body))
 	}
 

@@ -45,7 +45,9 @@ func (s *Server) resolveConversationID(msg *models.Message) (string, error) {
 	case models.ChannelSlack:
 		channelID := ""
 		if msg.Metadata != nil {
-			channelID, _ = msg.Metadata["slack_channel"].(string)
+			if value, ok := msg.Metadata["slack_channel"].(string); ok {
+				channelID = value
+			}
 		}
 		if channelID == "" {
 			return "", errors.New("slack channel id missing")
@@ -55,7 +57,9 @@ func (s *Server) resolveConversationID(msg *models.Message) (string, error) {
 		}
 		threadTS := ""
 		if msg.Metadata != nil {
-			threadTS, _ = msg.Metadata["slack_thread_ts"].(string)
+			if value, ok := msg.Metadata["slack_thread_ts"].(string); ok {
+				threadTS = value
+			}
 		}
 		if threadTS == "" {
 			if msg.Metadata != nil {

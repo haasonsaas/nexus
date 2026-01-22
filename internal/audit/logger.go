@@ -48,7 +48,6 @@ type Logger struct {
 	buffer     chan *Event
 	wg         sync.WaitGroup
 	done       chan struct{}
-	mu         sync.RWMutex
 	eventTypes map[EventType]bool
 }
 

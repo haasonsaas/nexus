@@ -660,7 +660,10 @@ func (s *RegistrySource) fetchIndex(ctx context.Context) (*RegistryIndex, error)
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		if readErr != nil {
+			return nil, fmt.Errorf("registry returned %d (failed reading body: %v)", resp.StatusCode, readErr)
+		}
 		return nil, fmt.Errorf("registry returned %d: %s", resp.StatusCode, string(body))
 	}
 

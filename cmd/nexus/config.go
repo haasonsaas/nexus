@@ -150,7 +150,10 @@ func promptString(reader *bufio.Reader, label string, defaultValue string) strin
 	} else {
 		fmt.Printf("%s: ", label)
 	}
-	text, _ := reader.ReadString('\n')
+	text, err := reader.ReadString('\n')
+	if err != nil && len(text) == 0 {
+		return defaultValue
+	}
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return defaultValue
@@ -229,8 +232,8 @@ func parseKeyValue(item string) (string, string, error) {
 
 // workspacePathFromProfile returns a workspace path based on profile name.
 func workspacePathFromProfile(profileName string) string {
-	home, _ := os.UserHomeDir()
-	if strings.TrimSpace(home) == "" {
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
 		home = "."
 	}
 	return filepath.Join(home, "nexus-"+profileName)

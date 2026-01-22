@@ -900,7 +900,9 @@ or selected via API for specific conversations.`,
 	cmd.Flags().StringVarP(&name, "name", "n", "", "Agent name (required)")
 	cmd.Flags().StringVarP(&provider, "provider", "p", "anthropic", "LLM provider")
 	cmd.Flags().StringVarP(&model, "model", "m", "", "Model identifier")
-	_ = cmd.MarkFlagRequired("name")
+	if err := cmd.MarkFlagRequired("name"); err != nil {
+		panic(err)
+	}
 
 	return cmd
 }

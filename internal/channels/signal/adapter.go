@@ -509,3 +509,51 @@ func downloadToTempFile(url string) (string, error) {
 
 	return f.Name(), nil
 }
+
+// SendTypingIndicator sends a typing indicator to the recipient.
+// This is part of the StreamingAdapter interface.
+func (a *Adapter) SendTypingIndicator(ctx context.Context, msg *models.Message) error {
+	peerID, ok := msg.Metadata["peer_id"].(string)
+	if !ok || peerID == "" {
+		// Can't send typing without peer ID, but don't error
+		return nil
+	}
+
+	// Build sendTyping request
+	params := map[string]any{
+		"recipient": []string{peerID},
+	}
+
+	// Handle group messages
+	if groupID, ok := msg.Metadata["group_id"].(string); ok && groupID != "" {
+		params["groupId"] = groupID
+		delete(params, "recipient")
+	}
+
+	req := map[string]any{
+		"method": "sendTyping",
+		"params": params,
+	}
+
+	// Send typing indicator (don't fail if it doesn't work)
+	if _, err := a.call(ctx, req); err != nil {
+		a.Logger().Debug("failed to send typing indicator", "error", err)
+	}
+
+	return nil
+}
+
+// StartStreamingResponse is a stub for Signal as it doesn't support message editing.
+// This is part of the StreamingAdapter interface.
+func (a *Adapter) StartStreamingResponse(ctx context.Context, msg *models.Message) (string, error) {
+	// Signal doesn't support message editing, so we can't do true streaming.
+	// Return empty string to indicate streaming is not available.
+	return "", nil
+}
+
+// UpdateStreamingResponse is a no-op for Signal as sent messages cannot be edited.
+// This is part of the StreamingAdapter interface.
+func (a *Adapter) UpdateStreamingResponse(ctx context.Context, msg *models.Message, messageID string, content string) error {
+	// Signal doesn't support editing sent messages
+	return nil
+}

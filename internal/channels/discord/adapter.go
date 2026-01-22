@@ -119,19 +119,24 @@ func NewAdapter(config Config) (*Adapter, error) {
 
 // NewAdapterSimple creates a new Discord adapter with just a token (for backward compatibility).
 // Returns nil if the config is invalid (which only happens if token is empty).
-// Callers should check for nil return value.
+// For error handling, use TryNewAdapterSimple instead.
 func NewAdapterSimple(token string) *Adapter {
-	config := Config{
-		Token:  token,
-		Logger: slog.Default(),
-	}
-
-	adapter, err := NewAdapter(config)
+	adapter, err := TryNewAdapterSimple(token)
 	if err != nil {
 		slog.Error("NewAdapterSimple: failed to create adapter", "error", err)
 		return nil
 	}
 	return adapter
+}
+
+// TryNewAdapterSimple creates a new Discord adapter with just a token and returns any error.
+// This is the error-returning version of NewAdapterSimple.
+func TryNewAdapterSimple(token string) (*Adapter, error) {
+	config := Config{
+		Token:  token,
+		Logger: slog.Default(),
+	}
+	return NewAdapter(config)
 }
 
 // Start begins listening for messages from Discord.

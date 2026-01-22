@@ -404,3 +404,27 @@ func appleTimestampToTime(nano int64) time.Time {
 	appleEpoch := time.Date(2001, 1, 1, 0, 0, 0, 0, time.UTC)
 	return appleEpoch.Add(time.Duration(nano) * time.Nanosecond)
 }
+
+// SendTypingIndicator is a no-op for iMessage as it doesn't support
+// programmatic typing indicators.
+// This is part of the StreamingAdapter interface.
+func (a *Adapter) SendTypingIndicator(ctx context.Context, msg *models.Message) error {
+	// iMessage doesn't support programmatic typing indicators
+	return nil
+}
+
+// StartStreamingResponse sends an initial message and returns an ID.
+// For iMessage, we send the message immediately since editing isn't supported.
+// This is part of the StreamingAdapter interface.
+func (a *Adapter) StartStreamingResponse(ctx context.Context, msg *models.Message) (string, error) {
+	// iMessage doesn't support message editing, so we can't do true streaming.
+	// Return empty string to indicate streaming is not available.
+	return "", nil
+}
+
+// UpdateStreamingResponse is a no-op for iMessage as sent messages cannot be edited.
+// This is part of the StreamingAdapter interface.
+func (a *Adapter) UpdateStreamingResponse(ctx context.Context, msg *models.Message, messageID string, content string) error {
+	// iMessage doesn't support editing sent messages
+	return nil
+}

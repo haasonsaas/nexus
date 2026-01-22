@@ -5,6 +5,9 @@
 package imessage
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/haasonsaas/nexus/internal/channels/personal"
 )
 
@@ -38,4 +41,23 @@ func DefaultConfig() *Config {
 			},
 		},
 	}
+}
+
+// Validate checks the configuration for errors.
+func (c *Config) Validate() error {
+	if !c.Enabled {
+		return nil
+	}
+
+	if c.DatabasePath == "" {
+		return fmt.Errorf("imessage: database_path is required")
+	}
+
+	if c.PollInterval != "" {
+		if _, err := time.ParseDuration(c.PollInterval); err != nil {
+			return fmt.Errorf("imessage: invalid poll_interval %q: %w", c.PollInterval, err)
+		}
+	}
+
+	return nil
 }

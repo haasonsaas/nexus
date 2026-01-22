@@ -358,3 +358,85 @@ func markdownToHTML(text string) string {
 	text = strings.ReplaceAll(text, "```", "<pre><code>")
 	return text
 }
+
+// SendTypingIndicator sends a typing indicator to the room.
+// This is part of the StreamingAdapter interface.
+func (a *Adapter) SendTypingIndicator(ctx context.Context, msg *models.Message) error {
+	if msg == nil {
+		return nil
+	}
+
+	roomID := id.RoomID(msg.ChannelID)
+	if roomID == "" {
+		return nil
+	}
+
+	// Send typing notification for 30 seconds
+	_, err := a.client.UserTyping(ctx, roomID, true, 30*time.Second)
+	if err != nil {
+		a.logger.Debug("failed to send typing indicator", "error", err)
+	}
+
+	return nil
+}
+
+// StartStreamingResponse sends an initial message and returns the event ID.
+// This is part of the StreamingAdapter interface.
+func (a *Adapter) StartStreamingResponse(ctx context.Context, msg *models.Message) (string, error) {
+	if msg == nil {
+		return "", nil
+	}
+
+	roomID := id.RoomID(msg.ChannelID)
+	if roomID == "" {
+		return "", nil
+	}
+
+	// Send initial message
+	content := &event.MessageEventContent{
+		MsgType: event.MsgText,
+		Body:    msg.Content,
+	}
+
+	resp, err := a.client.SendMessageEvent(ctx, roomID, event.EventMessage, content)
+	if err != nil {
+		return "", fmt.Errorf("failed to send initial message: %w", err)
+	}
+
+	return string(resp.EventID), nil
+}
+
+// UpdateStreamingResponse updates an existing message with new content.
+// Matrix supports message editing via m.replace relations.
+// This is part of the StreamingAdapter interface.
+func (a *Adapter) UpdateStreamingResponse(ctx context.Context, msg *models.Message, messageID string, content string) error {
+	if msg == nil || messageID == "" {
+		return nil
+	}
+
+	roomID := id.RoomID(msg.ChannelID)
+	if roomID == "" {
+		return nil
+	}
+
+	// Create edit content with m.replace relation
+	editContent := &event.MessageEventContent{
+		MsgType: event.MsgText,
+		Body:    "* " + content, // Fallback for clients that don't support edits
+		NewContent: &event.MessageEventContent{
+			MsgType: event.MsgText,
+			Body:    content,
+		},
+		RelatesTo: &event.RelatesTo{
+			Type:    event.RelReplace,
+			EventID: id.EventID(messageID),
+		},
+	}
+
+	_, err := a.client.SendMessageEvent(ctx, roomID, event.EventMessage, editContent)
+	if err != nil {
+		return fmt.Errorf("failed to edit message: %w", err)
+	}
+
+	return nil
+}

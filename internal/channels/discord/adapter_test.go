@@ -261,6 +261,34 @@ func TestNewAdapterSimple_InvalidToken(t *testing.T) {
 	}
 }
 
+func TestTryNewAdapterSimple(t *testing.T) {
+	adapter, err := TryNewAdapterSimple("test-token")
+
+	if err != nil {
+		t.Fatalf("TryNewAdapterSimple returned error: %v", err)
+	}
+
+	if adapter == nil {
+		t.Fatal("TryNewAdapterSimple returned nil adapter")
+	}
+
+	if adapter.Type() != models.ChannelDiscord {
+		t.Errorf("Expected channel type %s, got %s", models.ChannelDiscord, adapter.Type())
+	}
+}
+
+func TestTryNewAdapterSimple_Error(t *testing.T) {
+	adapter, err := TryNewAdapterSimple("")
+
+	if err == nil {
+		t.Error("TryNewAdapterSimple with empty token should return error")
+	}
+
+	if adapter != nil {
+		t.Error("TryNewAdapterSimple with empty token should return nil adapter")
+	}
+}
+
 // =============================================================================
 // Message Conversion Tests
 // =============================================================================

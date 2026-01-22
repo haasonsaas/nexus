@@ -2,6 +2,8 @@
 package signal
 
 import (
+	"fmt"
+
 	"github.com/haasonsaas/nexus/internal/channels/personal"
 )
 
@@ -37,4 +39,21 @@ func DefaultConfig() *Config {
 			},
 		},
 	}
+}
+
+// Validate checks the configuration for errors.
+func (c *Config) Validate() error {
+	if !c.Enabled {
+		return nil
+	}
+
+	if c.Account == "" {
+		return fmt.Errorf("signal: account (phone number) is required")
+	}
+
+	if c.SignalCLIPath == "" {
+		return fmt.Errorf("signal: signal_cli_path is required")
+	}
+
+	return nil
 }

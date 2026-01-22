@@ -620,3 +620,43 @@ func expandPath(path string) string {
 	}
 	return path
 }
+
+// SendTypingIndicator sends a typing indicator to the recipient.
+// This is part of the StreamingAdapter interface.
+func (a *Adapter) SendTypingIndicator(ctx context.Context, msg *models.Message) error {
+	if !a.isConnected() {
+		return nil
+	}
+
+	peerID, ok := msg.Metadata["peer_id"].(string)
+	if !ok || peerID == "" {
+		return nil
+	}
+
+	jid, err := types.ParseJID(peerID)
+	if err != nil {
+		return nil
+	}
+
+	// Send composing presence (typing indicator)
+	if err := a.client.SendChatPresence(ctx, jid, types.ChatPresenceComposing, types.ChatPresenceMediaText); err != nil {
+		a.Logger().Debug("failed to send typing indicator", "error", err)
+	}
+
+	return nil
+}
+
+// StartStreamingResponse is a stub for WhatsApp as it doesn't support message editing.
+// This is part of the StreamingAdapter interface.
+func (a *Adapter) StartStreamingResponse(ctx context.Context, msg *models.Message) (string, error) {
+	// WhatsApp doesn't support message editing, so we can't do true streaming.
+	// Return empty string to indicate streaming is not available.
+	return "", nil
+}
+
+// UpdateStreamingResponse is a no-op for WhatsApp as sent messages cannot be edited.
+// This is part of the StreamingAdapter interface.
+func (a *Adapter) UpdateStreamingResponse(ctx context.Context, msg *models.Message, messageID string, content string) error {
+	// WhatsApp doesn't support editing sent messages
+	return nil
+}

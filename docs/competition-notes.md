@@ -6,6 +6,7 @@
 - Clawdbot docs: `docs/tools/skills-config.md` (skills config schema + watchers).
 - Clawdbot memory sources: `src/memory/embeddings-openai.ts`, embedding batch tests, vector cache tables.
 - GitHub API snapshot (2026-01-21): stars, issues, topics, recent updates.
+- GitHub API docs (2026-01-22): exec approvals, sub-agents, skills config.
 
 ## Clawd workspace patterns (what they do)
 - Workspace = agent home. Standard files seed behavior, persona, user profile, tool notes, and heartbeat checklist.
@@ -21,6 +22,8 @@
 - **Memory system**: daily logs + optional long-term memory file, optional vector search, pre-compaction memory flush.
 - **Embeddings pipeline**: OpenAI-compatible embeddings with default `text-embedding-3-small`, `/v1/embeddings` base URL normalization, batching + retry logic, and on-disk/DB cache tables.
 - **Skills config**: allowlist for bundled skills, extraDirs + watch debounce, install preferences, per-skill enabled/env overrides.
+- **Exec approvals**: per-agent allowlists, ask fallback when UI is unavailable, safe-bins for stdin-only tools, and auto-allow skill CLIs.
+- **Sub-agents**: `sessions_spawn` tool with announce step, per-agent auth resolution, and concurrency controls.
 - **Profiles**: profile-derived paths for daemon/service configs (`CLAWDBOT_PROFILE`) and auth profiles file protections.
 
 ## Nexus adoption status (high-level)
@@ -29,15 +32,19 @@
 - Implemented: doctor repair/migration pipeline (config migrations + workspace repairs) and channel health probes.
 - Implemented: service/daemon audits, memory search tool, and memory flush reminders.
 - Implemented: remote embeddings + cache for memory search, service auto-restart hooks, profile/skills/channel login CLI.
+- Implemented: tool lifecycle events, tool retry/timeout controls, async jobs with `job_status`, and approval pattern gating.
 - Pending: automated compaction + post-flush confirmation.
+- Pending: exec allowlist + ask-fallback approvals, sub-agent spawn/announce flow, job persistence.
 
 ## Follow-up ideas (small/medium scope)
 1. Automated compaction triggers with post-flush confirmations.
 2. Skill watcher + allowlist controls (bundle filtering, extraDirs, and per-skill env overrides).
-3. Profile-aware state directories + auth-profile permission audits.
+3. Exec approvals with allowlists + safe-bins and UI fallback.
+4. Sub-agent spawn tool + announce UX.
+5. Profile-aware state directories + auth-profile permission audits.
 
-## GitHub snapshot (2026-01-21)
-- Stars: 5,761 · Forks: 891 · Open issues: 151
+## GitHub snapshot (2026-01-22)
+- Stars: 5,825 · Forks: 897 · Open issues: 129
 - Topics: ai, assistant, clawd, crustacean, own-your-data, personal
 - Default branch: main · License: MIT
 - Recent commit themes: tighten exec allowlist gating, heartbeat active hours, cache TTL/pruning, channel-specific session policies, and port listener hardening.

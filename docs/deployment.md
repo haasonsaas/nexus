@@ -266,6 +266,16 @@ data:
         enabled: true
         provider: searxng
         url: http://searxng:8080
+      execution:
+        max_iterations: 4
+        parallelism: 2
+        timeout: 0s
+        max_attempts: 1
+        retry_backoff: 0s
+        disable_events: false
+        max_tool_calls: 0
+        require_approval: []
+        async: []
 
     plugins:
       load:

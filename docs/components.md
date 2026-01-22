@@ -220,6 +220,7 @@ The agent runtime manages conversation state and orchestrates LLM interactions.
 ```
 internal/agent/
 ├── runtime.go          # Main agent loop
+├── options.go          # Runtime loop + tool execution options
 ├── prompt.go           # System prompt construction
 ├── context.go          # Context window management
 ├── tools.go            # Tool registration and dispatch
@@ -235,49 +236,76 @@ internal/agent/
 
 ```go
 type Runtime struct {
-    provider    LLMProvider
-    tools       *ToolRegistry
-    sessions    SessionStore
-    sandbox     SandboxExecutor
+    provider LLMProvider
+    tools    *ToolRegistry
+    sessions SessionStore
+    opts     RuntimeOptions
 }
 
 func (r *Runtime) Process(ctx context.Context, session *Session, msg *Message) (<-chan *ResponseChunk, error) {
-    chunks := make(chan *ResponseChunk)
+    chunks := make(chan *ResponseChunk, processBufferSize)
 
     go func() {
         defer close(chunks)
 
-        // 1. Build conversation context
-        history, err := r.sessions.GetHistory(ctx, session.ID)
+        history, err := r.sessions.GetHistory(ctx, session.ID, 50)
         if err != nil {
             chunks <- &ResponseChunk{Error: err}
             return
         }
 
-        // 2. Construct prompt
-        prompt := r.buildPrompt(session.Agent, history, msg)
+        messages := buildCompletionMessages(history, msg)
+        resolver, toolPolicy := toolPolicyFromContext(ctx)
 
-        // 3. Stream completion
-        completion, err := r.provider.Complete(ctx, prompt)
-        if err != nil {
-            chunks <- &ResponseChunk{Error: err}
-            return
-        }
+        for i := 0; i < r.opts.MaxIterations; i++ {
+            completion, err := r.provider.Complete(ctx, &CompletionRequest{
+                Messages: messages,
+                Tools:    filterToolsByPolicy(resolver, toolPolicy, r.tools.AsLLMTools()),
+            })
+            if err != nil {
+                chunks <- &ResponseChunk{Error: err}
+                return
+            }
 
-        // 4. Process stream, executing tools as needed
-        for chunk := range completion {
-            if chunk.ToolCall != nil {
-                result := r.executeTool(ctx, session, chunk.ToolCall)
-                // Continue with tool result...
-            } else {
-                chunks <- &ResponseChunk{Text: chunk.Text}
+            outcome, err := r.collectCompletion(completion, chunks)
+            if err != nil {
+                chunks <- &ResponseChunk{Error: err}
+                return
+            }
+            if len(outcome.toolCalls) == 0 {
+                return
+            }
+
+            messages = append(messages, CompletionMessage{
+                Role:      "assistant",
+                Content:   outcome.assistantText,
+                ToolCalls: outcome.toolCalls,
+            })
+
+            toolResults := r.executeToolCalls(ctx, outcome.toolCalls, resolver, toolPolicy, chunks)
+            if len(toolResults) > 0 {
+                messages = append(messages, CompletionMessage{Role: "tool", ToolResults: toolResults})
             }
         }
+
+        chunks <- &ResponseChunk{Error: fmt.Errorf("max tool iterations reached")}
     }()
 
     return chunks, nil
 }
 ```
+
+Runtime options control tool execution behavior:
+- `max_iterations`, `parallelism`, `timeout`, `max_attempts`, `retry_backoff`
+- `max_tool_calls` budget per request
+- `require_approval` patterns (deny tool execution and emit approval_required events)
+- `async` tool patterns (run tool in background job + return `job_id`)
+- `disable_events` to suppress tool lifecycle events
+
+Response chunks can include:
+- `Text` streaming tokens
+- `ToolResult` for synchronous tool execution
+- `ToolEvent` for lifecycle updates (`requested`, `started`, `succeeded`, `failed`, `retrying`, `denied`, `approval_required`)
 
 ### Provider Implementation (Anthropic)
 
@@ -890,6 +918,16 @@ tools:
       cache_dir: ~/.nexus/cache/embeddings
       cache_ttl: 24h
       timeout: 15s
+  execution:
+    max_iterations: 4
+    parallelism: 2
+    timeout: 0s
+    max_attempts: 1
+    retry_backoff: 0s
+    disable_events: false
+    max_tool_calls: 0
+    require_approval: []
+    async: []
 
 logging:
   level: info

@@ -287,7 +287,7 @@ func (p *Pool[T]) createResource(ctx context.Context) (*Resource[T], error) {
 
 func (p *Pool[T]) closeResource(res *Resource[T]) {
 	if p.config.Close != nil {
-		_ = p.config.Close(res.Value)
+		_ = p.config.Close(res.Value) //nolint:errcheck // close errors are logged by caller if needed
 	}
 	p.destroyed.Add(1)
 }

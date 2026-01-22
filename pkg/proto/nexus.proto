@@ -878,3 +878,75 @@ enum ToolCategory {
   TOOL_CATEGORY_AUTOMATION = 6;   // Scripts, workflows
   TOOL_CATEGORY_CUSTOM = 7;       // User-defined
 }
+
+// =============================================================================
+// Event Timeline Service - For debugging and observability
+// =============================================================================
+
+// EventService provides access to the event timeline for debugging.
+service EventService {
+  // GetEvents retrieves events by run ID or session ID.
+  rpc GetEvents(GetEventsRequest) returns (GetEventsResponse);
+
+  // GetTimeline retrieves a formatted timeline for a run.
+  rpc GetTimeline(GetTimelineRequest) returns (GetTimelineResponse);
+}
+
+message GetEventsRequest {
+  // Query by run_id (preferred for debugging a single run).
+  string run_id = 1;
+
+  // Query by session_id (all events for a session).
+  string session_id = 2;
+
+  // Maximum number of events to return.
+  int32 limit = 3;
+
+  // Filter by event type (e.g., "tool", "llm", "edge").
+  string type_filter = 4;
+}
+
+message GetEventsResponse {
+  repeated TimelineEvent events = 1;
+  int32 total_count = 2;
+}
+
+message GetTimelineRequest {
+  string run_id = 1;
+  string session_id = 2;
+}
+
+message GetTimelineResponse {
+  string run_id = 1;
+  string session_id = 2;
+  google.protobuf.Timestamp start_time = 3;
+  google.protobuf.Timestamp end_time = 4;
+  int64 duration_ms = 5;
+  repeated TimelineEvent events = 6;
+  TimelineSummary summary = 7;
+  string formatted = 8;  // Pre-formatted text output for CLI
+}
+
+message TimelineEvent {
+  string id = 1;
+  string type = 2;
+  google.protobuf.Timestamp timestamp = 3;
+  string run_id = 4;
+  string session_id = 5;
+  string tool_call_id = 6;
+  string edge_id = 7;
+  string name = 8;
+  string description = 9;
+  int64 duration_ms = 10;
+  string error = 11;
+  map<string, string> data = 12;
+}
+
+message TimelineSummary {
+  int32 total_events = 1;
+  int32 error_count = 2;
+  int32 tool_calls = 3;
+  int32 llm_calls = 4;
+  int32 edge_events = 5;
+  int64 total_duration_ms = 6;
+}

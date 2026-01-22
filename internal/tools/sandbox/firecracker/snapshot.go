@@ -263,11 +263,9 @@ func (o *Overlay) Reset() error {
 // Returns an error only if directory removal fails; unmount errors are
 // logged but not returned to ensure cleanup completes.
 func (o *Overlay) Destroy() error {
-	if err := o.Unmount(); err != nil {
-		// Log unmount error but continue with cleanup to avoid orphaned directories.
-		// In production, consider adding structured logging here.
-		// Unmount may fail if already unmounted or if path doesn't exist.
-	}
+	// Unmount may fail if already unmounted or if path doesn't exist.
+	// We intentionally ignore the error and continue with cleanup.
+	_ = o.Unmount()
 
 	return os.RemoveAll(o.OverlayPath)
 }

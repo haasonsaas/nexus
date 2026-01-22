@@ -9,7 +9,10 @@ import (
 
 // DefaultStateDir returns the default nexus state directory.
 func DefaultStateDir() string {
-	homeDir, _ := os.UserHomeDir()
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		homeDir = "."
+	}
 	return filepath.Join(homeDir, ".nexus")
 }
 
@@ -114,7 +117,10 @@ func Fix(opts FixOptions) *FixResult {
 			if info, err := os.Stat(path); err == nil && info.IsDir() {
 				result.Actions = append(result.Actions, fixDirectoryPermissions(path, 0700, opts.DryRun))
 				// Also fix files within
-				entries, _ := os.ReadDir(path)
+				entries, err := os.ReadDir(path)
+				if err != nil {
+					continue // Skip if can't read directory
+				}
 				for _, entry := range entries {
 					if !entry.IsDir() {
 						filePath := filepath.Join(path, entry.Name())

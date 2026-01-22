@@ -81,7 +81,10 @@ type AuditOptions struct {
 
 // DefaultAuditOptions returns sensible defaults for security auditing.
 func DefaultAuditOptions() AuditOptions {
-	homeDir, _ := os.UserHomeDir()
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		homeDir = "."
+	}
 	return AuditOptions{
 		ConfigPath:        filepath.Join(homeDir, ".nexus", "nexus.yaml"),
 		StateDir:          filepath.Join(homeDir, ".nexus"),
@@ -149,7 +152,10 @@ func (a *Auditor) auditFilesystem() []Finding {
 	// Check for sensitive files with loose permissions
 	sensitivePatterns := []string{"*.key", "*.pem", "*.token", "credentials.json"}
 	for _, pattern := range sensitivePatterns {
-		matches, _ := filepath.Glob(filepath.Join(a.opts.StateDir, pattern))
+		matches, err := filepath.Glob(filepath.Join(a.opts.StateDir, pattern))
+		if err != nil {
+			continue // Invalid pattern, skip
+		}
 		for _, match := range matches {
 			if info, err := os.Lstat(match); err == nil {
 				findings = append(findings, a.checkFilePermissions(match, info, "sensitive_file")...)
@@ -301,11 +307,11 @@ func countBySeverity(findings []Finding) Summary {
 func FormatReport(report *Report) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("Security Audit Report\n"))
-	sb.WriteString(fmt.Sprintf("=====================\n"))
+	sb.WriteString("Security Audit Report\n")
+	sb.WriteString("=====================\n")
 	sb.WriteString(fmt.Sprintf("Time: %s\n\n", time.Unix(report.Timestamp, 0).Format(time.RFC3339)))
 
-	sb.WriteString(fmt.Sprintf("Summary:\n"))
+	sb.WriteString("Summary:\n")
 	sb.WriteString(fmt.Sprintf("  Critical: %d\n", report.Summary.Critical))
 	sb.WriteString(fmt.Sprintf("  Warnings: %d\n", report.Summary.Warn))
 	sb.WriteString(fmt.Sprintf("  Info:     %d\n\n", report.Summary.Info))

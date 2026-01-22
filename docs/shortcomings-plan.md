@@ -62,6 +62,7 @@
    - [x] Add DB-backed storage for agents/channel connections/users with migrations and OAuth user linkage.
    - [x] Implement migration runner (`nexus migrate`) with embedded migrations + schema_migrations table.
    - [x] Ship cron scheduler MVP (webhook jobs, config-driven, tests) per design doc.
+   - [x] Wire MCP manager into gateway lifecycle and bridge MCP tools into the runtime (safe tool names).
 
 5) Testing improvements
    - [x] Add unit test for buffered runtime response channel.
@@ -110,3 +111,4 @@
 - 2026-01-22: Added storage layer for agents/channel connections/users (memory + Cockroach) and OAuth user linkage.
 - 2026-01-22: Added embedded migration runner + schema_migrations table and core table migrations.
 - 2026-01-22: Implemented cron scheduler MVP (webhook jobs, config schedules, tests) and wired into gateway start/stop.
+- 2026-01-22: Added MCP tool bridge with safe tool names, plus gateway lifecycle wiring and MCP integration docs update.

@@ -908,6 +908,10 @@ type BridgedResource struct {
 
 ### 7.1 MCP Tool as Nexus Tool
 
+Note: LLM providers require tool names to be alphanumeric/underscore. MCP tools are registered with
+sanitized names like `mcp_<server>_<tool>` and a short hash suffix when needed (length/duplicate
+collisions). The original MCP server/tool name is preserved in the tool description.
+
 ```go
 // internal/mcp/bridge.go
 
@@ -1035,26 +1039,26 @@ nexus mcp prompt <server.prompt> --arg key=value
 ## 10. Implementation Phases
 
 ### Phase 1: Transport (Week 1)
-- [ ] Transport interface
-- [ ] Stdio transport implementation
-- [ ] JSON-RPC request/response handling
-- [ ] Basic error handling
+- [x] Transport interface
+- [x] Stdio transport implementation
+- [x] JSON-RPC request/response handling
+- [x] Basic error handling
 
 ### Phase 2: Client (Week 2)
-- [ ] MCP Client implementation
-- [ ] Initialize/capabilities negotiation
-- [ ] Tools list/call
-- [ ] Resources list/read
-- [ ] Prompts list/get
+- [x] MCP Client implementation
+- [x] Initialize/capabilities negotiation
+- [x] Tools list/call
+- [x] Resources list/read
+- [x] Prompts list/get
 
 ### Phase 3: Manager & Bridge (Week 3)
-- [ ] MCP Manager for multiple servers
-- [ ] Server lifecycle management
-- [ ] Tool aggregation
-- [ ] Tool bridge to Nexus interface
+- [x] MCP Manager for multiple servers
+- [x] Server lifecycle management
+- [x] Tool aggregation
+- [x] Tool bridge to Nexus interface
 
 ### Phase 4: HTTP Transport & Polish (Week 4)
-- [ ] HTTP/SSE transport
+- [x] HTTP/SSE transport
 - [ ] Sampling support
 - [ ] CLI commands
 - [ ] Documentation

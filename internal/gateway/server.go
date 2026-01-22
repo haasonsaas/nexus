@@ -22,6 +22,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/cron"
+	"github.com/haasonsaas/nexus/internal/mcp"
 	"github.com/haasonsaas/nexus/internal/memory"
 	"github.com/haasonsaas/nexus/internal/plugins"
 	"github.com/haasonsaas/nexus/internal/sessions"
@@ -61,6 +62,7 @@ type Server struct {
 	runtimePlugins *plugins.RuntimeRegistry
 	authService    *auth.Service
 	cronScheduler  *cron.Scheduler
+	mcpManager     *mcp.Manager
 }
 
 // NewServer creates a new gateway server.
@@ -123,6 +125,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	if err != nil {
 		logger.Warn("vector memory not initialized", "error", err)
 	}
+	mcpManager := mcp.NewManager(&cfg.MCP, logger)
 
 	stores, err := initStorageStores(cfg)
 	if err != nil {
@@ -153,6 +156,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		stores:         stores,
 		authService:    authService,
 		cronScheduler:  cronScheduler,
+		mcpManager:     mcpManager,
 	}
 	grpcSvc := newGRPCService(server)
 	proto.RegisterNexusGatewayServer(grpcServer, grpcSvc)
@@ -177,6 +181,11 @@ func (s *Server) Channels() *channels.Registry {
 // Start begins serving requests.
 func (s *Server) Start(ctx context.Context) error {
 	s.startTime = time.Now()
+	if s.mcpManager != nil {
+		if err := s.mcpManager.Start(ctx); err != nil {
+			return fmt.Errorf("failed to start MCP manager: %w", err)
+		}
+	}
 	// Start channel adapters
 	if err := s.channels.StartAll(ctx); err != nil {
 		return fmt.Errorf("failed to start channels: %w", err)
@@ -241,6 +250,11 @@ func (s *Server) Stop(ctx context.Context) error {
 	if s.cronScheduler != nil {
 		if err := s.cronScheduler.Stop(ctx); err != nil {
 			s.logger.Error("error stopping cron scheduler", "error", err)
+		}
+	}
+	if s.mcpManager != nil {
+		if err := s.mcpManager.Stop(); err != nil {
+			s.logger.Error("error stopping MCP manager", "error", err)
 		}
 	}
 	if err := s.stores.Close(); err != nil {
@@ -468,6 +482,11 @@ func (s *Server) ensureRuntime(ctx context.Context) (*agent.Runtime, error) {
 	if err != nil {
 		return nil, err
 	}
+	if s.mcpManager != nil {
+		if err := s.mcpManager.Start(ctx); err != nil {
+			return nil, fmt.Errorf("mcp manager: %w", err)
+		}
+	}
 
 	runtime := agent.NewRuntime(provider, s.sessions)
 	if defaultModel != "" {
@@ -610,6 +629,10 @@ func (s *Server) registerTools(runtime *agent.Runtime) error {
 			},
 		}
 		runtime.RegisterTool(memorysearch.NewMemorySearchTool(searchConfig))
+	}
+
+	if s.config.MCP.Enabled && s.mcpManager != nil {
+		mcp.RegisterTools(runtime, s.mcpManager)
 	}
 
 	return nil

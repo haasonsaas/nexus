@@ -31,6 +31,7 @@ type Config struct {
 	Channels     ChannelsConfig      `yaml:"channels"`
 	LLM          LLMConfig           `yaml:"llm"`
 	Tools        ToolsConfig         `yaml:"tools"`
+	Cron         CronConfig          `yaml:"cron"`
 	Logging      LoggingConfig       `yaml:"logging"`
 }
 
@@ -236,6 +237,47 @@ type SandboxConfig struct {
 type ResourceLimits struct {
 	MaxCPU    int    `yaml:"max_cpu"`
 	MaxMemory string `yaml:"max_memory"`
+}
+
+// CronConfig configures scheduled jobs.
+type CronConfig struct {
+	Enabled bool            `yaml:"enabled"`
+	Jobs    []CronJobConfig `yaml:"jobs"`
+}
+
+// CronJobConfig defines a scheduled job.
+type CronJobConfig struct {
+	ID       string             `yaml:"id"`
+	Name     string             `yaml:"name"`
+	Type     string             `yaml:"type"`
+	Enabled  bool               `yaml:"enabled"`
+	Schedule CronScheduleConfig `yaml:"schedule"`
+	Message  *CronMessageConfig `yaml:"message,omitempty"`
+	Webhook  *CronWebhookConfig `yaml:"webhook,omitempty"`
+}
+
+// CronScheduleConfig defines when a job runs.
+type CronScheduleConfig struct {
+	Cron     string        `yaml:"cron"`
+	Every    time.Duration `yaml:"every"`
+	At       string        `yaml:"at"`
+	Timezone string        `yaml:"timezone"`
+}
+
+// CronMessageConfig defines a message job payload.
+type CronMessageConfig struct {
+	Channel   string `yaml:"channel"`
+	ChannelID string `yaml:"channel_id"`
+	Content   string `yaml:"content"`
+}
+
+// CronWebhookConfig defines a webhook job payload.
+type CronWebhookConfig struct {
+	URL     string            `yaml:"url"`
+	Method  string            `yaml:"method"`
+	Headers map[string]string `yaml:"headers"`
+	Body    string            `yaml:"body"`
+	Timeout time.Duration     `yaml:"timeout"`
 }
 
 type BrowserConfig struct {
@@ -624,6 +666,29 @@ func validateConfig(cfg *Config) error {
 	}
 	if cfg.Tools.MemorySearch.Embeddings.Timeout < 0 {
 		issues = append(issues, "tools.memory_search.embeddings.timeout must be >= 0")
+	}
+
+	if cfg.Cron.Enabled {
+		for i, job := range cfg.Cron.Jobs {
+			if strings.TrimSpace(job.ID) == "" {
+				issues = append(issues, fmt.Sprintf("cron.jobs[%d].id is required", i))
+			}
+			if strings.TrimSpace(job.Type) == "" {
+				issues = append(issues, fmt.Sprintf("cron.jobs[%d].type is required", i))
+			}
+			if strings.TrimSpace(job.Schedule.Cron) == "" && job.Schedule.Every == 0 && strings.TrimSpace(job.Schedule.At) == "" {
+				issues = append(issues, fmt.Sprintf("cron.jobs[%d].schedule is required", i))
+			}
+			switch strings.ToLower(strings.TrimSpace(job.Type)) {
+			case "webhook":
+				if job.Webhook == nil || strings.TrimSpace(job.Webhook.URL) == "" {
+					issues = append(issues, fmt.Sprintf("cron.jobs[%d].webhook.url is required for webhook jobs", i))
+				}
+			case "message", "agent":
+			default:
+				issues = append(issues, fmt.Sprintf("cron.jobs[%d].type must be message, agent, or webhook", i))
+			}
+		}
 	}
 
 	if len(issues) > 0 {

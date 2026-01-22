@@ -877,14 +877,14 @@ func (s *DBStore) Save(exec *JobExecution) error {
 ## 8. Implementation Phases
 
 ### Phase 1: Core Scheduler (Week 1)
-- [ ] Job data model
-- [ ] Cron scheduler with robfig/cron
-- [ ] Job registration/unregistration
-- [ ] Basic execution tracking
+- [x] Job data model (config-driven MVP)
+- [x] Cron scheduler with robfig/cron (parsing + next-run computation)
+- [ ] Job registration/unregistration (beyond config)
+- [x] Basic execution tracking (last run + last error)
 
 ### Phase 2: Job Executors (Week 2)
 - [ ] Message job executor
-- [ ] Webhook job executor
+- [x] Webhook job executor
 - [ ] Custom handler system
 - [ ] Template rendering
 

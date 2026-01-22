@@ -35,6 +35,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"database/sql"
 	"fmt"
 	"io"
 	"log/slog"
@@ -53,6 +54,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/plugins"
 	"github.com/haasonsaas/nexus/internal/profile"
 	"github.com/haasonsaas/nexus/internal/service"
+	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/skills"
 	"github.com/haasonsaas/nexus/internal/workspace"
 	"github.com/haasonsaas/nexus/pkg/models"
@@ -142,6 +144,35 @@ func resolveConfigPath(path string) string {
 		return profile.DefaultConfigPath()
 	}
 	return path
+}
+
+func openMigrationDB(cfg *config.Config) (*sql.DB, error) {
+	if cfg == nil || strings.TrimSpace(cfg.Database.URL) == "" {
+		return nil, fmt.Errorf("database url is required")
+	}
+	db, err := sql.Open("postgres", cfg.Database.URL)
+	if err != nil {
+		return nil, fmt.Errorf("open database: %w", err)
+	}
+	pool := sessions.DefaultCockroachConfig()
+	if cfg.Database.MaxConnections > 0 {
+		pool.MaxOpenConns = cfg.Database.MaxConnections
+	}
+	if cfg.Database.ConnMaxLifetime > 0 {
+		pool.ConnMaxLifetime = cfg.Database.ConnMaxLifetime
+	}
+	db.SetMaxOpenConns(pool.MaxOpenConns)
+	db.SetMaxIdleConns(pool.MaxIdleConns)
+	db.SetConnMaxLifetime(pool.ConnMaxLifetime)
+	db.SetConnMaxIdleTime(pool.ConnMaxIdleTime)
+
+	ctx, cancel := context.WithTimeout(context.Background(), pool.ConnectTimeout)
+	defer cancel()
+	if err := db.PingContext(ctx); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("ping database: %w", err)
+	}
+	return db, nil
 }
 
 // buildServiceCmd creates the "service" command group.
@@ -1424,13 +1455,28 @@ based on their timestamp prefix.`,
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}
+			db, err := openMigrationDB(cfg)
+			if err != nil {
+				return err
+			}
+			defer db.Close()
 
-			// TODO: Implement migration runner:
-			// 1. Connect to database
-			// 2. Load migration files from migrations/
-			// 3. Apply pending migrations
-			// 4. Record applied migrations in schema_migrations table
-			_ = cfg // Silence unused variable warning
+			migrator, err := sessions.NewMigrator(db)
+			if err != nil {
+				return fmt.Errorf("failed to initialize migrator: %w", err)
+			}
+
+			applied, err := migrator.Up(cmd.Context(), steps)
+			if err != nil {
+				return err
+			}
+			if len(applied) == 0 {
+				slog.Info("no pending migrations")
+				return nil
+			}
+			for _, id := range applied {
+				slog.Info("applied migration", "id", id)
+			}
 
 			slog.Info("migrations completed successfully")
 			return nil
@@ -1468,9 +1514,31 @@ if the migration removed columns or tables.`,
 				"config", configPath,
 				"steps", steps,
 			)
+			cfg, err := config.Load(configPath)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+			db, err := openMigrationDB(cfg)
+			if err != nil {
+				return err
+			}
+			defer db.Close()
 
-			// TODO: Implement migration rollback.
-			fmt.Printf("Would rollback %d migration(s)\n", steps)
+			migrator, err := sessions.NewMigrator(db)
+			if err != nil {
+				return fmt.Errorf("failed to initialize migrator: %w", err)
+			}
+			rolled, err := migrator.Down(cmd.Context(), steps)
+			if err != nil {
+				return err
+			}
+			if len(rolled) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No migrations to roll back.")
+				return nil
+			}
+			for _, id := range rolled {
+				slog.Info("rolled back migration", "id", id)
+			}
 			return nil
 		},
 	}
@@ -1493,18 +1561,47 @@ func buildMigrateStatusCmd() *cobra.Command {
 Shows which migrations have been applied and which are pending.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			configPath = resolveConfigPath(configPath)
-			fmt.Println("Migration Status")
-			fmt.Println("================")
-			fmt.Println()
+			cfg, err := config.Load(configPath)
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+			db, err := openMigrationDB(cfg)
+			if err != nil {
+				return err
+			}
+			defer db.Close()
 
-			// TODO: Query schema_migrations table and list migration files.
-			fmt.Println("Applied migrations:")
-			fmt.Println("  ✓ 20240101000000_initial_schema")
-			fmt.Println("  ✓ 20240115000000_add_sessions")
-			fmt.Println()
-			fmt.Println("Pending migrations:")
-			fmt.Println("  ○ 20240201000000_add_embeddings")
-			fmt.Println()
+			migrator, err := sessions.NewMigrator(db)
+			if err != nil {
+				return fmt.Errorf("failed to initialize migrator: %w", err)
+			}
+			applied, pending, err := migrator.Status(cmd.Context())
+			if err != nil {
+				return err
+			}
+
+			out := cmd.OutOrStdout()
+			fmt.Fprintln(out, "Migration Status")
+			fmt.Fprintln(out, "================")
+			fmt.Fprintln(out)
+			fmt.Fprintln(out, "Applied migrations:")
+			if len(applied) == 0 {
+				fmt.Fprintln(out, "  (none)")
+			} else {
+				for _, entry := range applied {
+					fmt.Fprintf(out, "  ✓ %s (%s)\n", entry.ID, entry.AppliedAt.Format(time.RFC3339))
+				}
+			}
+			fmt.Fprintln(out)
+			fmt.Fprintln(out, "Pending migrations:")
+			if len(pending) == 0 {
+				fmt.Fprintln(out, "  (none)")
+			} else {
+				for _, entry := range pending {
+					fmt.Fprintf(out, "  ○ %s\n", entry.ID)
+				}
+			}
+			fmt.Fprintln(out)
 
 			return nil
 		},

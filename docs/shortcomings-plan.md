@@ -59,6 +59,9 @@
    - [x] Implement auth service + API key/JWT gRPC middleware (design doc section 6).
    - [x] Add OAuth provider scaffolding + callback handler and env overrides for config.
    - [x] Implement gRPC services (stream + session/agent/channel/health) and in-memory session store.
+   - [x] Add DB-backed storage for agents/channel connections/users with migrations and OAuth user linkage.
+   - [x] Implement migration runner (`nexus migrate`) with embedded migrations + schema_migrations table.
+   - [x] Ship cron scheduler MVP (webhook jobs, config-driven, tests) per design doc.
 
 5) Testing improvements
    - [x] Add unit test for buffered runtime response channel.
@@ -103,3 +106,7 @@
 - 2026-01-21: Implemented auth service package (JWT + API keys) and gRPC middleware wiring per design docs.
 - 2026-01-21: Added OAuth provider scaffolding, callback handler, and config env overrides.
 - 2026-01-21: Implemented gRPC services + in-memory session store; added tests.
+- 2026-01-22: Reviewed Clawdbot cron implementation + docs via GH API; translated into a Nexus cron MVP plan.
+- 2026-01-22: Added storage layer for agents/channel connections/users (memory + Cockroach) and OAuth user linkage.
+- 2026-01-22: Added embedded migration runner + schema_migrations table and core table migrations.
+- 2026-01-22: Implemented cron scheduler MVP (webhook jobs, config schedules, tests) and wired into gateway start/stop.

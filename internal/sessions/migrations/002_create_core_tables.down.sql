@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS channel_connections;
+DROP TABLE IF EXISTS agents;
+DROP TABLE IF EXISTS users;

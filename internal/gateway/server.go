@@ -21,10 +21,12 @@ import (
 	"github.com/haasonsaas/nexus/internal/auth"
 	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/config"
+	"github.com/haasonsaas/nexus/internal/cron"
 	"github.com/haasonsaas/nexus/internal/memory"
 	"github.com/haasonsaas/nexus/internal/plugins"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/skills"
+	"github.com/haasonsaas/nexus/internal/storage"
 	"github.com/haasonsaas/nexus/internal/tools/browser"
 	"github.com/haasonsaas/nexus/internal/tools/memorysearch"
 	"github.com/haasonsaas/nexus/internal/tools/sandbox"
@@ -48,6 +50,7 @@ type Server struct {
 	runtimeMu sync.Mutex
 	runtime   *agent.Runtime
 	sessions  sessions.Store
+	stores    storage.StoreSet
 
 	browserPool   *browser.Pool
 	memoryLogger  *sessions.MemoryLogger
@@ -56,6 +59,8 @@ type Server struct {
 
 	channelPlugins *channelPluginRegistry
 	runtimePlugins *plugins.RuntimeRegistry
+	authService    *auth.Service
+	cronScheduler  *cron.Scheduler
 }
 
 // NewServer creates a new gateway server.
@@ -119,6 +124,23 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		logger.Warn("vector memory not initialized", "error", err)
 	}
 
+	stores, err := initStorageStores(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if stores.Users != nil {
+		authService.SetUserStore(stores.Users)
+	}
+	registerOAuthProviders(authService, cfg.Auth.OAuth)
+
+	var cronScheduler *cron.Scheduler
+	if cfg.Cron.Enabled {
+		cronScheduler, err = cron.NewScheduler(cfg.Cron, cron.WithLogger(logger))
+		if err != nil {
+			return nil, fmt.Errorf("cron scheduler: %w", err)
+		}
+	}
+
 	server := &Server{
 		config:         cfg,
 		grpc:           grpcServer,
@@ -128,6 +150,9 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		runtimePlugins: plugins.DefaultRuntimeRegistry(),
 		skillsManager:  skillsMgr,
 		vectorMemory:   vectorMem,
+		stores:         stores,
+		authService:    authService,
+		cronScheduler:  cronScheduler,
 	}
 	grpcSvc := newGRPCService(server)
 	proto.RegisterNexusGatewayServer(grpcServer, grpcSvc)
@@ -155,6 +180,11 @@ func (s *Server) Start(ctx context.Context) error {
 	// Start channel adapters
 	if err := s.channels.StartAll(ctx); err != nil {
 		return fmt.Errorf("failed to start channels: %w", err)
+	}
+	if s.cronScheduler != nil {
+		if err := s.cronScheduler.Start(ctx); err != nil {
+			return fmt.Errorf("failed to start cron scheduler: %w", err)
+		}
 	}
 
 	// Start message processing
@@ -207,6 +237,14 @@ func (s *Server) Stop(ctx context.Context) error {
 		if err := s.vectorMemory.Close(); err != nil {
 			s.logger.Error("error closing vector memory", "error", err)
 		}
+	}
+	if s.cronScheduler != nil {
+		if err := s.cronScheduler.Stop(ctx); err != nil {
+			s.logger.Error("error stopping cron scheduler", "error", err)
+		}
+	}
+	if err := s.stores.Close(); err != nil {
+		s.logger.Error("error closing storage stores", "error", err)
 	}
 
 	return nil
@@ -589,6 +627,44 @@ func (s *Server) registerChannelsFromConfig() error {
 		s.runtimePlugins = plugins.DefaultRuntimeRegistry()
 	}
 	return s.runtimePlugins.LoadChannels(s.config, s.channels)
+}
+
+func initStorageStores(cfg *config.Config) (storage.StoreSet, error) {
+	if cfg == nil || strings.TrimSpace(cfg.Database.URL) == "" {
+		return storage.NewMemoryStores(), nil
+	}
+	dbCfg := storage.DefaultCockroachConfig()
+	if cfg.Database.MaxConnections > 0 {
+		dbCfg.MaxOpenConns = cfg.Database.MaxConnections
+	}
+	if cfg.Database.ConnMaxLifetime > 0 {
+		dbCfg.ConnMaxLifetime = cfg.Database.ConnMaxLifetime
+	}
+	stores, err := storage.NewCockroachStoresFromDSN(cfg.Database.URL, dbCfg)
+	if err != nil {
+		return storage.StoreSet{}, fmt.Errorf("storage database: %w", err)
+	}
+	return stores, nil
+}
+
+func registerOAuthProviders(service *auth.Service, cfg config.OAuthConfig) {
+	if service == nil {
+		return
+	}
+	if strings.TrimSpace(cfg.Google.ClientID) != "" && strings.TrimSpace(cfg.Google.ClientSecret) != "" {
+		service.RegisterProvider("google", auth.NewGoogleProvider(auth.OAuthProviderConfig{
+			ClientID:     cfg.Google.ClientID,
+			ClientSecret: cfg.Google.ClientSecret,
+			RedirectURL:  cfg.Google.RedirectURL,
+		}))
+	}
+	if strings.TrimSpace(cfg.GitHub.ClientID) != "" && strings.TrimSpace(cfg.GitHub.ClientSecret) != "" {
+		service.RegisterProvider("github", auth.NewGitHubProvider(auth.OAuthProviderConfig{
+			ClientID:     cfg.GitHub.ClientID,
+			ClientSecret: cfg.GitHub.ClientSecret,
+			RedirectURL:  cfg.GitHub.RedirectURL,
+		}))
+	}
 }
 
 func (s *Server) resolveConversationID(msg *models.Message) (string, error) {

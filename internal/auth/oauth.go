@@ -22,6 +22,7 @@ var (
 // UserInfo represents user identity data returned by OAuth providers.
 type UserInfo struct {
 	ID        string
+	Provider  string
 	Email     string
 	Name      string
 	AvatarURL string
@@ -219,6 +220,7 @@ func parseGoogleUser(data []byte) (*UserInfo, error) {
 	}
 	return &UserInfo{
 		ID:        payload.Sub,
+		Provider:  "google",
 		Email:     payload.Email,
 		Name:      payload.Name,
 		AvatarURL: payload.Picture,
@@ -243,6 +245,7 @@ func parseGitHubUser(data []byte) (*UserInfo, error) {
 	}
 	return &UserInfo{
 		ID:        id,
+		Provider:  "github",
 		Email:     payload.Email,
 		Name:      name,
 		AvatarURL: payload.AvatarURL,

@@ -91,12 +91,14 @@ type Session struct {
 
 // User represents an authenticated user.
 type User struct {
-	ID        string    `json:"id"`
-	Email     string    `json:"email"`
-	Name      string    `json:"name,omitempty"`
-	AvatarURL string    `json:"avatar_url,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID         string    `json:"id"`
+	Email      string    `json:"email"`
+	Name       string    `json:"name,omitempty"`
+	AvatarURL  string    `json:"avatar_url,omitempty"`
+	Provider   string    `json:"provider,omitempty"`
+	ProviderID string    `json:"provider_id,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // Agent represents a configured AI agent.

@@ -66,6 +66,36 @@ func roleToProto(role models.Role) proto.Role {
 	}
 }
 
+func connectionStatusToProto(status models.ConnectionStatus) proto.ConnectionStatus {
+	switch status {
+	case models.ConnectionStatusConnected:
+		return proto.ConnectionStatus_CONNECTION_STATUS_CONNECTED
+	case models.ConnectionStatusDisconnected:
+		return proto.ConnectionStatus_CONNECTION_STATUS_DISCONNECTED
+	case models.ConnectionStatusError:
+		return proto.ConnectionStatus_CONNECTION_STATUS_ERROR
+	case models.ConnectionStatusConnecting:
+		return proto.ConnectionStatus_CONNECTION_STATUS_CONNECTING
+	default:
+		return proto.ConnectionStatus_CONNECTION_STATUS_UNSPECIFIED
+	}
+}
+
+func connectionStatusFromProto(status proto.ConnectionStatus) models.ConnectionStatus {
+	switch status {
+	case proto.ConnectionStatus_CONNECTION_STATUS_CONNECTED:
+		return models.ConnectionStatusConnected
+	case proto.ConnectionStatus_CONNECTION_STATUS_DISCONNECTED:
+		return models.ConnectionStatusDisconnected
+	case proto.ConnectionStatus_CONNECTION_STATUS_ERROR:
+		return models.ConnectionStatusError
+	case proto.ConnectionStatus_CONNECTION_STATUS_CONNECTING:
+		return models.ConnectionStatusConnecting
+	default:
+		return models.ConnectionStatusUnspecified
+	}
+}
+
 func metadataToProto(metadata map[string]any) map[string]string {
 	if metadata == nil {
 		return nil
@@ -86,6 +116,26 @@ func metadataFromProto(metadata map[string]string) map[string]any {
 		out[key] = value
 	}
 	return out
+}
+
+func connectionToProto(conn *models.ChannelConnection) *proto.ChannelConnection {
+	if conn == nil {
+		return nil
+	}
+	config := map[string]string{}
+	for k, v := range conn.Config {
+		config[k] = fmt.Sprint(v)
+	}
+	return &proto.ChannelConnection{
+		Id:             conn.ID,
+		UserId:         conn.UserID,
+		ChannelType:    channelToProto(conn.ChannelType),
+		ChannelId:      conn.ChannelID,
+		Status:         connectionStatusToProto(conn.Status),
+		Config:         config,
+		ConnectedAt:    timestampToProto(conn.ConnectedAt),
+		LastActivityAt: timestampToProto(conn.LastActivityAt),
+	}
 }
 
 func timestampToProto(ts time.Time) *timestamppb.Timestamp {

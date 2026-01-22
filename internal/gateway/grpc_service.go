@@ -7,7 +7,6 @@ import (
 	"io"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,6 +17,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/haasonsaas/nexus/internal/auth"
 	"github.com/haasonsaas/nexus/internal/sessions"
+	"github.com/haasonsaas/nexus/internal/storage"
 	"github.com/haasonsaas/nexus/pkg/models"
 	proto "github.com/haasonsaas/nexus/pkg/proto"
 )
@@ -29,16 +29,28 @@ type grpcService struct {
 	proto.UnimplementedChannelServiceServer
 	proto.UnimplementedHealthServiceServer
 
-	server      *Server
-	agentStore  *agentStore
-	channelConn *channelConnStore
+	server       *Server
+	agentStore   storage.AgentStore
+	channelStore storage.ChannelConnectionStore
 }
 
 func newGRPCService(server *Server) *grpcService {
+	var agentStore storage.AgentStore
+	var channelStore storage.ChannelConnectionStore
+	if server != nil && server.stores.Agents != nil {
+		agentStore = server.stores.Agents
+	} else {
+		agentStore = storage.NewMemoryAgentStore()
+	}
+	if server != nil && server.stores.Channels != nil {
+		channelStore = server.stores.Channels
+	} else {
+		channelStore = storage.NewMemoryChannelConnectionStore()
+	}
 	return &grpcService{
-		server:      server,
-		agentStore:  newAgentStore(),
-		channelConn: newChannelConnStore(),
+		server:       server,
+		agentStore:   agentStore,
+		channelStore: channelStore,
 	}
 }
 
@@ -349,7 +361,12 @@ func (g *grpcService) CreateAgent(ctx context.Context, req *proto.CreateAgentReq
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
 	}
-	g.agentStore.Save(agent)
+	if err := g.agentStore.Create(ctx, agent); err != nil {
+		if errors.Is(err, storage.ErrAlreadyExists) {
+			return nil, status.Error(codes.AlreadyExists, "agent already exists")
+		}
+		return nil, status.Errorf(codes.Internal, "failed to create agent: %v", err)
+	}
 	return &proto.CreateAgentResponse{Agent: agentToProto(agent)}, nil
 }
 
@@ -357,9 +374,12 @@ func (g *grpcService) GetAgent(ctx context.Context, req *proto.GetAgentRequest) 
 	if req == nil || req.Id == "" {
 		return nil, status.Error(codes.InvalidArgument, "agent id required")
 	}
-	agent, ok := g.agentStore.Get(req.Id)
-	if !ok {
-		return nil, status.Error(codes.NotFound, "agent not found")
+	agent, err := g.agentStore.Get(ctx, req.Id)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "agent not found")
+		}
+		return nil, status.Errorf(codes.Internal, "failed to fetch agent: %v", err)
 	}
 	return &proto.GetAgentResponse{Agent: agentToProto(agent)}, nil
 }
@@ -374,22 +394,19 @@ func (g *grpcService) ListAgents(ctx context.Context, req *proto.ListAgentsReque
 		}
 	}
 	offset := parsePageToken(req.GetPageToken())
-	agents := g.agentStore.List(userID)
-	if offset > len(agents) {
-		offset = len(agents)
-	}
-	end := len(agents)
-	if limit > 0 && offset+limit < end {
-		end = offset + limit
+	agents, total, err := g.agentStore.List(ctx, userID, limit, offset)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to list agents: %v", err)
 	}
 	response := &proto.ListAgentsResponse{}
-	for _, agent := range agents[offset:end] {
+	for _, agent := range agents {
 		response.Agents = append(response.Agents, agentToProto(agent))
 	}
-	if end < len(agents) {
-		response.NextPageToken = strconv.Itoa(end)
+	nextOffset := offset + len(agents)
+	if total > nextOffset {
+		response.NextPageToken = strconv.Itoa(nextOffset)
 	}
-	response.TotalCount = int32(len(agents))
+	response.TotalCount = int32(total)
 	return response, nil
 }
 
@@ -397,9 +414,12 @@ func (g *grpcService) UpdateAgent(ctx context.Context, req *proto.UpdateAgentReq
 	if req == nil || req.Id == "" {
 		return nil, status.Error(codes.InvalidArgument, "agent id required")
 	}
-	agent, ok := g.agentStore.Get(req.Id)
-	if !ok {
-		return nil, status.Error(codes.NotFound, "agent not found")
+	agent, err := g.agentStore.Get(ctx, req.Id)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "agent not found")
+		}
+		return nil, status.Errorf(codes.Internal, "failed to fetch agent: %v", err)
 	}
 	if req.Name != "" {
 		agent.Name = req.Name
@@ -420,7 +440,12 @@ func (g *grpcService) UpdateAgent(ctx context.Context, req *proto.UpdateAgentReq
 		agent.Config = mapStringToAny(req.Config)
 	}
 	agent.UpdatedAt = time.Now()
-	g.agentStore.Save(agent)
+	if err := g.agentStore.Update(ctx, agent); err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "agent not found")
+		}
+		return nil, status.Errorf(codes.Internal, "failed to update agent: %v", err)
+	}
 	return &proto.UpdateAgentResponse{Agent: agentToProto(agent)}, nil
 }
 
@@ -428,7 +453,12 @@ func (g *grpcService) DeleteAgent(ctx context.Context, req *proto.DeleteAgentReq
 	if req == nil || req.Id == "" {
 		return nil, status.Error(codes.InvalidArgument, "agent id required")
 	}
-	g.agentStore.Delete(req.Id)
+	if err := g.agentStore.Delete(ctx, req.Id); err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "agent not found")
+		}
+		return nil, status.Errorf(codes.Internal, "failed to delete agent: %v", err)
+	}
 	return &proto.DeleteAgentResponse{Success: true}, nil
 }
 
@@ -440,30 +470,40 @@ func (g *grpcService) ConnectChannel(ctx context.Context, req *proto.ConnectChan
 	if userID == "" {
 		userID = req.Credentials["user_id"]
 	}
-	connection := &proto.ChannelConnection{
-		Id:          uuid.NewString(),
-		UserId:      userID,
-		ChannelType: req.ChannelType,
-		ChannelId:   req.ChannelId,
-		Status:      proto.ConnectionStatus_CONNECTION_STATUS_CONNECTED,
-		Config:      req.Config,
-		ConnectedAt: timestamppb.Now(),
+	connection := &models.ChannelConnection{
+		ID:          uuid.NewString(),
+		UserID:      userID,
+		ChannelType: channelFromProto(req.ChannelType),
+		ChannelID:   req.ChannelId,
+		Status:      models.ConnectionStatusConnected,
+		Config:      mapStringToAny(req.Config),
+		ConnectedAt: time.Now(),
 	}
-	g.channelConn.Save(connection)
-	return &proto.ConnectChannelResponse{Connection: connection}, nil
+	if err := g.channelStore.Create(ctx, connection); err != nil {
+		if errors.Is(err, storage.ErrAlreadyExists) {
+			return nil, status.Error(codes.AlreadyExists, "channel connection already exists")
+		}
+		return nil, status.Errorf(codes.Internal, "failed to connect channel: %v", err)
+	}
+	return &proto.ConnectChannelResponse{Connection: connectionToProto(connection)}, nil
 }
 
 func (g *grpcService) DisconnectChannel(ctx context.Context, req *proto.DisconnectChannelRequest) (*proto.DisconnectChannelResponse, error) {
 	if req == nil || req.ConnectionId == "" {
 		return nil, status.Error(codes.InvalidArgument, "connection id required")
 	}
-	connection, ok := g.channelConn.Get(req.ConnectionId)
-	if !ok {
-		return &proto.DisconnectChannelResponse{Success: false}, nil
+	connection, err := g.channelStore.Get(ctx, req.ConnectionId)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return &proto.DisconnectChannelResponse{Success: false}, nil
+		}
+		return nil, status.Errorf(codes.Internal, "failed to fetch channel connection: %v", err)
 	}
-	connection.Status = proto.ConnectionStatus_CONNECTION_STATUS_DISCONNECTED
-	connection.LastActivityAt = timestamppb.Now()
-	g.channelConn.Save(connection)
+	connection.Status = models.ConnectionStatusDisconnected
+	connection.LastActivityAt = time.Now()
+	if err := g.channelStore.Update(ctx, connection); err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to update channel connection: %v", err)
+	}
 	return &proto.DisconnectChannelResponse{Success: true}, nil
 }
 
@@ -471,11 +511,14 @@ func (g *grpcService) GetChannelStatus(ctx context.Context, req *proto.GetChanne
 	if req == nil || req.ConnectionId == "" {
 		return nil, status.Error(codes.InvalidArgument, "connection id required")
 	}
-	connection, ok := g.channelConn.Get(req.ConnectionId)
-	if !ok {
-		return nil, status.Error(codes.NotFound, "connection not found")
+	connection, err := g.channelStore.Get(ctx, req.ConnectionId)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "connection not found")
+		}
+		return nil, status.Errorf(codes.Internal, "failed to fetch channel connection: %v", err)
 	}
-	return &proto.GetChannelStatusResponse{Connection: connection}, nil
+	return &proto.GetChannelStatusResponse{Connection: connectionToProto(connection)}, nil
 }
 
 func (g *grpcService) ListChannels(ctx context.Context, req *proto.ListChannelsRequest) (*proto.ListChannelsResponse, error) {
@@ -488,20 +531,19 @@ func (g *grpcService) ListChannels(ctx context.Context, req *proto.ListChannelsR
 		}
 	}
 	offset := parsePageToken(req.GetPageToken())
-	connections := g.channelConn.List(userID)
-	if offset > len(connections) {
-		offset = len(connections)
-	}
-	end := len(connections)
-	if limit > 0 && offset+limit < end {
-		end = offset + limit
+	connections, total, err := g.channelStore.List(ctx, userID, limit, offset)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to list channel connections: %v", err)
 	}
 	response := &proto.ListChannelsResponse{}
-	response.Connections = append(response.Connections, connections[offset:end]...)
-	if end < len(connections) {
-		response.NextPageToken = strconv.Itoa(end)
+	for _, conn := range connections {
+		response.Connections = append(response.Connections, connectionToProto(conn))
 	}
-	response.TotalCount = int32(len(connections))
+	nextOffset := offset + len(connections)
+	if total > nextOffset {
+		response.NextPageToken = strconv.Itoa(nextOffset)
+	}
+	response.TotalCount = int32(total)
 	return response, nil
 }
 
@@ -582,88 +624,4 @@ func agentToProto(agent *models.Agent) *proto.Agent {
 		CreatedAt:    timestampToProto(agent.CreatedAt),
 		UpdatedAt:    timestampToProto(agent.UpdatedAt),
 	}
-}
-
-// agentStore keeps agents in memory until persistence is implemented.
-type agentStore struct {
-	mu     sync.RWMutex
-	agents map[string]*models.Agent
-}
-
-func newAgentStore() *agentStore {
-	return &agentStore{agents: map[string]*models.Agent{}}
-}
-
-func (s *agentStore) Save(agent *models.Agent) {
-	if agent == nil {
-		return
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.agents[agent.ID] = agent
-}
-
-func (s *agentStore) Get(id string) (*models.Agent, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	agent, ok := s.agents[id]
-	return agent, ok
-}
-
-func (s *agentStore) List(userID string) []*models.Agent {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	out := make([]*models.Agent, 0, len(s.agents))
-	for _, agent := range s.agents {
-		if userID != "" && agent.UserID != userID {
-			continue
-		}
-		out = append(out, agent)
-	}
-	return out
-}
-
-func (s *agentStore) Delete(id string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	delete(s.agents, id)
-}
-
-// channelConnStore tracks channel connections in memory.
-type channelConnStore struct {
-	mu          sync.RWMutex
-	connections map[string]*proto.ChannelConnection
-}
-
-func newChannelConnStore() *channelConnStore {
-	return &channelConnStore{connections: map[string]*proto.ChannelConnection{}}
-}
-
-func (s *channelConnStore) Save(conn *proto.ChannelConnection) {
-	if conn == nil {
-		return
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.connections[conn.Id] = conn
-}
-
-func (s *channelConnStore) Get(id string) (*proto.ChannelConnection, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	conn, ok := s.connections[id]
-	return conn, ok
-}
-
-func (s *channelConnStore) List(userID string) []*proto.ChannelConnection {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	out := make([]*proto.ChannelConnection, 0, len(s.connections))
-	for _, conn := range s.connections {
-		if userID != "" && conn.UserId != userID {
-			continue
-		}
-		out = append(out, conn)
-	}
-	return out
 }

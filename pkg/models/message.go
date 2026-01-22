@@ -16,6 +16,7 @@ const (
 	ChannelWhatsApp ChannelType = "whatsapp"
 	ChannelSignal   ChannelType = "signal"
 	ChannelIMessage ChannelType = "imessage"
+	ChannelMatrix   ChannelType = "matrix"
 )
 
 // Direction indicates if a message is inbound or outbound.

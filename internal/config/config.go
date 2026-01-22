@@ -151,6 +151,7 @@ type ChannelsConfig struct {
 	WhatsApp WhatsAppConfig `yaml:"whatsapp"`
 	Signal   SignalConfig   `yaml:"signal"`
 	IMessage IMessageConfig `yaml:"imessage"`
+	Matrix   MatrixConfig   `yaml:"matrix"`
 }
 
 type WhatsAppConfig struct {
@@ -186,6 +187,17 @@ type IMessageConfig struct {
 	Enabled      bool   `yaml:"enabled"`
 	DatabasePath string `yaml:"database_path"`
 	PollInterval string `yaml:"poll_interval"`
+}
+
+type MatrixConfig struct {
+	Enabled      bool     `yaml:"enabled"`
+	Homeserver   string   `yaml:"homeserver"`
+	UserID       string   `yaml:"user_id"`
+	AccessToken  string   `yaml:"access_token"`
+	DeviceID     string   `yaml:"device_id"`
+	AllowedRooms []string `yaml:"allowed_rooms"`
+	AllowedUsers []string `yaml:"allowed_users"`
+	JoinOnInvite bool     `yaml:"join_on_invite"`
 }
 
 type TelegramConfig struct {

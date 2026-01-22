@@ -970,14 +970,20 @@ func (r *Runtime) executeToolsWithEvents(ctx context.Context, toolExec *ToolExec
 
 	results := toolExec.ExecuteConcurrently(ctx, calls, nil) // no legacy event callback
 
-	// Emit tool.finished for each result
+	// Emit tool.finished or tool.timed_out for each result
 	for _, er := range results {
 		if er.Index < 0 || er.Index >= len(calls) {
 			continue
 		}
 		tc := calls[er.Index]
 		elapsed := time.Since(startTimes[tc.ID])
-		emitter.ToolFinished(ctx, tc.ID, tc.Name, !er.Result.IsError, []byte(er.Result.Content), elapsed)
+
+		if er.TimedOut {
+			// Emit distinct timeout event for observability
+			emitter.ToolTimedOut(ctx, tc.ID, tc.Name, elapsed)
+		} else {
+			emitter.ToolFinished(ctx, tc.ID, tc.Name, !er.Result.IsError, []byte(er.Result.Content), elapsed)
+		}
 	}
 
 	return results

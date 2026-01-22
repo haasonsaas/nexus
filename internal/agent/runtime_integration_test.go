@@ -1237,3 +1237,214 @@ func TestProcess_EmitsCancelledOnContextCancel(t *testing.T) {
 		t.Error("expected error chunk on context cancellation")
 	}
 }
+
+// =============================================================================
+// Tool Timeout and Reliability Signal Tests
+// =============================================================================
+
+// slowTool simulates a tool that takes time to execute.
+type slowTool struct {
+	name  string
+	delay time.Duration
+}
+
+func (t *slowTool) Name() string             { return t.name }
+func (t *slowTool) Description() string      { return "slow tool for testing" }
+func (t *slowTool) Schema() json.RawMessage  { return json.RawMessage(`{"type":"object"}`) }
+
+func (t *slowTool) Execute(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
+	select {
+	case <-time.After(t.delay):
+		return &ToolResult{Content: "completed"}, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func TestProcessStream_EmitsToolTimedOutEvent(t *testing.T) {
+	provider := &multiTurnProvider{
+		responses: []multiTurnResponse{
+			{
+				toolCalls: []models.ToolCall{
+					{ID: "tc-1", Name: "slow_tool", Input: json.RawMessage(`{}`)},
+				},
+			},
+			{text: "Tool timed out, but I can continue."},
+		},
+	}
+	store := newMemoryStore()
+	runtime := NewRuntime(provider, store)
+
+	// Add a slow tool that will timeout
+	runtime.RegisterTool(&slowTool{name: "slow_tool", delay: 5 * time.Second})
+
+	// Set a very short per-tool timeout
+	runtime.SetToolExecConfig(ToolExecConfig{
+		Concurrency:    2,
+		PerToolTimeout: 50 * time.Millisecond,
+	})
+
+	session := &models.Session{ID: "test-session-tool-timeout"}
+	msg := &models.Message{ID: "msg-1", Role: models.RoleUser, Content: "Run the slow tool"}
+
+	events, err := runtime.ProcessStream(context.Background(), session, msg)
+	if err != nil {
+		t.Fatalf("ProcessStream failed: %v", err)
+	}
+
+	var gotToolTimedOut bool
+	var gotToolFinished bool
+	for e := range events {
+		switch e.Type {
+		case models.AgentEventToolTimedOut:
+			gotToolTimedOut = true
+			if e.Tool == nil {
+				t.Error("tool.timed_out event missing Tool payload")
+			}
+		case models.AgentEventToolFinished:
+			gotToolFinished = true
+		}
+	}
+
+	if !gotToolTimedOut {
+		t.Error("expected tool.timed_out event")
+	}
+	if gotToolFinished {
+		t.Error("should emit tool.timed_out, not tool.finished, for timed out tools")
+	}
+}
+
+func TestProcessStream_ReliabilitySignalsInStats_Cancelled(t *testing.T) {
+	provider := &slowProvider{delay: 5 * time.Second}
+	store := newMemoryStore()
+	runtime := NewRuntime(provider, store)
+
+	session := &models.Session{ID: "test-session-stats-cancelled"}
+	msg := &models.Message{ID: "msg-1", Role: models.RoleUser, Content: "Hello"}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	events, err := runtime.ProcessStream(ctx, session, msg)
+	if err != nil {
+		t.Fatalf("ProcessStream failed: %v", err)
+	}
+
+	// Wait a bit then cancel
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+
+	// Collect run.finished event
+	var runFinished *models.AgentEvent
+	for e := range events {
+		if e.Type == models.AgentEventRunFinished {
+			ev := e
+			runFinished = &ev
+		}
+	}
+
+	if runFinished == nil {
+		t.Fatal("missing run.finished event")
+	}
+
+	if runFinished.Stats == nil || runFinished.Stats.Run == nil {
+		t.Fatal("run.finished missing stats")
+	}
+
+	stats := runFinished.Stats.Run
+	if !stats.Cancelled {
+		t.Error("expected Cancelled=true in stats")
+	}
+	if stats.TimedOut {
+		t.Error("expected TimedOut=false for cancellation")
+	}
+}
+
+func TestProcessStream_ReliabilitySignalsInStats_TimedOut(t *testing.T) {
+	provider := &slowProvider{delay: 5 * time.Second}
+	store := newMemoryStore()
+	runtime := NewRuntime(provider, store)
+	runtime.SetMaxWallTime(100 * time.Millisecond)
+
+	session := &models.Session{ID: "test-session-stats-timeout"}
+	msg := &models.Message{ID: "msg-1", Role: models.RoleUser, Content: "Hello"}
+
+	events, err := runtime.ProcessStream(context.Background(), session, msg)
+	if err != nil {
+		t.Fatalf("ProcessStream failed: %v", err)
+	}
+
+	var runFinished *models.AgentEvent
+	for e := range events {
+		if e.Type == models.AgentEventRunFinished {
+			ev := e
+			runFinished = &ev
+		}
+	}
+
+	if runFinished == nil {
+		t.Fatal("missing run.finished event")
+	}
+
+	if runFinished.Stats == nil || runFinished.Stats.Run == nil {
+		t.Fatal("run.finished missing stats")
+	}
+
+	stats := runFinished.Stats.Run
+	if !stats.TimedOut {
+		t.Error("expected TimedOut=true in stats")
+	}
+	if stats.Cancelled {
+		t.Error("expected Cancelled=false for timeout")
+	}
+}
+
+func TestProcessStream_ReliabilitySignalsInStats_ToolTimeouts(t *testing.T) {
+	provider := &multiTurnProvider{
+		responses: []multiTurnResponse{
+			{
+				toolCalls: []models.ToolCall{
+					{ID: "tc-1", Name: "slow_tool", Input: json.RawMessage(`{}`)},
+					{ID: "tc-2", Name: "slow_tool", Input: json.RawMessage(`{}`)},
+				},
+			},
+			{text: "Done"},
+		},
+	}
+	store := newMemoryStore()
+	runtime := NewRuntime(provider, store)
+
+	runtime.RegisterTool(&slowTool{name: "slow_tool", delay: 5 * time.Second})
+	runtime.SetToolExecConfig(ToolExecConfig{
+		Concurrency:    2,
+		PerToolTimeout: 50 * time.Millisecond,
+	})
+
+	session := &models.Session{ID: "test-session-stats-tool-timeouts"}
+	msg := &models.Message{ID: "msg-1", Role: models.RoleUser, Content: "Run slow tools"}
+
+	events, err := runtime.ProcessStream(context.Background(), session, msg)
+	if err != nil {
+		t.Fatalf("ProcessStream failed: %v", err)
+	}
+
+	var runFinished *models.AgentEvent
+	for e := range events {
+		if e.Type == models.AgentEventRunFinished {
+			ev := e
+			runFinished = &ev
+		}
+	}
+
+	if runFinished == nil {
+		t.Fatal("missing run.finished event")
+	}
+
+	if runFinished.Stats == nil || runFinished.Stats.Run == nil {
+		t.Fatal("run.finished missing stats")
+	}
+
+	stats := runFinished.Stats.Run
+	if stats.ToolTimeouts != 2 {
+		t.Errorf("expected ToolTimeouts=2, got %d", stats.ToolTimeouts)
+	}
+}

@@ -214,6 +214,23 @@ func (e *EventEmitter) ToolFinished(ctx context.Context, callID, name string, su
 	return event
 }
 
+// ToolTimedOut emits a tool.timed_out event when a tool exceeds its timeout.
+func (e *EventEmitter) ToolTimedOut(ctx context.Context, callID, name string, timeout time.Duration) models.AgentEvent {
+	event := e.base(models.AgentEventToolTimedOut)
+	event.Tool = &models.ToolEventPayload{
+		CallID:  callID,
+		Name:    name,
+		Success: false,
+		Elapsed: timeout,
+	}
+	event.Error = &models.ErrorEventPayload{
+		Message:   fmt.Sprintf("tool %s timed out after %v", name, timeout),
+		Retriable: true,
+	}
+	e.emit(ctx, event)
+	return event
+}
+
 // ContextPacked emits a context.packed event with diagnostics.
 func (e *EventEmitter) ContextPacked(ctx context.Context, diag *models.ContextEventPayload) models.AgentEvent {
 	event := e.base(models.AgentEventContextPacked)
@@ -283,6 +300,16 @@ func (c *StatsCollector) OnEvent(ctx context.Context, e models.AgentEvent) {
 			}
 		}
 
+	case models.AgentEventToolTimedOut:
+		c.stats.ToolTimeouts++
+		c.stats.Errors++
+		if e.Tool != nil {
+			if start, ok := c.toolStarts[e.Tool.CallID]; ok {
+				c.stats.ToolWallTime += e.Time.Sub(start)
+				delete(c.toolStarts, e.Tool.CallID)
+			}
+		}
+
 	case models.AgentEventContextPacked:
 		c.stats.ContextPacks++
 		if e.Stats != nil && e.Stats.Run != nil {
@@ -290,6 +317,14 @@ func (c *StatsCollector) OnEvent(ctx context.Context, e models.AgentEvent) {
 		}
 
 	case models.AgentEventRunError:
+		c.stats.Errors++
+
+	case models.AgentEventRunCancelled:
+		c.stats.Cancelled = true
+		c.stats.Errors++
+
+	case models.AgentEventRunTimedOut:
+		c.stats.TimedOut = true
 		c.stats.Errors++
 
 	case models.AgentEventRunFinished:

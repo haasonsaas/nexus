@@ -69,6 +69,7 @@ const (
 	AgentEventToolStdout   AgentEventType = "tool.stdout"
 	AgentEventToolStderr   AgentEventType = "tool.stderr"
 	AgentEventToolFinished AgentEventType = "tool.finished"
+	AgentEventToolTimedOut AgentEventType = "tool.timed_out" // Per-tool timeout exceeded
 
 	// Context packing diagnostics
 	AgentEventContextPacked AgentEventType = "context.packed"
@@ -156,6 +157,7 @@ type RunStats struct {
 	// Tool metrics
 	ToolCalls    int           `json:"tool_calls,omitempty"`
 	ToolWallTime time.Duration `json:"tool_wall_time,omitempty"`
+	ToolTimeouts int           `json:"tool_timeouts,omitempty"`
 
 	// Model metrics
 	ModelWallTime time.Duration `json:"model_wall_time,omitempty"`
@@ -165,6 +167,11 @@ type RunStats struct {
 	// Context packing metrics
 	ContextPacks int `json:"context_packs,omitempty"`
 	DroppedItems int `json:"dropped_items,omitempty"`
+
+	// Reliability signals
+	Cancelled     bool `json:"cancelled,omitempty"`      // Run was explicitly cancelled
+	TimedOut      bool `json:"timed_out,omitempty"`      // Run hit wall time limit
+	DroppedEvents int  `json:"dropped_events,omitempty"` // Events dropped due to backpressure
 
 	// Error count
 	Errors int `json:"errors,omitempty"`

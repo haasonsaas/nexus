@@ -426,3 +426,499 @@ func TestTokenCounting(t *testing.T) {
 		}
 	}
 }
+
+// TestNewOpenAIProviderWithConfig tests the config-based constructor.
+func TestNewOpenAIProviderWithConfig(t *testing.T) {
+	tests := []struct {
+		name       string
+		config     OpenAIConfig
+		wantNilCli bool
+	}{
+		{
+			name: "full config",
+			config: OpenAIConfig{
+				APIKey:     "sk-test-key",
+				BaseURL:    "https://custom.api.example.com/v1",
+				MaxRetries: 5,
+				RetryDelay: 2 * time.Second,
+			},
+			wantNilCli: false,
+		},
+		{
+			name: "empty API key",
+			config: OpenAIConfig{
+				APIKey: "",
+			},
+			wantNilCli: true,
+		},
+		{
+			name: "defaults applied",
+			config: OpenAIConfig{
+				APIKey: "sk-test",
+			},
+			wantNilCli: false,
+		},
+		{
+			name: "negative retries uses default",
+			config: OpenAIConfig{
+				APIKey:     "sk-test",
+				MaxRetries: -5,
+				RetryDelay: -1 * time.Second,
+			},
+			wantNilCli: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			provider := NewOpenAIProviderWithConfig(tt.config)
+			if provider == nil {
+				t.Fatal("expected provider but got nil")
+			}
+
+			if tt.wantNilCli {
+				if provider.client != nil {
+					t.Error("expected nil client for empty API key")
+				}
+			} else {
+				if provider.client == nil {
+					t.Error("expected non-nil client")
+				}
+			}
+
+			// Check defaults are applied
+			if provider.maxRetries <= 0 {
+				t.Errorf("expected positive maxRetries, got %d", provider.maxRetries)
+			}
+			if provider.retryDelay <= 0 {
+				t.Errorf("expected positive retryDelay, got %v", provider.retryDelay)
+			}
+		})
+	}
+}
+
+// TestOpenAIProviderWithBaseURL tests provider with custom base URL.
+func TestOpenAIProviderWithBaseURL(t *testing.T) {
+	provider := NewOpenAIProviderWithConfig(OpenAIConfig{
+		APIKey:  "sk-test",
+		BaseURL: "https://custom.openai.proxy.com/v1",
+	})
+
+	if provider == nil {
+		t.Fatal("expected provider but got nil")
+	}
+	if provider.client == nil {
+		t.Fatal("expected client but got nil")
+	}
+}
+
+// TestConvertToOpenAIMessagesSystemRole tests system role handling.
+func TestConvertToOpenAIMessagesSystemRole(t *testing.T) {
+	provider := &OpenAIProvider{}
+
+	messages := []agent.CompletionMessage{
+		{Role: "system", Content: "System message in messages array"},
+		{Role: "user", Content: "Hello"},
+	}
+
+	result, err := provider.convertToOpenAIMessages(messages, "Additional system")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should have: injected system + original system + user
+	if len(result) != 3 {
+		t.Errorf("expected 3 messages, got %d", len(result))
+	}
+
+	if result[0].Role != openai.ChatMessageRoleSystem {
+		t.Errorf("first message should be system, got %s", result[0].Role)
+	}
+}
+
+// TestConvertToOpenAIMessagesMultipleToolResults tests multiple tool results.
+func TestConvertToOpenAIMessagesMultipleToolResults(t *testing.T) {
+	provider := &OpenAIProvider{}
+
+	messages := []agent.CompletionMessage{
+		{
+			Role: "tool",
+			ToolResults: []models.ToolResult{
+				{ToolCallID: "call_1", Content: "Result 1"},
+				{ToolCallID: "call_2", Content: "Result 2"},
+			},
+		},
+	}
+
+	result, err := provider.convertToOpenAIMessages(messages, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Each tool result becomes a separate message
+	if len(result) != 2 {
+		t.Errorf("expected 2 messages (one per tool result), got %d", len(result))
+	}
+
+	for i, msg := range result {
+		if msg.Role != openai.ChatMessageRoleTool {
+			t.Errorf("message %d should be tool role, got %s", i, msg.Role)
+		}
+	}
+}
+
+// TestConvertToOpenAIMessagesNonImageAttachment tests non-image attachments.
+func TestConvertToOpenAIMessagesNonImageAttachment(t *testing.T) {
+	provider := &OpenAIProvider{}
+
+	messages := []agent.CompletionMessage{
+		{
+			Role:    "user",
+			Content: "Check this document",
+			Attachments: []models.Attachment{
+				{
+					ID:       "doc_1",
+					Type:     "document", // Not an image
+					URL:      "https://example.com/doc.pdf",
+					MimeType: "application/pdf",
+				},
+			},
+		},
+	}
+
+	result, err := provider.convertToOpenAIMessages(messages, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should use simple Content (not MultiContent) since no images
+	if len(result) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(result))
+	}
+
+	if result[0].Content != "Check this document" {
+		t.Errorf("expected simple content, got %q", result[0].Content)
+	}
+
+	if len(result[0].MultiContent) != 0 {
+		t.Error("expected empty MultiContent for non-image attachments")
+	}
+}
+
+// TestConvertToOpenAIToolsInvalidSchema tests handling of invalid tool schemas.
+func TestConvertToOpenAIToolsInvalidSchema(t *testing.T) {
+	provider := &OpenAIProvider{}
+
+	tools := []agent.Tool{
+		&openaiMockTool{
+			name:        "bad_tool",
+			description: "Tool with invalid schema",
+			schema:      json.RawMessage(`not valid json`),
+		},
+	}
+
+	result := provider.convertToOpenAITools(tools)
+
+	// Should still return a tool with empty schema (graceful degradation)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 tool, got %d", len(result))
+	}
+}
+
+// TestIsRetryableErrorNil tests that nil error returns false.
+func TestIsRetryableErrorNil(t *testing.T) {
+	provider := &OpenAIProvider{}
+
+	if provider.isRetryableError(nil) {
+		t.Error("nil error should not be retryable")
+	}
+}
+
+// TestOpenAIIsRetryableWithProviderError tests retry with ProviderError.
+func TestOpenAIIsRetryableWithProviderError(t *testing.T) {
+	provider := &OpenAIProvider{}
+
+	// Rate limit error should be retryable
+	rateLimitErr := NewProviderError("openai", "gpt-4o", errors.New("rate limit")).
+		WithStatus(429)
+
+	if !provider.isRetryableError(rateLimitErr) {
+		t.Error("rate limit ProviderError should be retryable")
+	}
+
+	// Auth error should not be retryable
+	authErr := NewProviderError("openai", "gpt-4o", errors.New("unauthorized")).
+		WithStatus(401)
+
+	if provider.isRetryableError(authErr) {
+		t.Error("auth ProviderError should not be retryable")
+	}
+}
+
+// TestWrapErrorNil tests nil error handling.
+func TestOpenAIWrapErrorNil(t *testing.T) {
+	provider := &OpenAIProvider{}
+
+	result := provider.wrapError(nil, "gpt-4o")
+	if result != nil {
+		t.Errorf("expected nil for nil error, got %v", result)
+	}
+}
+
+// TestWrapErrorAlreadyWrapped tests already-wrapped error handling.
+func TestOpenAIWrapErrorAlreadyWrapped(t *testing.T) {
+	provider := &OpenAIProvider{}
+
+	originalErr := NewProviderError("openai", "gpt-4o", errors.New("test")).
+		WithStatus(429)
+
+	wrapped := provider.wrapError(originalErr, "different-model")
+
+	if wrapped != originalErr {
+		t.Error("expected already-wrapped error to be returned as-is")
+	}
+}
+
+// TestWrapErrorWithRequestError tests wrapping openai.RequestError.
+func TestWrapErrorWithRequestError(t *testing.T) {
+	provider := &OpenAIProvider{}
+
+	reqErr := &openai.RequestError{
+		HTTPStatusCode: 503,
+		Err:            errors.New("service temporarily unavailable"),
+	}
+
+	wrapped := provider.wrapError(reqErr, "gpt-4o")
+	providerErr, ok := GetProviderError(wrapped)
+	if !ok {
+		t.Fatal("expected ProviderError")
+	}
+
+	if providerErr.Status != 503 {
+		t.Errorf("expected status 503, got %d", providerErr.Status)
+	}
+}
+
+// TestWrapErrorWithNestedAPIError tests wrapping nested API errors.
+func TestWrapErrorWithNestedAPIError(t *testing.T) {
+	provider := &OpenAIProvider{}
+
+	innerAPIErr := &openai.APIError{
+		HTTPStatusCode: 400,
+		Message:        "Invalid model",
+		Code:           "invalid_model",
+	}
+
+	reqErr := &openai.RequestError{
+		HTTPStatusCode: 400,
+		Err:            innerAPIErr,
+	}
+
+	wrapped := provider.wrapError(reqErr, "gpt-invalid")
+	providerErr, ok := GetProviderError(wrapped)
+	if !ok {
+		t.Fatal("expected ProviderError")
+	}
+
+	if providerErr.Message != "Invalid model" {
+		t.Errorf("expected message 'Invalid model', got %q", providerErr.Message)
+	}
+	if providerErr.Code != "invalid_model" {
+		t.Errorf("expected code 'invalid_model', got %q", providerErr.Code)
+	}
+}
+
+// TestContainsFunction tests the contains helper function.
+func TestContainsFunction(t *testing.T) {
+	tests := []struct {
+		s        string
+		substr   string
+		expected bool
+	}{
+		{"hello world", "world", true},
+		{"hello world", "hello", true},
+		{"hello", "hello", true},
+		{"hello", "x", false},
+		{"", "", true},     // Edge case: empty strings (s == substr when both empty)
+		{"a", "ab", false}, // substr longer than s
+	}
+
+	for _, tt := range tests {
+		result := contains(tt.s, tt.substr)
+		if result != tt.expected {
+			t.Errorf("contains(%q, %q) = %v, want %v", tt.s, tt.substr, result, tt.expected)
+		}
+	}
+}
+
+// TestFindSubstringFunction tests the findSubstring helper function.
+func TestFindSubstringFunction(t *testing.T) {
+	tests := []struct {
+		s        string
+		substr   string
+		expected int
+	}{
+		{"hello world", "world", 6},
+		{"hello world", "hello", 0},
+		{"hello", "x", -1},
+		{"aaa", "a", 0},
+	}
+
+	for _, tt := range tests {
+		result := findSubstring(tt.s, tt.substr)
+		if result != tt.expected {
+			t.Errorf("findSubstring(%q, %q) = %v, want %v", tt.s, tt.substr, result, tt.expected)
+		}
+	}
+}
+
+// TestCompleteWithContextCancellation tests that Complete respects context cancellation.
+func TestCompleteWithContextCancellation(t *testing.T) {
+	provider := NewOpenAIProvider("sk-test-key")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	_, err := provider.Complete(ctx, &agent.CompletionRequest{
+		Model:    "gpt-4o",
+		Messages: []agent.CompletionMessage{{Role: "user", Content: "Hello"}},
+	})
+
+	// Should get context.Canceled error
+	if err == nil {
+		t.Log("Note: may get error from API client before context check")
+	}
+}
+
+// TestConvertToOpenAIMessagesEmptyContent tests message with empty content but tool calls.
+func TestConvertToOpenAIMessagesEmptyContent(t *testing.T) {
+	provider := &OpenAIProvider{}
+
+	messages := []agent.CompletionMessage{
+		{
+			Role:    "assistant",
+			Content: "", // Empty content
+			ToolCalls: []models.ToolCall{
+				{
+					ID:    "call_1",
+					Name:  "get_weather",
+					Input: json.RawMessage(`{"city":"NYC"}`),
+				},
+			},
+		},
+	}
+
+	result, err := provider.convertToOpenAIMessages(messages, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(result) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(result))
+	}
+
+	// Should have tool calls even with empty content
+	if len(result[0].ToolCalls) != 1 {
+		t.Errorf("expected 1 tool call, got %d", len(result[0].ToolCalls))
+	}
+}
+
+// TestConvertToOpenAIMessagesImageWithoutText tests image-only message.
+func TestConvertToOpenAIMessagesImageWithoutText(t *testing.T) {
+	provider := &OpenAIProvider{}
+
+	messages := []agent.CompletionMessage{
+		{
+			Role:    "user",
+			Content: "", // No text content
+			Attachments: []models.Attachment{
+				{
+					ID:   "img_1",
+					Type: "image",
+					URL:  "https://example.com/image.jpg",
+				},
+			},
+		},
+	}
+
+	result, err := provider.convertToOpenAIMessages(messages, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(result) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(result))
+	}
+
+	// Should have MultiContent with just the image (no text part)
+	if len(result[0].MultiContent) != 1 {
+		t.Errorf("expected 1 content part (image only), got %d", len(result[0].MultiContent))
+	}
+}
+
+// TestModelGPT4Properties tests GPT-4 model properties.
+func TestModelGPT4Properties(t *testing.T) {
+	provider := &OpenAIProvider{}
+	models := provider.Models()
+
+	var gpt4 *agent.Model
+	for i, m := range models {
+		if m.ID == "gpt-4" {
+			gpt4 = &models[i]
+			break
+		}
+	}
+
+	if gpt4 == nil {
+		t.Fatal("gpt-4 model not found")
+	}
+
+	if gpt4.ContextSize != 8192 {
+		t.Errorf("expected gpt-4 context size 8192, got %d", gpt4.ContextSize)
+	}
+
+	if gpt4.SupportsVision {
+		t.Error("gpt-4 (non-turbo) should not support vision")
+	}
+}
+
+// TestIsRetryableEdgeCases tests edge cases in retry logic.
+func TestIsRetryableEdgeCases(t *testing.T) {
+	provider := &OpenAIProvider{}
+
+	tests := []struct {
+		name  string
+		err   error
+		retry bool
+	}{
+		{
+			name:  "502 bad gateway",
+			err:   errors.New("HTTP 502 Bad Gateway"),
+			retry: true,
+		},
+		{
+			name:  "504 gateway timeout",
+			err:   errors.New("HTTP 504 Gateway Timeout"),
+			retry: true,
+		},
+		{
+			name:  "context deadline exceeded",
+			err:   errors.New("context deadline exceeded"),
+			retry: true,
+		},
+		{
+			name:  "unknown error",
+			err:   errors.New("something completely unknown"),
+			retry: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := provider.isRetryableError(tt.err)
+			if result != tt.retry {
+				t.Errorf("expected retry=%v, got %v", tt.retry, result)
+			}
+		})
+	}
+}

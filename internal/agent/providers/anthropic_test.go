@@ -873,3 +873,574 @@ func TestMaxEmptyStreamEventsConstant(t *testing.T) {
 		t.Logf("Note: maxEmptyStreamEvents=%d (expected 300 based on go-openai pattern)", maxEmptyStreamEvents)
 	}
 }
+
+// TestAnthropicProviderWithBaseURL tests provider creation with custom base URL.
+func TestAnthropicProviderWithBaseURL(t *testing.T) {
+	provider, err := NewAnthropicProvider(AnthropicConfig{
+		APIKey:  "test-key",
+		BaseURL: "https://custom.api.example.com/",
+	})
+	if err != nil {
+		t.Fatalf("failed to create provider with base URL: %v", err)
+	}
+
+	if provider == nil {
+		t.Fatal("expected provider but got nil")
+	}
+}
+
+// TestAnthropicProviderWithEmptyBaseURL tests that empty base URL is handled.
+func TestAnthropicProviderWithEmptyBaseURL(t *testing.T) {
+	provider, err := NewAnthropicProvider(AnthropicConfig{
+		APIKey:  "test-key",
+		BaseURL: "   ", // whitespace only
+	})
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	if provider == nil {
+		t.Fatal("expected provider but got nil")
+	}
+}
+
+// TestAnthropicProviderNegativeRetries tests that negative retries are defaulted.
+func TestAnthropicProviderNegativeRetries(t *testing.T) {
+	provider, err := NewAnthropicProvider(AnthropicConfig{
+		APIKey:     "test-key",
+		MaxRetries: -5,
+		RetryDelay: -1 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	if provider.maxRetries <= 0 {
+		t.Errorf("expected positive maxRetries, got %d", provider.maxRetries)
+	}
+	if provider.retryDelay <= 0 {
+		t.Errorf("expected positive retryDelay, got %v", provider.retryDelay)
+	}
+}
+
+// TestConvertMessagesWithMultipleToolCalls tests converting multiple tool calls.
+func TestConvertMessagesWithMultipleToolCalls(t *testing.T) {
+	provider, err := NewAnthropicProvider(AnthropicConfig{
+		APIKey: "test-key",
+	})
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	messages := []agent.CompletionMessage{
+		{
+			Role:    "assistant",
+			Content: "I'll help you with both.",
+			ToolCalls: []models.ToolCall{
+				{
+					ID:    "call_1",
+					Name:  "get_weather",
+					Input: json.RawMessage(`{"city":"London"}`),
+				},
+				{
+					ID:    "call_2",
+					Name:  "search",
+					Input: json.RawMessage(`{"query":"news"}`),
+				},
+			},
+		},
+	}
+
+	result, err := provider.convertMessages(messages)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(result) != 1 {
+		t.Errorf("expected 1 message, got %d", len(result))
+	}
+}
+
+// TestConvertMessagesWithMultipleToolResults tests converting multiple tool results.
+func TestConvertMessagesWithMultipleToolResults(t *testing.T) {
+	provider, err := NewAnthropicProvider(AnthropicConfig{
+		APIKey: "test-key",
+	})
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	messages := []agent.CompletionMessage{
+		{
+			Role: "user",
+			ToolResults: []models.ToolResult{
+				{
+					ToolCallID: "call_1",
+					Content:    "Sunny, 72°F",
+					IsError:    false,
+				},
+				{
+					ToolCallID: "call_2",
+					Content:    "Top news: ...",
+					IsError:    false,
+				},
+			},
+		},
+	}
+
+	result, err := provider.convertMessages(messages)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(result) != 1 {
+		t.Errorf("expected 1 message, got %d", len(result))
+	}
+}
+
+// TestConvertMessagesWithToolResultError tests tool result with error flag.
+func TestConvertMessagesWithToolResultError(t *testing.T) {
+	provider, err := NewAnthropicProvider(AnthropicConfig{
+		APIKey: "test-key",
+	})
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	messages := []agent.CompletionMessage{
+		{
+			Role: "user",
+			ToolResults: []models.ToolResult{
+				{
+					ToolCallID: "call_1",
+					Content:    "Network error occurred",
+					IsError:    true,
+				},
+			},
+		},
+	}
+
+	result, err := provider.convertMessages(messages)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(result) != 1 {
+		t.Errorf("expected 1 message, got %d", len(result))
+	}
+}
+
+// TestConvertToolsWithComplexSchema tests tool conversion with complex schemas.
+func TestConvertToolsWithComplexSchema(t *testing.T) {
+	provider, err := NewAnthropicProvider(AnthropicConfig{
+		APIKey: "test-key",
+	})
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	tools := []agent.Tool{
+		&mockTool{
+			name:        "complex_tool",
+			description: "A tool with complex schema",
+			schema: json.RawMessage(`{
+				"type": "object",
+				"properties": {
+					"query": {
+						"type": "string",
+						"description": "Search query"
+					},
+					"filters": {
+						"type": "object",
+						"properties": {
+							"date": {"type": "string"},
+							"limit": {"type": "integer"}
+						}
+					},
+					"options": {
+						"type": "array",
+						"items": {"type": "string"}
+					}
+				},
+				"required": ["query"]
+			}`),
+		},
+	}
+
+	result, err := provider.convertTools(tools)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(result) != 1 {
+		t.Errorf("expected 1 tool, got %d", len(result))
+	}
+}
+
+// TestIsRetryableWithProviderError tests retry logic with ProviderError.
+func TestIsRetryableWithProviderError(t *testing.T) {
+	provider, err := NewAnthropicProvider(AnthropicConfig{
+		APIKey: "test-key",
+	})
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	// Test with ProviderError that has retryable reason
+	rateLimitErr := NewProviderError("anthropic", "claude-sonnet", errors.New("rate limit")).
+		WithStatus(429)
+
+	if !provider.isRetryableError(rateLimitErr) {
+		t.Error("expected rate limit ProviderError to be retryable")
+	}
+
+	// Test with ProviderError that has non-retryable reason
+	authErr := NewProviderError("anthropic", "claude-sonnet", errors.New("unauthorized")).
+		WithStatus(401)
+
+	if provider.isRetryableError(authErr) {
+		t.Error("expected auth ProviderError to not be retryable")
+	}
+}
+
+// TestWrapErrorNil tests that wrapError handles nil correctly.
+func TestWrapErrorNil(t *testing.T) {
+	provider, err := NewAnthropicProvider(AnthropicConfig{
+		APIKey: "test-key",
+	})
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	result := provider.wrapError(nil, "claude-sonnet")
+	if result != nil {
+		t.Errorf("expected nil for nil error, got %v", result)
+	}
+}
+
+// TestWrapErrorAlreadyWrapped tests that already-wrapped errors are returned as-is.
+func TestWrapErrorAlreadyWrapped(t *testing.T) {
+	provider, err := NewAnthropicProvider(AnthropicConfig{
+		APIKey: "test-key",
+	})
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	originalErr := NewProviderError("anthropic", "claude-sonnet", errors.New("test")).
+		WithStatus(429).
+		WithCode("rate_limit")
+
+	wrapped := provider.wrapError(originalErr, "different-model")
+
+	// Should return the same error
+	if wrapped != originalErr {
+		t.Error("expected already-wrapped error to be returned as-is")
+	}
+}
+
+// TestWrapErrorExtractsRequestID tests that request ID is extracted from API errors.
+func TestWrapErrorExtractsRequestID(t *testing.T) {
+	provider, err := NewAnthropicProvider(AnthropicConfig{
+		APIKey: "test-key",
+	})
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	// Create an anthropic.Error with request ID
+	apiErr := &anthropic.Error{
+		StatusCode: 500,
+		RequestID:  "req_test_123",
+	}
+
+	wrapped := provider.wrapError(apiErr, "claude-sonnet")
+	providerErr, ok := GetProviderError(wrapped)
+	if !ok {
+		t.Fatal("expected ProviderError")
+	}
+
+	if providerErr.RequestID != "req_test_123" {
+		t.Errorf("expected request ID req_test_123, got %s", providerErr.RequestID)
+	}
+}
+
+// TestGetMaxTokensEdgeCases tests max tokens edge cases.
+func TestGetMaxTokensEdgeCases(t *testing.T) {
+	provider, err := NewAnthropicProvider(AnthropicConfig{
+		APIKey: "test-key",
+	})
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		input    int
+		expected int
+	}{
+		{"zero", 0, 4096},
+		{"negative", -100, 4096},
+		{"positive", 2000, 2000},
+		{"large", 100000, 100000},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := provider.getMaxTokens(tt.input)
+			if result != tt.expected {
+				t.Errorf("expected %d, got %d", tt.expected, result)
+			}
+		})
+	}
+}
+
+// TestCountTokensWithToolCalls tests token counting with tool calls.
+func TestCountTokensWithToolCalls(t *testing.T) {
+	provider, err := NewAnthropicProvider(AnthropicConfig{
+		APIKey: "test-key",
+	})
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	req := &agent.CompletionRequest{
+		Messages: []agent.CompletionMessage{
+			{
+				Role:    "assistant",
+				Content: "Let me check that.",
+				ToolCalls: []models.ToolCall{
+					{
+						ID:    "call_123",
+						Name:  "get_weather",
+						Input: json.RawMessage(`{"city":"London","units":"celsius"}`),
+					},
+				},
+			},
+		},
+	}
+
+	count := provider.CountTokens(req)
+	if count <= 0 {
+		t.Error("expected positive token count")
+	}
+}
+
+// TestCountTokensWithToolResults tests token counting with tool results.
+func TestCountTokensWithToolResults(t *testing.T) {
+	provider, err := NewAnthropicProvider(AnthropicConfig{
+		APIKey: "test-key",
+	})
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	req := &agent.CompletionRequest{
+		Messages: []agent.CompletionMessage{
+			{
+				Role: "user",
+				ToolResults: []models.ToolResult{
+					{
+						ToolCallID: "call_123",
+						Content:    "The weather in London is sunny with a temperature of 22 degrees celsius.",
+					},
+				},
+			},
+		},
+	}
+
+	count := provider.CountTokens(req)
+	if count <= 0 {
+		t.Error("expected positive token count")
+	}
+}
+
+// TestParseSSEStreamHandlerError tests SSE parsing with handler error.
+func TestParseSSEStreamHandlerError(t *testing.T) {
+	input := `event: test
+data: some data
+
+`
+	reader := strings.NewReader(input)
+	handlerErr := errors.New("handler failed")
+
+	err := ParseSSEStream(reader, func(eventType, data string) error {
+		return handlerErr
+	})
+
+	if err != handlerErr {
+		t.Errorf("expected handler error, got %v", err)
+	}
+}
+
+// TestParseSSEStreamEmptyInput tests SSE parsing with empty input.
+func TestParseSSEStreamEmptyInput(t *testing.T) {
+	reader := strings.NewReader("")
+	var events []string
+
+	err := ParseSSEStream(reader, func(eventType, data string) error {
+		events = append(events, eventType)
+		return nil
+	})
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if len(events) != 0 {
+		t.Errorf("expected 0 events, got %d", len(events))
+	}
+}
+
+// TestParseSSEStreamDataOnly tests SSE parsing with data-only events.
+func TestParseSSEStreamDataOnly(t *testing.T) {
+	input := `data: just data
+
+`
+	reader := strings.NewReader(input)
+	var events []struct {
+		eventType string
+		data      string
+	}
+
+	err := ParseSSEStream(reader, func(eventType, data string) error {
+		events = append(events, struct {
+			eventType string
+			data      string
+		}{eventType, data})
+		return nil
+	})
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+
+	if events[0].eventType != "" {
+		t.Errorf("expected empty event type, got %q", events[0].eventType)
+	}
+
+	if events[0].data != "just data" {
+		t.Errorf("expected data 'just data', got %q", events[0].data)
+	}
+}
+
+// TestConvertMessagesEmptyContent tests converting message with empty content.
+func TestConvertMessagesEmptyContent(t *testing.T) {
+	provider, err := NewAnthropicProvider(AnthropicConfig{
+		APIKey: "test-key",
+	})
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	// Message with only tool calls, no text content
+	messages := []agent.CompletionMessage{
+		{
+			Role:    "assistant",
+			Content: "", // Empty content
+			ToolCalls: []models.ToolCall{
+				{
+					ID:    "call_1",
+					Name:  "test",
+					Input: json.RawMessage(`{}`),
+				},
+			},
+		},
+	}
+
+	result, err := provider.convertMessages(messages)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(result) != 1 {
+		t.Errorf("expected 1 message, got %d", len(result))
+	}
+}
+
+// TestModelVisionSupport tests that model vision support is correctly reported.
+func TestModelVisionSupport(t *testing.T) {
+	provider, err := NewAnthropicProvider(AnthropicConfig{
+		APIKey: "test-key",
+	})
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	models := provider.Models()
+	for _, m := range models {
+		// All Claude models should support vision
+		if !m.SupportsVision {
+			t.Errorf("model %s should support vision", m.ID)
+		}
+	}
+}
+
+// TestModelContextSizes tests that models have reasonable context sizes.
+func TestModelContextSizes(t *testing.T) {
+	provider, err := NewAnthropicProvider(AnthropicConfig{
+		APIKey: "test-key",
+	})
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	models := provider.Models()
+	for _, m := range models {
+		// All Claude 3+ models should have 200K context
+		if m.ContextSize != 200000 {
+			t.Errorf("model %s has unexpected context size %d", m.ID, m.ContextSize)
+		}
+	}
+}
+
+// TestIsRetryableWithServerErrors tests retry logic with various server errors.
+func TestIsRetryableWithServerErrors(t *testing.T) {
+	provider, err := NewAnthropicProvider(AnthropicConfig{
+		APIKey: "test-key",
+	})
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	serverErrors := []string{
+		"internal server error",
+		"bad gateway",
+		"service unavailable",
+		"gateway timeout",
+	}
+
+	for _, errMsg := range serverErrors {
+		err := errors.New(errMsg)
+		if !provider.isRetryableError(err) {
+			t.Errorf("expected %q to be retryable", errMsg)
+		}
+	}
+}
+
+// TestIsRetryableWithConnectionErrors tests retry logic with connection errors.
+func TestIsRetryableWithConnectionErrors(t *testing.T) {
+	provider, err := NewAnthropicProvider(AnthropicConfig{
+		APIKey: "test-key",
+	})
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	connectionErrors := []string{
+		"connection reset",
+		"connection refused",
+		"no such host",
+	}
+
+	for _, errMsg := range connectionErrors {
+		err := errors.New(errMsg)
+		if !provider.isRetryableError(err) {
+			t.Errorf("expected %q to be retryable", errMsg)
+		}
+	}
+}

@@ -231,12 +231,26 @@ type LLMProviderConfig struct {
 }
 
 type ToolsConfig struct {
-	Sandbox      SandboxConfig      `yaml:"sandbox"`
-	Browser      BrowserConfig      `yaml:"browser"`
-	WebSearch    WebSearchConfig    `yaml:"websearch"`
-	MemorySearch MemorySearchConfig `yaml:"memory_search"`
-	Notes        string             `yaml:"notes"`
-	NotesFile    string             `yaml:"notes_file"`
+	Sandbox      SandboxConfig       `yaml:"sandbox"`
+	Browser      BrowserConfig       `yaml:"browser"`
+	WebSearch    WebSearchConfig     `yaml:"websearch"`
+	MemorySearch MemorySearchConfig  `yaml:"memory_search"`
+	Notes        string              `yaml:"notes"`
+	NotesFile    string              `yaml:"notes_file"`
+	Execution    ToolExecutionConfig `yaml:"execution"`
+}
+
+// ToolExecutionConfig controls runtime tool execution behavior.
+type ToolExecutionConfig struct {
+	MaxIterations   int           `yaml:"max_iterations"`
+	Parallelism     int           `yaml:"parallelism"`
+	Timeout         time.Duration `yaml:"timeout"`
+	MaxAttempts     int           `yaml:"max_attempts"`
+	RetryBackoff    time.Duration `yaml:"retry_backoff"`
+	DisableEvents   bool          `yaml:"disable_events"`
+	MaxToolCalls    int           `yaml:"max_tool_calls"`
+	RequireApproval []string      `yaml:"require_approval"`
+	Async           []string      `yaml:"async"`
 }
 
 type SandboxConfig struct {
@@ -678,6 +692,24 @@ func validateConfig(cfg *Config) error {
 	}
 	if cfg.Tools.MemorySearch.Embeddings.Timeout < 0 {
 		issues = append(issues, "tools.memory_search.embeddings.timeout must be >= 0")
+	}
+	if cfg.Tools.Execution.MaxIterations < 0 {
+		issues = append(issues, "tools.execution.max_iterations must be >= 0")
+	}
+	if cfg.Tools.Execution.Parallelism < 0 {
+		issues = append(issues, "tools.execution.parallelism must be >= 0")
+	}
+	if cfg.Tools.Execution.Timeout < 0 {
+		issues = append(issues, "tools.execution.timeout must be >= 0")
+	}
+	if cfg.Tools.Execution.MaxAttempts < 0 {
+		issues = append(issues, "tools.execution.max_attempts must be >= 0")
+	}
+	if cfg.Tools.Execution.RetryBackoff < 0 {
+		issues = append(issues, "tools.execution.retry_backoff must be >= 0")
+	}
+	if cfg.Tools.Execution.MaxToolCalls < 0 {
+		issues = append(issues, "tools.execution.max_tool_calls must be >= 0")
 	}
 
 	if cfg.Cron.Enabled {

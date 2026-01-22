@@ -85,6 +85,7 @@ import (
 )
 
 type systemPromptKey struct{}
+type chunksChanKey struct{}
 
 // WithSystemPrompt stores a request-scoped system prompt override in the context.
 func WithSystemPrompt(ctx context.Context, prompt string) context.Context {
@@ -453,10 +454,11 @@ func NewRuntimeWithOptions(provider LLMProvider, sessions sessions.Store, opts R
 	if opts.MaxIterations > 0 {
 		runtime.maxIterations = opts.MaxIterations
 	}
-	if opts.ToolParallelism > 0 || opts.ToolTimeout > 0 {
+	if opts.ToolParallelism > 0 || opts.ToolTimeout > 0 || opts.ToolMaxAttempts > 0 {
 		runtime.toolExec = ToolExecConfig{
 			Concurrency:    opts.ToolParallelism,
 			PerToolTimeout: opts.ToolTimeout,
+			MaxAttempts:    opts.ToolMaxAttempts,
 		}
 	}
 	return runtime
@@ -468,10 +470,11 @@ func (r *Runtime) SetOptions(opts RuntimeOptions) {
 	if r.opts.MaxIterations > 0 {
 		r.maxIterations = r.opts.MaxIterations
 	}
-	if r.opts.ToolParallelism > 0 || r.opts.ToolTimeout > 0 {
+	if r.opts.ToolParallelism > 0 || r.opts.ToolTimeout > 0 || r.opts.ToolMaxAttempts > 0 {
 		r.toolExec = ToolExecConfig{
 			Concurrency:    r.opts.ToolParallelism,
 			PerToolTimeout: r.opts.ToolTimeout,
+			MaxAttempts:    r.opts.ToolMaxAttempts,
 		}
 	}
 }
@@ -638,9 +641,13 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 		runID := session.ID + "-" + msg.ID
 		emitter := NewEventEmitter(runID, sink)
 
+		// Pass chunks channel via context for direct tool event emission
+		// Cast to send-only to match the type assertion in run()
+		runCtx := context.WithValue(ctx, chunksChanKey{}, (chan<- *ResponseChunk)(chunks))
+
 		// Run the core agentic loop
 		// Errors are emitted as run.error events which ChunkAdapterSink converts to ResponseChunk.Error
-		_ = r.run(ctx, session, msg, emitter)
+		_ = r.run(runCtx, session, msg, emitter)
 	}()
 
 	return chunks, nil
@@ -887,9 +894,12 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 		allowedCalls := make([]models.ToolCall, 0, len(toolCalls))
 		allowedToOriginal := make([]int, 0, len(toolCalls))
 
+		skipFinalEvent := make([]bool, len(toolCalls))
+
 		for i := range toolCalls {
 			tc := toolCalls[i]
 
+			// Check policy denial first
 			if resolver != nil && toolPolicy != nil && !resolver.IsAllowed(toolPolicy, tc.Name) {
 				denied[i] = true
 				res := models.ToolResult{
@@ -903,6 +913,70 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 				emitter.ToolFinished(ctx, tc.ID, tc.Name, false, []byte("tool not allowed by policy"), 0)
 
 				// Persist (best-effort)
+				if r.toolEvents != nil {
+					_ = r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res)
+				}
+				continue
+			}
+
+			// Check if tool requires approval
+			if r.requiresApproval(tc.Name, resolver) {
+				res := models.ToolResult{
+					ToolCallID: tc.ID,
+					Content:    "approval required for tool: " + tc.Name,
+					IsError:    true,
+				}
+				results[i] = res
+				skipFinalEvent[i] = true
+
+				// Emit approval required event and result via ResponseChunk for Process() callers
+				if chunks, ok := ctx.Value(chunksChanKey{}).(chan<- *ResponseChunk); ok {
+					r.emitToolEvent(chunks, &models.ToolEvent{
+						ToolCallID: tc.ID,
+						ToolName:   tc.Name,
+						Stage:      models.ToolEventApprovalRequired,
+						Input:      tc.Input,
+						FinishedAt: time.Now(),
+					})
+					// Also send the tool result
+					chunks <- &ResponseChunk{ToolResult: &res}
+				}
+
+				if r.toolEvents != nil {
+					_ = r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res)
+				}
+				continue
+			}
+
+			// Check if tool should run async
+			if r.isAsyncTool(tc.Name, resolver) && r.opts.JobStore != nil {
+				job := &jobs.Job{
+					ID:         uuid.NewString(),
+					ToolName:   tc.Name,
+					ToolCallID: tc.ID,
+					Status:     jobs.StatusQueued,
+					CreatedAt:  time.Now(),
+				}
+				_ = r.opts.JobStore.Create(context.Background(), job)
+				go r.runToolJob(tc, job, toolExec)
+
+				payload, _ := json.Marshal(map[string]any{
+					"job_id": job.ID,
+					"status": job.Status,
+				})
+				res := models.ToolResult{
+					ToolCallID: tc.ID,
+					Content:    string(payload),
+					IsError:    false,
+				}
+				results[i] = res
+				skipFinalEvent[i] = true
+
+				// Send the async job result via ResponseChunk
+				if chunks, ok := ctx.Value(chunksChanKey{}).(chan<- *ResponseChunk); ok {
+					chunks <- &ResponseChunk{ToolResult: &res}
+				}
+
 				if r.toolEvents != nil {
 					_ = r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res)
 				}

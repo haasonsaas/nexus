@@ -85,10 +85,11 @@
    - [x] Add policy decision reasons (allow/deny) for debugging.
    - [x] Add async tool jobs with `job_status` tool and in-memory store.
    - [x] Add approval gating via `tools.execution.require_approval`.
-   - [ ] Persist job store in DB with retention/pruning config.
-   - [ ] Implement Clawdbot-style exec approvals (allowlist + ask fallback + safe bins).
-   - [ ] Add sub-agent spawn tool with announce behavior and per-agent tool policy.
-   - [ ] Add tool cancellation hooks (job abort + context mapping).
+   - [x] Persist job store in DB with retention/pruning config.
+   - [x] Implement Clawdbot-style exec approvals (allowlist + ask fallback + safe bins).
+   - [x] Add sub-agent spawn tool with announce behavior and per-agent tool policy.
+   - [x] Add tool cancellation hooks (job abort + context mapping).
+   - [x] Add automated compaction with post-flush confirmation.
 
 ## TDD Approach
 - For each change: add/extend tests first, confirm failure, then implement.
@@ -130,3 +131,4 @@
 - 2026-01-22: Implemented tool lifecycle events, tool retries/timeouts/parallelism, max tool-call budgets, approval gating, and async tool jobs (`job_status`) with tests.
 - 2026-01-22: Claude CLI: short prompts succeed (`claude -p "ping"`), long prompts can exceed 120s and time out; mitigate by splitting prompts, using faster models, or increasing command timeout.
 - 2026-01-22: Implemented skills watcher (fsnotify + debounce) and gateway shutdown cleanup.
+- 2026-01-22: Completed remaining designs: job DB persistence with pruning, Clawdbot-style exec approvals (allowlist/denylist/safe_bins/skill_allowlist), sub-agent spawn tool with announce/policy, tool cancellation hooks, and automated compaction with flush confirmation.

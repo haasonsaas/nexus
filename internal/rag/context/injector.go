@@ -11,10 +11,17 @@ import (
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
+// Searcher defines the search capability needed by the Injector.
+// This interface is implemented by index.Manager and enables testing.
+type Searcher interface {
+	Search(ctx context.Context, req *models.DocumentSearchRequest) (*models.DocumentSearchResponse, error)
+}
+
 // Injector injects retrieved document chunks into agent context.
 type Injector struct {
-	manager *index.Manager
-	config  *InjectorConfig
+	manager  *index.Manager
+	searcher Searcher
+	config   *InjectorConfig
 }
 
 // InjectorConfig configures context injection behavior.
@@ -77,9 +84,25 @@ func NewInjector(manager *index.Manager, cfg *InjectorConfig) *Injector {
 	if cfg == nil {
 		cfg = DefaultInjectorConfig()
 	}
-	return &Injector{
+	i := &Injector{
 		manager: manager,
 		config:  cfg,
+	}
+	if manager != nil {
+		i.searcher = manager
+	}
+	return i
+}
+
+// NewInjectorWithSearcher creates a new context injector with a custom searcher.
+// This is primarily used for testing.
+func NewInjectorWithSearcher(searcher Searcher, cfg *InjectorConfig) *Injector {
+	if cfg == nil {
+		cfg = DefaultInjectorConfig()
+	}
+	return &Injector{
+		searcher: searcher,
+		config:   cfg,
 	}
 }
 
@@ -100,7 +123,7 @@ type InjectionResult struct {
 
 // Inject retrieves relevant documents and formats them for context injection.
 func (i *Injector) Inject(ctx context.Context, query string, scopeID string) (*InjectionResult, error) {
-	if !i.config.Enabled || i.manager == nil {
+	if !i.config.Enabled || i.searcher == nil {
 		return &InjectionResult{}, nil
 	}
 
@@ -114,7 +137,7 @@ func (i *Injector) Inject(ctx context.Context, query string, scopeID string) (*I
 	}
 
 	// Search for relevant chunks
-	resp, err := i.manager.Search(ctx, req)
+	resp, err := i.searcher.Search(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("search failed: %w", err)
 	}

@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -446,5 +447,416 @@ func TestNewToolExecutor_DefaultsZeroValues(t *testing.T) {
 	}
 	if executor.config.PerToolTimeout != 30*time.Second {
 		t.Errorf("PerToolTimeout = %v, want 30s", executor.config.PerToolTimeout)
+	}
+}
+
+func TestExecuteConcurrently_RetryWithBackoff(t *testing.T) {
+	var attempts int32
+	registry := NewToolRegistry()
+	registry.Register(&testExecTool{
+		name: "flaky",
+		execFunc: func(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
+			a := atomic.AddInt32(&attempts, 1)
+			if a < 3 {
+				return &ToolResult{Content: "error", IsError: true}, nil
+			}
+			return &ToolResult{Content: "success"}, nil
+		},
+	})
+
+	config := ToolExecConfig{
+		Concurrency:    4,
+		PerToolTimeout: 5 * time.Second,
+		MaxAttempts:    3,
+		RetryBackoff:   10 * time.Millisecond,
+	}
+	executor := NewToolExecutor(registry, config)
+
+	toolCalls := []models.ToolCall{
+		{ID: "1", Name: "flaky", Input: json.RawMessage(`{}`)},
+	}
+
+	results := executor.ExecuteConcurrently(context.Background(), toolCalls, nil)
+
+	if len(results) != 1 {
+		t.Fatalf("got %d results, want 1", len(results))
+	}
+
+	if results[0].Result.IsError {
+		t.Error("expected success after retries")
+	}
+	if attempts != 3 {
+		t.Errorf("attempts = %d, want 3", attempts)
+	}
+}
+
+func TestExecuteConcurrently_CancelDuringBackoff(t *testing.T) {
+	var attempts int32
+	registry := NewToolRegistry()
+	registry.Register(&testExecTool{
+		name: "always_fails",
+		execFunc: func(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
+			atomic.AddInt32(&attempts, 1)
+			return &ToolResult{Content: "error", IsError: true}, nil
+		},
+	})
+
+	config := ToolExecConfig{
+		Concurrency:    4,
+		PerToolTimeout: 5 * time.Second,
+		MaxAttempts:    10,
+		RetryBackoff:   time.Second, // Long backoff
+	}
+	executor := NewToolExecutor(registry, config)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	toolCalls := []models.ToolCall{
+		{ID: "1", Name: "always_fails", Input: json.RawMessage(`{}`)},
+	}
+
+	results := executor.ExecuteConcurrently(ctx, toolCalls, nil)
+
+	if len(results) != 1 {
+		t.Fatalf("got %d results, want 1", len(results))
+	}
+
+	// Should have been cancelled during backoff
+	if attempts > 3 {
+		t.Errorf("too many attempts (%d), should be cancelled", attempts)
+	}
+}
+
+func TestExecuteSequentially_Retry(t *testing.T) {
+	var attempts int32
+	registry := NewToolRegistry()
+	registry.Register(&testExecTool{
+		name: "flaky",
+		execFunc: func(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
+			a := atomic.AddInt32(&attempts, 1)
+			if a == 1 {
+				return &ToolResult{Content: "error", IsError: true}, nil
+			}
+			return &ToolResult{Content: "success"}, nil
+		},
+	})
+
+	config := ToolExecConfig{
+		Concurrency:    4,
+		PerToolTimeout: 5 * time.Second,
+		MaxAttempts:    2,
+		RetryBackoff:   time.Millisecond,
+	}
+	executor := NewToolExecutor(registry, config)
+
+	toolCalls := []models.ToolCall{
+		{ID: "1", Name: "flaky", Input: json.RawMessage(`{}`)},
+	}
+
+	results := executor.ExecuteSequentially(context.Background(), toolCalls)
+
+	if len(results) != 1 {
+		t.Fatalf("got %d results, want 1", len(results))
+	}
+
+	if results[0].Result.IsError {
+		t.Error("expected success after retry")
+	}
+}
+
+func TestExecuteSequentially_Timeout(t *testing.T) {
+	registry := NewToolRegistry()
+	registry.Register(&testExecTool{
+		name: "slow",
+		execFunc: func(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
+			<-ctx.Done()
+			return &ToolResult{Content: "should not reach"}, nil
+		},
+	})
+
+	config := ToolExecConfig{
+		Concurrency:    4,
+		PerToolTimeout: 50 * time.Millisecond,
+		MaxAttempts:    1,
+	}
+	executor := NewToolExecutor(registry, config)
+
+	toolCalls := []models.ToolCall{
+		{ID: "1", Name: "slow", Input: json.RawMessage(`{}`)},
+	}
+
+	results := executor.ExecuteSequentially(context.Background(), toolCalls)
+
+	if len(results) != 1 {
+		t.Fatalf("got %d results, want 1", len(results))
+	}
+
+	if !results[0].TimedOut {
+		t.Error("expected TimedOut to be true")
+	}
+	if !results[0].Result.IsError {
+		t.Error("expected IsError for timeout")
+	}
+}
+
+func TestExecuteSingle_Retry(t *testing.T) {
+	var attempts int32
+	registry := NewToolRegistry()
+	registry.Register(&testExecTool{
+		name: "flaky",
+		execFunc: func(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
+			a := atomic.AddInt32(&attempts, 1)
+			if a == 1 {
+				return nil, errors.New("temporary failure")
+			}
+			return &ToolResult{Content: "success"}, nil
+		},
+	})
+
+	config := ToolExecConfig{
+		Concurrency:    4,
+		PerToolTimeout: 5 * time.Second,
+		MaxAttempts:    2,
+		RetryBackoff:   time.Millisecond,
+	}
+	executor := NewToolExecutor(registry, config)
+
+	result, err := executor.ExecuteSingle(context.Background(), "flaky", json.RawMessage(`{}`))
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Content != "success" {
+		t.Errorf("Content = %q, want %q", result.Content, "success")
+	}
+}
+
+func TestExecuteSingle_AllRetriesFail(t *testing.T) {
+	registry := NewToolRegistry()
+	registry.Register(&testExecTool{
+		name: "always_fails",
+		execFunc: func(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
+			return nil, errors.New("permanent failure")
+		},
+	})
+
+	config := ToolExecConfig{
+		Concurrency:    4,
+		PerToolTimeout: 5 * time.Second,
+		MaxAttempts:    2,
+		RetryBackoff:   time.Millisecond,
+	}
+	executor := NewToolExecutor(registry, config)
+
+	_, err := executor.ExecuteSingle(context.Background(), "always_fails", json.RawMessage(`{}`))
+
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestExecuteSingle_ContextCancel(t *testing.T) {
+	registry := NewToolRegistry()
+	registry.Register(&testExecTool{
+		name: "slow",
+		execFunc: func(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		},
+	})
+
+	config := ToolExecConfig{
+		Concurrency:    4,
+		PerToolTimeout: 5 * time.Second,
+		MaxAttempts:    2,
+		RetryBackoff:   time.Second,
+	}
+	executor := NewToolExecutor(registry, config)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	_, err := executor.ExecuteSingle(ctx, "slow", json.RawMessage(`{}`))
+
+	if err == nil {
+		t.Fatal("expected error for cancelled context")
+	}
+}
+
+func TestExecuteConcurrently_SemaphoreWait(t *testing.T) {
+	registry := NewToolRegistry()
+	registry.Register(&testExecTool{
+		name: "blocking",
+		execFunc: func(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
+			time.Sleep(50 * time.Millisecond)
+			return &ToolResult{Content: "done"}, nil
+		},
+	})
+
+	config := ToolExecConfig{
+		Concurrency:    1, // Only 1 at a time
+		PerToolTimeout: 5 * time.Second,
+		MaxAttempts:    1,
+	}
+	executor := NewToolExecutor(registry, config)
+
+	toolCalls := []models.ToolCall{
+		{ID: "1", Name: "blocking", Input: json.RawMessage(`{}`)},
+		{ID: "2", Name: "blocking", Input: json.RawMessage(`{}`)},
+	}
+
+	start := time.Now()
+	results := executor.ExecuteConcurrently(context.Background(), toolCalls, nil)
+	elapsed := time.Since(start)
+
+	if len(results) != 2 {
+		t.Fatalf("got %d results, want 2", len(results))
+	}
+
+	// With concurrency=1, should take at least 100ms (2 x 50ms sequential)
+	if elapsed < 80*time.Millisecond {
+		t.Errorf("elapsed = %v, expected at least 80ms for sequential execution", elapsed)
+	}
+}
+
+func TestExecuteConcurrently_AllToolsFail(t *testing.T) {
+	registry := NewToolRegistry()
+	registry.Register(&testExecTool{
+		name: "fails",
+		execFunc: func(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
+			return &ToolResult{Content: "error", IsError: true}, nil
+		},
+	})
+
+	config := DefaultToolExecConfig()
+	executor := NewToolExecutor(registry, config)
+
+	toolCalls := []models.ToolCall{
+		{ID: "1", Name: "fails", Input: json.RawMessage(`{}`)},
+		{ID: "2", Name: "fails", Input: json.RawMessage(`{}`)},
+	}
+
+	results := executor.ExecuteConcurrently(context.Background(), toolCalls, nil)
+
+	for i, r := range results {
+		if !r.Result.IsError {
+			t.Errorf("result %d should be error", i)
+		}
+	}
+}
+
+func TestExecuteConcurrently_EventsForTimeout(t *testing.T) {
+	registry := NewToolRegistry()
+	registry.Register(&testExecTool{
+		name: "slow",
+		execFunc: func(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
+			<-ctx.Done()
+			return &ToolResult{Content: "timeout"}, nil
+		},
+	})
+
+	config := ToolExecConfig{
+		Concurrency:    4,
+		PerToolTimeout: 50 * time.Millisecond,
+		MaxAttempts:    1,
+	}
+	executor := NewToolExecutor(registry, config)
+
+	toolCalls := []models.ToolCall{
+		{ID: "1", Name: "slow", Input: json.RawMessage(`{}`)},
+	}
+
+	var events []*models.RuntimeEvent
+	var mu sync.Mutex
+	emit := func(e *models.RuntimeEvent) {
+		mu.Lock()
+		events = append(events, e)
+		mu.Unlock()
+	}
+
+	executor.ExecuteConcurrently(context.Background(), toolCalls, emit)
+
+	time.Sleep(10 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	// Should have started and timeout events
+	hasStarted := false
+	hasTimeout := false
+	for _, e := range events {
+		if e.Type == models.EventToolStarted {
+			hasStarted = true
+		}
+		if e.Type == models.EventToolTimeout {
+			hasTimeout = true
+		}
+	}
+
+	if !hasStarted {
+		t.Error("expected started event")
+	}
+	if !hasTimeout {
+		t.Error("expected timeout event")
+	}
+}
+
+func TestExecuteWithTimeout_Cancellation(t *testing.T) {
+	registry := NewToolRegistry()
+	registry.Register(&testExecTool{
+		name: "blocking",
+		execFunc: func(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		},
+	})
+
+	config := ToolExecConfig{
+		Concurrency:    4,
+		PerToolTimeout: 5 * time.Second,
+		MaxAttempts:    1,
+	}
+	executor := NewToolExecutor(registry, config)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	result, timedOut := executor.executeWithTimeout(ctx, models.ToolCall{
+		ID:   "1",
+		Name: "blocking",
+	})
+
+	if timedOut {
+		t.Error("should not be marked as timeout for cancellation")
+	}
+	if !result.IsError {
+		t.Error("expected error for cancellation")
+	}
+}
+
+func TestToolExecResult_Fields(t *testing.T) {
+	start := time.Now()
+	result := ToolExecResult{
+		Index:    0,
+		ToolCall: models.ToolCall{ID: "call-1", Name: "test"},
+		Result:   models.ToolResult{ToolCallID: "call-1", Content: "ok"},
+		StartTime: start,
+		EndTime:   start.Add(100 * time.Millisecond),
+		TimedOut: false,
+	}
+
+	if result.Index != 0 {
+		t.Errorf("Index = %d, want 0", result.Index)
+	}
+	if result.ToolCall.Name != "test" {
+		t.Errorf("ToolCall.Name = %q, want %q", result.ToolCall.Name, "test")
+	}
+	if result.TimedOut {
+		t.Error("TimedOut should be false")
 	}
 }

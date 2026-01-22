@@ -23,7 +23,10 @@ import (
 // Usage:
 //
 //	config := LoadConfig("agents.yaml")
-//	orch := NewOrchestrator(config, provider, sessions)
+//	orch, err := NewOrchestrator(config, provider, sessions)
+//	if err != nil {
+//	    log.Fatalf("failed to create orchestrator: %v", err)
+//	}
 //	orch.RegisterAgent(agent1)
 //	orch.RegisterAgent(agent2)
 //
@@ -110,7 +113,8 @@ const (
 )
 
 // NewOrchestrator creates a new multi-agent orchestrator.
-func NewOrchestrator(config *MultiAgentConfig, provider agent.LLMProvider, sessions sessions.Store) *Orchestrator {
+// Returns an error if any of the configured agents fail to register.
+func NewOrchestrator(config *MultiAgentConfig, provider agent.LLMProvider, sessions sessions.Store) (*Orchestrator, error) {
 	if config == nil {
 		config = &MultiAgentConfig{
 			DefaultContextMode: ContextFull,
@@ -146,11 +150,11 @@ func NewOrchestrator(config *MultiAgentConfig, provider agent.LLMProvider, sessi
 	// Register configured agents
 	for i := range config.Agents {
 		if err := orch.RegisterAgent(&config.Agents[i]); err != nil {
-			panic(fmt.Sprintf("failed to register agent %q: %v", config.Agents[i].ID, err))
+			return nil, fmt.Errorf("failed to register agent %q: %w", config.Agents[i].ID, err)
 		}
 	}
 
-	return orch
+	return orch, nil
 }
 
 // RegisterAgent adds an agent to the orchestrator.

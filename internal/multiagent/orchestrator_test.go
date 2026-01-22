@@ -7,8 +7,19 @@ import (
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/agent"
+	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
+
+// mustNewOrchestrator is a test helper that creates an orchestrator and fails the test on error.
+func mustNewOrchestrator(t *testing.T, config *MultiAgentConfig, provider agent.LLMProvider, store sessions.Store) *Orchestrator {
+	t.Helper()
+	orch, err := NewOrchestrator(config, provider, store)
+	if err != nil {
+		t.Fatalf("failed to create orchestrator: %v", err)
+	}
+	return orch
+}
 
 func TestNewOrchestrator(t *testing.T) {
 	tests := []struct {
@@ -46,7 +57,10 @@ func TestNewOrchestrator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			orch := NewOrchestrator(tt.config, nil, nil)
+			orch, err := NewOrchestrator(tt.config, nil, nil)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			if orch == nil {
 				t.Fatal("expected orchestrator to be created")
@@ -158,7 +172,7 @@ func TestOrchestrator_RegisterAgent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			orch := NewOrchestrator(nil, nil, nil)
+			orch := mustNewOrchestrator(t, nil, nil, nil)
 
 			err := orch.RegisterAgent(tt.agent)
 
@@ -198,7 +212,7 @@ func TestOrchestrator_RegisterAgent(t *testing.T) {
 }
 
 func TestOrchestrator_GetAgent(t *testing.T) {
-	orch := NewOrchestrator(nil, nil, nil)
+	orch := mustNewOrchestrator(t, nil, nil, nil)
 
 	agent := &AgentDefinition{
 		ID:          "get-test",
@@ -226,7 +240,7 @@ func TestOrchestrator_GetAgent(t *testing.T) {
 }
 
 func TestOrchestrator_GetRuntime(t *testing.T) {
-	orch := NewOrchestrator(nil, nil, nil)
+	orch := mustNewOrchestrator(t, nil, nil, nil)
 
 	agent := &AgentDefinition{
 		ID:   "runtime-test",
@@ -253,7 +267,7 @@ func TestOrchestrator_GetRuntime(t *testing.T) {
 }
 
 func TestOrchestrator_ListAgents(t *testing.T) {
-	orch := NewOrchestrator(nil, nil, nil)
+	orch := mustNewOrchestrator(t, nil, nil, nil)
 
 	agents := []*AgentDefinition{
 		{ID: "agent-1", Name: "Agent 1"},
@@ -285,7 +299,7 @@ func TestOrchestrator_ListAgents(t *testing.T) {
 }
 
 func TestOrchestrator_SetEventCallback(t *testing.T) {
-	orch := NewOrchestrator(nil, nil, nil)
+	orch := mustNewOrchestrator(t, nil, nil, nil)
 
 	var receivedEvent *OrchestratorEvent
 	callback := func(event *OrchestratorEvent) {
@@ -316,7 +330,7 @@ func TestOrchestrator_SetEventCallback(t *testing.T) {
 }
 
 func TestOrchestrator_EmitEventWithNilCallback(t *testing.T) {
-	orch := NewOrchestrator(nil, nil, nil)
+	orch := mustNewOrchestrator(t, nil, nil, nil)
 
 	// Should not panic
 	orch.emitEvent(&OrchestratorEvent{
@@ -330,7 +344,7 @@ func TestOrchestrator_Config(t *testing.T) {
 		EnablePeerHandoffs: true,
 	}
 
-	orch := NewOrchestrator(config, nil, nil)
+	orch := mustNewOrchestrator(t, config, nil, nil)
 
 	got := orch.Config()
 	if got == nil {
@@ -343,7 +357,7 @@ func TestOrchestrator_Config(t *testing.T) {
 }
 
 func TestOrchestrator_Provider(t *testing.T) {
-	orch := NewOrchestrator(nil, nil, nil)
+	orch := mustNewOrchestrator(t, nil, nil, nil)
 
 	// Provider is nil since we passed nil
 	if orch.Provider() != nil {
@@ -352,7 +366,7 @@ func TestOrchestrator_Provider(t *testing.T) {
 }
 
 func TestOrchestrator_Sessions(t *testing.T) {
-	orch := NewOrchestrator(nil, nil, nil)
+	orch := mustNewOrchestrator(t, nil, nil, nil)
 
 	// Sessions is nil since we passed nil
 	if orch.Sessions() != nil {
@@ -361,7 +375,7 @@ func TestOrchestrator_Sessions(t *testing.T) {
 }
 
 func TestOrchestrator_BuildHandoffMessage(t *testing.T) {
-	orch := NewOrchestrator(nil, nil, nil)
+	orch := mustNewOrchestrator(t, nil, nil, nil)
 
 	tests := []struct {
 		name     string
@@ -425,7 +439,7 @@ func TestOrchestrator_BuildHandoffMessage(t *testing.T) {
 }
 
 func TestOrchestrator_GetSessionMetadata(t *testing.T) {
-	orch := NewOrchestrator(nil, nil, nil)
+	orch := mustNewOrchestrator(t, nil, nil, nil)
 
 	t.Run("nil metadata returns empty", func(t *testing.T) {
 		session := &models.Session{ID: "test-1"}
@@ -483,7 +497,7 @@ func TestOrchestrator_GetSessionMetadata(t *testing.T) {
 }
 
 func TestOrchestrator_UpdateSessionMetadata(t *testing.T) {
-	orch := NewOrchestrator(nil, nil, nil)
+	orch := mustNewOrchestrator(t, nil, nil, nil)
 
 	t.Run("updates session metadata", func(t *testing.T) {
 		session := &models.Session{ID: "test-1"}
@@ -525,7 +539,7 @@ func TestOrchestrator_BuildAgentContext(t *testing.T) {
 	config := &MultiAgentConfig{
 		EnablePeerHandoffs: true,
 	}
-	orch := NewOrchestrator(config, nil, nil)
+	orch := mustNewOrchestrator(t, config, nil, nil)
 
 	agent := &AgentDefinition{
 		ID:   "ctx-agent",
@@ -564,7 +578,7 @@ func TestOrchestrator_BuildAgentContext(t *testing.T) {
 }
 
 func TestOrchestrator_IsHandoffResult(t *testing.T) {
-	orch := NewOrchestrator(nil, nil, nil)
+	orch := mustNewOrchestrator(t, nil, nil, nil)
 
 	tests := []struct {
 		name   string
@@ -675,7 +689,7 @@ func TestHandoffStackFromContext_NotSet(t *testing.T) {
 }
 
 func TestOrchestrator_RegisterToolForAgent(t *testing.T) {
-	orch := NewOrchestrator(nil, nil, nil)
+	orch := mustNewOrchestrator(t, nil, nil, nil)
 
 	agent := &AgentDefinition{
 		ID:   "tool-agent",
@@ -701,7 +715,7 @@ func TestOrchestrator_RegisterToolForAgent(t *testing.T) {
 }
 
 func TestOrchestrator_RegisterToolForAll(t *testing.T) {
-	orch := NewOrchestrator(nil, nil, nil)
+	orch := mustNewOrchestrator(t, nil, nil, nil)
 
 	agents := []*AgentDefinition{
 		{ID: "agent-1", Name: "Agent 1"},

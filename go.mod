@@ -34,6 +34,7 @@ require (
 )
 
 require (
+	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/robfig/cron/v3 v3.0.1
 	golang.org/x/image v0.35.0

@@ -50,9 +50,9 @@ func IsBuiltinTemplate(name string) bool {
 }
 
 // LoadBuiltinTemplate loads a specific builtin template by name.
-func LoadBuiltinTemplate(name string) (*AgentTemplate, error) {
+func LoadBuiltinTemplate(ctx context.Context, name string) (*AgentTemplate, error) {
 	source := NewBuiltinSource()
-	templates, err := source.Discover(context.TODO())
+	templates, err := source.Discover(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -140,3 +140,108 @@ func TestManagerClose(t *testing.T) {
 		t.Errorf("unexpected error from Close: %v", err)
 	}
 }
+
+func TestManagerSetChannelHandler(t *testing.T) {
+	config := DefaultManagerConfig()
+	auth := &mockAuthenticator{}
+	manager := NewManager(config, auth, nil)
+
+	// Initially no handler
+	if manager.channelHandler != nil {
+		t.Error("expected nil channel handler initially")
+	}
+
+	// Set a handler
+	var handlerCalled bool
+	manager.SetChannelHandler(func(ctx context.Context, msg *pb.EdgeChannelInbound) error {
+		handlerCalled = true
+		return nil
+	})
+
+	if manager.channelHandler == nil {
+		t.Error("expected channel handler to be set")
+	}
+
+	// Call it to verify it's the right handler
+	_ = manager.channelHandler(context.Background(), &pb.EdgeChannelInbound{})
+	if !handlerCalled {
+		t.Error("expected handler to be called")
+	}
+}
+
+func TestManagerGetEdgesWithChannel(t *testing.T) {
+	config := DefaultManagerConfig()
+	auth := &mockAuthenticator{}
+	manager := NewManager(config, auth, nil)
+
+	// Add some mock edges with channel types
+	manager.mu.Lock()
+	manager.edges["edge1"] = &EdgeConnection{
+		ID:           "edge1",
+		ChannelTypes: []string{"imessage", "signal"},
+	}
+	manager.edges["edge2"] = &EdgeConnection{
+		ID:           "edge2",
+		ChannelTypes: []string{"whatsapp"},
+	}
+	manager.edges["edge3"] = &EdgeConnection{
+		ID:           "edge3",
+		ChannelTypes: []string{"imessage"},
+	}
+	manager.mu.Unlock()
+
+	// Query for imessage
+	edges := manager.GetEdgesWithChannel("imessage")
+	if len(edges) != 2 {
+		t.Errorf("expected 2 edges with imessage, got %d", len(edges))
+	}
+
+	// Query for whatsapp
+	edges = manager.GetEdgesWithChannel("whatsapp")
+	if len(edges) != 1 {
+		t.Errorf("expected 1 edge with whatsapp, got %d", len(edges))
+	}
+
+	// Query for nonexistent
+	edges = manager.GetEdgesWithChannel("telegram")
+	if len(edges) != 0 {
+		t.Errorf("expected 0 edges with telegram, got %d", len(edges))
+	}
+}
+
+func TestManagerSendChannelMessageNoEdge(t *testing.T) {
+	config := DefaultManagerConfig()
+	auth := &mockAuthenticator{}
+	manager := NewManager(config, auth, nil)
+
+	ctx := context.Background()
+	msg := &pb.CoreChannelOutbound{
+		MessageId:   "msg-1",
+		SessionId:   "session-1",
+		ChannelType: pb.ChannelType_CHANNEL_TYPE_IMESSAGE,
+		ChannelId:   "+1234567890",
+		Content:     "Hello",
+	}
+
+	_, err := manager.SendChannelMessage(ctx, "nonexistent", msg)
+	if err == nil {
+		t.Error("expected error for nonexistent edge")
+	}
+}
+
+func TestPendingChannelMessage(t *testing.T) {
+	pending := &PendingChannelMessage{
+		MessageID:  "msg-1",
+		SessionID:  "session-1",
+		EdgeID:     "edge-1",
+		SentAt:     time.Now(),
+		ResultChan: make(chan *pb.EdgeChannelAck, 1),
+	}
+
+	if pending.MessageID != "msg-1" {
+		t.Errorf("expected MessageID msg-1, got %s", pending.MessageID)
+	}
+	if pending.SessionID != "session-1" {
+		t.Errorf("expected SessionID session-1, got %s", pending.SessionID)
+	}
+}

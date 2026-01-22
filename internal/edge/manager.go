@@ -50,6 +50,19 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// ChannelInboundHandler is called when a channel message arrives from an edge.
+// The handler should route the message to the appropriate session pipeline.
+type ChannelInboundHandler func(ctx context.Context, msg *pb.EdgeChannelInbound) error
+
+// PendingChannelMessage tracks an outbound message waiting for acknowledgment.
+type PendingChannelMessage struct {
+	MessageID  string
+	SessionID  string
+	EdgeID     string
+	SentAt     time.Time
+	ResultChan chan *pb.EdgeChannelAck
+}
+
 // Manager coordinates edge daemon connections and tool execution.
 type Manager struct {
 	mu sync.RWMutex
@@ -59,6 +72,12 @@ type Manager struct {
 
 	// pendingTools maps execution_id to pending tool calls
 	pendingTools map[string]*PendingTool
+
+	// pendingChannelMsgs maps message_id to pending outbound messages
+	pendingChannelMsgs map[string]*PendingChannelMessage
+
+	// channelHandler receives inbound channel messages
+	channelHandler ChannelInboundHandler
 
 	// config holds manager configuration
 	config ManagerConfig
@@ -265,13 +284,14 @@ func NewManager(config ManagerConfig, auth Authenticator, logger *slog.Logger) *
 		logger = slog.Default()
 	}
 	return &Manager{
-		edges:        make(map[string]*EdgeConnection),
-		pendingTools: make(map[string]*PendingTool),
-		config:       config,
-		auth:         auth,
-		events:       make(chan EdgeEvent, config.EventBufferSize),
-		logger:       logger.With("component", "edge.manager"),
-		metrics:      &Metrics{},
+		edges:              make(map[string]*EdgeConnection),
+		pendingTools:       make(map[string]*PendingTool),
+		pendingChannelMsgs: make(map[string]*PendingChannelMessage),
+		config:             config,
+		auth:               auth,
+		events:             make(chan EdgeEvent, config.EventBufferSize),
+		logger:             logger.With("component", "edge.manager"),
+		metrics:            &Metrics{},
 	}
 }
 
@@ -280,6 +300,14 @@ func (m *Manager) SetArtifactRepository(repo artifacts.Repository) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.artifacts = repo
+}
+
+// SetChannelHandler configures the handler for inbound channel messages from edges.
+// The handler is called when an edge-hosted channel adapter receives a message.
+func (m *Manager) SetChannelHandler(handler ChannelInboundHandler) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.channelHandler = handler
 }
 
 // HandleConnect handles a new edge connection stream.
@@ -411,6 +439,12 @@ func (m *Manager) handleMessages(ctx context.Context, conn *EdgeConnection) erro
 
 		case *pb.EdgeMessage_Event:
 			m.handleEdgeEvent(conn, payload.Event)
+
+		case *pb.EdgeMessage_ChannelInbound:
+			m.handleChannelInbound(conn, payload.ChannelInbound)
+
+		case *pb.EdgeMessage_ChannelAck:
+			m.handleChannelAck(conn, payload.ChannelAck)
 		}
 	}
 }
@@ -510,6 +544,149 @@ func (m *Manager) handleEdgeEvent(conn *EdgeConnection, event *pb.EdgeEvent) {
 			"event_type", event.Type,
 		)
 	}
+}
+
+// handleChannelInbound processes an inbound channel message from an edge.
+func (m *Manager) handleChannelInbound(conn *EdgeConnection, msg *pb.EdgeChannelInbound) {
+	m.mu.RLock()
+	handler := m.channelHandler
+	m.mu.RUnlock()
+
+	if handler == nil {
+		m.logger.Warn("received channel message but no handler configured",
+			"edge_id", conn.ID,
+			"channel_type", msg.ChannelType,
+			"channel_id", msg.ChannelId,
+		)
+		return
+	}
+
+	m.logger.Debug("received channel inbound message",
+		"edge_id", conn.ID,
+		"channel_type", msg.ChannelType,
+		"channel_id", msg.ChannelId,
+		"session_key", msg.SessionKey,
+		"sender_id", msg.SenderId,
+	)
+
+	// Call handler in a goroutine to not block the message loop
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		if err := handler(ctx, msg); err != nil {
+			m.logger.Error("channel inbound handler failed",
+				"edge_id", conn.ID,
+				"channel_type", msg.ChannelType,
+				"error", err,
+			)
+		}
+	}()
+}
+
+// handleChannelAck processes a channel message delivery acknowledgment.
+func (m *Manager) handleChannelAck(conn *EdgeConnection, ack *pb.EdgeChannelAck) {
+	m.mu.Lock()
+	pending, ok := m.pendingChannelMsgs[ack.MessageId]
+	if ok {
+		delete(m.pendingChannelMsgs, ack.MessageId)
+	}
+	m.mu.Unlock()
+
+	if !ok {
+		m.logger.Warn("received ack for unknown message",
+			"edge_id", conn.ID,
+			"message_id", ack.MessageId,
+		)
+		return
+	}
+
+	m.logger.Debug("received channel ack",
+		"edge_id", conn.ID,
+		"message_id", ack.MessageId,
+		"status", ack.Status,
+	)
+
+	// Send ack to waiting caller
+	select {
+	case pending.ResultChan <- ack:
+	default:
+		m.logger.Warn("channel ack receiver not ready",
+			"message_id", ack.MessageId,
+		)
+	}
+}
+
+// SendChannelMessage sends an outbound message through an edge channel.
+// Returns the delivery acknowledgment or an error.
+func (m *Manager) SendChannelMessage(ctx context.Context, edgeID string, msg *pb.CoreChannelOutbound) (*pb.EdgeChannelAck, error) {
+	m.mu.RLock()
+	conn, ok := m.edges[edgeID]
+	m.mu.RUnlock()
+
+	if !ok {
+		return nil, fmt.Errorf("edge not found: %s", edgeID)
+	}
+
+	// Create result channel for ack
+	resultChan := make(chan *pb.EdgeChannelAck, 1)
+
+	// Register pending message
+	m.mu.Lock()
+	m.pendingChannelMsgs[msg.MessageId] = &PendingChannelMessage{
+		MessageID:  msg.MessageId,
+		SessionID:  msg.SessionId,
+		EdgeID:     edgeID,
+		SentAt:     time.Now(),
+		ResultChan: resultChan,
+	}
+	m.mu.Unlock()
+
+	// Send the message to the edge
+	conn.mu.RLock()
+	stream := conn.stream
+	conn.mu.RUnlock()
+
+	if err := stream.Send(&pb.CoreMessage{
+		Message: &pb.CoreMessage_ChannelOutbound{
+			ChannelOutbound: msg,
+		},
+	}); err != nil {
+		// Clean up pending
+		m.mu.Lock()
+		delete(m.pendingChannelMsgs, msg.MessageId)
+		m.mu.Unlock()
+		return nil, fmt.Errorf("failed to send channel message: %w", err)
+	}
+
+	// Wait for ack or timeout
+	select {
+	case ack := <-resultChan:
+		return ack, nil
+	case <-ctx.Done():
+		// Clean up pending
+		m.mu.Lock()
+		delete(m.pendingChannelMsgs, msg.MessageId)
+		m.mu.Unlock()
+		return nil, ctx.Err()
+	}
+}
+
+// GetEdgesWithChannel returns edges that support a given channel type.
+func (m *Manager) GetEdgesWithChannel(channelType string) []*EdgeConnection {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var result []*EdgeConnection
+	for _, conn := range m.edges {
+		for _, ct := range conn.ChannelTypes {
+			if ct == channelType {
+				result = append(result, conn)
+				break
+			}
+		}
+	}
+	return result
 }
 
 // removeEdge removes an edge from the registry.

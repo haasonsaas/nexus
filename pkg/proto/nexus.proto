@@ -220,6 +220,9 @@ enum ChannelType {
   CHANNEL_TYPE_DISCORD = 2;
   CHANNEL_TYPE_SLACK = 3;
   CHANNEL_TYPE_API = 4;
+  CHANNEL_TYPE_IMESSAGE = 5;  // Edge-only: macOS iMessage
+  CHANNEL_TYPE_SIGNAL = 6;    // Edge-only: Signal bridge
+  CHANNEL_TYPE_WHATSAPP = 7;  // Edge-only: WhatsApp bridge
 }
 
 enum Direction {
@@ -539,6 +542,8 @@ message EdgeMessage {
     EdgeHeartbeat heartbeat = 2;
     ToolExecutionResult tool_result = 3;
     EdgeEvent event = 4;
+    EdgeChannelInbound channel_inbound = 5;   // Channel message from user
+    EdgeChannelAck channel_ack = 6;           // Delivery acknowledgment
   }
 }
 
@@ -549,6 +554,7 @@ message CoreMessage {
     ToolExecutionRequest tool_request = 2;
     ToolCancellation tool_cancel = 3;
     CoreEvent event = 4;
+    CoreChannelOutbound channel_outbound = 5;   // Channel message to user
   }
 }
 
@@ -793,6 +799,95 @@ enum CoreEventType {
   CORE_EVENT_TYPE_APPROVAL_DENIED = 2;
   CORE_EVENT_TYPE_CONFIG_UPDATE = 3;
   CORE_EVENT_TYPE_SHUTDOWN = 4;
+}
+
+// =============================================================================
+// Edge Channel Messages
+// =============================================================================
+
+// EdgeChannelInbound forwards an inbound message from an edge-hosted channel.
+// Used for channels that can only run locally (iMessage, Signal, etc.).
+message EdgeChannelInbound {
+  // Edge identifier.
+  string edge_id = 1;
+
+  // Channel type (must be an edge-only type like IMESSAGE, SIGNAL).
+  ChannelType channel_type = 2;
+
+  // Channel-specific identifier (e.g., phone number, chat ID).
+  string channel_id = 3;
+
+  // Session key for routing (derived from channel_id + user context).
+  string session_key = 4;
+
+  // The normalized message content.
+  string content = 5;
+
+  // Sender information.
+  string sender_id = 6;
+  string sender_name = 7;
+
+  // Attachments (images, files, etc.).
+  repeated Attachment attachments = 8;
+
+  // Channel-specific metadata.
+  map<string, string> metadata = 9;
+
+  // When the message was received by the edge.
+  google.protobuf.Timestamp received_at = 10;
+}
+
+// CoreChannelOutbound sends an outbound message through an edge channel.
+message CoreChannelOutbound {
+  // Unique message ID for acknowledgment.
+  string message_id = 1;
+
+  // Session ID this message belongs to.
+  string session_id = 2;
+
+  // Channel type to send through.
+  ChannelType channel_type = 3;
+
+  // Channel-specific destination (phone number, chat ID).
+  string channel_id = 4;
+
+  // The message content to send.
+  string content = 5;
+
+  // Attachments to send.
+  repeated Attachment attachments = 6;
+
+  // Reply context if this is a reply.
+  string reply_to_id = 7;
+
+  // Channel-specific options.
+  map<string, string> options = 8;
+}
+
+// EdgeChannelAck acknowledges receipt/delivery of an outbound message.
+message EdgeChannelAck {
+  // The message ID being acknowledged.
+  string message_id = 1;
+
+  // Delivery status.
+  ChannelDeliveryStatus status = 2;
+
+  // Error message if delivery failed.
+  string error = 3;
+
+  // Channel-assigned message ID after sending.
+  string external_id = 4;
+
+  // When the message was delivered.
+  google.protobuf.Timestamp delivered_at = 5;
+}
+
+enum ChannelDeliveryStatus {
+  CHANNEL_DELIVERY_STATUS_UNSPECIFIED = 0;
+  CHANNEL_DELIVERY_STATUS_SENT = 1;
+  CHANNEL_DELIVERY_STATUS_DELIVERED = 2;
+  CHANNEL_DELIVERY_STATUS_READ = 3;
+  CHANNEL_DELIVERY_STATUS_FAILED = 4;
 }
 
 // =============================================================================

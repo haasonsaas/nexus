@@ -7,6 +7,17 @@ import (
 	"path/filepath"
 )
 
+// DefaultStateDir returns the default nexus state directory.
+func DefaultStateDir() string {
+	homeDir, _ := os.UserHomeDir()
+	return filepath.Join(homeDir, ".nexus")
+}
+
+// DefaultConfigPath returns the default nexus configuration file path.
+func DefaultConfigPath() string {
+	return filepath.Join(DefaultStateDir(), "nexus.yaml")
+}
+
 // FixAction represents an action taken to fix a security issue.
 type FixAction struct {
 	// Type is the kind of fix (chmod, config, etc.)

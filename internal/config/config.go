@@ -34,6 +34,7 @@ type Config struct {
 	VectorMemory  memory.Config             `yaml:"vector_memory"`
 	RAG           RAGConfig                 `yaml:"rag"`
 	MCP           mcp.Config                `yaml:"mcp"`
+	Edge          EdgeConfig                `yaml:"edge"`
 	Channels      ChannelsConfig            `yaml:"channels"`
 	LLM           LLMConfig                 `yaml:"llm"`
 	Tools         ToolsConfig               `yaml:"tools"`
@@ -679,6 +680,37 @@ type TranscriptionConfig struct {
 	Language string `yaml:"language"`
 }
 
+// EdgeConfig configures the edge protocol for remote tool execution.
+type EdgeConfig struct {
+	// Enabled enables the edge service for remote edge daemons.
+	Enabled bool `yaml:"enabled"`
+
+	// AuthMode controls how edges authenticate: "token", "tofu", or "dev".
+	// token: Pre-shared tokens (production)
+	// tofu: Trust-On-First-Use with manual approval
+	// dev: Accept all connections (development only)
+	AuthMode string `yaml:"auth_mode"`
+
+	// Tokens maps edge IDs to pre-shared authentication tokens.
+	// Only used when AuthMode is "token".
+	Tokens map[string]string `yaml:"tokens"`
+
+	// HeartbeatInterval is how often edges should send heartbeats.
+	HeartbeatInterval time.Duration `yaml:"heartbeat_interval"`
+
+	// HeartbeatTimeout is how long before an edge is considered disconnected.
+	HeartbeatTimeout time.Duration `yaml:"heartbeat_timeout"`
+
+	// DefaultToolTimeout is the default timeout for tool execution.
+	DefaultToolTimeout time.Duration `yaml:"default_tool_timeout"`
+
+	// MaxConcurrentTools limits concurrent tool executions per edge.
+	MaxConcurrentTools int `yaml:"max_concurrent_tools"`
+
+	// EventBufferSize is the buffer size for edge events.
+	EventBufferSize int `yaml:"event_buffer_size"`
+}
+
 // Load reads and parses the configuration file.
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
@@ -725,6 +757,7 @@ func applyDefaults(cfg *Config) {
 	applyTranscriptionDefaults(&cfg.Transcription)
 	applyMarketplaceDefaults(&cfg.Marketplace)
 	applyRAGDefaults(&cfg.RAG)
+	applyEdgeDefaults(&cfg.Edge)
 }
 
 func applyServerDefaults(cfg *ServerConfig) {
@@ -1003,6 +1036,27 @@ func applyRAGDefaults(cfg *RAGConfig) {
 	}
 	if cfg.ContextInjection.Scope == "" {
 		cfg.ContextInjection.Scope = "global"
+	}
+}
+
+func applyEdgeDefaults(cfg *EdgeConfig) {
+	if cfg.AuthMode == "" {
+		cfg.AuthMode = "token"
+	}
+	if cfg.HeartbeatInterval == 0 {
+		cfg.HeartbeatInterval = 30 * time.Second
+	}
+	if cfg.HeartbeatTimeout == 0 {
+		cfg.HeartbeatTimeout = 90 * time.Second
+	}
+	if cfg.DefaultToolTimeout == 0 {
+		cfg.DefaultToolTimeout = 60 * time.Second
+	}
+	if cfg.MaxConcurrentTools == 0 {
+		cfg.MaxConcurrentTools = 10
+	}
+	if cfg.EventBufferSize == 0 {
+		cfg.EventBufferSize = 1000
 	}
 }
 

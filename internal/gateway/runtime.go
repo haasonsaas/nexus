@@ -12,6 +12,7 @@ import (
 
 	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/haasonsaas/nexus/internal/agent/providers"
+	"github.com/haasonsaas/nexus/internal/edge"
 	"github.com/haasonsaas/nexus/internal/mcp"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/tools/browser"
@@ -356,7 +357,21 @@ func (s *Server) registerTools(ctx context.Context, runtime *agent.Runtime) erro
 		mcp.RegisterToolsWithRegistrar(runtime, s.mcpManager, s.toolPolicyResolver)
 	}
 
+	// Register edge tools if enabled
+	if s.config.Edge.Enabled && s.edgeManager != nil {
+		s.registerEdgeTools(runtime)
+	}
+
 	return nil
+}
+
+// registerEdgeTools registers tools from connected edges with the runtime.
+func (s *Server) registerEdgeTools(runtime *agent.Runtime) {
+	provider := edge.NewToolProvider(s.edgeManager)
+	for _, tool := range provider.GetTools() {
+		runtime.RegisterTool(tool)
+	}
+	s.logger.Info("registered edge tools", "count", len(provider.GetTools()))
 }
 
 // parseMemoryMB parses a memory string (e.g., "512MB", "1GB") to megabytes.

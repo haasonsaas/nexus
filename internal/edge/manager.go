@@ -582,10 +582,13 @@ func (m *Manager) ExecuteTool(ctx context.Context, edgeID, toolName, input strin
 	case result := <-pending.Result:
 		m.mu.Lock()
 		m.metrics.ActiveToolCalls--
-		if result.IsError {
+		if result != nil && result.IsError {
 			m.metrics.FailedToolCalls++
 		}
 		m.mu.Unlock()
+		if result == nil {
+			return nil, fmt.Errorf("tool execution failed: nil result")
+		}
 		return result, nil
 
 	case <-time.After(timeout):
@@ -663,6 +666,20 @@ func (m *Manager) CancelTool(execID, reason string) error {
 
 	pending.Cancelled = true
 
+	// Send cancellation result to unblock waiting goroutine
+	select {
+	case pending.Result <- &ToolExecutionResult{
+		Content: fmt.Sprintf("cancelled: %s", reason),
+		IsError: true,
+	}:
+	default:
+		// Result already received or channel closed
+	}
+
+	// Clean up pending
+	m.cleanupPending(execID)
+
+	// Notify edge of cancellation
 	return conn.stream.Send(&pb.CoreMessage{
 		Message: &pb.CoreMessage_ToolCancel{
 			ToolCancel: &pb.ToolCancellation{

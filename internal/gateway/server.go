@@ -343,9 +343,8 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		msg.CreatedAt = time.Now()
 	}
 
-	if err := s.sessions.AppendMessage(ctx, session.ID, msg); err != nil {
-		s.logger.Error("failed to persist inbound message", "error", err)
-	}
+	// Note: The runtime handles message persistence for both inbound and outbound
+	// messages. Gateway only logs to memory if enabled.
 	if s.memoryLogger != nil {
 		if err := s.memoryLogger.Append(msg); err != nil {
 			s.logger.Error("failed to write memory log", "error", err)
@@ -409,9 +408,7 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		return
 	}
 
-	if err := s.sessions.AppendMessage(ctx, session.ID, outbound); err != nil {
-		s.logger.Error("failed to persist outbound message", "error", err)
-	}
+	// Note: The runtime handles message persistence. Gateway only logs to memory if enabled.
 	if s.memoryLogger != nil {
 		if err := s.memoryLogger.Append(outbound); err != nil {
 			s.logger.Error("failed to write memory log", "error", err)

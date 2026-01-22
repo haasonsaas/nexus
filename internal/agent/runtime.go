@@ -643,6 +643,9 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 	if msg.CreatedAt.IsZero() {
 		msg.CreatedAt = time.Now()
 	}
+	if msg.Direction == "" {
+		msg.Direction = models.DirectionInbound
+	}
 	if err := r.sessions.AppendMessage(ctx, session.ID, msg); err != nil {
 		wrappedErr := fmt.Errorf("failed to persist user message: %w", err)
 		emitter.RunError(ctx, wrappedErr, false)
@@ -818,6 +821,7 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 			ID:        assistantMsgID,
 			SessionID: session.ID,
 			Role:      models.RoleAssistant,
+			Direction: models.DirectionOutbound,
 			Content:   textBuilder.String(),
 			ToolCalls: toolCalls,
 			CreatedAt: time.Now(),

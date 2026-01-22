@@ -1507,9 +1507,34 @@ func (r *ToolRegistry) Get(name string) (Tool, bool) {
 	return tool, ok
 }
 
+// Tool parameter limits to prevent resource exhaustion
+const (
+	// MaxToolNameLength is the maximum length of a tool name.
+	MaxToolNameLength = 256
+
+	// MaxToolParamsSize is the maximum size of tool parameters JSON (10MB).
+	MaxToolParamsSize = 10 << 20
+)
+
 // Execute runs a tool by name with the given JSON parameters.
-// Returns an error result if the tool is not found.
+// Returns an error result if the tool is not found or parameters are invalid.
 func (r *ToolRegistry) Execute(ctx context.Context, name string, params json.RawMessage) (*ToolResult, error) {
+	// Validate tool name
+	if len(name) > MaxToolNameLength {
+		return &ToolResult{
+			Content: fmt.Sprintf("tool name exceeds maximum length of %d characters", MaxToolNameLength),
+			IsError: true,
+		}, nil
+	}
+
+	// Validate params size
+	if len(params) > MaxToolParamsSize {
+		return &ToolResult{
+			Content: fmt.Sprintf("tool parameters exceed maximum size of %d bytes", MaxToolParamsSize),
+			IsError: true,
+		}, nil
+	}
+
 	r.mu.RLock()
 	tool, ok := r.tools[name]
 	r.mu.RUnlock()

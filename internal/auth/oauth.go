@@ -69,10 +69,24 @@ func (s *Service) SetUserStore(store UserStore) {
 	s.users = store
 }
 
+// OAuth parameter limits to prevent abuse
+const (
+	maxProviderLength = 64
+	maxCodeLength     = 4096
+)
+
 // HandleCallback completes an OAuth flow and returns an auth result.
 func (s *Service) HandleCallback(ctx context.Context, provider, code string) (*AuthResult, error) {
 	if s == nil {
 		return nil, ErrAuthDisabled
+	}
+
+	// Validate input lengths
+	if len(provider) > maxProviderLength {
+		return nil, errors.New("provider name too long")
+	}
+	if len(code) > maxCodeLength {
+		return nil, errors.New("authorization code too long")
 	}
 
 	// Read providers and users under lock

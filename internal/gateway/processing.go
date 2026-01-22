@@ -18,6 +18,18 @@ import (
 
 const defaultAgentID = "main"
 
+// Processing limits to prevent resource exhaustion
+const (
+	// maxProcessingTime is the maximum time allowed for a single message processing.
+	maxProcessingTime = 10 * time.Minute
+
+	// maxResponseSize is the maximum size of accumulated response text (1MB).
+	maxResponseSize = 1 << 20 // 1MB
+
+	// maxToolResults is the maximum number of tool results per processing.
+	maxToolResults = 100
+)
+
 // startProcessing starts the background message processing goroutine.
 func (s *Server) startProcessing(ctx context.Context) {
 	processCtx, cancel := context.WithCancel(ctx)
@@ -209,7 +221,7 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		}
 	}
 
-	runCtx, cancel := context.WithCancel(promptCtx)
+	runCtx, cancel := context.WithTimeout(promptCtx, maxProcessingTime)
 	runToken := s.registerActiveRun(session.ID, cancel)
 	defer func() {
 		cancel()
@@ -224,15 +236,33 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 
 	var response strings.Builder
 	var toolResults []models.ToolResult
+	var truncated bool
 	for chunk := range chunks {
 		if chunk.Error != nil {
 			s.logger.Error("runtime stream error", "error", chunk.Error)
 			return
 		}
 		if chunk.Text != "" {
+			// Check size limit to prevent memory exhaustion
+			if response.Len()+len(chunk.Text) > maxResponseSize {
+				if !truncated {
+					s.logger.Warn("response truncated due to size limit",
+						"session_id", session.ID,
+						"limit", maxResponseSize)
+					truncated = true
+				}
+				continue
+			}
 			response.WriteString(chunk.Text)
 		}
 		if chunk.ToolResult != nil {
+			// Check tool results limit
+			if len(toolResults) >= maxToolResults {
+				s.logger.Warn("tool results truncated due to limit",
+					"session_id", session.ID,
+					"limit", maxToolResults)
+				continue
+			}
 			toolResults = append(toolResults, *chunk.ToolResult)
 		}
 	}

@@ -126,8 +126,9 @@ func (e *ToolExecutor) ExecuteConcurrently(ctx context.Context, toolCalls []mode
 						WithMeta("attempt", attempt))
 				}
 
-				// Execute with timeout
+				// Execute with timeout and add correlation ID
 				toolCtx, cancel := context.WithTimeout(ctx, e.config.PerToolTimeout)
+				toolCtx = observability.AddToolCallID(toolCtx, call.ID)
 				result, timedOut = e.executeWithTimeout(toolCtx, call)
 				cancel()
 
@@ -269,6 +270,7 @@ func (e *ToolExecutor) ExecuteSequentially(ctx context.Context, toolCalls []mode
 		var timedOut bool
 		for attempt := 1; attempt <= maxAttempts; attempt++ {
 			toolCtx, cancel := context.WithTimeout(ctx, e.config.PerToolTimeout)
+			toolCtx = observability.AddToolCallID(toolCtx, tc.ID)
 			result, timedOut = e.executeWithTimeout(toolCtx, tc)
 			cancel()
 			if !result.IsError {
@@ -311,6 +313,8 @@ func (e *ToolExecutor) ExecuteSingle(ctx context.Context, name string, input jso
 	var lastErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		toolCtx, cancel := context.WithTimeout(ctx, e.config.PerToolTimeout)
+		// Note: ExecuteSingle doesn't have a tool call ID, but the context
+		// may already have one from the caller
 		result, err := e.registry.Execute(toolCtx, name, input)
 		cancel()
 		if err == nil {

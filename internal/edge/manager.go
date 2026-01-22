@@ -36,6 +36,7 @@
 package edge
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -44,6 +45,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/haasonsaas/nexus/internal/artifacts"
 	pb "github.com/haasonsaas/nexus/pkg/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -72,6 +74,9 @@ type Manager struct {
 
 	// metrics for observability
 	metrics *Metrics
+
+	// artifacts stores edge-produced artifacts (optional)
+	artifacts artifacts.Repository
 }
 
 // ManagerConfig configures the edge manager.
@@ -270,6 +275,13 @@ func NewManager(config ManagerConfig, auth Authenticator, logger *slog.Logger) *
 	}
 }
 
+// SetArtifactRepository configures the artifact storage for edge-produced artifacts.
+func (m *Manager) SetArtifactRepository(repo artifacts.Repository) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.artifacts = repo
+}
+
 // HandleConnect handles a new edge connection stream.
 func (m *Manager) HandleConnect(stream pb.EdgeService_ConnectServer) error {
 	ctx := stream.Context()
@@ -415,6 +427,7 @@ func (m *Manager) handleHeartbeat(conn *EdgeConnection, hb *pb.EdgeHeartbeat) {
 func (m *Manager) handleToolResult(conn *EdgeConnection, result *pb.ToolExecutionResult) {
 	m.mu.Lock()
 	pending, ok := m.pendingTools[result.ExecutionId]
+	artifactRepo := m.artifacts
 	if ok {
 		delete(m.pendingTools, result.ExecutionId)
 	}
@@ -432,6 +445,29 @@ func (m *Manager) handleToolResult(conn *EdgeConnection, result *pb.ToolExecutio
 	conn.mu.Lock()
 	delete(conn.activeTools, result.ExecutionId)
 	conn.mu.Unlock()
+
+	// Store artifacts if repository is configured
+	if artifactRepo != nil && len(result.Artifacts) > 0 {
+		ctx := context.Background()
+		for _, artifact := range result.Artifacts {
+			// If artifact has inline data, store it
+			if len(artifact.Data) > 0 {
+				if err := artifactRepo.StoreArtifact(ctx, artifact, bytes.NewReader(artifact.Data)); err != nil {
+					m.logger.Warn("failed to store artifact",
+						"artifact_id", artifact.Id,
+						"execution_id", result.ExecutionId,
+						"error", err,
+					)
+				} else {
+					m.logger.Debug("stored artifact",
+						"artifact_id", artifact.Id,
+						"type", artifact.Type,
+						"size", artifact.Size,
+					)
+				}
+			}
+		}
+	}
 
 	// Send result to waiting caller
 	select {
@@ -454,6 +490,7 @@ func (m *Manager) handleToolResult(conn *EdgeConnection, result *pb.ToolExecutio
 		"edge_id", conn.ID,
 		"duration_ms", result.DurationMs,
 		"is_error", result.IsError,
+		"artifacts", len(result.Artifacts),
 	)
 }
 

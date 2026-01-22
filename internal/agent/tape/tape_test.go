@@ -303,10 +303,10 @@ func TestReplayTool(t *testing.T) {
 	})
 
 	replayer := NewReplayer(tape)
-	// Simulate having processed turn 0
-	replayer.Complete(context.Background(), &agent.CompletionRequest{})
-	for range make(chan struct{}) {
-		break // Immediately break, just to advance the replayer
+	// Simulate having processed turn 0 by consuming the Complete channel
+	ch, _ := replayer.Complete(context.Background(), &agent.CompletionRequest{})
+	for range ch {
+		// drain the channel to advance the replayer
 	}
 
 	tool := replayer.NewReplayTool("search", json.RawMessage(`{}`))

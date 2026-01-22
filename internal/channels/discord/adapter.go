@@ -19,6 +19,8 @@ type discordSession interface {
 	Close() error
 	ChannelMessageSend(channelID string, content string, options ...discordgo.RequestOption) (*discordgo.Message, error)
 	ChannelMessageSendComplex(channelID string, data *discordgo.MessageSend, options ...discordgo.RequestOption) (*discordgo.Message, error)
+	ChannelMessageEdit(channelID, messageID, content string, options ...discordgo.RequestOption) (*discordgo.Message, error)
+	ChannelTyping(channelID string, options ...discordgo.RequestOption) error
 	MessageReactionAdd(channelID, messageID, emoji string, options ...discordgo.RequestOption) error
 	ThreadStart(channelID, name string, typ discordgo.ChannelType, archiveDuration int, options ...discordgo.RequestOption) (*discordgo.Channel, error)
 	AddHandler(handler interface{}) func()
@@ -733,4 +735,99 @@ func detectAttachmentType(contentType string) string {
 		return "video"
 	}
 	return "document"
+}
+
+// SendTypingIndicator shows a "typing" indicator in the channel.
+// This is part of the StreamingAdapter interface.
+func (a *Adapter) SendTypingIndicator(ctx context.Context, msg *models.Message) error {
+	if a.session == nil {
+		return channels.ErrInternal("session not initialized", nil)
+	}
+
+	channelID, err := a.extractChannelID(msg)
+	if err != nil {
+		return channels.ErrInvalidInput("failed to extract channel ID", err)
+	}
+
+	if err := a.session.ChannelTyping(channelID); err != nil {
+		a.logger.Debug("failed to send typing indicator", "error", err, "channel_id", channelID)
+		// Don't return error - typing indicators are best-effort
+		return nil
+	}
+
+	return nil
+}
+
+// StartStreamingResponse sends an initial placeholder message and returns its ID.
+// This is part of the StreamingAdapter interface.
+func (a *Adapter) StartStreamingResponse(ctx context.Context, msg *models.Message) (string, error) {
+	if a.session == nil {
+		return "", channels.ErrInternal("session not initialized", nil)
+	}
+
+	channelID, err := a.extractChannelID(msg)
+	if err != nil {
+		return "", channels.ErrInvalidInput("failed to extract channel ID", err)
+	}
+
+	// Apply rate limiting
+	if err := a.rateLimiter.Wait(ctx); err != nil {
+		return "", channels.ErrTimeout("rate limit wait cancelled", err)
+	}
+
+	// Send initial message with a placeholder that indicates processing
+	sentMsg, err := a.session.ChannelMessageSend(channelID, "...")
+	if err != nil {
+		a.logger.Error("failed to start streaming response", "error", err, "channel_id", channelID)
+		a.metrics.RecordMessageFailed()
+		return "", channels.ErrInternal("failed to send initial message", err)
+	}
+
+	a.metrics.RecordMessageSent()
+	return sentMsg.ID, nil
+}
+
+// UpdateStreamingResponse updates a previously sent message with new content.
+// This is part of the StreamingAdapter interface.
+func (a *Adapter) UpdateStreamingResponse(ctx context.Context, msg *models.Message, messageID string, content string) error {
+	if a.session == nil {
+		return channels.ErrInternal("session not initialized", nil)
+	}
+
+	channelID, err := a.extractChannelID(msg)
+	if err != nil {
+		return channels.ErrInvalidInput("failed to extract channel ID", err)
+	}
+
+	// Apply rate limiting for edits
+	if err := a.rateLimiter.Wait(ctx); err != nil {
+		return channels.ErrTimeout("rate limit wait cancelled", err)
+	}
+
+	_, err = a.session.ChannelMessageEdit(channelID, messageID, content)
+	if err != nil {
+		a.logger.Debug("failed to update streaming response", "error", err, "channel_id", channelID, "message_id", messageID)
+		return channels.ErrInternal("failed to edit message", err)
+	}
+
+	return nil
+}
+
+// extractChannelID extracts the Discord channel ID from a message.
+func (a *Adapter) extractChannelID(msg *models.Message) (string, error) {
+	if msg.Metadata != nil {
+		if channelID, ok := msg.Metadata["discord_channel_id"].(string); ok && channelID != "" {
+			return channelID, nil
+		}
+	}
+
+	// Try to parse from SessionID (format: "discord:channelid" or "discord:channelid:threadid")
+	if msg.SessionID != "" {
+		parts := strings.Split(msg.SessionID, ":")
+		if len(parts) >= 2 && parts[0] == "discord" {
+			return parts[1], nil
+		}
+	}
+
+	return "", fmt.Errorf("channel_id not found in message")
 }

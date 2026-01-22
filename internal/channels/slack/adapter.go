@@ -666,3 +666,77 @@ func parseSlackTimestamp(ts string) (time.Time, error) {
 
 	return time.Unix(sec, nsec), nil
 }
+
+// SendTypingIndicator is a no-op for Slack as it doesn't support programmatic typing indicators.
+// This is part of the StreamingAdapter interface.
+func (a *Adapter) SendTypingIndicator(ctx context.Context, msg *models.Message) error {
+	// Slack doesn't support programmatic typing indicators
+	return nil
+}
+
+// StartStreamingResponse sends an initial placeholder message and returns its timestamp.
+// This is part of the StreamingAdapter interface.
+func (a *Adapter) StartStreamingResponse(ctx context.Context, msg *models.Message) (string, error) {
+	if a.client == nil {
+		return "", channels.ErrInternal("client not initialized", nil)
+	}
+
+	channelID, ok := msg.Metadata["slack_channel"].(string)
+	if !ok || channelID == "" {
+		return "", channels.ErrInvalidInput("missing slack_channel in message metadata", nil)
+	}
+
+	// Apply rate limiting
+	if err := a.rateLimiter.Wait(ctx); err != nil {
+		return "", channels.ErrTimeout("rate limit wait cancelled", err)
+	}
+
+	options := []slack.MsgOption{
+		slack.MsgOptionText("...", false),
+	}
+
+	// Thread the response if there's a thread timestamp
+	if threadTS, ok := msg.Metadata["slack_thread_ts"].(string); ok && threadTS != "" {
+		options = append(options, slack.MsgOptionTS(threadTS))
+	}
+
+	_, timestamp, err := a.client.PostMessageContext(ctx, channelID, options...)
+	if err != nil {
+		a.logger.Error("failed to start streaming response", "error", err, "channel_id", channelID)
+		a.metrics.RecordMessageFailed()
+		return "", channels.ErrInternal("failed to send initial message", err)
+	}
+
+	a.metrics.RecordMessageSent()
+	return timestamp, nil
+}
+
+// UpdateStreamingResponse updates a previously sent message with new content.
+// This is part of the StreamingAdapter interface.
+func (a *Adapter) UpdateStreamingResponse(ctx context.Context, msg *models.Message, messageID string, content string) error {
+	if a.client == nil {
+		return channels.ErrInternal("client not initialized", nil)
+	}
+
+	channelID, ok := msg.Metadata["slack_channel"].(string)
+	if !ok || channelID == "" {
+		return channels.ErrInvalidInput("missing slack_channel in message metadata", nil)
+	}
+
+	// Apply rate limiting for edits
+	if err := a.rateLimiter.Wait(ctx); err != nil {
+		return channels.ErrTimeout("rate limit wait cancelled", err)
+	}
+
+	options := []slack.MsgOption{
+		slack.MsgOptionText(content, false),
+	}
+
+	_, _, _, err := a.client.UpdateMessageContext(ctx, channelID, messageID, options...)
+	if err != nil {
+		a.logger.Debug("failed to update streaming response", "error", err, "channel_id", channelID, "timestamp", messageID)
+		return channels.ErrInternal("failed to edit message", err)
+	}
+
+	return nil
+}

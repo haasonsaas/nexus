@@ -1151,6 +1151,18 @@ func (m *mockDiscordSession) ChannelMessageSendComplex(channelID string, data *d
 	}, nil
 }
 
+func (m *mockDiscordSession) ChannelMessageEdit(channelID, messageID, content string, options ...discordgo.RequestOption) (*discordgo.Message, error) {
+	return &discordgo.Message{
+		ID:        messageID,
+		ChannelID: channelID,
+		Content:   content,
+	}, nil
+}
+
+func (m *mockDiscordSession) ChannelTyping(channelID string, options ...discordgo.RequestOption) error {
+	return nil
+}
+
 func (m *mockDiscordSession) MessageReactionAdd(channelID, messageID, emoji string, options ...discordgo.RequestOption) error {
 	if m.messageReactionAddFn != nil {
 		return m.messageReactionAddFn(channelID, messageID, emoji)

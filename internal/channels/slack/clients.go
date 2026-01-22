@@ -17,6 +17,7 @@ type SlackAPIClient interface {
 	// Messaging
 	PostMessage(channelID string, options ...slack.MsgOption) (string, string, error)
 	PostMessageContext(ctx context.Context, channelID string, options ...slack.MsgOption) (string, string, error)
+	UpdateMessageContext(ctx context.Context, channelID, timestamp string, options ...slack.MsgOption) (string, string, string, error)
 
 	// Reactions
 	AddReaction(name string, item slack.ItemRef) error
@@ -53,18 +54,19 @@ var _ SlackAPIClient = (*slack.Client)(nil)
 
 // MockSlackClient is a test double for SlackAPIClient.
 type MockSlackClient struct {
-	AuthTestFunc             func() (*slack.AuthTestResponse, error)
-	AuthTestContextFunc      func(ctx context.Context) (*slack.AuthTestResponse, error)
-	PostMessageFunc          func(channelID string, options ...slack.MsgOption) (string, string, error)
-	PostMessageContextFunc   func(ctx context.Context, channelID string, options ...slack.MsgOption) (string, string, error)
-	AddReactionFunc          func(name string, item slack.ItemRef) error
-	AddReactionContextFunc   func(ctx context.Context, name string, item slack.ItemRef) error
-	UploadFileV2Func         func(params slack.UploadFileV2Parameters) (*slack.FileSummary, error)
-	UploadFileV2ContextFunc  func(ctx context.Context, params slack.UploadFileV2Parameters) (*slack.FileSummary, error)
-	GetUserInfoFunc          func(userID string) (*slack.User, error)
-	GetUserInfoContextFunc   func(ctx context.Context, userID string) (*slack.User, error)
-	GetConversationInfoFunc  func(input *slack.GetConversationInfoInput) (*slack.Channel, error)
-	GetConversationInfoCtxFn func(ctx context.Context, input *slack.GetConversationInfoInput) (*slack.Channel, error)
+	AuthTestFunc               func() (*slack.AuthTestResponse, error)
+	AuthTestContextFunc        func(ctx context.Context) (*slack.AuthTestResponse, error)
+	PostMessageFunc            func(channelID string, options ...slack.MsgOption) (string, string, error)
+	PostMessageContextFunc     func(ctx context.Context, channelID string, options ...slack.MsgOption) (string, string, error)
+	UpdateMessageContextFunc   func(ctx context.Context, channelID, timestamp string, options ...slack.MsgOption) (string, string, string, error)
+	AddReactionFunc            func(name string, item slack.ItemRef) error
+	AddReactionContextFunc     func(ctx context.Context, name string, item slack.ItemRef) error
+	UploadFileV2Func           func(params slack.UploadFileV2Parameters) (*slack.FileSummary, error)
+	UploadFileV2ContextFunc    func(ctx context.Context, params slack.UploadFileV2Parameters) (*slack.FileSummary, error)
+	GetUserInfoFunc            func(userID string) (*slack.User, error)
+	GetUserInfoContextFunc     func(ctx context.Context, userID string) (*slack.User, error)
+	GetConversationInfoFunc    func(input *slack.GetConversationInfoInput) (*slack.Channel, error)
+	GetConversationInfoCtxFn   func(ctx context.Context, input *slack.GetConversationInfoInput) (*slack.Channel, error)
 }
 
 func (m *MockSlackClient) AuthTest() (*slack.AuthTestResponse, error) {
@@ -93,6 +95,13 @@ func (m *MockSlackClient) PostMessageContext(ctx context.Context, channelID stri
 		return m.PostMessageContextFunc(ctx, channelID, options...)
 	}
 	return m.PostMessage(channelID, options...)
+}
+
+func (m *MockSlackClient) UpdateMessageContext(ctx context.Context, channelID, timestamp string, options ...slack.MsgOption) (string, string, string, error) {
+	if m.UpdateMessageContextFunc != nil {
+		return m.UpdateMessageContextFunc(ctx, channelID, timestamp, options...)
+	}
+	return channelID, timestamp, "", nil
 }
 
 func (m *MockSlackClient) AddReaction(name string, item slack.ItemRef) error {

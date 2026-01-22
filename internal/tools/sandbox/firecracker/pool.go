@@ -241,7 +241,9 @@ func (p *VMPool) maintenanceLoop() {
 
 // performMaintenance checks pool health and replenishes VMs.
 func (p *VMPool) performMaintenance() {
-	ctx := context.Background()
+	// Use timeout context to prevent maintenance from hanging indefinitely
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
 
 	p.poolsMu.RLock()
 	defer p.poolsMu.RUnlock()
@@ -387,7 +389,9 @@ func (p *VMPool) Put(vm *MicroVM) {
 	p.closedMu.RLock()
 	if p.closed {
 		p.closedMu.RUnlock()
-		p.stopVM(context.Background(), vm)
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		p.stopVM(stopCtx, vm)
+		stopCancel()
 		return
 	}
 	p.closedMu.RUnlock()
@@ -408,7 +412,9 @@ func (p *VMPool) Put(vm *MicroVM) {
 
 	if shouldRecycle {
 		go func() {
-			p.stopVM(context.Background(), vm)
+			stopCtx, stopCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			p.stopVM(stopCtx, vm)
+			stopCancel()
 			atomic.AddInt64(&p.stats.TotalDestroyed, 1)
 
 			p.poolsMu.RLock()
@@ -435,7 +441,9 @@ func (p *VMPool) Put(vm *MicroVM) {
 	p.poolsMu.RUnlock()
 
 	if !ok {
-		p.stopVM(context.Background(), vm)
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		p.stopVM(stopCtx, vm)
+		stopCancel()
 		return
 	}
 
@@ -446,7 +454,9 @@ func (p *VMPool) Put(vm *MicroVM) {
 	default:
 		// Pool is full, destroy the VM
 		go func() {
-			p.stopVM(context.Background(), vm)
+			stopCtx, stopCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			p.stopVM(stopCtx, vm)
+			stopCancel()
 			atomic.AddInt32(&langPool.total, -1)
 			atomic.AddInt64(&p.stats.TotalDestroyed, 1)
 		}()

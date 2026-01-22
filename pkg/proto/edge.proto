@@ -181,11 +181,11 @@ message ToolRegistrationError {
 }
 
 enum ToolRegistrationErrorCode {
-  TOOL_REG_ERROR_UNSPECIFIED = 0;
-  TOOL_REG_ERROR_NAME_COLLISION = 1;  // Tool name conflicts with existing
-  TOOL_REG_ERROR_INVALID_SCHEMA = 2;  // Invalid JSON schema
-  TOOL_REG_ERROR_POLICY_DENIED = 3;   // Policy prevents registration
-  TOOL_REG_ERROR_QUOTA_EXCEEDED = 4;  // Too many tools from this edge
+  TOOL_REGISTRATION_ERROR_CODE_UNSPECIFIED = 0;
+  TOOL_REGISTRATION_ERROR_CODE_NAME_COLLISION = 1;  // Tool name conflicts with existing
+  TOOL_REGISTRATION_ERROR_CODE_INVALID_SCHEMA = 2;  // Invalid JSON schema
+  TOOL_REGISTRATION_ERROR_CODE_POLICY_DENIED = 3;   // Policy prevents registration
+  TOOL_REGISTRATION_ERROR_CODE_QUOTA_EXCEEDED = 4;  // Too many tools from this edge
 }
 
 // EdgeTool defines a tool provided by an edge daemon.
@@ -318,14 +318,14 @@ message ToolExecutionResult {
 }
 
 enum ToolErrorCode {
-  TOOL_ERROR_UNSPECIFIED = 0;
-  TOOL_ERROR_NOT_FOUND = 1;       // Tool not registered
-  TOOL_ERROR_INVALID_INPUT = 2;   // Input validation failed
-  TOOL_ERROR_TIMEOUT = 3;         // Execution timed out
-  TOOL_ERROR_CANCELLED = 4;       // Execution was cancelled
-  TOOL_ERROR_PERMISSION = 5;      // Permission denied on edge
-  TOOL_ERROR_RESOURCE = 6;        // Resource unavailable
-  TOOL_ERROR_INTERNAL = 7;        // Internal tool error
+  TOOL_ERROR_CODE_UNSPECIFIED = 0;
+  TOOL_ERROR_CODE_NOT_FOUND = 1;       // Tool not registered
+  TOOL_ERROR_CODE_INVALID_INPUT = 2;   // Input validation failed
+  TOOL_ERROR_CODE_TIMEOUT = 3;         // Execution timed out
+  TOOL_ERROR_CODE_CANCELLED = 4;       // Execution was cancelled
+  TOOL_ERROR_CODE_PERMISSION = 5;      // Permission denied on edge
+  TOOL_ERROR_CODE_RESOURCE = 6;        // Resource unavailable
+  TOOL_ERROR_CODE_INTERNAL = 7;        // Internal tool error
 }
 
 message ResourceUsage {

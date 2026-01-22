@@ -149,9 +149,9 @@ func TestApprovalManager_TrustLevels(t *testing.T) {
 	})
 
 	tests := []struct {
-		name        string
-		edgeID      string
-		riskLevel   proto.RiskLevel
+		name         string
+		edgeID       string
+		riskLevel    proto.RiskLevel
 		wantApproval bool
 	}{
 		{"trusted + low risk", "trusted-device", proto.RiskLevel_RISK_LEVEL_LOW, false},

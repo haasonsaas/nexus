@@ -71,14 +71,14 @@ type ClientConfig struct {
 
 // Tool defines a tool provided by this edge daemon.
 type Tool struct {
-	Name             string
-	Description      string
-	InputSchema      json.RawMessage
-	Category         proto.ToolCategory
-	RequiresApproval bool
-	RiskLevel        proto.RiskLevel
+	Name              string
+	Description       string
+	InputSchema       json.RawMessage
+	Category          proto.ToolCategory
+	RequiresApproval  bool
+	RiskLevel         proto.RiskLevel
 	SupportsStreaming bool
-	Metadata         map[string]string
+	Metadata          map[string]string
 }
 
 // ToolHandler handles execution of a tool.
@@ -298,14 +298,14 @@ func (c *Client) registerTools(ctx context.Context) error {
 	tools := make([]*proto.EdgeTool, 0, len(c.tools))
 	for _, tool := range c.tools {
 		tools = append(tools, &proto.EdgeTool{
-			Name:             tool.Name,
-			Description:      tool.Description,
-			InputSchema:      string(tool.InputSchema),
-			Category:         tool.Category,
-			RequiresApproval: tool.RequiresApproval,
-			RiskLevel:        tool.RiskLevel,
+			Name:              tool.Name,
+			Description:       tool.Description,
+			InputSchema:       string(tool.InputSchema),
+			Category:          tool.Category,
+			RequiresApproval:  tool.RequiresApproval,
+			RiskLevel:         tool.RiskLevel,
 			SupportsStreaming: tool.SupportsStreaming,
-			Metadata:         tool.Metadata,
+			Metadata:          tool.Metadata,
 		})
 	}
 	c.mu.RUnlock()
@@ -505,7 +505,7 @@ func (c *Client) sendToolResult(ctx context.Context, requestID string, result *T
 
 	var errorCode proto.ToolErrorCode
 	if !result.Success {
-		errorCode = proto.ToolErrorCode_TOOL_ERROR_INTERNAL
+		errorCode = proto.ToolErrorCode_TOOL_ERROR_CODE_INTERNAL
 	}
 
 	if err := c.stream.Send(&proto.EdgeMessage{

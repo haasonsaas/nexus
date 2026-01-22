@@ -16,16 +16,16 @@ import (
 
 // Edge authentication errors
 var (
-	ErrEdgeNotFound       = errors.New("edge device not found")
-	ErrEdgeBanned         = errors.New("edge device is banned")
-	ErrInvalidSecret      = errors.New("invalid shared secret")
-	ErrInvalidPublicKey   = errors.New("invalid public key")
-	ErrSignatureInvalid   = errors.New("signature verification failed")
-	ErrTOFUPending        = errors.New("TOFU verification pending")
-	ErrSessionExpired     = errors.New("edge session expired")
-	ErrSessionNotFound    = errors.New("edge session not found")
-	ErrRateLimited        = errors.New("edge rate limited")
-	ErrProtocolMismatch   = errors.New("protocol version mismatch")
+	ErrEdgeNotFound     = errors.New("edge device not found")
+	ErrEdgeBanned       = errors.New("edge device is banned")
+	ErrInvalidSecret    = errors.New("invalid shared secret")
+	ErrInvalidPublicKey = errors.New("invalid public key")
+	ErrSignatureInvalid = errors.New("signature verification failed")
+	ErrTOFUPending      = errors.New("TOFU verification pending")
+	ErrSessionExpired   = errors.New("edge session expired")
+	ErrSessionNotFound  = errors.New("edge session not found")
+	ErrRateLimited      = errors.New("edge rate limited")
+	ErrProtocolMismatch = errors.New("protocol version mismatch")
 )
 
 // EdgeTrustLevel defines the trust level for an edge device.
@@ -118,8 +118,8 @@ type EdgeAuthRequest struct {
 	AuthMethod      EdgeAuthMethod
 	SharedSecret    string
 	PublicKey       []byte
-	Signature       []byte   // For TOFU: signature of challenge
-	Challenge       []byte   // For TOFU: challenge bytes
+	Signature       []byte // For TOFU: signature of challenge
+	Challenge       []byte // For TOFU: challenge bytes
 	ProtocolVersion string
 }
 

@@ -1045,3 +1045,333 @@ message TimelineSummary {
   int32 edge_events = 5;
   int64 total_duration_ms = 6;
 }
+
+// =============================================================================
+// Task Service - Scheduled/Proactive Messaging
+// =============================================================================
+
+// TaskService manages scheduled tasks for proactive messaging and automation.
+service TaskService {
+  // CreateTask creates a new scheduled task.
+  rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);
+
+  // GetTask retrieves a task by ID.
+  rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
+
+  // ListTasks lists tasks with optional filtering.
+  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+
+  // UpdateTask updates an existing task.
+  rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse);
+
+  // DeleteTask deletes a task.
+  rpc DeleteTask(DeleteTaskRequest) returns (DeleteTaskResponse);
+
+  // PauseTask pauses a task's schedule.
+  rpc PauseTask(PauseTaskRequest) returns (PauseTaskResponse);
+
+  // ResumeTask resumes a paused task.
+  rpc ResumeTask(ResumeTaskRequest) returns (ResumeTaskResponse);
+
+  // TriggerTask manually triggers a task to run immediately.
+  rpc TriggerTask(TriggerTaskRequest) returns (TriggerTaskResponse);
+
+  // ListExecutions lists executions for a task.
+  rpc ListExecutions(ListExecutionsRequest) returns (ListExecutionsResponse);
+}
+
+// MessageService provides proactive message sending capabilities.
+service MessageService {
+  // SendMessage sends a message to a specific channel/peer without requiring an inbound message.
+  rpc SendMessage(ProactiveSendRequest) returns (ProactiveSendResponse);
+
+  // BroadcastMessage sends a message to multiple recipients.
+  rpc BroadcastMessage(BroadcastMessageRequest) returns (BroadcastMessageResponse);
+}
+
+// ScheduledTask represents a task that runs on a schedule.
+message ScheduledTask {
+  // Unique identifier.
+  string id = 1;
+
+  // Human-readable name.
+  string name = 2;
+
+  // Task description.
+  string description = 3;
+
+  // Agent to execute the task.
+  string agent_id = 4;
+
+  // Cron expression (standard 5-field or extended 6-field with seconds).
+  string schedule = 5;
+
+  // Timezone for schedule (e.g., "America/New_York"). Defaults to UTC.
+  string timezone = 6;
+
+  // Prompt to send to the agent when task executes.
+  string prompt = 7;
+
+  // Task configuration.
+  TaskConfig config = 8;
+
+  // Current status.
+  TaskStatus status = 9;
+
+  // Next scheduled run time.
+  google.protobuf.Timestamp next_run_at = 10;
+
+  // Last run time.
+  google.protobuf.Timestamp last_run_at = 11;
+
+  // Last execution ID.
+  string last_execution_id = 12;
+
+  // Creation timestamp.
+  google.protobuf.Timestamp created_at = 13;
+
+  // Last update timestamp.
+  google.protobuf.Timestamp updated_at = 14;
+
+  // Arbitrary metadata.
+  map<string, string> metadata = 15;
+}
+
+// TaskConfig holds task configuration options.
+message TaskConfig {
+  // Timeout in seconds (default: 300).
+  int32 timeout_seconds = 1;
+
+  // Number of retry attempts on failure.
+  int32 max_retries = 2;
+
+  // Delay between retries in seconds.
+  int32 retry_delay_seconds = 3;
+
+  // Allow overlapping executions.
+  bool allow_overlap = 4;
+
+  // Channel type for execution context.
+  string channel = 5;
+
+  // Channel ID for execution context.
+  string channel_id = 6;
+
+  // Fixed session ID (optional, creates new if empty).
+  string session_id = 7;
+
+  // Override system prompt for this task.
+  string system_prompt = 8;
+
+  // Override model for this task.
+  string model = 9;
+
+  // Target peer for proactive messages.
+  string target_peer_id = 10;
+}
+
+enum TaskStatus {
+  TASK_STATUS_UNSPECIFIED = 0;
+  TASK_STATUS_ACTIVE = 1;
+  TASK_STATUS_PAUSED = 2;
+  TASK_STATUS_DISABLED = 3;
+}
+
+// TaskExecution represents a single execution of a task.
+message TaskExecution {
+  string id = 1;
+  string task_id = 2;
+  ExecutionStatus status = 3;
+  google.protobuf.Timestamp scheduled_at = 4;
+  google.protobuf.Timestamp started_at = 5;
+  google.protobuf.Timestamp finished_at = 6;
+  string session_id = 7;
+  string prompt = 8;
+  string response = 9;
+  string error = 10;
+  int32 attempt_number = 11;
+  int64 duration_ms = 12;
+}
+
+enum ExecutionStatus {
+  EXECUTION_STATUS_UNSPECIFIED = 0;
+  EXECUTION_STATUS_PENDING = 1;
+  EXECUTION_STATUS_RUNNING = 2;
+  EXECUTION_STATUS_SUCCEEDED = 3;
+  EXECUTION_STATUS_FAILED = 4;
+  EXECUTION_STATUS_TIMED_OUT = 5;
+  EXECUTION_STATUS_CANCELLED = 6;
+}
+
+// Task Service Request/Response Messages
+message CreateTaskRequest {
+  string name = 1;
+  string description = 2;
+  string agent_id = 3;
+  string schedule = 4;
+  string timezone = 5;
+  string prompt = 6;
+  TaskConfig config = 7;
+  map<string, string> metadata = 8;
+}
+
+message CreateTaskResponse {
+  ScheduledTask task = 1;
+}
+
+message GetTaskRequest {
+  string id = 1;
+}
+
+message GetTaskResponse {
+  ScheduledTask task = 1;
+}
+
+message ListTasksRequest {
+  string agent_id = 1;
+  TaskStatus status = 2;
+  int32 page_size = 3;
+  string page_token = 4;
+}
+
+message ListTasksResponse {
+  repeated ScheduledTask tasks = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+message UpdateTaskRequest {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  string schedule = 4;
+  string timezone = 5;
+  string prompt = 6;
+  TaskConfig config = 7;
+  map<string, string> metadata = 8;
+}
+
+message UpdateTaskResponse {
+  ScheduledTask task = 1;
+}
+
+message DeleteTaskRequest {
+  string id = 1;
+}
+
+message DeleteTaskResponse {
+  bool success = 1;
+}
+
+message PauseTaskRequest {
+  string id = 1;
+}
+
+message PauseTaskResponse {
+  ScheduledTask task = 1;
+}
+
+message ResumeTaskRequest {
+  string id = 1;
+}
+
+message ResumeTaskResponse {
+  ScheduledTask task = 1;
+}
+
+message TriggerTaskRequest {
+  string id = 1;
+}
+
+message TriggerTaskResponse {
+  TaskExecution execution = 1;
+}
+
+message ListExecutionsRequest {
+  string task_id = 1;
+  ExecutionStatus status = 2;
+  int32 page_size = 3;
+  string page_token = 4;
+}
+
+message ListExecutionsResponse {
+  repeated TaskExecution executions = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+// Proactive Message Service Request/Response Messages
+message ProactiveSendRequest {
+  // Channel type to send to.
+  string channel = 1;
+
+  // Channel-specific recipient ID (e.g., chat_id for Telegram).
+  string peer_id = 2;
+
+  // Message content.
+  string content = 3;
+
+  // Optional agent ID for context.
+  string agent_id = 4;
+
+  // Optional session ID for conversation continuity.
+  string session_id = 5;
+
+  // Optional attachments.
+  repeated Attachment attachments = 6;
+
+  // Message metadata.
+  map<string, string> metadata = 7;
+}
+
+message ProactiveSendResponse {
+  // Whether the message was sent successfully.
+  bool success = 1;
+
+  // Message ID assigned by the channel.
+  string message_id = 2;
+
+  // Session ID (created if not provided).
+  string session_id = 3;
+
+  // Error message if failed.
+  string error = 4;
+}
+
+message BroadcastMessageRequest {
+  // Channel type to send to.
+  string channel = 1;
+
+  // List of peer IDs to send to.
+  repeated string peer_ids = 2;
+
+  // Message content.
+  string content = 3;
+
+  // Optional agent ID.
+  string agent_id = 4;
+
+  // Optional attachments.
+  repeated Attachment attachments = 5;
+
+  // Message metadata.
+  map<string, string> metadata = 6;
+}
+
+message BroadcastMessageResponse {
+  // Number of messages sent successfully.
+  int32 success_count = 1;
+
+  // Number of messages that failed.
+  int32 failure_count = 2;
+
+  // Details per recipient.
+  repeated BroadcastResult results = 3;
+}
+
+message BroadcastResult {
+  string peer_id = 1;
+  bool success = 2;
+  string message_id = 3;
+  string error = 4;
+}

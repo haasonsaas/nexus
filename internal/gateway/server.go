@@ -371,6 +371,8 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	proto.RegisterChannelServiceServer(grpcServer, grpcSvc)
 	proto.RegisterHealthServiceServer(grpcServer, grpcSvc)
 	proto.RegisterEventServiceServer(grpcServer, newEventService(server))
+	proto.RegisterTaskServiceServer(grpcServer, newTaskService(server))
+	proto.RegisterMessageServiceServer(grpcServer, newMessageService(server))
 	if edgeService != nil {
 		proto.RegisterEdgeServiceServer(grpcServer, edgeService)
 	}

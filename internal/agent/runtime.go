@@ -619,11 +619,17 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 				return
 			}
 
+			// Pre-generate assistant message ID so tool calls can be correlated
+			assistantMsgID := uuid.NewString()
+
 			// Collect response: stream text, accumulate tool calls
 			var textBuilder strings.Builder
 			var toolCalls []models.ToolCall
 
 			for chunk := range completion {
+				if chunk == nil {
+					continue
+				}
 				if chunk.Error != nil {
 					chunks <- &ResponseChunk{Error: chunk.Error}
 					return
@@ -640,14 +646,14 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 					toolCalls = append(toolCalls, tc)
 					// Persist tool call event immediately when received
 					if r.toolEvents != nil {
-						_ = r.toolEvents.AddToolCall(ctx, session.ID, "", &tc)
+						_ = r.toolEvents.AddToolCall(ctx, session.ID, assistantMsgID, &tc)
 					}
 				}
 			}
 
 			// Build assistant message from this turn
 			assistantMsg := &models.Message{
-				ID:        uuid.NewString(),
+				ID:        assistantMsgID,
 				SessionID: session.ID,
 				Role:      models.RoleAssistant,
 				Content:   textBuilder.String(),

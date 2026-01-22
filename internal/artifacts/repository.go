@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/haasonsaas/nexus/internal/observability"
 	pb "github.com/haasonsaas/nexus/pkg/proto"
 )
 
@@ -51,6 +52,12 @@ func (r *MemoryRepository) StoreArtifact(ctx context.Context, artifact *pb.Artif
 		Size:       artifact.Size,
 		TTLSeconds: artifact.TtlSeconds,
 		CreatedAt:  now,
+	}
+	if sessionID := observability.GetSessionID(ctx); sessionID != "" {
+		meta.SessionID = sessionID
+	}
+	if edgeID := observability.GetEdgeID(ctx); edgeID != "" {
+		meta.EdgeID = edgeID
 	}
 
 	// Calculate expiration

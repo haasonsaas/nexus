@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/haasonsaas/nexus/internal/observability"
 	pb "github.com/haasonsaas/nexus/pkg/proto"
 )
 
@@ -103,6 +104,42 @@ func TestLocalStore_DirectoryStructure(t *testing.T) {
 
 	if _, err := os.Stat(expectedDir); os.IsNotExist(err) {
 		t.Errorf("Expected directory %s does not exist", expectedDir)
+	}
+}
+
+func TestLocalStore_PersistsIndex(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewLocalStore(dir)
+	if err != nil {
+		t.Fatalf("NewLocalStore: %v", err)
+	}
+
+	ctx := context.Background()
+	artifactID := "persisted-1"
+	payload := []byte("persisted data")
+	if _, err := store.Put(ctx, artifactID, bytes.NewReader(payload), PutOptions{
+		MimeType: "text/plain",
+		Metadata: map[string]string{"type": "file"},
+	}); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	store.Close()
+
+	reloaded, err := NewLocalStore(dir)
+	if err != nil {
+		t.Fatalf("NewLocalStore reload: %v", err)
+	}
+	reader, err := reloaded.Get(ctx, artifactID)
+	if err != nil {
+		t.Fatalf("Get after reload: %v", err)
+	}
+	defer reader.Close()
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if !bytes.Equal(data, payload) {
+		t.Errorf("data = %q, want %q", data, payload)
 	}
 }
 
@@ -227,6 +264,45 @@ func TestMemoryRepository_LargeArtifact(t *testing.T) {
 	}
 	if !bytes.Equal(readData, largeData) {
 		t.Error("Retrieved data does not match stored data")
+	}
+}
+
+func TestMemoryRepository_FiltersByContext(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewLocalStore(dir)
+	if err != nil {
+		t.Fatalf("NewLocalStore: %v", err)
+	}
+	defer store.Close()
+
+	repo := NewMemoryRepository(store, nil)
+	ctx := observability.AddSessionID(context.Background(), "session-1")
+	ctx = observability.AddEdgeID(ctx, "edge-1")
+
+	artifact := &pb.Artifact{
+		Type:     "file",
+		MimeType: "text/plain",
+		Filename: "note.txt",
+		Size:     4,
+	}
+	if err := repo.StoreArtifact(ctx, artifact, bytes.NewReader([]byte("test"))); err != nil {
+		t.Fatalf("StoreArtifact: %v", err)
+	}
+
+	results, err := repo.ListArtifacts(context.Background(), Filter{SessionID: "session-1"})
+	if err != nil {
+		t.Fatalf("ListArtifacts: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 artifact, got %d", len(results))
+	}
+
+	edgeResults, err := repo.ListArtifacts(context.Background(), Filter{EdgeID: "edge-1"})
+	if err != nil {
+		t.Fatalf("ListArtifacts (edge): %v", err)
+	}
+	if len(edgeResults) != 1 {
+		t.Fatalf("expected 1 edge artifact, got %d", len(edgeResults))
 	}
 }
 

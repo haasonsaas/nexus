@@ -176,7 +176,7 @@ func (m *MultiRateLimiter) Add(name string, rate float64, capacity int) {
 func (m *MultiRateLimiter) Wait(ctx context.Context, name string) error {
 	limiter := m.get(name)
 	if limiter == nil {
-		return fmt.Errorf("rate limiter %q not found", name)
+		return ErrConfig(fmt.Sprintf("rate limiter %q not found", name), nil)
 	}
 
 	return limiter.Wait(ctx)

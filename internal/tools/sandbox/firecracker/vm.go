@@ -1,3 +1,5 @@
+//go:build linux
+
 // Package firecracker provides a Firecracker microVM-based sandbox backend for secure code execution.
 package firecracker
 

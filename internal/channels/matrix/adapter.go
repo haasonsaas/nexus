@@ -226,6 +226,28 @@ func (a *Adapter) Healthy(ctx context.Context) bool {
 	return err == nil
 }
 
+// HealthCheck returns the adapter's health status.
+func (a *Adapter) HealthCheck(ctx context.Context) channels.HealthStatus {
+	start := time.Now()
+
+	_, err := a.client.Whoami(ctx)
+	if err != nil {
+		return channels.HealthStatus{
+			Healthy:   false,
+			Message:   fmt.Sprintf("whoami failed: %v", err),
+			Latency:   time.Since(start),
+			LastCheck: time.Now(),
+		}
+	}
+
+	return channels.HealthStatus{
+		Healthy:   true,
+		Message:   "connected",
+		Latency:   time.Since(start),
+		LastCheck: time.Now(),
+	}
+}
+
 // Status returns adapter status information.
 func (a *Adapter) Status() map[string]any {
 	a.mu.RLock()

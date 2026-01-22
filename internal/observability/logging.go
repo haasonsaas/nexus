@@ -90,6 +90,67 @@ var DefaultRedactPatterns = []string{
 
 	// Generic hex secrets (32+ chars)
 	`(?i)(secret|key|token)[\s:=]+["\']?([a-fA-F0-9]{32,})["\']?`,
+
+	// GitHub tokens (classic and fine-grained PAT)
+	`ghp_[A-Za-z0-9]{20,}`,
+	`github_pat_[A-Za-z0-9_]{20,}`,
+	`gho_[A-Za-z0-9]{36,}`,
+	`ghu_[A-Za-z0-9]{36,}`,
+	`ghs_[A-Za-z0-9]{36,}`,
+	`ghr_[A-Za-z0-9]{36,}`,
+
+	// Slack tokens
+	`xox[baprs]-[A-Za-z0-9-]{10,}`,
+	`xapp-[A-Za-z0-9-]{10,}`,
+
+	// Google API keys
+	`AIza[0-9A-Za-z\-_]{35}`,
+
+	// Telegram bot tokens
+	`\d{8,}:[A-Za-z0-9_-]{20,}`,
+
+	// Groq API keys
+	`gsk_[A-Za-z0-9_-]{10,}`,
+
+	// Perplexity API keys
+	`pplx-[A-Za-z0-9_-]{10,}`,
+
+	// NPM tokens
+	`npm_[A-Za-z0-9]{10,}`,
+
+	// Discord tokens
+	`[MN][A-Za-z\d]{23,}\.[\w-]{6}\.[\w-]{27}`,
+
+	// AWS keys
+	`AKIA[0-9A-Z]{16}`,
+	`(?i)aws.{0,20}secret.{0,20}['\"][0-9a-zA-Z/+]{40}['\"]`,
+
+	// Stripe API keys
+	`sk_live_[A-Za-z0-9]{24,}`,
+	`sk_test_[A-Za-z0-9]{24,}`,
+	`pk_live_[A-Za-z0-9]{24,}`,
+	`pk_test_[A-Za-z0-9]{24,}`,
+
+	// SendGrid API keys
+	`SG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}`,
+
+	// Twilio tokens
+	`SK[A-Za-z0-9]{32}`,
+
+	// Mailchimp API keys
+	`[a-f0-9]{32}-us[0-9]{1,2}`,
+
+	// JSON/YAML field patterns
+	`(?i)"(?:apiKey|token|secret|password|passwd|accessToken|refreshToken)"\s*:\s*"([^"]+)"`,
+
+	// CLI flag patterns
+	`(?i)--(?:api[-_]?key|token|secret|password|passwd)\s+(["']?)([^\s"']+)\1`,
+
+	// Authorization headers
+	`(?i)Authorization\s*[:=]\s*Bearer\s+([A-Za-z0-9._\-+=]+)`,
+
+	// ENV-style assignments
+	`(?i)[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)\s*[=:]\s*(["']?)([^\s"'\\]+)\1`,
 }
 
 // NewLogger creates a new structured logger with the given configuration.

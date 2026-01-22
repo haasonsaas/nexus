@@ -99,7 +99,6 @@ func TestFailoverOrchestrator_FailoverOnError(t *testing.T) {
 }
 
 func TestFailoverOrchestrator_RetryOnTransientError(t *testing.T) {
-	attempts := atomic.Int32{}
 	primary := &failingProvider{
 		name: "primary",
 		err:  errors.New("rate limit exceeded"),
@@ -120,8 +119,6 @@ func TestFailoverOrchestrator_RetryOnTransientError(t *testing.T) {
 	if primary.callCount.Load() != 3 { // 1 initial + 2 retries
 		t.Errorf("call count = %d, want 3", primary.callCount.Load())
 	}
-
-	_ = attempts // unused, but keeping for test structure
 }
 
 func TestFailoverOrchestrator_NoRetryOnNonRetriable(t *testing.T) {

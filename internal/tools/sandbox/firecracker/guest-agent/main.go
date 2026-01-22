@@ -1,3 +1,5 @@
+//go:build linux
+
 // Package main implements the guest agent that runs inside Firecracker microVMs.
 // It listens for execution requests via vsock and executes code in isolation.
 package main

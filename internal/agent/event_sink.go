@@ -130,6 +130,7 @@ type BackpressureSink struct {
 	lowPri  chan models.AgentEvent // Dropped when full
 	merged  chan models.AgentEvent // Output channel that prioritizes highPri
 	dropped uint64                 // Atomic counter for dropped events
+	closed  uint32                 // Atomic flag: 1 if closed, 0 otherwise
 }
 
 // NewBackpressureSink creates a backpressure-aware sink with merged output channel.
@@ -197,7 +198,12 @@ func (s *BackpressureSink) mergeLoop() {
 
 // Emit sends an event through the appropriate lane.
 // Non-droppable events block if buffer is full; droppable events are dropped.
+// Returns immediately if the sink is closed.
 func (s *BackpressureSink) Emit(ctx context.Context, e models.AgentEvent) {
+	// Check if closed before attempting to send
+	if atomic.LoadUint32(&s.closed) == 1 {
+		return
+	}
 	if isDroppableEvent(e.Type) {
 		// Low-priority: drop if buffer is full
 		select {
@@ -232,6 +238,10 @@ func (s *BackpressureSink) DroppedCount() uint64 {
 // Close signals the sink to stop and closes the output channel.
 // After Close, no more events should be emitted.
 func (s *BackpressureSink) Close() {
+	// Mark as closed first to prevent new Emit calls
+	if !atomic.CompareAndSwapUint32(&s.closed, 0, 1) {
+		return // Already closed
+	}
 	// Close highPri first - this triggers mergeLoop to drain lowPri and exit
 	close(s.highPri)
 	// Close lowPri after so mergeLoop can drain it

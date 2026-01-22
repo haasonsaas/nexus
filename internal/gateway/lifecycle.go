@@ -83,6 +83,11 @@ func (s *Server) Stop(ctx context.Context) error {
 		s.cancel()
 	}
 
+	// Cancel background discovery goroutines
+	if s.startupCancel != nil {
+		s.startupCancel()
+	}
+
 	// Stop accepting new connections
 	s.grpc.GracefulStop()
 

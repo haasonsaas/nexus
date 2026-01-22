@@ -593,10 +593,20 @@ func (a *Adapter) reconnect() {
 	a.mu.Lock()
 	a.reconnectCount++
 	attempt := a.reconnectCount
+	maxAttempts := a.config.MaxReconnectAttempts
 	a.mu.Unlock()
 
+	// Stop trying if we've exceeded max attempts
+	if maxAttempts > 0 && attempt > maxAttempts {
+		a.logger.Error("max reconnection attempts reached", "attempts", attempt-1, "max", maxAttempts)
+		a.mu.Lock()
+		a.status.Error = fmt.Sprintf("max reconnection attempts (%d) reached", maxAttempts)
+		a.mu.Unlock()
+		return
+	}
+
 	a.setDegraded(true)
-	a.logger.Info("attempting reconnection", "attempt", attempt)
+	a.logger.Info("attempting reconnection", "attempt", attempt, "max", maxAttempts)
 
 	backoff := calculateBackoff(attempt, a.config.ReconnectBackoff)
 	time.Sleep(backoff)

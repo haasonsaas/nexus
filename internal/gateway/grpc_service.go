@@ -572,6 +572,9 @@ func (g *grpcService) Check(ctx context.Context, req *proto.HealthCheckRequest) 
 }
 
 func (g *grpcService) Watch(req *proto.HealthCheckRequest, stream proto.HealthService_WatchServer) error {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
 	for {
 		resp, err := g.Check(stream.Context(), req)
 		if err != nil {
@@ -583,7 +586,7 @@ func (g *grpcService) Watch(req *proto.HealthCheckRequest, stream proto.HealthSe
 		select {
 		case <-stream.Context().Done():
 			return nil
-		case <-time.After(5 * time.Second):
+		case <-ticker.C:
 		}
 	}
 }

@@ -442,10 +442,17 @@ func (s *MemoryBranchStore) GetBranchHistory(ctx context.Context, branchID strin
 
 	var result []*models.Message
 
-	// Get inherited messages from ancestors
+	// Get inherited messages from ancestors with cycle detection
+	visited := make(map[string]bool)
 	currentBranch := branch
 	for currentBranch.ParentBranchID != nil {
 		parentID := *currentBranch.ParentBranchID
+		if visited[parentID] {
+			// Circular reference detected, stop traversal
+			break
+		}
+		visited[currentBranch.ID] = true
+
 		parentMsgs := s.messages[parentID]
 		for _, msg := range parentMsgs {
 			if msg.SequenceNum <= currentBranch.BranchPoint {

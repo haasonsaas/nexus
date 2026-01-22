@@ -213,6 +213,9 @@ func (s *Server) cancelActiveRun(sessionID string) bool {
 		return false
 	}
 	run, ok := s.activeRuns[sessionID]
+	if ok {
+		delete(s.activeRuns, sessionID)
+	}
 	s.activeRunsMu.Unlock()
 	if !ok || run.cancel == nil {
 		return false

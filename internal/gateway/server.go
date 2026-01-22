@@ -57,6 +57,9 @@ type Server struct {
 	cancel    context.CancelFunc
 	startTime time.Time
 
+	// startupCancel cancels background discovery goroutines launched during initialization
+	startupCancel context.CancelFunc
+
 	handleMessageHook func(context.Context, *models.Message)
 
 	runtimeMu   sync.Mutex
@@ -108,6 +111,9 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		logger = slog.Default()
 	}
 
+	// Create startup context for background discovery goroutines
+	startupCtx, startupCancel := context.WithCancel(context.Background())
+
 	// Create gRPC server with interceptors
 	apiKeys := make([]auth.APIKeyConfig, 0, len(cfg.Auth.APIKeys))
 	for _, entry := range cfg.Auth.APIKeys {
@@ -149,12 +155,11 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	}
 	// Discover skills (non-blocking, errors logged)
 	go func() {
-		ctx := context.Background()
-		if err := skillsMgr.Discover(ctx); err != nil {
+		if err := skillsMgr.Discover(startupCtx); err != nil {
 			logger.Error("skill discovery failed", "error", err)
 			return
 		}
-		if err := skillsMgr.StartWatching(ctx); err != nil {
+		if err := skillsMgr.StartWatching(startupCtx); err != nil {
 			logger.Error("skill watcher failed", "error", err)
 		}
 	}()
@@ -250,7 +255,6 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 
 	// Discover and register hooks (non-blocking)
 	go func() {
-		discoverCtx := context.Background()
 		sources := hooks.BuildDefaultSources(
 			cfg.Workspace.Path,
 			hooks.DefaultLocalPath(),
@@ -260,7 +264,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		sources = append([]hooks.DiscoverySource{
 			hooks.NewEmbeddedSource(bundled.BundledFS(), hooks.SourceBundled, hooks.PriorityBundled),
 		}, sources...)
-		discoveredHooks, err := hooks.DiscoverAll(discoverCtx, sources)
+		discoveredHooks, err := hooks.DiscoverAll(startupCtx, sources)
 		if err != nil {
 			logger.Error("hook discovery failed", "error", err)
 			return
@@ -287,6 +291,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		grpc:               grpcServer,
 		channels:           channels.NewRegistry(),
 		logger:             logger,
+		startupCancel:      startupCancel,
 		channelPlugins:     newChannelPluginRegistry(),
 		runtimePlugins:     plugins.DefaultRuntimeRegistry(),
 		skillsManager:      skillsMgr,

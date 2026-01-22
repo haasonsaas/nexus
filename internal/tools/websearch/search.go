@@ -23,6 +23,12 @@ const (
 
 	// maxCacheSize limits the number of cached search responses to prevent unbounded memory growth
 	maxCacheSize = 1000
+
+	// maxResponseSize limits HTTP response body reads to prevent memory exhaustion (5MB)
+	maxResponseSize = 5 * 1024 * 1024
+
+	// maxExtractConcurrency limits parallel content extraction to prevent resource exhaustion
+	maxExtractConcurrency = 5
 )
 
 // SearchType represents the type of search to perform (web, image, or news).
@@ -354,13 +360,27 @@ func (t *WebSearchTool) putInCache(key string, response *SearchResponse) {
 	}
 }
 
-// extractContentForResults extracts full content for search results in parallel.
+// extractContentForResults extracts full content for search results with bounded concurrency.
 func (t *WebSearchTool) extractContentForResults(ctx context.Context, response *SearchResponse) {
 	var wg sync.WaitGroup
+	sem := make(chan struct{}, maxExtractConcurrency)
 	for i := range response.Results {
+		// Check context before spawning goroutine
+		select {
+		case <-ctx.Done():
+			break
+		default:
+		}
 		wg.Add(1)
 		go func(result *SearchResult) {
 			defer wg.Done()
+			// Acquire semaphore or exit on context cancellation
+			select {
+			case sem <- struct{}{}:
+				defer func() { <-sem }()
+			case <-ctx.Done():
+				return
+			}
 			content, err := t.extractor.Extract(ctx, result.URL)
 			if err == nil && content != "" {
 				result.Content = content
@@ -416,8 +436,8 @@ func (t *WebSearchTool) searchSearXNG(ctx context.Context, params *SearchParams)
 		return nil, fmt.Errorf("SearXNG returned status %d", resp.StatusCode)
 	}
 
-	// Parse response
-	body, err := io.ReadAll(resp.Body)
+	// Parse response with size limit to prevent memory exhaustion
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
@@ -481,7 +501,7 @@ func (t *WebSearchTool) searchDuckDuckGo(ctx context.Context, params *SearchPara
 		return nil, fmt.Errorf("DuckDuckGo returned status %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
@@ -580,14 +600,14 @@ func (t *WebSearchTool) searchBrave(ctx context.Context, params *SearchParams) (
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, readErr := io.ReadAll(resp.Body)
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize))
 		if readErr != nil {
 			return nil, fmt.Errorf("Brave API returned status %d and failed to read body: %w", resp.StatusCode, readErr)
 		}
 		return nil, fmt.Errorf("Brave API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}

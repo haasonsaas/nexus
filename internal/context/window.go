@@ -4,8 +4,12 @@ package context
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"unicode/utf8"
 )
+
+// modelContextMu protects access to modelContextWindows
+var modelContextMu sync.RWMutex
 
 // Default token limits
 const (
@@ -22,8 +26,9 @@ const (
 	TokensPerChar = 0.25
 )
 
-// ModelContextWindows maps model IDs to their context window sizes.
-var ModelContextWindows = map[string]int{
+// modelContextWindows maps model IDs to their context window sizes.
+// Access must be protected by modelContextMu.
+var modelContextWindows = map[string]int{
 	// Anthropic models
 	"claude-3-opus":     200000,
 	"claude-3-sonnet":   200000,
@@ -118,8 +123,11 @@ func NewWindow(totalTokens int, source string) *Window {
 
 // NewWindowForModel creates a context window for a specific model.
 func NewWindowForModel(modelID string) *Window {
+	modelContextMu.RLock()
+	defer modelContextMu.RUnlock()
+
 	// Try exact match first
-	if tokens, ok := ModelContextWindows[modelID]; ok {
+	if tokens, ok := modelContextWindows[modelID]; ok {
 		return NewWindow(tokens, "model")
 	}
 
@@ -127,7 +135,7 @@ func NewWindowForModel(modelID string) *Window {
 	// (e.g., "gpt-4-turbo-preview" should match "gpt-4-turbo" not "gpt-4")
 	bestMatch := ""
 	bestTokens := 0
-	for prefix, tokens := range ModelContextWindows {
+	for prefix, tokens := range modelContextWindows {
 		if strings.HasPrefix(modelID, prefix) && len(prefix) > len(bestMatch) {
 			bestMatch = prefix
 			bestTokens = tokens
@@ -233,14 +241,17 @@ func EstimateTokensForMessages(contents []string) int {
 
 // GetModelContextWindow returns the context window for a model ID.
 func GetModelContextWindow(modelID string) (int, bool) {
-	if tokens, ok := ModelContextWindows[modelID]; ok {
+	modelContextMu.RLock()
+	defer modelContextMu.RUnlock()
+
+	if tokens, ok := modelContextWindows[modelID]; ok {
 		return tokens, true
 	}
 
 	// Try prefix match - find longest matching prefix
 	bestMatch := ""
 	bestTokens := 0
-	for prefix, tokens := range ModelContextWindows {
+	for prefix, tokens := range modelContextWindows {
 		if strings.HasPrefix(modelID, prefix) && len(prefix) > len(bestMatch) {
 			bestMatch = prefix
 			bestTokens = tokens
@@ -255,6 +266,9 @@ func GetModelContextWindow(modelID string) (int, bool) {
 }
 
 // RegisterModelContextWindow registers a context window size for a model.
+// This is safe for concurrent use.
 func RegisterModelContextWindow(modelID string, tokens int) {
-	ModelContextWindows[modelID] = tokens
+	modelContextMu.Lock()
+	defer modelContextMu.Unlock()
+	modelContextWindows[modelID] = tokens
 }

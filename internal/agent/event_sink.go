@@ -117,11 +117,20 @@ func (s *ChunkAdapterSink) Emit(ctx context.Context, e models.AgentEvent) {
 		return
 	}
 
+	// Try to send - prioritize this over context cancellation
+	// so that error events are delivered even when context is cancelled
+	select {
+	case s.ch <- chunk:
+		return
+	default:
+	}
+
+	// Channel was full, check context before retrying
 	select {
 	case s.ch <- chunk:
 	case <-ctx.Done():
 	default:
-		// Channel full - drop chunk rather than block
+		// Channel still full - drop chunk rather than block
 	}
 }
 
@@ -147,9 +156,14 @@ func eventToChunk(e models.AgentEvent) *ResponseChunk {
 
 	case models.AgentEventRunError:
 		if e.Error != nil {
-			return &ResponseChunk{
-				Error: &AgentError{Message: e.Error.Message},
+			// Prefer original error if available (preserves error type for errors.Is)
+			var err error
+			if e.Error.Err != nil {
+				err = e.Error.Err
+			} else {
+				err = &AgentError{Message: e.Error.Message}
 			}
+			return &ResponseChunk{Error: err}
 		}
 
 	case models.AgentEventIterStarted, models.AgentEventIterFinished,

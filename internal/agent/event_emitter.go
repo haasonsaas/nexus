@@ -97,6 +97,7 @@ func (e *EventEmitter) RunError(ctx context.Context, err error, retriable bool) 
 	event.Error = &models.ErrorEventPayload{
 		Message:   err.Error(),
 		Retriable: retriable,
+		Err:       err, // Preserve original error for errors.Is/errors.As
 	}
 	e.emit(ctx, event)
 	return event

@@ -124,6 +124,10 @@ type ErrorEventPayload struct {
 
 	// Retriable indicates if the operation can be retried.
 	Retriable bool `json:"retriable,omitempty"`
+
+	// Err is the original error (runtime only, not serialized).
+	// Used to preserve error types for errors.Is/errors.As.
+	Err error `json:"-"`
 }
 
 // StatsEventPayload carries run statistics as an event.

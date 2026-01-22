@@ -670,18 +670,18 @@ func TestProcess_LifecycleEvents(t *testing.T) {
 	}
 
 	// Should have lifecycle events
+	// Note: After refactor to unified event model, some legacy events are no longer emitted:
+	// - thinking_start/end: removed (artificial markers)
+	// - tool_completed: now emitted as ToolResult instead of RuntimeEvent
 	eventTypes := make(map[models.RuntimeEventType]int)
 	for _, e := range events {
 		eventTypes[e.Type]++
 	}
 
-	// Check for expected event types
+	// Check for expected event types (only those still supported)
 	expectedTypes := []models.RuntimeEventType{
 		models.EventIterationStart,
-		models.EventThinkingStart,
-		models.EventThinkingEnd,
 		models.EventToolStarted,
-		models.EventToolCompleted,
 		models.EventIterationEnd,
 	}
 
@@ -920,5 +920,134 @@ func TestProcessStream_RunStats(t *testing.T) {
 	expectedRunID := session.ID + "-" + msg.ID
 	if stats.RunID != expectedRunID {
 		t.Errorf("RunID = %q, want %q", stats.RunID, expectedRunID)
+	}
+}
+
+// =============================================================================
+// Process/ProcessStream Equivalence Test
+// =============================================================================
+
+// TestProcessAndProcessStream_Equivalence verifies that Process() and ProcessStream()
+// produce equivalent logical output when given the same inputs.
+func TestProcessAndProcessStream_Equivalence(t *testing.T) {
+	// Create two identical providers (they'll be consumed separately)
+	createProvider := func() *multiTurnProvider {
+		return &multiTurnProvider{
+			responses: []multiTurnResponse{
+				{
+					toolCalls: []models.ToolCall{
+						{ID: "tc-1", Name: "test_tool", Input: json.RawMessage(`{"key":"value"}`)},
+					},
+				},
+				{text: "Final response after tool execution."},
+			},
+		}
+	}
+
+	// Run Process()
+	provider1 := createProvider()
+	store1 := newMemoryStore()
+	runtime1 := NewRuntime(provider1, store1)
+	runtime1.RegisterTool(&integrationTool{name: "test_tool"})
+
+	session1 := &models.Session{ID: "test-session-1", Channel: models.ChannelTelegram}
+	msg1 := &models.Message{ID: "msg-1", Role: models.RoleUser, Content: "Test equivalence"}
+
+	chunks, err := runtime1.Process(context.Background(), session1, msg1)
+	if err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+
+	var processText string
+	var processToolResults int
+	var processIterEvents int
+	var processToolStartEvents int
+	for chunk := range chunks {
+		if chunk.Error != nil {
+			t.Fatalf("Process() chunk error: %v", chunk.Error)
+		}
+		processText += chunk.Text
+		if chunk.ToolResult != nil {
+			processToolResults++
+		}
+		if chunk.Event != nil {
+			switch chunk.Event.Type {
+			case models.EventIterationStart, models.EventIterationEnd:
+				processIterEvents++
+			case models.EventToolStarted:
+				processToolStartEvents++
+			}
+		}
+	}
+
+	// Run ProcessStream()
+	provider2 := createProvider()
+	store2 := newMemoryStore()
+	runtime2 := NewRuntime(provider2, store2)
+	runtime2.RegisterTool(&integrationTool{name: "test_tool"})
+
+	session2 := &models.Session{ID: "test-session-2", Channel: models.ChannelTelegram}
+	msg2 := &models.Message{ID: "msg-2", Role: models.RoleUser, Content: "Test equivalence"}
+
+	events, err := runtime2.ProcessStream(context.Background(), session2, msg2)
+	if err != nil {
+		t.Fatalf("ProcessStream() error = %v", err)
+	}
+
+	var streamText string
+	var streamToolFinished int
+	var streamIterEvents int
+	var streamToolStartEvents int
+	for event := range events {
+		if event.Type == models.AgentEventRunError {
+			t.Fatalf("ProcessStream() error event: %v", event.Error)
+		}
+		switch event.Type {
+		case models.AgentEventModelDelta:
+			if event.Stream != nil {
+				streamText += event.Stream.Delta
+			}
+		case models.AgentEventToolFinished:
+			streamToolFinished++
+		case models.AgentEventIterStarted, models.AgentEventIterFinished:
+			streamIterEvents++
+		case models.AgentEventToolStarted:
+			streamToolStartEvents++
+		}
+	}
+
+	// Verify equivalence
+	if processText != streamText {
+		t.Errorf("Text mismatch:\n  Process:      %q\n  ProcessStream: %q", processText, streamText)
+	}
+
+	// Both should have tool results/finished events
+	if processToolResults != streamToolFinished {
+		t.Errorf("Tool result count mismatch: Process=%d, ProcessStream=%d", processToolResults, streamToolFinished)
+	}
+
+	// Both should have iteration events (start + end for each iteration)
+	if processIterEvents != streamIterEvents {
+		t.Errorf("Iteration event count mismatch: Process=%d, ProcessStream=%d", processIterEvents, streamIterEvents)
+	}
+
+	// Both should have tool started events
+	if processToolStartEvents != streamToolStartEvents {
+		t.Errorf("Tool started event count mismatch: Process=%d, ProcessStream=%d", processToolStartEvents, streamToolStartEvents)
+	}
+
+	// Both should have persisted the same messages (minus session-specific IDs)
+	msgs1 := store1.getMessages("test-session-1")
+	msgs2 := store2.getMessages("test-session-2")
+
+	if len(msgs1) != len(msgs2) {
+		t.Errorf("Persisted message count mismatch: Process=%d, ProcessStream=%d", len(msgs1), len(msgs2))
+	}
+
+	// Verify message structure is the same
+	for i := 0; i < len(msgs1) && i < len(msgs2); i++ {
+		if msgs1[i].Role != msgs2[i].Role {
+			t.Errorf("Message %d role mismatch: Process=%s, ProcessStream=%s", i, msgs1[i].Role, msgs2[i].Role)
+		}
 	}
 }

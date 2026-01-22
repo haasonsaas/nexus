@@ -145,6 +145,44 @@ type ChannelsConfig struct {
 	Telegram TelegramConfig `yaml:"telegram"`
 	Discord  DiscordConfig  `yaml:"discord"`
 	Slack    SlackConfig    `yaml:"slack"`
+	WhatsApp WhatsAppConfig `yaml:"whatsapp"`
+	Signal   SignalConfig   `yaml:"signal"`
+	IMessage IMessageConfig `yaml:"imessage"`
+}
+
+type WhatsAppConfig struct {
+	Enabled      bool   `yaml:"enabled"`
+	SessionPath  string `yaml:"session_path"`
+	MediaPath    string `yaml:"media_path"`
+	SyncContacts bool   `yaml:"sync_contacts"`
+
+	Presence WhatsAppPresenceConfig `yaml:"presence"`
+}
+
+type WhatsAppPresenceConfig struct {
+	SendReadReceipts bool `yaml:"send_read_receipts"`
+	SendTyping       bool `yaml:"send_typing"`
+	BroadcastOnline  bool `yaml:"broadcast_online"`
+}
+
+type SignalConfig struct {
+	Enabled       bool   `yaml:"enabled"`
+	Account       string `yaml:"account"`
+	SignalCLIPath string `yaml:"signal_cli_path"`
+	ConfigDir     string `yaml:"config_dir"`
+
+	Presence SignalPresenceConfig `yaml:"presence"`
+}
+
+type SignalPresenceConfig struct {
+	SendReadReceipts bool `yaml:"send_read_receipts"`
+	SendTyping       bool `yaml:"send_typing"`
+}
+
+type IMessageConfig struct {
+	Enabled      bool   `yaml:"enabled"`
+	DatabasePath string `yaml:"database_path"`
+	PollInterval string `yaml:"poll_interval"`
 }
 
 type TelegramConfig struct {

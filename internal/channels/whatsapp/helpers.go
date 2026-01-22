@@ -1,0 +1,186 @@
+package whatsapp
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"net/http"
+	"time"
+
+	"github.com/haasonsaas/nexus/internal/channels/personal"
+
+	"go.mau.fi/whatsmeow/types"
+)
+
+// contactManager implements personal.ContactManager for WhatsApp.
+type contactManager struct {
+	adapter *Adapter
+}
+
+func (c *contactManager) Resolve(ctx context.Context, identifier string) (*personal.Contact, error) {
+	// First check cache
+	if contact, ok := c.adapter.GetContact(identifier); ok {
+		return contact, nil
+	}
+
+	jid, err := types.ParseJID(identifier)
+	if err != nil {
+		// Try as phone number
+		jid = types.NewJID(identifier, types.DefaultUserServer)
+	}
+
+	contact, err := c.adapter.client.Store.Contacts.GetContact(ctx, jid)
+	if err != nil {
+		return nil, fmt.Errorf("contact not found: %w", err)
+	}
+
+	result := &personal.Contact{
+		ID:    jid.String(),
+		Name:  contact.FullName,
+		Phone: jid.User,
+	}
+
+	if contact.PushName != "" && result.Name == "" {
+		result.Name = contact.PushName
+	}
+
+	c.adapter.SetContact(result)
+	return result, nil
+}
+
+func (c *contactManager) Search(ctx context.Context, query string) ([]*personal.Contact, error) {
+	// whatsmeow doesn't have a contact search API
+	// We could search our local cache
+	return nil, nil
+}
+
+func (c *contactManager) Sync(ctx context.Context) error {
+	// Sync contacts from WhatsApp
+	contacts, err := c.adapter.client.Store.Contacts.GetAllContacts(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get contacts: %w", err)
+	}
+
+	for jid, contact := range contacts {
+		c.adapter.SetContact(&personal.Contact{
+			ID:    jid.String(),
+			Name:  contact.FullName,
+			Phone: jid.User,
+		})
+	}
+
+	return nil
+}
+
+func (c *contactManager) GetByID(ctx context.Context, id string) (*personal.Contact, error) {
+	return c.Resolve(ctx, id)
+}
+
+// mediaHandler implements personal.MediaHandler for WhatsApp.
+type mediaHandler struct {
+	adapter *Adapter
+}
+
+func (m *mediaHandler) Download(ctx context.Context, mediaID string) ([]byte, string, error) {
+	// WhatsApp media download requires the full media message
+	// This is a simplified stub - real implementation would need message history
+	return nil, "", fmt.Errorf("media download not implemented")
+}
+
+func (m *mediaHandler) Upload(ctx context.Context, data []byte, mimeType string, filename string) (string, error) {
+	// WhatsApp media upload is done inline with sending
+	// This is a simplified stub
+	return "", fmt.Errorf("standalone media upload not supported")
+}
+
+func (m *mediaHandler) GetURL(ctx context.Context, mediaID string) (string, error) {
+	return "", fmt.Errorf("media URL not available")
+}
+
+// presenceManager implements personal.PresenceManager for WhatsApp.
+type presenceManager struct {
+	adapter *Adapter
+}
+
+func (p *presenceManager) SetTyping(ctx context.Context, peerID string, typing bool) error {
+	if !p.adapter.config.Personal.Presence.SendTyping {
+		return nil
+	}
+
+	jid, err := types.ParseJID(peerID)
+	if err != nil {
+		return fmt.Errorf("invalid peer ID: %w", err)
+	}
+
+	var presence types.ChatPresence
+	if typing {
+		presence = types.ChatPresenceComposing
+	} else {
+		presence = types.ChatPresencePaused
+	}
+
+	return p.adapter.client.SendChatPresence(ctx, jid, presence, types.ChatPresenceMediaText)
+}
+
+func (p *presenceManager) SetOnline(ctx context.Context, online bool) error {
+	if !p.adapter.config.Personal.Presence.BroadcastOnline {
+		return nil
+	}
+
+	var presence types.Presence
+	if online {
+		presence = types.PresenceAvailable
+	} else {
+		presence = types.PresenceUnavailable
+	}
+
+	return p.adapter.client.SendPresence(ctx, presence)
+}
+
+func (p *presenceManager) Subscribe(ctx context.Context, peerID string) (<-chan personal.PresenceEvent, error) {
+	jid, err := types.ParseJID(peerID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid peer ID: %w", err)
+	}
+
+	if err := p.adapter.client.SubscribePresence(ctx, jid); err != nil {
+		return nil, fmt.Errorf("failed to subscribe: %w", err)
+	}
+
+	// Note: Events will come through the main event handler
+	// This is a simplified implementation
+	ch := make(chan personal.PresenceEvent, 10)
+	return ch, nil
+}
+
+func (p *presenceManager) MarkRead(ctx context.Context, peerID string, messageID string) error {
+	if !p.adapter.config.Personal.Presence.SendReadReceipts {
+		return nil
+	}
+
+	jid, err := types.ParseJID(peerID)
+	if err != nil {
+		return fmt.Errorf("invalid peer ID: %w", err)
+	}
+
+	return p.adapter.client.MarkRead(ctx, []types.MessageID{types.MessageID(messageID)}, time.Now(), jid, jid)
+}
+
+// downloadURL downloads content from a URL.
+func downloadURL(url string) ([]byte, error) {
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	return io.ReadAll(resp.Body)
+}

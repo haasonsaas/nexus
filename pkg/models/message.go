@@ -13,6 +13,9 @@ const (
 	ChannelDiscord  ChannelType = "discord"
 	ChannelSlack    ChannelType = "slack"
 	ChannelAPI      ChannelType = "api"
+	ChannelWhatsApp ChannelType = "whatsapp"
+	ChannelSignal   ChannelType = "signal"
+	ChannelIMessage ChannelType = "imessage"
 )
 
 // Direction indicates if a message is inbound or outbound.

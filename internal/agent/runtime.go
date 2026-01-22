@@ -615,7 +615,6 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 			// SummaryProvider backed by the current runtime/provider
 			summaryProvider := &llmSummaryProvider{
 				runtime: r,
-				session: session,
 			}
 			summarizer := agentctx.NewSummarizer(summaryProvider, cfg)
 
@@ -867,14 +866,16 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 				}
 			}
 
+			// Ensure all ToolCallIDs are set before streaming and persistence
+			for i := range results {
+				if results[i].ToolCallID == "" && i < len(toolCalls) {
+					results[i].ToolCallID = toolCalls[i].ID
+				}
+			}
+
 			// Stream tool results to caller in original order
 			for i := range results {
-				res := results[i]
-				// Guard: ensure ToolCallID is set even if something went wrong
-				if res.ToolCallID == "" && i < len(toolCalls) {
-					res.ToolCallID = toolCalls[i].ID
-				}
-				resCopy := res
+				resCopy := results[i]
 				chunks <- &ResponseChunk{ToolResult: &resCopy}
 			}
 
@@ -909,7 +910,6 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 // llmSummaryProvider implements agentctx.SummaryProvider using the runtime's LLM provider.
 type llmSummaryProvider struct {
 	runtime *Runtime
-	session *models.Session
 }
 
 func (p *llmSummaryProvider) Summarize(ctx context.Context, messages []*models.Message, maxLength int) (string, error) {
@@ -936,6 +936,9 @@ func (p *llmSummaryProvider) Summarize(ctx context.Context, messages []*models.M
 	for chunk := range ch {
 		if chunk == nil {
 			continue
+		}
+		if chunk.ToolCall != nil {
+			return "", fmt.Errorf("unexpected tool call during summarization: %s", chunk.ToolCall.Name)
 		}
 		if chunk.Error != nil {
 			return "", chunk.Error

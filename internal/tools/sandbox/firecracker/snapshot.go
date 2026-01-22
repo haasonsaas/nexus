@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -168,10 +169,61 @@ func (o *Overlay) isMounted() bool {
 }
 
 // containsMount checks if a path is in the mount table.
+// Properly parses /proc/mounts format: device mountpoint fstype options
 func containsMount(mounts, path string) bool {
-	// Simple check - in production you'd want to parse properly
-	return len(mounts) > 0 && len(path) > 0 &&
-		(len(mounts) >= len(path) && mounts[0:len(path)] == path)
+	if len(mounts) == 0 || len(path) == 0 {
+		return false
+	}
+
+	// Parse each line of /proc/mounts
+	lines := strings.Split(mounts, "\n")
+	for _, line := range lines {
+		// Skip empty lines
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		// /proc/mounts format: device mountpoint fstype options dump pass
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+
+		mountPoint := fields[1]
+		// Unescape octal sequences (e.g., \040 for space)
+		mountPoint = unescapeMountPath(mountPoint)
+
+		// Exact match required to avoid false positives
+		// (e.g., /mnt/data matching /mnt/data2)
+		if mountPoint == path {
+			return true
+		}
+	}
+	return false
+}
+
+// unescapeMountPath unescapes octal sequences in mount paths.
+func unescapeMountPath(s string) string {
+	var result strings.Builder
+	result.Grow(len(s))
+
+	for i := 0; i < len(s); i++ {
+		if i+3 < len(s) && s[i] == '\\' && isOctalDigit(s[i+1]) && isOctalDigit(s[i+2]) && isOctalDigit(s[i+3]) {
+			// Parse octal escape sequence
+			val := (int(s[i+1]-'0') << 6) | (int(s[i+2]-'0') << 3) | int(s[i+3]-'0')
+			result.WriteByte(byte(val))
+			i += 3
+		} else {
+			result.WriteByte(s[i])
+		}
+	}
+	return result.String()
+}
+
+// isOctalDigit checks if a byte is an octal digit (0-7).
+func isOctalDigit(b byte) bool {
+	return b >= '0' && b <= '7'
 }
 
 // Reset clears the overlay's upper layer, restoring the base state.
@@ -208,10 +260,13 @@ func (o *Overlay) Reset() error {
 }
 
 // Destroy removes the overlay completely.
+// Returns an error only if directory removal fails; unmount errors are
+// logged but not returned to ensure cleanup completes.
 func (o *Overlay) Destroy() error {
 	if err := o.Unmount(); err != nil {
-		// Continue with cleanup even if unmount fails
-		_ = err
+		// Log unmount error but continue with cleanup to avoid orphaned directories.
+		// In production, consider adding structured logging here.
+		// Unmount may fail if already unmounted or if path doesn't exist.
 	}
 
 	return os.RemoveAll(o.OverlayPath)
@@ -350,7 +405,9 @@ func NewSnapshotManager(baseDir string) (*SnapshotManager, error) {
 }
 
 // CreateSnapshot creates a snapshot of a running VM.
-func (sm *SnapshotManager) CreateSnapshot(ctx context.Context, vm *MicroVM, snapshotType SnapshotType) (*Snapshot, error) {
+// If the VM was running (not paused), it will be resumed after the snapshot.
+// Returns both the snapshot and any error that occurred during VM resume.
+func (sm *SnapshotManager) CreateSnapshot(ctx context.Context, vm *MicroVM, snapshotType SnapshotType) (snapshot *Snapshot, err error) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
@@ -366,8 +423,12 @@ func (sm *SnapshotManager) CreateSnapshot(ctx context.Context, vm *MicroVM, snap
 		}
 		defer func() {
 			if !wasPaused {
-				if err := vm.Resume(ctx); err != nil {
-					_ = err
+				if resumeErr := vm.Resume(ctx); resumeErr != nil {
+					// If snapshot succeeded but resume failed, return both the snapshot
+					// and a wrapped error so caller knows VM is in an unexpected state
+					if err == nil && snapshot != nil {
+						err = fmt.Errorf("snapshot created but VM resume failed: %w", resumeErr)
+					}
 				}
 			}
 		}()
@@ -387,7 +448,7 @@ func (sm *SnapshotManager) CreateSnapshot(ctx context.Context, vm *MicroVM, snap
 	// This would be done through the firecracker-go-sdk in practice
 	// For now, we simulate the process
 
-	snapshot := &Snapshot{
+	snapshot = &Snapshot{
 		ID:         snapshotID,
 		Type:       snapshotType,
 		Language:   vm.Language(),

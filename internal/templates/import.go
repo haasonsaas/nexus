@@ -6,12 +6,16 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
 )
+
+// execCommand is a variable to allow mocking in tests.
+var execCommand = exec.Command
 
 // ImportOptions configures template import behavior.
 type ImportOptions struct {
@@ -293,11 +297,73 @@ func (i *Importer) ImportBatch(dir string, opts ImportOptions) ([]*AgentTemplate
 	return templates, nil
 }
 
-// ImportFromGit imports templates from a git repository (placeholder).
+// ImportFromGit imports templates from a git repository.
 func (i *Importer) ImportFromGit(repoURL, branch, subPath string, opts ImportOptions) ([]*AgentTemplate, error) {
-	// This would clone the repo to a temp directory and import
-	// For now, return an error indicating it's not implemented
-	return nil, fmt.Errorf("git import not yet implemented")
+	if repoURL == "" {
+		return nil, fmt.Errorf("repository URL is required")
+	}
+
+	// Create temporary directory for clone
+	tempDir, err := os.MkdirTemp("", "nexus-template-*")
+	if err != nil {
+		return nil, fmt.Errorf("create temp directory: %w", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Build git clone command arguments
+	args := []string{"clone", "--depth", "1"}
+	if branch != "" {
+		args = append(args, "--branch", branch)
+	}
+	args = append(args, repoURL, tempDir)
+
+	// Execute git clone
+	if err := runGitCommand(args...); err != nil {
+		return nil, fmt.Errorf("git clone failed: %w", err)
+	}
+
+	// Determine import directory
+	importDir := tempDir
+	if subPath != "" {
+		importDir = filepath.Join(tempDir, subPath)
+		if info, err := os.Stat(importDir); err != nil || !info.IsDir() {
+			return nil, fmt.Errorf("subpath %q not found in repository", subPath)
+		}
+	}
+
+	// Check if it's a single template or a directory of templates
+	if isTemplateFile(importDir) {
+		// Single template directory
+		tmpl, err := i.ImportFromDirectory(importDir, opts)
+		if err != nil {
+			return nil, err
+		}
+		return []*AgentTemplate{tmpl}, nil
+	}
+
+	// Import all templates from directory
+	return i.ImportBatch(importDir, opts)
+}
+
+// runGitCommand executes a git command and returns any error.
+func runGitCommand(args ...string) error {
+	// Use os/exec to run git
+	cmd := execCommand("git", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s: %s", err, string(output))
+	}
+	return nil
+}
+
+// isTemplateFile checks if a directory contains a template.yaml file.
+func isTemplateFile(dir string) bool {
+	for _, name := range []string{"template.yaml", "template.yml", "template.json"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // CloneTemplate creates a copy of an existing template with a new name.

@@ -42,6 +42,18 @@ type Adapter struct {
 
 	cancelFunc context.CancelFunc
 	wg         sync.WaitGroup
+
+	// Conversation tracking for ListConversations
+	conversations   map[string]*trackedConversation
+	conversationsMu sync.RWMutex
+}
+
+// trackedConversation tracks metadata about a conversation.
+type trackedConversation struct {
+	ID          string
+	Type        personal.ConversationType
+	LastMessage time.Time
+	Name        string
 }
 
 // New creates a new WhatsApp adapter.
@@ -68,10 +80,11 @@ func New(cfg *Config, logger *slog.Logger) (*Adapter, error) {
 	}
 
 	adapter := &Adapter{
-		BaseAdapter: personal.NewBaseAdapter(models.ChannelWhatsApp, &cfg.Personal, logger),
-		config:      cfg,
-		store:       container,
-		qrChan:      make(chan string, 1),
+		BaseAdapter:   personal.NewBaseAdapter(models.ChannelWhatsApp, &cfg.Personal, logger),
+		config:        cfg,
+		store:         container,
+		qrChan:        make(chan string, 1),
+		conversations: make(map[string]*trackedConversation),
 	}
 
 	return adapter, nil
@@ -278,11 +291,90 @@ func (a *Adapter) GetConversation(ctx context.Context, peerID string) (*personal
 // ErrNotImplemented indicates the operation is not implemented for this adapter.
 var ErrNotImplemented = errors.New("operation not implemented")
 
-// ListConversations lists conversations.
+// ListConversations lists conversations tracked from message history.
 func (a *Adapter) ListConversations(ctx context.Context, opts personal.ListOptions) ([]*personal.Conversation, error) {
-	// whatsmeow doesn't have a direct conversation list API
-	// This would need to be implemented with local state tracking
-	return nil, fmt.Errorf("ListConversations: %w", ErrNotImplemented)
+	a.conversationsMu.RLock()
+	defer a.conversationsMu.RUnlock()
+
+	// Collect all tracked conversations
+	conversations := make([]*personal.Conversation, 0, len(a.conversations))
+	for _, tracked := range a.conversations {
+		// Filter by group if specified
+		if opts.GroupID != "" {
+			if tracked.Type != personal.ConversationGroup {
+				continue
+			}
+			if tracked.ID != opts.GroupID {
+				continue
+			}
+		}
+
+		// Filter by time if specified
+		if !opts.After.IsZero() && tracked.LastMessage.Before(opts.After) {
+			continue
+		}
+		if !opts.Before.IsZero() && tracked.LastMessage.After(opts.Before) {
+			continue
+		}
+
+		conversations = append(conversations, &personal.Conversation{
+			ID:        tracked.ID,
+			Type:      tracked.Type,
+			UpdatedAt: tracked.LastMessage,
+		})
+	}
+
+	// Sort by last message time (most recent first)
+	sortConversationsByTime(conversations, a.conversations)
+
+	// Apply offset and limit
+	if opts.Offset > 0 && opts.Offset < len(conversations) {
+		conversations = conversations[opts.Offset:]
+	} else if opts.Offset >= len(conversations) {
+		return []*personal.Conversation{}, nil
+	}
+
+	if opts.Limit > 0 && len(conversations) > opts.Limit {
+		conversations = conversations[:opts.Limit]
+	}
+
+	return conversations, nil
+}
+
+// sortConversationsByTime sorts conversations by last message time descending.
+func sortConversationsByTime(convs []*personal.Conversation, tracked map[string]*trackedConversation) {
+	// Simple bubble sort for typically small lists
+	for i := 0; i < len(convs)-1; i++ {
+		for j := i + 1; j < len(convs); j++ {
+			ti := tracked[convs[i].ID]
+			tj := tracked[convs[j].ID]
+			if ti != nil && tj != nil && tj.LastMessage.After(ti.LastMessage) {
+				convs[i], convs[j] = convs[j], convs[i]
+			}
+		}
+	}
+}
+
+// trackConversation records a conversation from an incoming/outgoing message.
+func (a *Adapter) trackConversation(jid types.JID, isGroup bool) {
+	a.conversationsMu.Lock()
+	defer a.conversationsMu.Unlock()
+
+	convID := jid.String()
+	convType := personal.ConversationDM
+	if isGroup {
+		convType = personal.ConversationGroup
+	}
+
+	if existing, ok := a.conversations[convID]; ok {
+		existing.LastMessage = time.Now()
+	} else {
+		a.conversations[convID] = &trackedConversation{
+			ID:          convID,
+			Type:        convType,
+			LastMessage: time.Now(),
+		}
+	}
 }
 
 // handleEvent processes WhatsApp events.
@@ -327,6 +419,10 @@ func (a *Adapter) handleMessage(evt *events.Message) {
 	if evt.Info.Chat.Server == "broadcast" {
 		return
 	}
+
+	// Track the conversation for ListConversations
+	isGroup := evt.Info.Chat.Server == "g.us"
+	a.trackConversation(evt.Info.Chat, isGroup)
 
 	var content string
 	var attachments []personal.RawAttachment

@@ -56,10 +56,11 @@ type Server struct {
 
 	handleMessageHook func(context.Context, *models.Message)
 
-	runtimeMu sync.Mutex
-	runtime   *agent.Runtime
-	sessions  sessions.Store
-	stores    storage.StoreSet
+	runtimeMu   sync.Mutex
+	runtime     *agent.Runtime
+	sessions    sessions.Store
+	branchStore sessions.BranchStore
+	stores      storage.StoreSet
 
 	browserPool     *browser.Pool
 	memoryLogger    *sessions.MemoryLogger
@@ -875,6 +876,13 @@ func (s *Server) ensureRuntime(ctx context.Context) (*agent.Runtime, error) {
 		}
 		s.sessions = store
 	}
+	if s.branchStore == nil {
+		if cr, ok := s.sessions.(*sessions.CockroachStore); ok {
+			s.branchStore = sessions.NewCockroachBranchStore(cr.DB())
+		} else {
+			s.branchStore = sessions.NewMemoryBranchStore()
+		}
+	}
 	if s.memoryLogger == nil && s.config.Session.Memory.Enabled {
 		s.memoryLogger = sessions.NewMemoryLogger(s.config.Session.Memory.Directory)
 	}
@@ -894,6 +902,9 @@ func (s *Server) ensureRuntime(ctx context.Context) (*agent.Runtime, error) {
 	}
 
 	runtime := agent.NewRuntime(provider, s.sessions)
+	if s.branchStore != nil {
+		runtime.SetBranchStore(s.branchStore)
+	}
 	if defaultModel != "" {
 		runtime.SetDefaultModel(defaultModel)
 	}

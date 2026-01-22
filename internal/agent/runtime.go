@@ -404,6 +404,9 @@ type Runtime struct {
 	// sessions stores conversation history for continuity
 	sessions sessions.Store
 
+	// branchStore persists branch-aware histories when enabled
+	branchStore sessions.BranchStore
+
 	// toolEvents optionally persists tool calls/results for audit and replay
 	toolEvents ToolEventStore
 
@@ -507,6 +510,11 @@ func (r *Runtime) SetSystemPrompt(system string) {
 // SetToolEventStore configures optional tool event persistence for audit and replay.
 func (r *Runtime) SetToolEventStore(store ToolEventStore) {
 	r.toolEvents = store
+}
+
+// SetBranchStore enables branch-aware history persistence.
+func (r *Runtime) SetBranchStore(store sessions.BranchStore) {
+	r.branchStore = store
 }
 
 // SetMaxIterations configures the maximum agentic loop iterations (default 5).
@@ -684,10 +692,42 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 	}
 
 	// 1) Load history (pre-incoming message)
-	history, err := r.sessions.GetHistory(ctx, session.ID, 50)
+	branchID := strings.TrimSpace(msg.BranchID)
+	if r.branchStore != nil {
+		if branchID == "" {
+			branch, branchErr := r.branchStore.EnsurePrimaryBranch(ctx, session.ID)
+			if branchErr != nil {
+				emitter.RunError(ctx, branchErr, false)
+				return branchErr
+			}
+			branchID = branch.ID
+		}
+		msg.BranchID = branchID
+	}
+
+	var (
+		history []*models.Message
+		err     error
+	)
+	if r.branchStore != nil && branchID != "" {
+		history, err = r.branchStore.GetBranchHistory(ctx, branchID, 50)
+	} else {
+		history, err = r.sessions.GetHistory(ctx, session.ID, 50)
+	}
 	if err != nil {
 		emitter.RunError(ctx, err, false)
 		return err
+	}
+
+	appendMessage := func(message *models.Message) error {
+		if message == nil {
+			return nil
+		}
+		if r.branchStore != nil && branchID != "" {
+			message.BranchID = branchID
+			return r.branchStore.AppendMessageToBranch(ctx, session.ID, branchID, message)
+		}
+		return r.sessions.AppendMessage(ctx, session.ID, message)
 	}
 
 	// 2) Persist inbound user message (source of truth)
@@ -703,7 +743,7 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 	if msg.Direction == "" {
 		msg.Direction = models.DirectionInbound
 	}
-	if err := r.sessions.AppendMessage(ctx, session.ID, msg); err != nil {
+	if err := appendMessage(msg); err != nil {
 		wrappedErr := fmt.Errorf("failed to persist user message: %w", err)
 		emitter.RunError(ctx, wrappedErr, false)
 		return wrappedErr
@@ -734,7 +774,7 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 				if newSummary.CreatedAt.IsZero() {
 					newSummary.CreatedAt = time.Now()
 				}
-				if err := r.sessions.AppendMessage(ctx, session.ID, newSummary); err != nil {
+				if err := appendMessage(newSummary); err != nil {
 					wrappedErr := fmt.Errorf("failed to persist summary message: %w", err)
 					emitter.RunError(ctx, wrappedErr, false)
 					return wrappedErr
@@ -883,7 +923,7 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 			ToolCalls: toolCalls,
 			CreatedAt: time.Now(),
 		}
-		if err := r.sessions.AppendMessage(ctx, session.ID, assistantMsg); err != nil {
+		if err := appendMessage(assistantMsg); err != nil {
 			wrappedErr := fmt.Errorf("failed to persist assistant message: %w", err)
 			emitter.RunError(ctx, wrappedErr, false)
 			return wrappedErr
@@ -1036,7 +1076,7 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 			ToolResults: results,
 			CreatedAt:   time.Now(),
 		}
-		if err := r.sessions.AppendMessage(ctx, session.ID, toolMsg); err != nil {
+		if err := appendMessage(toolMsg); err != nil {
 			wrappedErr := fmt.Errorf("failed to persist tool message: %w", err)
 			emitter.RunError(ctx, wrappedErr, false)
 			return wrappedErr

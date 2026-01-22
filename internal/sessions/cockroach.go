@@ -25,6 +25,11 @@ type CockroachStore struct {
 	stmtGetHistory    *sql.Stmt
 }
 
+// DB exposes the underlying database connection for related stores.
+func (s *CockroachStore) DB() *sql.DB {
+	return s.db
+}
+
 // CockroachConfig holds configuration for CockroachDB connection.
 type CockroachConfig struct {
 	Host            string

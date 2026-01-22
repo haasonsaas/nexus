@@ -24,6 +24,8 @@ import (
 	"github.com/haasonsaas/nexus/internal/cron"
 	"github.com/haasonsaas/nexus/internal/jobs"
 	"github.com/haasonsaas/nexus/internal/mcp"
+	"github.com/haasonsaas/nexus/internal/media"
+	"github.com/haasonsaas/nexus/internal/media/transcribe"
 	"github.com/haasonsaas/nexus/internal/memory"
 	"github.com/haasonsaas/nexus/internal/plugins"
 	"github.com/haasonsaas/nexus/internal/sessions"
@@ -34,6 +36,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/tools/memorysearch"
 	"github.com/haasonsaas/nexus/internal/tools/policy"
 	"github.com/haasonsaas/nexus/internal/tools/sandbox"
+	"github.com/haasonsaas/nexus/internal/tools/sandbox/firecracker"
 	"github.com/haasonsaas/nexus/internal/tools/websearch"
 	"github.com/haasonsaas/nexus/pkg/models"
 	proto "github.com/haasonsaas/nexus/pkg/proto"
@@ -56,16 +59,19 @@ type Server struct {
 	sessions  sessions.Store
 	stores    storage.StoreSet
 
-	browserPool   *browser.Pool
-	memoryLogger  *sessions.MemoryLogger
-	skillsManager *skills.Manager
-	vectorMemory  *memory.Manager
+	browserPool     *browser.Pool
+	memoryLogger    *sessions.MemoryLogger
+	skillsManager   *skills.Manager
+	vectorMemory    *memory.Manager
+	mediaProcessor  media.Processor
+	mediaAggregator *media.Aggregator
 
-	channelPlugins *channelPluginRegistry
-	runtimePlugins *plugins.RuntimeRegistry
-	authService    *auth.Service
-	cronScheduler  *cron.Scheduler
-	mcpManager     *mcp.Manager
+	channelPlugins     *channelPluginRegistry
+	runtimePlugins     *plugins.RuntimeRegistry
+	authService        *auth.Service
+	cronScheduler      *cron.Scheduler
+	mcpManager         *mcp.Manager
+	firecrackerBackend *firecracker.Backend
 
 	toolPolicyResolver *policy.Resolver
 	llmProvider        agent.LLMProvider
@@ -134,9 +140,32 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	}()
 
 	// Initialize vector memory manager (optional, returns nil if not enabled)
+	if cfg.VectorMemory.Enabled && cfg.VectorMemory.Pgvector.UseCockroachDB && cfg.VectorMemory.Pgvector.DSN == "" {
+		cfg.VectorMemory.Pgvector.DSN = cfg.Database.URL
+	}
 	vectorMem, err := memory.NewManager(&cfg.VectorMemory)
 	if err != nil {
 		logger.Warn("vector memory not initialized", "error", err)
+	}
+	var mediaProcessor media.Processor
+	var mediaAggregator *media.Aggregator
+	if cfg.Transcription.Enabled {
+		transcriber, err := transcribe.New(transcribe.Config{
+			Provider: cfg.Transcription.Provider,
+			APIKey:   cfg.Transcription.APIKey,
+			BaseURL:  cfg.Transcription.BaseURL,
+			Model:    cfg.Transcription.Model,
+			Language: cfg.Transcription.Language,
+			Logger:   logger,
+		})
+		if err != nil {
+			logger.Warn("transcription not initialized", "error", err)
+		} else {
+			processor := media.NewDefaultProcessor(logger)
+			processor.SetTranscriber(transcriber)
+			mediaProcessor = processor
+			mediaAggregator = media.NewAggregator(processor, logger)
+		}
 	}
 	mcpManager := mcp.NewManager(&cfg.MCP, logger)
 	toolPolicyResolver := policy.NewResolver()
@@ -182,6 +211,8 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		runtimePlugins:     plugins.DefaultRuntimeRegistry(),
 		skillsManager:      skillsMgr,
 		vectorMemory:       vectorMem,
+		mediaProcessor:     mediaProcessor,
+		mediaAggregator:    mediaAggregator,
 		stores:             stores,
 		authService:        authService,
 		cronScheduler:      cronScheduler,
@@ -294,6 +325,11 @@ func (s *Server) Stop(ctx context.Context) error {
 	if s.mcpManager != nil {
 		if err := s.mcpManager.Stop(); err != nil {
 			s.logger.Error("error stopping MCP manager", "error", err)
+		}
+	}
+	if s.firecrackerBackend != nil {
+		if err := s.firecrackerBackend.Close(); err != nil {
+			s.logger.Error("error closing firecracker backend", "error", err)
 		}
 	}
 	if err := s.stores.Close(); err != nil {
@@ -412,6 +448,8 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 	if msg.CreatedAt.IsZero() {
 		msg.CreatedAt = time.Now()
 	}
+
+	s.enrichMessageWithMedia(ctx, msg)
 
 	// Note: inbound message persistence is handled by runtime.Process()
 	// to avoid double-persisting the same message.
@@ -592,7 +630,7 @@ func (s *Server) ensureRuntime(ctx context.Context) (*agent.Runtime, error) {
 		JobStore:          s.jobStore,
 		Logger:            s.logger,
 	})
-	if err := s.registerTools(runtime); err != nil {
+	if err := s.registerTools(ctx, runtime); err != nil {
 		return nil, err
 	}
 	if s.runtimePlugins != nil {
@@ -662,14 +700,66 @@ func (s *Server) newProvider() (agent.LLMProvider, string, error) {
 	}
 }
 
-func (s *Server) registerTools(runtime *agent.Runtime) error {
+func (s *Server) registerTools(ctx context.Context, runtime *agent.Runtime) error {
 	if s.config.Tools.Sandbox.Enabled {
 		opts := []sandbox.Option{}
+		backend := strings.ToLower(strings.TrimSpace(s.config.Tools.Sandbox.Backend))
+		switch backend {
+		case "", "docker":
+			// default
+		case "firecracker":
+			fcConfig := firecracker.DefaultBackendConfig()
+			fcConfig.NetworkEnabled = s.config.Tools.Sandbox.NetworkEnabled
+			if s.config.Tools.Sandbox.PoolSize > 0 {
+				fcConfig.PoolConfig.InitialSize = s.config.Tools.Sandbox.PoolSize
+			}
+			if s.config.Tools.Sandbox.MaxPoolSize > 0 {
+				fcConfig.PoolConfig.MaxSize = s.config.Tools.Sandbox.MaxPoolSize
+			}
+			if s.config.Tools.Sandbox.Limits.MaxCPU > 0 {
+				vcpus := int64((s.config.Tools.Sandbox.Limits.MaxCPU + 999) / 1000)
+				if vcpus < 1 {
+					vcpus = 1
+				}
+				fcConfig.DefaultVCPUs = vcpus
+				fcConfig.PoolConfig.DefaultVCPUs = vcpus
+			}
+			if memMB, err := parseMemoryMB(s.config.Tools.Sandbox.Limits.MaxMemory); err == nil && memMB > 0 {
+				fcConfig.DefaultMemMB = int64(memMB)
+				fcConfig.PoolConfig.DefaultMemMB = int64(memMB)
+			}
+			fcBackend, err := firecracker.NewBackend(fcConfig)
+			if err != nil {
+				s.logger.Warn("firecracker backend unavailable, falling back to docker", "error", err)
+			} else if err := fcBackend.Start(ctx); err != nil {
+				s.logger.Warn("firecracker backend start failed, falling back to docker", "error", err)
+				_ = fcBackend.Close()
+			} else {
+				sandbox.InitFirecrackerBackend(fcBackend)
+				s.firecrackerBackend = fcBackend
+				opts = append(opts, sandbox.WithBackend(sandbox.BackendFirecracker))
+			}
+		default:
+			return fmt.Errorf("unsupported sandbox backend %q", backend)
+		}
+
 		if s.config.Tools.Sandbox.PoolSize > 0 {
 			opts = append(opts, sandbox.WithPoolSize(s.config.Tools.Sandbox.PoolSize))
 		}
+		if s.config.Tools.Sandbox.MaxPoolSize > 0 {
+			opts = append(opts, sandbox.WithMaxPoolSize(s.config.Tools.Sandbox.MaxPoolSize))
+		}
 		if s.config.Tools.Sandbox.Timeout > 0 {
 			opts = append(opts, sandbox.WithDefaultTimeout(s.config.Tools.Sandbox.Timeout))
+		}
+		if s.config.Tools.Sandbox.Limits.MaxCPU > 0 {
+			opts = append(opts, sandbox.WithDefaultCPU(s.config.Tools.Sandbox.Limits.MaxCPU))
+		}
+		if memMB, err := parseMemoryMB(s.config.Tools.Sandbox.Limits.MaxMemory); err == nil && memMB > 0 {
+			opts = append(opts, sandbox.WithDefaultMemory(memMB))
+		}
+		if s.config.Tools.Sandbox.NetworkEnabled {
+			opts = append(opts, sandbox.WithNetworkEnabled(true))
 		}
 		if err := sandbox.Register(runtime, opts...); err != nil {
 			return fmt.Errorf("sandbox tool: %w", err)
@@ -855,6 +945,141 @@ func (s *Server) resolveConversationID(msg *models.Message) (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported channel %q", msg.Channel)
 	}
+}
+
+func (s *Server) enrichMessageWithMedia(ctx context.Context, msg *models.Message) {
+	if msg == nil || s.mediaAggregator == nil || s.config == nil || !s.config.Transcription.Enabled {
+		return
+	}
+	if len(msg.Attachments) == 0 {
+		return
+	}
+
+	var downloader channels.AttachmentDownloader
+	if adapter, ok := s.channels.Get(msg.Channel); ok {
+		if d, ok := adapter.(channels.AttachmentDownloader); ok {
+			downloader = d
+		}
+	}
+
+	mediaAttachments := make([]*media.Attachment, 0, len(msg.Attachments))
+	for i := range msg.Attachments {
+		att := msg.Attachments[i]
+		mediaType := media.DetectMediaType(att.MimeType, att.Filename)
+		switch strings.ToLower(att.Type) {
+		case "voice":
+			mediaType = media.MediaTypeAudio
+			if att.MimeType == "" {
+				att.MimeType = "audio/ogg"
+			}
+		case "audio":
+			mediaType = media.MediaTypeAudio
+		}
+		if mediaType != media.MediaTypeAudio {
+			continue
+		}
+
+		mediaAtt := &media.Attachment{
+			ID:       att.ID,
+			Type:     mediaType,
+			MimeType: att.MimeType,
+			Filename: att.Filename,
+			Size:     att.Size,
+			URL:      att.URL,
+		}
+
+		if downloader != nil {
+			data, mimeType, filename, err := downloader.DownloadAttachment(ctx, msg, &att)
+			if err != nil {
+				s.logger.Warn("attachment download failed", "error", err, "channel", msg.Channel)
+			} else {
+				mediaAtt.Data = data
+				if mimeType != "" {
+					mediaAtt.MimeType = mimeType
+				}
+				if filename != "" {
+					mediaAtt.Filename = filename
+				}
+			}
+		}
+
+		if len(mediaAtt.Data) == 0 && !isHTTPURL(mediaAtt.URL) {
+			continue
+		}
+
+		mediaAttachments = append(mediaAttachments, mediaAtt)
+	}
+
+	if len(mediaAttachments) == 0 {
+		return
+	}
+
+	opts := media.DefaultOptions()
+	opts.EnableVision = false
+	opts.EnableTranscription = true
+	opts.TranscriptionLanguage = s.config.Transcription.Language
+
+	mediaCtx := ctx
+	if opts.Timeout > 0 {
+		var cancel context.CancelFunc
+		mediaCtx, cancel = context.WithTimeout(ctx, opts.Timeout)
+		defer cancel()
+	}
+
+	content := s.mediaAggregator.Aggregate(mediaCtx, mediaAttachments, opts)
+	if content == nil || content.Text == "" {
+		return
+	}
+
+	if msg.Metadata == nil {
+		msg.Metadata = map[string]any{}
+	}
+	msg.Metadata["media_text"] = content.Text
+	if len(content.Errors) > 0 {
+		msg.Metadata["media_errors"] = content.Errors
+	}
+
+	if msg.Content == "" {
+		msg.Content = content.Text
+	} else {
+		msg.Content = msg.Content + "\n\n" + content.Text
+	}
+}
+
+func isHTTPURL(value string) bool {
+	return strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://")
+}
+
+func parseMemoryMB(value string) (int, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return 0, nil
+	}
+	upper := strings.ToUpper(trimmed)
+	multiplier := 1.0
+	switch {
+	case strings.HasSuffix(upper, "GB"):
+		multiplier = 1024.0
+		upper = strings.TrimSuffix(upper, "GB")
+	case strings.HasSuffix(upper, "G"):
+		multiplier = 1024.0
+		upper = strings.TrimSuffix(upper, "G")
+	case strings.HasSuffix(upper, "MB"):
+		upper = strings.TrimSuffix(upper, "MB")
+	case strings.HasSuffix(upper, "M"):
+		upper = strings.TrimSuffix(upper, "M")
+	case strings.HasSuffix(upper, "KB"):
+		multiplier = 1.0 / 1024.0
+		upper = strings.TrimSuffix(upper, "KB")
+	case strings.HasSuffix(upper, "K"):
+		multiplier = 1.0 / 1024.0
+		upper = strings.TrimSuffix(upper, "K")
+	}
+	valueFloat, err := strconv.ParseFloat(strings.TrimSpace(upper), 64)
+	if err != nil {
+		return 0, err
+	}
+	return int(valueFloat * multiplier), nil
 }
 
 func (s *Server) buildReplyMetadata(msg *models.Message) map[string]any {

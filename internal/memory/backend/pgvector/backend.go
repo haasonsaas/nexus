@@ -86,7 +86,7 @@ func New(cfg Config) (*Backend, error) {
 	}
 
 	// Run migrations by default
-	if cfg.RunMigrations || cfg.DSN != "" {
+	if cfg.RunMigrations {
 		if err := b.runMigrations(context.Background()); err != nil {
 			if ownsDB {
 				db.Close()
@@ -103,7 +103,7 @@ func (b *Backend) runMigrations(ctx context.Context) error {
 	// Ensure schema_migrations table exists
 	_, err := b.db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS memory_schema_migrations (
-			id STRING PRIMARY KEY,
+			id TEXT PRIMARY KEY,
 			applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 		)
 	`)

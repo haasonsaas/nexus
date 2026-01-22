@@ -170,9 +170,9 @@ func (p *Pool) Close() error {
 func (p *Pool) createExecutor(language string) (RuntimeExecutor, error) {
 	switch p.config.Backend {
 	case BackendDocker:
-		return newDockerExecutor(language, p.config.DefaultCPU, p.config.DefaultMemory)
+		return newDockerExecutor(language, p.config.DefaultCPU, p.config.DefaultMemory, p.config.NetworkEnabled)
 	case BackendFirecracker:
-		return newFirecrackerExecutor(language, p.config.DefaultCPU, p.config.DefaultMemory)
+		return newFirecrackerExecutor(language, p.config.DefaultCPU, p.config.DefaultMemory, p.config.NetworkEnabled)
 	default:
 		return nil, fmt.Errorf("unsupported backend: %s", p.config.Backend)
 	}
@@ -194,7 +194,7 @@ type firecrackerBackendWrapper struct {
 }
 
 // newFirecrackerExecutor creates a new Firecracker-based executor.
-func newFirecrackerExecutor(language string, cpuLimit, memLimit int) (RuntimeExecutor, error) {
+func newFirecrackerExecutor(language string, cpuLimit, memLimit int, networkEnabled bool) (RuntimeExecutor, error) {
 	// Lazy initialization of shared backend
 	firecrackerBackendOnce.Do(func() {
 		// Import the firecracker package at runtime to avoid circular imports
@@ -204,7 +204,7 @@ func newFirecrackerExecutor(language string, cpuLimit, memLimit int) (RuntimeExe
 
 	if firecrackerBackendErr != nil {
 		// Fall back to Docker if Firecracker is not available
-		return newDockerExecutor(language, cpuLimit, memLimit)
+		return newDockerExecutor(language, cpuLimit, memLimit, networkEnabled)
 	}
 
 	return &firecrackerExecutorWrapper{

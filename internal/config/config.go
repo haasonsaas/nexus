@@ -290,10 +290,13 @@ type ApprovalConfig struct {
 }
 
 type SandboxConfig struct {
-	Enabled  bool           `yaml:"enabled"`
-	PoolSize int            `yaml:"pool_size"`
-	Timeout  time.Duration  `yaml:"timeout"`
-	Limits   ResourceLimits `yaml:"limits"`
+	Enabled        bool           `yaml:"enabled"`
+	Backend        string         `yaml:"backend"`
+	PoolSize       int            `yaml:"pool_size"`
+	MaxPoolSize    int            `yaml:"max_pool_size"`
+	Timeout        time.Duration  `yaml:"timeout"`
+	NetworkEnabled bool           `yaml:"network_enabled"`
+	Limits         ResourceLimits `yaml:"limits"`
 }
 
 type ResourceLimits struct {

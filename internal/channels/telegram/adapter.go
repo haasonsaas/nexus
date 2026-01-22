@@ -4,7 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"mime"
+	"net/http"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -107,6 +111,7 @@ type Adapter struct {
 	rateLimiter *channels.RateLimiter
 	metrics     *channels.Metrics
 	logger      *slog.Logger
+	httpClient  *http.Client
 	degraded    bool
 	degradedMu  sync.RWMutex
 }
@@ -125,6 +130,7 @@ func NewAdapter(config Config) (*Adapter, error) {
 		rateLimiter: channels.NewRateLimiter(config.RateLimit, config.RateBurst),
 		metrics:     channels.NewMetrics(nexusmodels.ChannelTelegram),
 		logger:      config.Logger.With("adapter", "telegram"),
+		httpClient:  &http.Client{Timeout: 30 * time.Second},
 	}
 
 	return a, nil
@@ -424,6 +430,67 @@ func (a *Adapter) Send(ctx context.Context, msg *nexusmodels.Message) error {
 	return nil
 }
 
+// DownloadAttachment fetches attachment bytes from Telegram without exposing the bot token.
+func (a *Adapter) DownloadAttachment(ctx context.Context, msg *nexusmodels.Message, attachment *nexusmodels.Attachment) ([]byte, string, string, error) {
+	if a.bot == nil {
+		return nil, "", "", fmt.Errorf("telegram bot not initialized")
+	}
+	if attachment == nil {
+		return nil, "", "", fmt.Errorf("attachment is required")
+	}
+
+	fileID := attachment.ID
+	if fileID == "" && msg != nil && msg.Metadata != nil {
+		if id, ok := msg.Metadata["voice_file_id"].(string); ok && id != "" {
+			fileID = id
+		}
+	}
+	if fileID == "" {
+		return nil, "", "", fmt.Errorf("missing telegram file id")
+	}
+
+	file, err := a.bot.GetFile(ctx, &bot.GetFileParams{FileID: fileID})
+	if err != nil {
+		return nil, "", "", fmt.Errorf("telegram getFile failed: %w", err)
+	}
+	if file == nil || file.FilePath == "" {
+		return nil, "", "", fmt.Errorf("telegram file path missing")
+	}
+
+	url := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", a.config.Token, file.FilePath)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("create request: %w", err)
+	}
+	resp, err := a.httpClient.Do(req)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("download file: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, "", "", fmt.Errorf("download failed: HTTP %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("read response: %w", err)
+	}
+
+	mimeType := attachment.MimeType
+	if mimeType == "" {
+		mimeType = mime.TypeByExtension(filepath.Ext(file.FilePath))
+	}
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+
+	filename := attachment.Filename
+	if filename == "" {
+		filename = filepath.Base(file.FilePath)
+	}
+
+	return data, mimeType, filename, nil
+}
+
 // sendAttachments sends message attachments.
 func (a *Adapter) sendAttachments(ctx context.Context, chatID int64, attachments []nexusmodels.Attachment) error {
 	for _, attachment := range attachments {
@@ -620,8 +687,7 @@ func isRateLimitError(err error) bool {
 	}
 	// Telegram returns "Too Many Requests" errors
 	return errors.Is(err, context.DeadlineExceeded) ||
-		(err.Error() != "" && (
-			errors.Is(err, errors.New("Too Many Requests")) ||
+		(err.Error() != "" && (errors.Is(err, errors.New("Too Many Requests")) ||
 			errors.Is(err, errors.New("429"))))
 }
 

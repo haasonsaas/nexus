@@ -86,6 +86,40 @@ user:
   timezone: ""
   notes: ""
 
+vector_memory:
+  enabled: false
+  backend: sqlite-vec # sqlite-vec | lancedb | pgvector
+  dimension: 1536
+  sqlite_vec:
+    path: ~/.nexus/vector-memory.sqlite
+  lancedb:
+    path: ~/.nexus/lancedb
+    index_type: flat
+    metric_type: cosine
+    n_probes: 10
+    ef: 64
+    refine_factor: 2
+  pgvector:
+    dsn: ${VECTOR_MEMORY_DSN:-}
+    use_cockroachdb: false
+    run_migrations: true
+  embeddings:
+    provider: openai
+    api_key: ${OPENAI_API_KEY}
+    base_url: https://api.openai.com/v1
+    model: text-embedding-3-small
+    ollama_url: http://localhost:11434
+    project_id: ""
+    location: ""
+  indexing:
+    auto_index_messages: false
+    min_content_length: 10
+    batch_size: 100
+  search:
+    default_limit: 10
+    default_threshold: 0.7
+    default_scope: session
+
 channels:
   telegram:
     enabled: true
@@ -154,12 +188,15 @@ tools:
       timeout: 15s
   sandbox:
     enabled: true
+    backend: docker # docker | firecracker
     # Number of pre-warmed sandboxes
     pool_size: 5
+    max_pool_size: 10
     # Maximum execution time per request
     timeout: 30s
+    network_enabled: false
     limits:
-      max_cpu: 1
+      max_cpu: 1000 # millicores
       max_memory: 512MB
   browser:
     enabled: true
@@ -171,6 +208,14 @@ tools:
     provider: searxng
     # SearXNG instance URL
     url: ${SEARXNG_URL:-http://localhost:8888}
+
+transcription:
+  enabled: false
+  provider: openai
+  api_key: ${OPENAI_API_KEY}
+  base_url: https://api.openai.com/v1
+  model: whisper-1
+  language: ""
 
 plugins:
   # Optional plugin manifest search paths

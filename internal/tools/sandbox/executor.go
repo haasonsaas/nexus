@@ -15,7 +15,7 @@ import (
 
 // Executor implements the agent.Tool interface for code execution.
 type Executor struct {
-	pool          *Pool
+	pool           *Pool
 	useFirecracker bool
 }
 
@@ -24,8 +24,8 @@ type ExecuteParams struct {
 	Language string            `json:"language"` // python, nodejs, go, bash
 	Code     string            `json:"code"`
 	Stdin    string            `json:"stdin,omitempty"`
-	Files    map[string]string `json:"files,omitempty"`    // filename -> content
-	Timeout  int               `json:"timeout,omitempty"`  // seconds, default 30
+	Files    map[string]string `json:"files,omitempty"`     // filename -> content
+	Timeout  int               `json:"timeout,omitempty"`   // seconds, default 30
 	CPULimit int               `json:"cpu_limit,omitempty"` // millicores, default 1000
 	MemLimit int               `json:"mem_limit,omitempty"` // MB, default 512
 }
@@ -42,12 +42,12 @@ type ExecuteResult struct {
 // NewExecutor creates a new sandbox executor.
 func NewExecutor(opts ...Option) (*Executor, error) {
 	config := &Config{
-		Backend:       BackendDocker,
-		PoolSize:      3,
-		MaxPoolSize:   10,
+		Backend:        BackendDocker,
+		PoolSize:       3,
+		MaxPoolSize:    10,
 		DefaultTimeout: 30 * time.Second,
-		DefaultCPU:    1000, // 1 core
-		DefaultMemory: 512,  // 512 MB
+		DefaultCPU:     1000, // 1 core
+		DefaultMemory:  512,  // 512 MB
 		NetworkEnabled: false,
 	}
 
@@ -72,7 +72,7 @@ func NewExecutor(opts ...Option) (*Executor, error) {
 	}
 
 	return &Executor{
-		pool:          pool,
+		pool:           pool,
 		useFirecracker: useFirecracker,
 	}, nil
 }
@@ -325,30 +325,33 @@ type RuntimeExecutor interface {
 
 // dockerExecutor implements RuntimeExecutor using Docker.
 type dockerExecutor struct {
-	language  string
-	image     string
-	cpuLimit  int
-	memLimit  int
+	language       string
+	image          string
+	cpuLimit       int
+	memLimit       int
+	networkEnabled bool
 }
 
 // newDockerExecutor creates a new Docker-based executor.
-func newDockerExecutor(language string, cpuLimit, memLimit int) (*dockerExecutor, error) {
+func newDockerExecutor(language string, cpuLimit, memLimit int, networkEnabled bool) (*dockerExecutor, error) {
 	image := getDockerImage(language)
 	return &dockerExecutor{
-		language:  language,
-		image:     image,
-		cpuLimit:  cpuLimit,
-		memLimit:  memLimit,
+		language:       language,
+		image:          image,
+		cpuLimit:       cpuLimit,
+		memLimit:       memLimit,
+		networkEnabled: networkEnabled,
 	}, nil
 }
 
 // Run executes code in a Docker container.
 func (d *dockerExecutor) Run(ctx context.Context, params *ExecuteParams, workspace string) (*ExecuteResult, error) {
 	// Build Docker command
-	args := []string{
-		"run",
-		"--rm",
-		"--network", "none", // No network access
+	args := []string{"run", "--rm"}
+	if !d.networkEnabled {
+		args = append(args, "--network", "none")
+	}
+	args = append(args,
 		"--cpus", fmt.Sprintf("%.2f", float64(params.CPULimit)/1000.0),
 		"--memory", fmt.Sprintf("%dm", params.MemLimit),
 		"--memory-swap", fmt.Sprintf("%dm", params.MemLimit), // No swap
@@ -356,7 +359,7 @@ func (d *dockerExecutor) Run(ctx context.Context, params *ExecuteParams, workspa
 		"--ulimit", "nofile=1024:1024",
 		"-v", fmt.Sprintf("%s:/workspace:ro", workspace),
 		"-w", "/workspace",
-	}
+	)
 
 	// Add stdin if provided
 	if params.Stdin != "" {
@@ -490,6 +493,20 @@ func WithMaxPoolSize(size int) Option {
 func WithDefaultTimeout(timeout time.Duration) Option {
 	return func(c *Config) {
 		c.DefaultTimeout = timeout
+	}
+}
+
+// WithDefaultCPU sets the default CPU limit in millicores.
+func WithDefaultCPU(millicores int) Option {
+	return func(c *Config) {
+		c.DefaultCPU = millicores
+	}
+}
+
+// WithDefaultMemory sets the default memory limit in MB.
+func WithDefaultMemory(megabytes int) Option {
+	return func(c *Config) {
+		c.DefaultMemory = megabytes
 	}
 }
 

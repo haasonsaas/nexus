@@ -30,6 +30,12 @@ type InboundAdapter interface {
 	Messages() <-chan *models.Message
 }
 
+// AttachmentDownloader allows adapters to fetch attachment bytes when URLs are not public.
+// Implementations should avoid leaking credentials in returned metadata.
+type AttachmentDownloader interface {
+	DownloadAttachment(ctx context.Context, msg *models.Message, attachment *models.Attachment) (data []byte, mimeType string, filename string, err error)
+}
+
 // HealthAdapter represents adapters that expose status and metrics.
 type HealthAdapter interface {
 	Status() Status

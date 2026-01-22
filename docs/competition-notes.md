@@ -4,8 +4,9 @@
 - Clawd workspace templates (`AGENTS.md`, `SOUL.md`, `USER.md`, `IDENTITY.md`, `TOOLS.md`, `HEARTBEAT.md`).
 - Clawdbot docs: agent workspace + memory concepts, gateway doctor behavior.
 - Clawdbot docs: `docs/tools/skills-config.md` (skills config schema + watchers).
+- Clawdbot docs: `docs/multi-agent-sandbox-tools.md` (per-agent sandbox + tool allow/deny).
 - Clawdbot memory sources: `src/memory/embeddings-openai.ts`, embedding batch tests, vector cache tables.
-- GitHub API snapshot (2026-01-21): stars, issues, topics, recent updates.
+- GitHub API snapshot (2026-01-22): stars, issues, topics, recent updates.
 - GitHub API docs (2026-01-22): exec approvals, sub-agents, skills config.
 
 ## Clawd workspace patterns (what they do)
@@ -25,6 +26,8 @@
 - **Exec approvals**: per-agent allowlists, ask fallback when UI is unavailable, safe-bins for stdin-only tools, and auto-allow skill CLIs.
 - **Sub-agents**: `sessions_spawn` tool with announce step, per-agent auth resolution, and concurrency controls.
 - **Profiles**: profile-derived paths for daemon/service configs (`CLAWDBOT_PROFILE`) and auth profiles file protections.
+- **Multi-agent sandboxing**: per-agent sandbox overrides + per-agent tool allow/deny lists.
+- **Per-agent auth isolation**: each agent reads its own `auth-profiles.json` under `~/.clawdbot/agents/<agentId>/agent/`.
 
 ## Nexus adoption status (high-level)
 - Implemented: strict config validation, doctor CLI, system prompt assembly, heartbeat + tool-notes injection, memory log recall, runtime plugin loader.
@@ -44,11 +47,9 @@
 5. Profile-aware state directories + auth-profile permission audits.
 
 ## GitHub snapshot (2026-01-22)
-- Stars: 5,825 · Forks: 897 · Open issues: 129
-- Topics: ai, assistant, clawd, crustacean, own-your-data, personal
+- Stars: 5,854 · Forks: 898 · Open issues: 141
 - Default branch: main · License: MIT
 - Recent commit themes: tighten exec allowlist gating, heartbeat active hours, cache TTL/pruning, channel-specific session policies, and port listener hardening.
-- Latest release: v2026.1.20 (published 2026-01-21).
 
 ## Issue themes (open)
 - Heartbeat UX (silent acknowledgments, schedule control, session scoping).

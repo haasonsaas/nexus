@@ -56,11 +56,11 @@ type SQLiteVecConfig struct {
 // PgvectorConfig contains pgvector specific configuration.
 type PgvectorConfig struct {
 	// DSN is the PostgreSQL connection string.
-	// If empty and UseCockroachDB is true, uses the existing CockroachDB connection.
+	// If empty and UseCockroachDB is true, gateway will fall back to database.url.
 	DSN string `yaml:"dsn"`
 
-	// UseCockroachDB indicates whether to reuse the existing CockroachDB connection.
-	// When true, DSN is ignored and the shared database connection is used.
+	// UseCockroachDB indicates whether to reuse the configured database URL.
+	// When true and DSN is empty, the gateway copies database.url into DSN.
 	UseCockroachDB bool `yaml:"use_cockroachdb"`
 
 	// DB is an existing database connection to reuse (set programmatically, not via config).
@@ -68,7 +68,7 @@ type PgvectorConfig struct {
 
 	// RunMigrations controls whether to run migrations on startup.
 	// Default is true.
-	RunMigrations bool `yaml:"run_migrations"`
+	RunMigrations *bool `yaml:"run_migrations"`
 }
 
 // LanceDBConfig contains LanceDB specific configuration.
@@ -159,11 +159,15 @@ func NewManager(cfg *Config) (*Manager, error) {
 			Dimension: cfg.Dimension,
 		})
 	case "pgvector", "postgres", "postgresql":
+		runMigrations := true
+		if cfg.Pgvector.RunMigrations != nil {
+			runMigrations = *cfg.Pgvector.RunMigrations
+		}
 		b, err = pgvector.New(pgvector.Config{
 			DSN:           cfg.Pgvector.DSN,
 			DB:            cfg.Pgvector.DB,
 			Dimension:     cfg.Dimension,
-			RunMigrations: cfg.Pgvector.RunMigrations,
+			RunMigrations: runMigrations,
 		})
 	case "lancedb", "lance":
 		b, err = lancedb.New(lancedb.Config{

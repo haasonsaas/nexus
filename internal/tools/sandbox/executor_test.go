@@ -727,7 +727,7 @@ func TestPool_Close(t *testing.T) {
 func TestDockerExecutor_Run(t *testing.T) {
 	requireDocker(t)
 
-	executor, err := newDockerExecutor("python", 1000, 512)
+	executor, err := newDockerExecutor("python", 1000, 512, false)
 	if err != nil {
 		t.Fatalf("Failed to create docker executor: %v", err)
 	}

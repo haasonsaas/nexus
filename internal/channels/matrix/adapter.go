@@ -42,7 +42,7 @@ func NewAdapter(cfg Config) (*Adapter, error) {
 	// Create Matrix client
 	client, err := mautrix.NewClient(cfg.Homeserver, id.UserID(cfg.UserID), cfg.AccessToken)
 	if err != nil {
-		return nil, fmt.Errorf("create matrix client: %w", err)
+		return nil, channels.ErrConnection("create matrix client", err)
 	}
 
 	if cfg.DeviceID != "" {
@@ -95,7 +95,7 @@ func (a *Adapter) Start(ctx context.Context) error {
 	// Register event handlers
 	syncer, ok := a.client.Syncer.(*mautrix.DefaultSyncer)
 	if !ok {
-		return fmt.Errorf("unexpected syncer type: %T", a.client.Syncer)
+		return channels.ErrInternal(fmt.Sprintf("unexpected syncer type: %T", a.client.Syncer), nil)
 	}
 
 	// Handle room messages
@@ -422,7 +422,7 @@ func (a *Adapter) StartStreamingResponse(ctx context.Context, msg *models.Messag
 
 	resp, err := a.client.SendMessageEvent(ctx, roomID, event.EventMessage, content)
 	if err != nil {
-		return "", fmt.Errorf("failed to send initial message: %w", err)
+		return "", channels.ErrConnection("failed to send initial message", err)
 	}
 
 	return string(resp.EventID), nil
@@ -457,7 +457,7 @@ func (a *Adapter) UpdateStreamingResponse(ctx context.Context, msg *models.Messa
 
 	_, err := a.client.SendMessageEvent(ctx, roomID, event.EventMessage, editContent)
 	if err != nil {
-		return fmt.Errorf("failed to edit message: %w", err)
+		return channels.ErrInternal("failed to edit message", err)
 	}
 
 	return nil

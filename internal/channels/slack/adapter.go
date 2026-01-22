@@ -652,7 +652,7 @@ func parseSlackTimestamp(ts string) (time.Time, error) {
 	// Slack timestamps are in the format "1234567890.123456"
 	parts := strings.Split(ts, ".")
 	if len(parts) != 2 {
-		return time.Time{}, fmt.Errorf("invalid timestamp format: %s", ts)
+		return time.Time{}, channels.ErrInvalidInput(fmt.Sprintf("invalid timestamp format: %s", ts), nil)
 	}
 
 	var sec, nsec int64

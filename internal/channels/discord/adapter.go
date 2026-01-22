@@ -836,5 +836,5 @@ func (a *Adapter) extractChannelID(msg *models.Message) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("channel_id not found in message")
+	return "", channels.ErrInvalidInput("channel_id not found in message", nil)
 }

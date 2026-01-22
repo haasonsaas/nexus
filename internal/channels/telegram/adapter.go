@@ -563,10 +563,10 @@ func (a *Adapter) UpdateStreamingResponse(ctx context.Context, msg *nexusmodels.
 // DownloadAttachment fetches attachment bytes from Telegram without exposing the bot token.
 func (a *Adapter) DownloadAttachment(ctx context.Context, msg *nexusmodels.Message, attachment *nexusmodels.Attachment) ([]byte, string, string, error) {
 	if a.botClient == nil {
-		return nil, "", "", fmt.Errorf("telegram bot not initialized")
+		return nil, "", "", channels.ErrInternal("telegram bot not initialized", nil)
 	}
 	if attachment == nil {
-		return nil, "", "", fmt.Errorf("attachment is required")
+		return nil, "", "", channels.ErrInvalidInput("attachment is required", nil)
 	}
 
 	fileID := attachment.ID
@@ -576,33 +576,33 @@ func (a *Adapter) DownloadAttachment(ctx context.Context, msg *nexusmodels.Messa
 		}
 	}
 	if fileID == "" {
-		return nil, "", "", fmt.Errorf("missing telegram file id")
+		return nil, "", "", channels.ErrInvalidInput("missing telegram file id", nil)
 	}
 
 	file, err := a.botClient.GetFile(ctx, &bot.GetFileParams{FileID: fileID})
 	if err != nil {
-		return nil, "", "", fmt.Errorf("telegram getFile failed: %w", err)
+		return nil, "", "", channels.ErrConnection("telegram getFile failed", err)
 	}
 	if file == nil || file.FilePath == "" {
-		return nil, "", "", fmt.Errorf("telegram file path missing")
+		return nil, "", "", channels.ErrInvalidInput("telegram file path missing", nil)
 	}
 
 	url := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", a.config.Token, file.FilePath)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("create request: %w", err)
+		return nil, "", "", channels.ErrConnection("create request", err)
 	}
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("download file: %w", err)
+		return nil, "", "", channels.ErrConnection("download file", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, "", "", fmt.Errorf("download failed: HTTP %d", resp.StatusCode)
+		return nil, "", "", channels.ErrConnection(fmt.Sprintf("download failed: HTTP %d", resp.StatusCode), nil)
 	}
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("read response: %w", err)
+		return nil, "", "", channels.ErrInternal("read response", err)
 	}
 
 	mimeType := attachment.MimeType

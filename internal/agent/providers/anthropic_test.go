@@ -857,3 +857,19 @@ func TestModelDefaults(t *testing.T) {
 		t.Errorf("expected specified maxTokens=2000, got %d", maxTokens)
 	}
 }
+
+// TestMaxEmptyStreamEventsConstant verifies the malformed stream protection constant.
+func TestMaxEmptyStreamEventsConstant(t *testing.T) {
+	// Verify the constant is set to a reasonable value that protects against
+	// infinite loops while allowing for legitimate stream processing
+	if maxEmptyStreamEvents < 100 {
+		t.Errorf("maxEmptyStreamEvents=%d is too low, may cause false positives", maxEmptyStreamEvents)
+	}
+	if maxEmptyStreamEvents > 1000 {
+		t.Errorf("maxEmptyStreamEvents=%d is too high, may not protect against malformed streams", maxEmptyStreamEvents)
+	}
+	// Verify it's exactly 300 (from go-openai pattern)
+	if maxEmptyStreamEvents != 300 {
+		t.Logf("Note: maxEmptyStreamEvents=%d (expected 300 based on go-openai pattern)", maxEmptyStreamEvents)
+	}
+}

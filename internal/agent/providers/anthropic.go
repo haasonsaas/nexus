@@ -559,6 +559,12 @@ func (p *AnthropicProvider) createStream(ctx context.Context, req *agent.Complet
 	return stream, nil
 }
 
+// maxEmptyStreamEvents is the maximum number of consecutive empty events before
+// treating the stream as malformed. This protects against streams that flood with
+// empty events, which could otherwise cause excessive CPU usage and memory pressure.
+// Based on patterns from sashabaranov/go-openai stream_reader implementation.
+const maxEmptyStreamEvents = 300
+
 // processStream processes Server-Sent Events from Anthropic's streaming API.
 //
 // This method consumes the SSE stream and converts Anthropic's event format into
@@ -581,6 +587,11 @@ func (p *AnthropicProvider) createStream(ctx context.Context, req *agent.Complet
 // The method accumulates tool input across delta events before sending the
 // complete tool call chunk.
 //
+// Stream Health Protection:
+// The method tracks consecutive empty events to detect malformed streams.
+// If maxEmptyStreamEvents consecutive empty events occur, the stream is
+// terminated with an error to prevent resource exhaustion.
+//
 // Parameters:
 //   - stream: Anthropic SSE stream to consume
 //   - chunks: Channel to send converted chunks to (will not be closed by this method)
@@ -593,10 +604,12 @@ func (p *AnthropicProvider) createStream(ctx context.Context, req *agent.Complet
 func (p *AnthropicProvider) processStream(stream *ssestream.Stream[anthropic.MessageStreamEventUnion], chunks chan<- *agent.CompletionChunk, model string) {
 	var currentToolCall *models.ToolCall
 	var currentToolInput strings.Builder
+	emptyEventCount := 0 // Track consecutive empty events for malformed stream detection
 
 	// Track current tool call being assembled across multiple events
 	for stream.Next() {
 		event := stream.Current()
+		eventProcessed := false // Track if this event produced meaningful output
 
 		switch event.Type {
 		case "content_block_start":
@@ -612,6 +625,7 @@ func (p *AnthropicProvider) processStream(stream *ssestream.Stream[anthropic.Mes
 					Name: toolUse.Name,
 				}
 				currentToolInput.Reset()
+				eventProcessed = true
 			}
 
 		case "content_block_delta":
@@ -621,15 +635,21 @@ func (p *AnthropicProvider) processStream(stream *ssestream.Stream[anthropic.Mes
 
 			// Handle text delta - emit immediately for real-time streaming
 			if textDelta, ok := delta.(anthropic.TextDelta); ok {
-				chunks <- &agent.CompletionChunk{
-					Text: textDelta.Text,
+				if textDelta.Text != "" {
+					chunks <- &agent.CompletionChunk{
+						Text: textDelta.Text,
+					}
+					eventProcessed = true
 				}
 			}
 
 			// Handle tool input delta - accumulate JSON fragments
 			// Tool arguments are streamed as partial JSON strings
 			if inputDelta, ok := delta.(anthropic.InputJSONDelta); ok {
-				currentToolInput.WriteString(inputDelta.PartialJSON)
+				if inputDelta.PartialJSON != "" {
+					currentToolInput.WriteString(inputDelta.PartialJSON)
+					eventProcessed = true
+				}
 			}
 
 		case "content_block_stop":
@@ -641,18 +661,41 @@ func (p *AnthropicProvider) processStream(stream *ssestream.Stream[anthropic.Mes
 					ToolCall: currentToolCall,
 				}
 				currentToolCall = nil
+				eventProcessed = true
 			}
+
+		case "message_start", "message_delta":
+			// Valid events that don't produce output but indicate healthy stream
+			eventProcessed = true
 
 		case "message_stop":
 			// Stream complete successfully
 			chunks <- &agent.CompletionChunk{
 				Done: true,
 			}
+			return // Exit immediately on successful completion
 
 		case "error":
 			// Server-side error during streaming
 			chunks <- &agent.CompletionChunk{
 				Error: p.wrapError(errors.New("anthropic stream error"), model),
+			}
+			return // Exit immediately on error
+		}
+
+		// Malformed stream protection: track consecutive empty events
+		if eventProcessed {
+			emptyEventCount = 0
+		} else {
+			emptyEventCount++
+			if emptyEventCount >= maxEmptyStreamEvents {
+				chunks <- &agent.CompletionChunk{
+					Error: p.wrapError(
+						fmt.Errorf("stream appears malformed: received %d consecutive empty events", emptyEventCount),
+						model,
+					),
+				}
+				return
 			}
 		}
 	}

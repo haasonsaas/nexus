@@ -361,40 +361,131 @@ type Stats struct {
 	Dimension         int    `json:"dimension"`
 }
 
-// embeddingCache is a simple LRU cache for query embeddings.
+// lruNode represents a node in the doubly-linked list for LRU tracking.
+type lruNode struct {
+	key   string
+	value []float32
+	prev  *lruNode
+	next  *lruNode
+}
+
+// embeddingCache is a true LRU cache for query embeddings using a doubly-linked list.
+// Accessed items are promoted to the front, ensuring least-recently-used eviction.
 type embeddingCache struct {
 	mu       sync.RWMutex
-	items    map[string][]float32
-	order    []string
+	items    map[string]*lruNode
+	head     *lruNode // Most recently used
+	tail     *lruNode // Least recently used
 	capacity int
 }
 
 func newEmbeddingCache(capacity int) *embeddingCache {
 	return &embeddingCache{
-		items:    make(map[string][]float32),
+		items:    make(map[string]*lruNode),
 		capacity: capacity,
 	}
 }
 
+// get retrieves a value and promotes it to the front (most recently used).
 func (c *embeddingCache) get(key string) ([]float32, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	v, ok := c.items[key]
-	return v, ok
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	node, ok := c.items[key]
+	if !ok {
+		return nil, false
+	}
+
+	// Promote to front (most recently used)
+	c.moveToFront(node)
+	return node.value, true
 }
 
+// set adds or updates a value, promoting it to the front.
 func (c *embeddingCache) set(key string, value []float32) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if _, exists := c.items[key]; !exists {
-		c.order = append(c.order, key)
-		if len(c.order) > c.capacity {
-			// Evict oldest
-			oldest := c.order[0]
-			c.order = c.order[1:]
-			delete(c.items, oldest)
-		}
+	if node, exists := c.items[key]; exists {
+		// Update existing node and move to front
+		node.value = value
+		c.moveToFront(node)
+		return
 	}
-	c.items[key] = value
+
+	// Create new node
+	node := &lruNode{
+		key:   key,
+		value: value,
+	}
+	c.items[key] = node
+	c.addToFront(node)
+
+	// Evict least recently used if over capacity
+	if len(c.items) > c.capacity {
+		c.evictLRU()
+	}
+}
+
+// moveToFront moves a node to the front of the list (most recently used).
+func (c *embeddingCache) moveToFront(node *lruNode) {
+	if node == c.head {
+		return // Already at front
+	}
+
+	// Remove from current position
+	c.removeNode(node)
+
+	// Add to front
+	c.addToFront(node)
+}
+
+// addToFront adds a node to the front of the list.
+func (c *embeddingCache) addToFront(node *lruNode) {
+	node.prev = nil
+	node.next = c.head
+
+	if c.head != nil {
+		c.head.prev = node
+	}
+	c.head = node
+
+	if c.tail == nil {
+		c.tail = node
+	}
+}
+
+// removeNode removes a node from the list without deleting from map.
+func (c *embeddingCache) removeNode(node *lruNode) {
+	if node.prev != nil {
+		node.prev.next = node.next
+	} else {
+		c.head = node.next
+	}
+
+	if node.next != nil {
+		node.next.prev = node.prev
+	} else {
+		c.tail = node.prev
+	}
+}
+
+// evictLRU removes the least recently used item from the cache.
+func (c *embeddingCache) evictLRU() {
+	if c.tail == nil {
+		return
+	}
+
+	// Remove from map
+	delete(c.items, c.tail.key)
+
+	// Remove from list
+	if c.tail.prev != nil {
+		c.tail.prev.next = nil
+		c.tail = c.tail.prev
+	} else {
+		// Only one element
+		c.head = nil
+		c.tail = nil
+	}
 }

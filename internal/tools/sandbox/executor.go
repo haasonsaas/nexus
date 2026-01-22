@@ -20,16 +20,31 @@ type Executor struct {
 	useFirecracker bool
 }
 
+// WorkspaceAccessMode controls how the workspace is mounted in the sandbox.
+type WorkspaceAccessMode string
+
+const (
+	// WorkspaceNone means no workspace is mounted (most secure).
+	WorkspaceNone WorkspaceAccessMode = "none"
+
+	// WorkspaceReadOnly mounts the workspace as read-only (default).
+	WorkspaceReadOnly WorkspaceAccessMode = "ro"
+
+	// WorkspaceReadWrite mounts the workspace with read-write access.
+	WorkspaceReadWrite WorkspaceAccessMode = "rw"
+)
+
 // ExecuteParams defines the input parameters for code execution including
 // the code, language, optional input, additional files, and resource limits.
 type ExecuteParams struct {
-	Language string            `json:"language"` // python, nodejs, go, bash
-	Code     string            `json:"code"`
-	Stdin    string            `json:"stdin,omitempty"`
-	Files    map[string]string `json:"files,omitempty"`     // filename -> content
-	Timeout  int               `json:"timeout,omitempty"`   // seconds, default 30
-	CPULimit int               `json:"cpu_limit,omitempty"` // millicores, default 1000
-	MemLimit int               `json:"mem_limit,omitempty"` // MB, default 512
+	Language        string              `json:"language"` // python, nodejs, go, bash
+	Code            string              `json:"code"`
+	Stdin           string              `json:"stdin,omitempty"`
+	Files           map[string]string   `json:"files,omitempty"`            // filename -> content
+	Timeout         int                 `json:"timeout,omitempty"`          // seconds, default 30
+	CPULimit        int                 `json:"cpu_limit,omitempty"`        // millicores, default 1000
+	MemLimit        int                 `json:"mem_limit,omitempty"`        // MB, default 512
+	WorkspaceAccess WorkspaceAccessMode `json:"workspace_access,omitempty"` // none, ro, rw - default ro
 }
 
 // ExecuteResult contains the execution output including stdout, stderr,
@@ -362,9 +377,22 @@ func (d *dockerExecutor) Run(ctx context.Context, params *ExecuteParams, workspa
 		"--memory-swap", fmt.Sprintf("%dm", params.MemLimit), // No swap
 		"--pids-limit", "100",
 		"--ulimit", "nofile=1024:1024",
-		"-v", fmt.Sprintf("%s:/workspace:ro", workspace),
-		"-w", "/workspace",
 	)
+
+	// Mount workspace based on access mode
+	switch params.WorkspaceAccess {
+	case WorkspaceReadWrite:
+		args = append(args, "-v", fmt.Sprintf("%s:/workspace:rw", workspace))
+	case WorkspaceNone:
+		// Don't mount the workspace at all
+	case WorkspaceReadOnly, "":
+		// Default to read-only for security
+		args = append(args, "-v", fmt.Sprintf("%s:/workspace:ro", workspace))
+	default:
+		// Unknown mode - fall back to read-only
+		args = append(args, "-v", fmt.Sprintf("%s:/workspace:ro", workspace))
+	}
+	args = append(args, "-w", "/workspace")
 
 	// Add stdin if provided
 	if params.Stdin != "" {

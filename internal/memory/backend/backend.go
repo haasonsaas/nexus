@@ -29,6 +29,20 @@ type Backend interface {
 	Close() error
 }
 
+// SearchMode specifies the search algorithm to use.
+type SearchMode string
+
+const (
+	// SearchModeVector uses pure vector similarity search (default).
+	SearchModeVector SearchMode = "vector"
+
+	// SearchModeBM25 uses BM25 full-text search only.
+	SearchModeBM25 SearchMode = "bm25"
+
+	// SearchModeHybrid combines vector and BM25 search with weighted scoring.
+	SearchModeHybrid SearchMode = "hybrid"
+)
+
 // SearchOptions defines options for backend search operations.
 type SearchOptions struct {
 	Scope     models.MemoryScope
@@ -36,6 +50,17 @@ type SearchOptions struct {
 	Limit     int
 	Threshold float32
 	Filters   map[string]any
+
+	// SearchMode specifies the search algorithm (default: vector).
+	SearchMode SearchMode
+
+	// HybridAlpha controls the weighting in hybrid mode.
+	// 0.0 = pure BM25, 1.0 = pure vector.
+	// Default: 0.7 (favor vector similarity).
+	HybridAlpha float32
+
+	// Query is the raw text query (required for BM25 and hybrid modes).
+	Query string
 }
 
 // Config contains common backend configuration.

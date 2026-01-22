@@ -320,6 +320,11 @@ type SlackConfig struct {
 type LLMConfig struct {
 	DefaultProvider string                       `yaml:"default_provider"`
 	Providers       map[string]LLMProviderConfig `yaml:"providers"`
+
+	// FallbackChain specifies provider IDs to try if the default provider fails.
+	// Providers are tried in order until one succeeds.
+	// Example: ["openai", "google"] - try OpenAI first, then Google.
+	FallbackChain []string `yaml:"fallback_chain"`
 }
 
 type LLMProviderConfig struct {

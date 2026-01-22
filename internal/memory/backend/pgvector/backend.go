@@ -251,7 +251,7 @@ func (b *Backend) Index(ctx context.Context, entries []*models.MemoryEntry) erro
 	return tx.Commit()
 }
 
-// Search finds similar entries using vector cosine similarity.
+// Search finds similar entries using vector similarity, BM25, or hybrid search.
 func (b *Backend) Search(ctx context.Context, queryEmbedding []float32, opts *backend.SearchOptions) ([]*models.SearchResult, error) {
 	if opts == nil {
 		opts = &backend.SearchOptions{Limit: 10}
@@ -260,6 +260,20 @@ func (b *Backend) Search(ctx context.Context, queryEmbedding []float32, opts *ba
 		opts.Limit = 10
 	}
 
+	// Route to appropriate search method based on mode
+	switch opts.SearchMode {
+	case backend.SearchModeBM25:
+		return b.searchBM25(ctx, opts)
+	case backend.SearchModeHybrid:
+		return b.searchHybrid(ctx, queryEmbedding, opts)
+	default:
+		// Default to vector search
+		return b.searchVector(ctx, queryEmbedding, opts)
+	}
+}
+
+// searchVector performs pure vector similarity search.
+func (b *Backend) searchVector(ctx context.Context, queryEmbedding []float32, opts *backend.SearchOptions) ([]*models.SearchResult, error) {
 	// Encode query embedding as pgvector string
 	queryVec := encodeEmbedding(queryEmbedding)
 
@@ -276,20 +290,7 @@ func (b *Backend) Search(ctx context.Context, queryEmbedding []float32, opts *ba
 	args := []any{queryVec}
 	argNum := 2
 
-	switch opts.Scope {
-	case models.ScopeSession:
-		query += fmt.Sprintf(" AND session_id = $%d", argNum)
-		args = append(args, opts.ScopeID)
-		argNum++
-	case models.ScopeChannel:
-		query += fmt.Sprintf(" AND channel_id = $%d", argNum)
-		args = append(args, opts.ScopeID)
-		argNum++
-	case models.ScopeAgent:
-		query += fmt.Sprintf(" AND agent_id = $%d", argNum)
-		args = append(args, opts.ScopeID)
-		argNum++
-	}
+	query, args, argNum = b.addScopeFilter(query, args, argNum, opts)
 
 	// Add threshold filter
 	if opts.Threshold > 0 {
@@ -305,6 +306,152 @@ func (b *Backend) Search(ctx context.Context, queryEmbedding []float32, opts *ba
 	query += fmt.Sprintf(" LIMIT $%d", argNum)
 	args = append(args, opts.Limit)
 
+	return b.executeSearch(ctx, query, args)
+}
+
+// searchBM25 performs full-text search using PostgreSQL's built-in FTS.
+func (b *Backend) searchBM25(ctx context.Context, opts *backend.SearchOptions) ([]*models.SearchResult, error) {
+	if opts.Query == "" {
+		return nil, fmt.Errorf("query text is required for BM25 search")
+	}
+
+	// Convert query to tsquery format
+	// plainto_tsquery handles natural language queries
+	query := `
+		SELECT
+			id, session_id, channel_id, agent_id, content, metadata,
+			embedding, created_at, updated_at,
+			ts_rank_cd(content_tsv, plainto_tsquery('english', $1)) as similarity
+		FROM memories
+		WHERE content_tsv @@ plainto_tsquery('english', $1)
+	`
+	args := []any{opts.Query}
+	argNum := 2
+
+	query, args, argNum = b.addScopeFilter(query, args, argNum, opts)
+
+	// Add threshold filter on BM25 rank
+	if opts.Threshold > 0 {
+		query += fmt.Sprintf(" AND ts_rank_cd(content_tsv, plainto_tsquery('english', $1)) >= $%d", argNum)
+		args = append(args, opts.Threshold)
+		argNum++
+	}
+
+	// Order by BM25 rank (descending)
+	query += " ORDER BY similarity DESC"
+
+	// Limit results
+	query += fmt.Sprintf(" LIMIT $%d", argNum)
+	args = append(args, opts.Limit)
+
+	return b.executeSearch(ctx, query, args)
+}
+
+// searchHybrid combines vector and BM25 search with reciprocal rank fusion.
+func (b *Backend) searchHybrid(ctx context.Context, queryEmbedding []float32, opts *backend.SearchOptions) ([]*models.SearchResult, error) {
+	if opts.Query == "" {
+		// Fall back to vector-only if no query text
+		return b.searchVector(ctx, queryEmbedding, opts)
+	}
+
+	// Default hybrid alpha (weight for vector score)
+	alpha := opts.HybridAlpha
+	if alpha <= 0 {
+		alpha = 0.7 // Default: 70% vector, 30% BM25
+	}
+
+	// Encode query embedding as pgvector string
+	queryVec := encodeEmbedding(queryEmbedding)
+
+	// Use Reciprocal Rank Fusion (RRF) to combine scores
+	// RRF(d) = sum(1 / (k + rank_i(d))) where k is a constant (typically 60)
+	// This query:
+	// 1. Gets vector search results with ranks
+	// 2. Gets BM25 search results with ranks
+	// 3. Combines using weighted RRF
+	query := `
+		WITH vector_results AS (
+			SELECT
+				id, session_id, channel_id, agent_id, content, metadata,
+				embedding, created_at, updated_at,
+				1 - (embedding <=> $1::vector) as vec_score,
+				ROW_NUMBER() OVER (ORDER BY embedding <=> $1::vector ASC) as vec_rank
+			FROM memories
+			WHERE embedding IS NOT NULL
+		),
+		bm25_results AS (
+			SELECT
+				id,
+				ts_rank_cd(content_tsv, plainto_tsquery('english', $2)) as bm25_score,
+				ROW_NUMBER() OVER (ORDER BY ts_rank_cd(content_tsv, plainto_tsquery('english', $2)) DESC) as bm25_rank
+			FROM memories
+			WHERE content_tsv @@ plainto_tsquery('english', $2)
+		),
+		combined AS (
+			SELECT
+				v.id, v.session_id, v.channel_id, v.agent_id, v.content, v.metadata,
+				v.embedding, v.created_at, v.updated_at,
+				-- Hybrid score: weighted combination of RRF scores
+				($3 * (1.0 / (60 + v.vec_rank))) + ((1 - $3) * COALESCE(1.0 / (60 + b.bm25_rank), 0)) as similarity
+			FROM vector_results v
+			LEFT JOIN bm25_results b ON v.id = b.id
+		)
+		SELECT
+			id, session_id, channel_id, agent_id, content, metadata,
+			embedding, created_at, updated_at, similarity
+		FROM combined
+		WHERE 1=1
+	`
+	args := []any{queryVec, opts.Query, alpha}
+	argNum := 4
+
+	// Add scope filters
+	switch opts.Scope {
+	case models.ScopeSession:
+		query += fmt.Sprintf(" AND session_id = $%d", argNum)
+		args = append(args, opts.ScopeID)
+		argNum++
+	case models.ScopeChannel:
+		query += fmt.Sprintf(" AND channel_id = $%d", argNum)
+		args = append(args, opts.ScopeID)
+		argNum++
+	case models.ScopeAgent:
+		query += fmt.Sprintf(" AND agent_id = $%d", argNum)
+		args = append(args, opts.ScopeID)
+		argNum++
+	}
+
+	// Order by hybrid score
+	query += " ORDER BY similarity DESC"
+
+	// Limit results
+	query += fmt.Sprintf(" LIMIT $%d", argNum)
+	args = append(args, opts.Limit)
+
+	return b.executeSearch(ctx, query, args)
+}
+
+// addScopeFilter adds scope filtering to a query.
+func (b *Backend) addScopeFilter(query string, args []any, argNum int, opts *backend.SearchOptions) (string, []any, int) {
+	switch opts.Scope {
+	case models.ScopeSession:
+		query += fmt.Sprintf(" AND session_id = $%d", argNum)
+		args = append(args, opts.ScopeID)
+		argNum++
+	case models.ScopeChannel:
+		query += fmt.Sprintf(" AND channel_id = $%d", argNum)
+		args = append(args, opts.ScopeID)
+		argNum++
+	case models.ScopeAgent:
+		query += fmt.Sprintf(" AND agent_id = $%d", argNum)
+		args = append(args, opts.ScopeID)
+		argNum++
+	}
+	return query, args, argNum
+}
+
+// executeSearch executes a search query and returns results.
+func (b *Backend) executeSearch(ctx context.Context, query string, args []any) ([]*models.SearchResult, error) {
 	rows, err := b.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query: %w", err)

@@ -616,12 +616,24 @@ func (p *AnthropicProvider) processStream(stream *ssestream.Stream[anthropic.Mes
 	emptyEventCount := 0     // Track consecutive empty events for malformed stream detection
 	inThinkingBlock := false // Track if we're currently in a thinking block
 
+	// Track token usage across the stream
+	var inputTokens int
+	var outputTokens int
+
 	// Track current tool call being assembled across multiple events
 	for stream.Next() {
 		event := stream.Current()
 		eventProcessed := false // Track if this event produced meaningful output
 
 		switch event.Type {
+		case "message_start":
+			// Extract input tokens from message_start event
+			messageStart := event.AsMessageStart()
+			if messageStart.Message.Usage.InputTokens > 0 {
+				inputTokens = int(messageStart.Message.Usage.InputTokens)
+			}
+			eventProcessed = true
+
 		case "content_block_start":
 			// New content block starting (could be text, tool use, or thinking)
 			contentBlockStart := event.AsContentBlockStart()
@@ -700,14 +712,20 @@ func (p *AnthropicProvider) processStream(stream *ssestream.Stream[anthropic.Mes
 				eventProcessed = true
 			}
 
-		case "message_start", "message_delta":
-			// Valid events that don't produce output but indicate healthy stream
+		case "message_delta":
+			// Extract output tokens from message_delta event (final usage)
+			messageDelta := event.AsMessageDelta()
+			if messageDelta.Usage.OutputTokens > 0 {
+				outputTokens = int(messageDelta.Usage.OutputTokens)
+			}
 			eventProcessed = true
 
 		case "message_stop":
-			// Stream complete successfully
+			// Stream complete successfully - include token counts
 			chunks <- &agent.CompletionChunk{
-				Done: true,
+				Done:         true,
+				InputTokens:  inputTokens,
+				OutputTokens: outputTokens,
 			}
 			return // Exit immediately on successful completion
 

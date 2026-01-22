@@ -141,6 +141,7 @@ func (s *Server) newSessionStore() (sessions.Store, error) {
 }
 
 // newProvider creates a new LLM provider based on configuration.
+// If a fallback chain is configured, it wraps the primary provider with a failover orchestrator.
 func (s *Server) newProvider() (agent.LLMProvider, string, error) {
 	providerID := strings.TrimSpace(s.config.LLM.DefaultProvider)
 	if providerID == "" {
@@ -148,6 +149,40 @@ func (s *Server) newProvider() (agent.LLMProvider, string, error) {
 	}
 	providerID = strings.ToLower(providerID)
 
+	primary, model, err := s.buildProvider(providerID)
+	if err != nil {
+		return nil, "", err
+	}
+
+	// Wrap with failover orchestrator if fallback chain is configured
+	if len(s.config.LLM.FallbackChain) > 0 {
+		orchestrator := agent.NewFailoverOrchestrator(primary, agent.DefaultFailoverConfig())
+
+		for _, fallbackID := range s.config.LLM.FallbackChain {
+			fallbackID = strings.ToLower(strings.TrimSpace(fallbackID))
+			if fallbackID == "" || fallbackID == providerID {
+				continue // Skip empty or duplicate of primary
+			}
+
+			fallback, _, err := s.buildProvider(fallbackID)
+			if err != nil {
+				// Log warning but don't fail - just skip this fallback
+				if s.logger != nil {
+					s.logger.Warn("failed to create fallback provider", "provider", fallbackID, "error", err)
+				}
+				continue
+			}
+			orchestrator.AddProvider(fallback)
+		}
+
+		return orchestrator, model, nil
+	}
+
+	return primary, model, nil
+}
+
+// buildProvider creates a single LLM provider by ID.
+func (s *Server) buildProvider(providerID string) (agent.LLMProvider, string, error) {
 	providerCfg, ok := s.config.LLM.Providers[providerID]
 	if !ok {
 		return nil, "", fmt.Errorf("provider config missing for %q", providerID)

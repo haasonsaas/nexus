@@ -117,7 +117,7 @@ func (m *SchedulerManager) Start(ctx context.Context) error {
 	if err := m.startTaskScheduler(ctx); err != nil {
 		cancel()
 		if m.cronScheduler != nil {
-			_ = m.cronScheduler.Stop(ctx)
+			_ = m.cronScheduler.Stop(ctx) //nolint:errcheck // best-effort cleanup
 		}
 		return fmt.Errorf("start task scheduler: %w", err)
 	}

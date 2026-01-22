@@ -53,7 +53,7 @@ func (m *Managers) StartAll(ctx context.Context) error {
 		if err := mgr.Start(ctx); err != nil {
 			// Stop already-started managers in reverse order
 			for i := len(started) - 1; i >= 0; i-- {
-				_ = started[i].Stop(ctx)
+				_ = started[i].Stop(ctx) //nolint:errcheck // best-effort cleanup
 			}
 			return err
 		}

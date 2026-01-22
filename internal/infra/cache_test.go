@@ -432,19 +432,28 @@ func TestAsyncTTLCache_PreventThunderingHerd(t *testing.T) {
 		return 42, nil
 	}
 
-	// Launch multiple concurrent requests
+	// Launch multiple concurrent requests with a barrier to ensure
+	// all goroutines start at approximately the same time
+	const numRequests = 10
 	var wg sync.WaitGroup
-	results := make([]int, 10)
-	errs := make([]error, 10)
+	var readyWg sync.WaitGroup
+	start := make(chan struct{})
+	results := make([]int, numRequests)
+	errs := make([]error, numRequests)
 
-	for i := 0; i < 10; i++ {
+	readyWg.Add(numRequests)
+	for i := 0; i < numRequests; i++ {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
+			readyWg.Done() // Signal that this goroutine is ready
+			<-start        // Wait for the start signal
 			results[idx], errs[idx] = cache.Get("key", loader)
 		}(i)
 	}
 
+	readyWg.Wait() // Wait for all goroutines to be ready
+	close(start)   // Start all goroutines at once
 	wg.Wait()
 
 	// All should succeed with same value
@@ -457,7 +466,7 @@ func TestAsyncTTLCache_PreventThunderingHerd(t *testing.T) {
 		}
 	}
 
-	// Loader should only be called once
+	// Loader should only be called once (thundering herd prevented)
 	if count := atomic.LoadInt32(&loadCount); count != 1 {
 		t.Errorf("expected loader called once, called %d times", count)
 	}

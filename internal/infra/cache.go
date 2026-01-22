@@ -387,9 +387,14 @@ func (c *AsyncTTLCache[K, V]) GetWithTTL(key K, loader func(K) (V, error), ttl t
 	// Load the value
 	value, err := loader(key)
 
-	// Clean up loading state
+	// Clean up loading state and set cache while holding lock
+	// to prevent race between waiting goroutines seeing empty loading map
+	// but not yet cached value
 	c.loadingM.Lock()
 	delete(c.loading, key)
+	if err == nil {
+		c.cache.SetWithTTL(key, value, ttl)
+	}
 	close(ch)
 	c.loadingM.Unlock()
 
@@ -398,7 +403,6 @@ func (c *AsyncTTLCache[K, V]) GetWithTTL(key K, loader func(K) (V, error), ttl t
 		return zero, err
 	}
 
-	c.cache.SetWithTTL(key, value, ttl)
 	return value, nil
 }
 

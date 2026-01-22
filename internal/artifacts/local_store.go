@@ -190,8 +190,12 @@ func (s *LocalStore) persistIndexLocked() error {
 	if err != nil {
 		return err
 	}
+	mode := os.FileMode(0644)
+	if info, err := os.Stat(s.indexPath); err == nil {
+		mode = info.Mode().Perm()
+	}
 	tmpPath := s.indexPath + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+	if err := os.WriteFile(tmpPath, data, mode); err != nil {
 		return err
 	}
 	return os.Rename(tmpPath, s.indexPath)

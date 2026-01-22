@@ -187,6 +187,14 @@ func (bp *BatchProcessor[T, R]) processBatch(items []batchItem[T, R]) {
 	bp.mu.Lock()
 	bp.processing = false
 	hasMore := len(bp.items) >= bp.config.MaxSize
+	needsTimer := len(bp.items) > 0 && bp.timer == nil && !hasMore
+
+	// Restart timer if items accumulated but not enough for flush
+	if needsTimer {
+		bp.timer = time.AfterFunc(bp.config.MaxWait, func() {
+			bp.flush()
+		})
+	}
 	bp.mu.Unlock()
 
 	// Process any accumulated items

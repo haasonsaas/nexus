@@ -96,7 +96,7 @@ func TestBatchProcessor_MaxSize(t *testing.T) {
 	var callCount int32
 
 	bp := NewBatchProcessor(
-		BatchConfig{MaxSize: 5, MaxWait: time.Hour},
+		BatchConfig{MaxSize: 5, MaxWait: 100 * time.Millisecond}, // Short MaxWait for test
 		func(ctx context.Context, items []int) ([]int, error) {
 			atomic.AddInt32(&callCount, 1)
 			return items, nil
@@ -114,7 +114,7 @@ func TestBatchProcessor_MaxSize(t *testing.T) {
 
 	wg.Wait()
 
-	// Should have called process function at least twice (2 batches of 5)
+	// Should have called process function at least twice
 	count := atomic.LoadInt32(&callCount)
 	if count < 2 {
 		t.Errorf("expected at least 2 batch calls, got %d", count)

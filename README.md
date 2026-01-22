@@ -456,15 +456,19 @@ Prometheus metrics at `/metrics`:
 - [x] Voice message transcription - OpenAI Whisper integration
 - [x] Multi-agent orchestration - Supervisor, router, and handoff patterns
 - [x] Web UI for session management - htmx + Go templates dashboard
+- [x] Plugin marketplace - Ed25519-verified plugin installation with CLI
+- [x] Scheduled tasks - Cron-based agent triggers with distributed locking
+- [x] RAG pipelines - Document parsing, chunking, and semantic retrieval
+- [x] Agent templates - YAML+Markdown format with variable substitution
+- [x] Conversation branching - Fork, merge, and compare conversation paths
 
 ### Planned
 
-- [ ] Plugin marketplace - Discover and install community plugins
-- [ ] Scheduled tasks - Cron-based agent triggers
-- [ ] RAG pipelines - Document ingestion and chunking
-- [ ] Agent templates - Pre-built agents for common use cases
 - [ ] Mobile app - React Native client for iOS/Android
-- [ ] Conversation branching - Fork and explore alternative paths
+- [ ] Streaming responses - Real-time token streaming to messaging channels
+- [ ] Custom tools SDK - Plugin development kit for external tools
+- [ ] Workflow builder - Visual agent workflow designer
+- [ ] Analytics dashboard - Usage metrics and conversation insights
 
 ## Contributing
 

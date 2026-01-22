@@ -924,6 +924,127 @@ func (r *Runtime) Process(ctx context.Context, session *models.Session, msg *mod
 	return chunks, nil
 }
 
+// ProcessStream processes a user message and returns a channel of AgentEvents.
+// This provides a unified event stream for UI rendering, logging, and plugins.
+//
+// The channel is closed when processing completes or an error occurs.
+// Events include run lifecycle, model streaming, tool execution, and statistics.
+//
+// Example:
+//
+//	events, err := runtime.ProcessStream(ctx, session, msg)
+//	if err != nil {
+//	    return err
+//	}
+//	for event := range events {
+//	    switch event.Type {
+//	    case models.AgentEventModelDelta:
+//	        fmt.Print(event.Stream.Delta)
+//	    case models.AgentEventToolStarted:
+//	        fmt.Printf("Tool: %s\n", event.Tool.Name)
+//	    }
+//	}
+func (r *Runtime) ProcessStream(ctx context.Context, session *models.Session, msg *models.Message) (<-chan models.AgentEvent, error) {
+	eventCh := make(chan models.AgentEvent, processBufferSize)
+
+	go func() {
+		defer close(eventCh)
+
+		// Create multi-sink that sends to both the event channel and plugins
+		eventSink := NewChanSink(eventCh)
+		pluginSink := NewPluginSink(r.plugins)
+		sink := NewMultiSink(eventSink, pluginSink)
+
+		// Create emitter with the multi-sink
+		runID := session.ID + "-" + msg.ID
+		emitter := NewEventEmitter(runID, sink)
+
+		// Emit run started
+		emitter.RunStarted(ctx)
+
+		// Create stats collector
+		statsCollector := NewStatsCollector(runID)
+
+		// Process using the legacy Process() for now
+		// This is a bridge until we refactor to a shared core runner
+		chunks, err := r.Process(ctx, session, msg)
+		if err != nil {
+			emitter.RunError(ctx, err, false)
+			return
+		}
+
+		// Convert ResponseChunks to AgentEvents
+		for chunk := range chunks {
+			if chunk.Error != nil {
+				event := emitter.RunError(ctx, chunk.Error, false)
+				statsCollector.OnEvent(ctx, event)
+				continue
+			}
+
+			if chunk.Text != "" {
+				event := emitter.ModelDelta(ctx, chunk.Text)
+				statsCollector.OnEvent(ctx, event)
+			}
+
+			if chunk.ToolResult != nil {
+				// Tool finished event
+				success := !chunk.ToolResult.IsError
+				event := emitter.ToolFinished(ctx, chunk.ToolResult.ToolCallID, "", success, []byte(chunk.ToolResult.Content), 0)
+				statsCollector.OnEvent(ctx, event)
+			}
+
+			if chunk.Event != nil {
+				// Convert legacy RuntimeEvent to AgentEvent
+				// Note: convertLegacyEvent calls emitter methods which already emit to sink
+				// We only need to track stats here, not emit again
+				event := convertLegacyEvent(emitter, chunk.Event)
+				if event != nil {
+					statsCollector.OnEvent(ctx, *event)
+				}
+			}
+		}
+
+		// Emit run finished with stats
+		stats := statsCollector.Stats()
+		emitter.RunFinished(ctx, stats)
+	}()
+
+	return eventCh, nil
+}
+
+// convertLegacyEvent converts a RuntimeEvent to an AgentEvent.
+func convertLegacyEvent(emitter *EventEmitter, re *models.RuntimeEvent) *models.AgentEvent {
+	if re == nil {
+		return nil
+	}
+
+	emitter.SetIter(re.Iteration)
+
+	var event models.AgentEvent
+
+	switch re.Type {
+	case models.EventIterationStart:
+		event = emitter.IterStarted(context.Background())
+	case models.EventIterationEnd:
+		event = emitter.IterFinished(context.Background())
+	case models.EventToolStarted:
+		event = emitter.ToolStarted(context.Background(), re.ToolCallID, re.ToolName, nil)
+	case models.EventToolCompleted:
+		event = emitter.ToolFinished(context.Background(), re.ToolCallID, re.ToolName, true, nil, 0)
+	case models.EventToolFailed:
+		event = emitter.ToolFinished(context.Background(), re.ToolCallID, re.ToolName, false, nil, 0)
+	case models.EventToolTimeout:
+		event = emitter.ToolFinished(context.Background(), re.ToolCallID, re.ToolName, false, []byte("timeout"), 0)
+	case models.EventThinkingStart, models.EventThinkingEnd:
+		// Skip these for now - they're internal to Process
+		return nil
+	default:
+		return nil
+	}
+
+	return &event
+}
+
 // llmSummaryProvider implements agentctx.SummaryProvider using the runtime's LLM provider.
 type llmSummaryProvider struct {
 	runtime *Runtime

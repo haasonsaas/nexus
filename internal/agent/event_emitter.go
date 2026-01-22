@@ -18,16 +18,25 @@ type EventEmitter struct {
 	turnIndex int
 	iterIndex int
 
-	// Plugin registry for dispatch
-	plugins *PluginRegistry
+	// Sink for event dispatch (can be plugin registry, channel, or multi-sink)
+	sink EventSink
 }
 
 // NewEventEmitter creates a new event emitter for an agent run.
-func NewEventEmitter(runID string, plugins *PluginRegistry) *EventEmitter {
-	return &EventEmitter{
-		runID:   runID,
-		plugins: plugins,
+func NewEventEmitter(runID string, sink EventSink) *EventEmitter {
+	if sink == nil {
+		sink = NopSink{}
 	}
+	return &EventEmitter{
+		runID: runID,
+		sink:  sink,
+	}
+}
+
+// NewEventEmitterWithPlugins creates a new event emitter that dispatches to a plugin registry.
+// This is a convenience constructor for backwards compatibility.
+func NewEventEmitterWithPlugins(runID string, plugins *PluginRegistry) *EventEmitter {
+	return NewEventEmitter(runID, NewPluginSink(plugins))
 }
 
 // SetTurn updates the current turn index.
@@ -58,10 +67,10 @@ func (e *EventEmitter) base(eventType models.AgentEventType) models.AgentEvent {
 	}
 }
 
-// emit dispatches the event to plugins (if any).
+// emit dispatches the event to the configured sink.
 func (e *EventEmitter) emit(ctx context.Context, event models.AgentEvent) {
-	if e.plugins != nil {
-		e.plugins.Emit(ctx, event)
+	if e.sink != nil {
+		e.sink.Emit(ctx, event)
 	}
 }
 

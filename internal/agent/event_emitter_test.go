@@ -78,7 +78,7 @@ func TestEventEmitter_DispatchesToPlugins(t *testing.T) {
 		mu.Unlock()
 	}))
 
-	emitter := NewEventEmitter("test", registry)
+	emitter := NewEventEmitterWithPlugins("test", registry)
 
 	emitter.RunStarted(context.Background())
 	emitter.IterStarted(context.Background())

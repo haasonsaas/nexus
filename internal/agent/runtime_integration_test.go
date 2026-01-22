@@ -691,3 +691,234 @@ func TestProcess_LifecycleEvents(t *testing.T) {
 		}
 	}
 }
+
+// =============================================================================
+// ProcessStream Tests
+// =============================================================================
+
+func TestProcessStream_Basic(t *testing.T) {
+	provider := &multiTurnProvider{
+		responses: []multiTurnResponse{
+			{
+				toolCalls: []models.ToolCall{
+					{ID: "tc-1", Name: "test_tool", Input: json.RawMessage(`{"key":"value"}`)},
+				},
+			},
+			{text: "Here is the result."},
+		},
+	}
+	store := newMemoryStore()
+	runtime := NewRuntime(provider, store)
+
+	testTool := &integrationTool{name: "test_tool"}
+	runtime.RegisterTool(testTool)
+
+	session := &models.Session{ID: "test-session", Channel: models.ChannelTelegram}
+	msg := &models.Message{ID: "msg-1", Role: models.RoleUser, Content: "Test ProcessStream"}
+
+	events, err := runtime.ProcessStream(context.Background(), session, msg)
+	if err != nil {
+		t.Fatalf("ProcessStream() error = %v", err)
+	}
+
+	var allEvents []models.AgentEvent
+	for event := range events {
+		allEvents = append(allEvents, event)
+	}
+
+	// Check for run lifecycle events
+	eventTypes := make(map[models.AgentEventType]int)
+	for _, e := range allEvents {
+		eventTypes[e.Type]++
+	}
+
+	// Must have run.started and run.finished
+	if eventTypes[models.AgentEventRunStarted] == 0 {
+		t.Error("missing run.started event")
+	}
+	if eventTypes[models.AgentEventRunFinished] == 0 {
+		t.Error("missing run.finished event")
+	}
+
+	// Should have model.delta events for "Here is the result."
+	if eventTypes[models.AgentEventModelDelta] == 0 {
+		t.Error("missing model.delta events")
+	}
+
+	// Should have iteration events
+	if eventTypes[models.AgentEventIterStarted] == 0 {
+		t.Error("missing iter.started events")
+	}
+	if eventTypes[models.AgentEventIterFinished] == 0 {
+		t.Error("missing iter.finished events")
+	}
+
+	// Should have tool events
+	if eventTypes[models.AgentEventToolStarted] == 0 {
+		t.Error("missing tool.started event")
+	}
+	if eventTypes[models.AgentEventToolFinished] == 0 {
+		t.Error("missing tool.finished event")
+	}
+
+	// Verify run ID is set correctly
+	for _, e := range allEvents {
+		expectedRunID := session.ID + "-" + msg.ID
+		if e.RunID != expectedRunID {
+			t.Errorf("RunID = %q, want %q", e.RunID, expectedRunID)
+			break
+		}
+	}
+
+	// Verify sequence is monotonic
+	var lastSeq uint64
+	for _, e := range allEvents {
+		if e.Sequence <= lastSeq && lastSeq > 0 {
+			t.Errorf("sequence not monotonic: %d after %d", e.Sequence, lastSeq)
+		}
+		lastSeq = e.Sequence
+	}
+}
+
+func TestProcessStream_PluginReceivesEvents(t *testing.T) {
+	provider := &multiTurnProvider{
+		responses: []multiTurnResponse{
+			{text: "Hello from ProcessStream"},
+		},
+	}
+	store := newMemoryStore()
+	runtime := NewRuntime(provider, store)
+
+	var pluginEvents []models.AgentEvent
+	var mu sync.Mutex
+
+	runtime.Use(PluginFunc(func(ctx context.Context, e models.AgentEvent) {
+		mu.Lock()
+		pluginEvents = append(pluginEvents, e)
+		mu.Unlock()
+	}))
+
+	session := &models.Session{ID: "test-session", Channel: models.ChannelTelegram}
+	msg := &models.Message{ID: "msg-1", Role: models.RoleUser, Content: "Test"}
+
+	events, err := runtime.ProcessStream(context.Background(), session, msg)
+	if err != nil {
+		t.Fatalf("ProcessStream() error = %v", err)
+	}
+
+	// Drain channel
+	for range events {
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	// Plugin should have received events
+	if len(pluginEvents) == 0 {
+		t.Error("plugin received no events")
+	}
+
+	// Check plugin received run lifecycle
+	eventTypes := make(map[models.AgentEventType]bool)
+	for _, e := range pluginEvents {
+		eventTypes[e.Type] = true
+	}
+
+	if !eventTypes[models.AgentEventRunStarted] {
+		t.Error("plugin missing run.started")
+	}
+	if !eventTypes[models.AgentEventRunFinished] {
+		t.Error("plugin missing run.finished")
+	}
+}
+
+func TestProcessStream_Error(t *testing.T) {
+	provider := &multiTurnProvider{
+		responses: []multiTurnResponse{
+			{err: fmt.Errorf("provider error")},
+		},
+	}
+	store := newMemoryStore()
+	runtime := NewRuntime(provider, store)
+
+	session := &models.Session{ID: "test-session", Channel: models.ChannelTelegram}
+	msg := &models.Message{ID: "msg-1", Role: models.RoleUser, Content: "Test error"}
+
+	events, err := runtime.ProcessStream(context.Background(), session, msg)
+	if err != nil {
+		t.Fatalf("ProcessStream() error = %v", err)
+	}
+
+	var errorEvents []models.AgentEvent
+	for event := range events {
+		if event.Type == models.AgentEventRunError {
+			errorEvents = append(errorEvents, event)
+		}
+	}
+
+	// Should have run.error event
+	if len(errorEvents) == 0 {
+		t.Error("expected run.error event")
+	}
+}
+
+func TestProcessStream_RunStats(t *testing.T) {
+	provider := &multiTurnProvider{
+		responses: []multiTurnResponse{
+			{
+				toolCalls: []models.ToolCall{
+					{ID: "tc-1", Name: "tool1", Input: json.RawMessage(`{}`)},
+					{ID: "tc-2", Name: "tool2", Input: json.RawMessage(`{}`)},
+				},
+			},
+			{text: "Done with tools"},
+		},
+	}
+	store := newMemoryStore()
+	runtime := NewRuntime(provider, store)
+
+	runtime.RegisterTool(&integrationTool{name: "tool1"})
+	runtime.RegisterTool(&integrationTool{name: "tool2"})
+
+	session := &models.Session{ID: "test-session", Channel: models.ChannelTelegram}
+	msg := &models.Message{ID: "msg-1", Role: models.RoleUser, Content: "Test stats"}
+
+	events, err := runtime.ProcessStream(context.Background(), session, msg)
+	if err != nil {
+		t.Fatalf("ProcessStream() error = %v", err)
+	}
+
+	var runFinished *models.AgentEvent
+	for event := range events {
+		if event.Type == models.AgentEventRunFinished {
+			e := event
+			runFinished = &e
+		}
+	}
+
+	if runFinished == nil {
+		t.Fatal("missing run.finished event")
+	}
+
+	if runFinished.Stats == nil || runFinished.Stats.Run == nil {
+		t.Fatal("run.finished missing stats")
+	}
+
+	stats := runFinished.Stats.Run
+
+	// Should have counted tool calls
+	if stats.ToolCalls < 2 {
+		t.Errorf("ToolCalls = %d, want >= 2", stats.ToolCalls)
+	}
+
+	// Should have wall time
+	if stats.WallTime == 0 {
+		t.Error("WallTime should be > 0")
+	}
+
+	// RunID should match
+	expectedRunID := session.ID + "-" + msg.ID
+	if stats.RunID != expectedRunID {
+		t.Errorf("RunID = %q, want %q", stats.RunID, expectedRunID)
+	}
+}

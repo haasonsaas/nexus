@@ -288,8 +288,8 @@ func (m *Manager) HandleConnect(stream pb.EdgeService_ConnectServer) error {
 	// Authenticate the edge
 	edgeID, err := m.auth.Authenticate(ctx, reg)
 	if err != nil {
-		// Send failure response
-		_ = stream.Send(&pb.CoreMessage{
+		// Send failure response (best-effort, we're returning an error anyway)
+		_ = stream.Send(&pb.CoreMessage{ //nolint:errcheck
 			Message: &pb.CoreMessage_Registered{
 				Registered: &pb.EdgeRegistered{
 					Success: false,
@@ -593,8 +593,8 @@ func (m *Manager) ExecuteTool(ctx context.Context, edgeID, toolName, input strin
 
 	case <-time.After(timeout):
 		m.cleanupPending(execID)
-		// Send cancellation
-		_ = conn.stream.Send(&pb.CoreMessage{
+		// Send cancellation (best-effort)
+		_ = conn.stream.Send(&pb.CoreMessage{ //nolint:errcheck
 			Message: &pb.CoreMessage_ToolCancel{
 				ToolCancel: &pb.ToolCancellation{
 					ExecutionId: execID,
@@ -606,8 +606,8 @@ func (m *Manager) ExecuteTool(ctx context.Context, edgeID, toolName, input strin
 
 	case <-ctx.Done():
 		m.cleanupPending(execID)
-		// Send cancellation
-		_ = conn.stream.Send(&pb.CoreMessage{
+		// Send cancellation (best-effort)
+		_ = conn.stream.Send(&pb.CoreMessage{ //nolint:errcheck
 			Message: &pb.CoreMessage_ToolCancel{
 				ToolCancel: &pb.ToolCancellation{
 					ExecutionId: execID,

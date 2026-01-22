@@ -63,7 +63,7 @@ type Config struct {
 
 // DefaultConfig returns sensible defaults.
 func DefaultConfig() Config {
-	hostname, _ := os.Hostname()
+	hostname, _ := os.Hostname() //nolint:errcheck // Best-effort hostname lookup
 	return Config{
 		CoreURL:           "localhost:9090",
 		EdgeID:            hostname,
@@ -348,8 +348,8 @@ func (d *EdgeDaemon) handleToolRequest(ctx context.Context, req *pb.ToolExecutio
 	d.activeCalls[req.ExecutionId] = cancel
 	defer delete(d.activeCalls, req.ExecutionId)
 
-	// Send started event
-	_ = d.sendEvent(pb.EdgeEventType_EDGE_EVENT_TYPE_TOOL_STARTED, map[string]interface{}{
+	// Send started event (best-effort, don't block on failure)
+	_ = d.sendEvent(pb.EdgeEventType_EDGE_EVENT_TYPE_TOOL_STARTED, map[string]interface{}{ //nolint:errcheck
 		"execution_id": req.ExecutionId,
 		"tool_name":    req.ToolName,
 	})
@@ -376,7 +376,7 @@ func (d *EdgeDaemon) handleToolRequest(ctx context.Context, req *pb.ToolExecutio
 	if result.IsError {
 		eventType = pb.EdgeEventType_EDGE_EVENT_TYPE_TOOL_FAILED
 	}
-	_ = d.sendEvent(eventType, map[string]interface{}{
+	_ = d.sendEvent(eventType, map[string]interface{}{ //nolint:errcheck // Best-effort event
 		"execution_id": req.ExecutionId,
 		"tool_name":    req.ToolName,
 		"duration_ms":  time.Since(startTime).Milliseconds(),
@@ -409,7 +409,7 @@ func (d *EdgeDaemon) handleToolCancel(cancel *pb.ToolCancellation) {
 			"reason", cancel.Reason,
 		)
 
-		_ = d.sendEvent(pb.EdgeEventType_EDGE_EVENT_TYPE_TOOL_CANCELLED, map[string]interface{}{
+		_ = d.sendEvent(pb.EdgeEventType_EDGE_EVENT_TYPE_TOOL_CANCELLED, map[string]interface{}{ //nolint:errcheck
 			"execution_id": cancel.ExecutionId,
 			"reason":       cancel.Reason,
 		})

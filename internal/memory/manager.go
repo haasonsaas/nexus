@@ -45,6 +45,12 @@ type Config struct {
 
 	// Search defaults
 	Search SearchConfig `yaml:"search"`
+
+	// Auto-capture configuration
+	AutoCapture AutoCaptureConfig `yaml:"auto_capture"`
+
+	// Auto-recall configuration
+	AutoRecall AutoRecallConfig `yaml:"auto_recall"`
 }
 
 // SQLiteVecConfig contains sqlite-vec specific configuration.

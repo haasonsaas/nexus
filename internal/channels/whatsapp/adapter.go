@@ -56,9 +56,11 @@ func New(cfg *Config, logger *slog.Logger) (*Adapter, error) {
 		return nil, channels.ErrConfig("failed to create session directory", err)
 	}
 
-	// Initialize SQLite store
+	// Initialize SQLite store with timeout to prevent indefinite blocking
 	dbLog := waLog.Noop
-	container, err := sqlstore.New(context.Background(), "sqlite3",
+	initCtx, initCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer initCancel()
+	container, err := sqlstore.New(initCtx, "sqlite3",
 		fmt.Sprintf("file:%s?_foreign_keys=on", sessionPath),
 		dbLog)
 	if err != nil {

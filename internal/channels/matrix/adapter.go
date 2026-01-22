@@ -266,6 +266,11 @@ func (a *Adapter) Status() channels.Status {
 	return a.status
 }
 
+// Metrics returns the current metrics snapshot.
+func (a *Adapter) Metrics() channels.MetricsSnapshot {
+	return a.metrics.Snapshot()
+}
+
 func (a *Adapter) syncLoop(ctx context.Context) {
 	for {
 		select {

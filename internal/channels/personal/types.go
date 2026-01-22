@@ -100,6 +100,13 @@ type Config struct {
 	Presence PresenceConfig `yaml:"presence"`
 }
 
+// Validate validates the personal channel configuration.
+func (c *Config) Validate() error {
+	// SessionPath and MediaPath are optional - defaults will be used if empty
+	// No required fields currently
+	return nil
+}
+
 // PresenceConfig holds presence-related settings.
 type PresenceConfig struct {
 	SendReadReceipts bool `yaml:"send_read_receipts"`

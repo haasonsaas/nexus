@@ -12,6 +12,7 @@
 - Clawdbot reference repo (local clone) for inspiration.
 - Clawd workspace templates (`/home/developer/clawd`).
 - Claude CLI synthesis (2026-01-21).
+- Clawdbot GH API docs: exec approvals, sub-agents, skills config (2026-01-22).
 
 ## Workstreams & Status
 1) Critical gateway functionality
@@ -55,6 +56,7 @@
    - [x] Add remote embeddings + cache for memory search (OpenAI-compatible).
    - [x] Add profile-aware config selection + profile CLI.
    - [x] Add skills CLI (list/enable/disable) and channel login checks.
+   - [x] Add debounced skills watcher for hot reload (skills.load.watch).
    - [x] Auto-restart services after install/repair.
    - [x] Implement auth service + API key/JWT gRPC middleware (design doc section 6).
    - [x] Add OAuth provider scaffolding + callback handler and env overrides for config.
@@ -76,6 +78,17 @@
 6) Validation
    - [x] `go test ./...`
    - [x] `go build ./cmd/nexus`
+
+7) Tool execution orchestration (Clawdbot parity)
+   - [x] Add tool lifecycle events (ToolEvent) and stream them in `ResponseChunk`.
+   - [x] Add retries/timeouts/parallelism controls + max tool-call budget.
+   - [x] Add policy decision reasons (allow/deny) for debugging.
+   - [x] Add async tool jobs with `job_status` tool and in-memory store.
+   - [x] Add approval gating via `tools.execution.require_approval`.
+   - [ ] Persist job store in DB with retention/pruning config.
+   - [ ] Implement Clawdbot-style exec approvals (allowlist + ask fallback + safe bins).
+   - [ ] Add sub-agent spawn tool with announce behavior and per-agent tool policy.
+   - [ ] Add tool cancellation hooks (job abort + context mapping).
 
 ## TDD Approach
 - For each change: add/extend tests first, confirm failure, then implement.
@@ -114,3 +127,6 @@
 - 2026-01-22: Implemented cron scheduler MVP (webhook jobs, config schedules, tests) and wired into gateway start/stop.
 - 2026-01-22: Added MCP tool bridge with safe tool names, plus gateway lifecycle wiring and MCP integration docs update.
 - 2026-01-22: Added MCP sampling support, resource/prompt tool bridges, MCP CLI commands, and policy alias mapping for MCP tools.
+- 2026-01-22: Implemented tool lifecycle events, tool retries/timeouts/parallelism, max tool-call budgets, approval gating, and async tool jobs (`job_status`) with tests.
+- 2026-01-22: Claude CLI: short prompts succeed (`claude -p "ping"`), long prompts can exceed 120s and time out; mitigate by splitting prompts, using faster models, or increasing command timeout.
+- 2026-01-22: Implemented skills watcher (fsnotify + debounce) and gateway shutdown cleanup.

@@ -66,7 +66,6 @@ func NewHandler(cfg *Config) (*Handler, error) {
 		"truncate":       truncate,
 		"channelIcon":    channelIcon,
 		"roleClass":      roleClass,
-		"safeHTML":       safeHTML,
 		"hasPrefix":      strings.HasPrefix,
 		"lower":          strings.ToLower,
 		"upper":          strings.ToUpper,
@@ -218,8 +217,4 @@ func roleClass(role models.Role) string {
 	default:
 		return ""
 	}
-}
-
-func safeHTML(s string) template.HTML {
-	return template.HTML(s)
 }

@@ -159,33 +159,11 @@ func (s *MemoryBranchStore) GetFullBranchPath(ctx context.Context, branchID stri
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	var path []*models.Branch
-	currentID := branchID
-
-	for currentID != "" {
-		branch, ok := s.branches[currentID]
-		if !ok {
-			if len(path) == 0 {
-				return nil, ErrBranchNotFound
-			}
-			break
-		}
-		path = append([]*models.Branch{cloneBranch(branch)}, path...)
-		if branch.ParentBranchID == nil {
-			break
-		}
-		currentID = *branch.ParentBranchID
+	path := s.getFullBranchPathLocked(branchID)
+	if path == nil {
+		return nil, ErrBranchNotFound
 	}
-
-	result := &models.BranchPath{
-		BranchID: branchID,
-		Path:     make([]string, len(path)),
-		Branches: path,
-	}
-	for i, b := range path {
-		result.Path[i] = b.ID
-	}
-	return result, nil
+	return path, nil
 }
 
 func (s *MemoryBranchStore) GetBranchStats(ctx context.Context, branchID string) (*models.BranchStats, error) {
@@ -327,34 +305,30 @@ func (s *MemoryBranchStore) ArchiveBranch(ctx context.Context, branchID string) 
 }
 
 func (s *MemoryBranchStore) CompareBranches(ctx context.Context, sourceBranchID, targetBranchID string) (*models.BranchCompare, error) {
-	source, err := s.GetBranch(ctx, sourceBranchID)
-	if err != nil {
-		return nil, err
-	}
-	target, err := s.GetBranch(ctx, targetBranchID)
-	if err != nil {
-		return nil, err
-	}
-
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	// Use internal methods that don't acquire locks (we already hold the lock)
+	source, ok := s.branches[sourceBranchID]
+	if !ok {
+		return nil, ErrBranchNotFound
+	}
+	target, ok := s.branches[targetBranchID]
+	if !ok {
+		return nil, ErrBranchNotFound
+	}
+
 	compare := &models.BranchCompare{
-		SourceBranch: source,
-		TargetBranch: target,
+		SourceBranch: cloneBranch(source),
+		TargetBranch: cloneBranch(target),
 		SourceAhead:  len(s.messages[sourceBranchID]),
 		TargetAhead:  len(s.messages[targetBranchID]),
 	}
 
-	// Find common ancestor
-	sourcePath, err := s.GetFullBranchPath(ctx, sourceBranchID)
-	if err != nil {
-		return nil, err
-	}
-	targetPath, err := s.GetFullBranchPath(ctx, targetBranchID)
-	if err != nil {
-		return nil, err
-	}
+	// Find common ancestor using internal path computation (no lock acquisition)
+	sourcePath := s.getFullBranchPathLocked(sourceBranchID)
+	targetPath := s.getFullBranchPathLocked(targetBranchID)
+
 	if sourcePath != nil && targetPath != nil {
 		sourceSet := make(map[string]bool)
 		for _, id := range sourcePath.Path {
@@ -362,17 +336,47 @@ func (s *MemoryBranchStore) CompareBranches(ctx context.Context, sourceBranchID,
 		}
 		for _, id := range targetPath.Path {
 			if sourceSet[id] {
-				commonAncestor, err := s.GetBranch(ctx, id)
-				if err != nil {
-					return nil, err
+				if ancestor, ok := s.branches[id]; ok {
+					compare.CommonAncestor = cloneBranch(ancestor)
 				}
-				compare.CommonAncestor = commonAncestor
 				break
 			}
 		}
 	}
 
 	return compare, nil
+}
+
+// getFullBranchPathLocked computes the branch path without acquiring locks.
+// Caller must hold at least an RLock.
+func (s *MemoryBranchStore) getFullBranchPathLocked(branchID string) *models.BranchPath {
+	var path []*models.Branch
+	currentID := branchID
+
+	for currentID != "" {
+		branch, ok := s.branches[currentID]
+		if !ok {
+			if len(path) == 0 {
+				return nil
+			}
+			break
+		}
+		path = append([]*models.Branch{cloneBranch(branch)}, path...)
+		if branch.ParentBranchID == nil {
+			break
+		}
+		currentID = *branch.ParentBranchID
+	}
+
+	result := &models.BranchPath{
+		BranchID: branchID,
+		Path:     make([]string, len(path)),
+		Branches: path,
+	}
+	for i, b := range path {
+		result.Path[i] = b.ID
+	}
+	return result
 }
 
 func (s *MemoryBranchStore) AppendMessageToBranch(ctx context.Context, sessionID, branchID string, msg *models.Message) error {

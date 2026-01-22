@@ -40,6 +40,7 @@ type Adapter struct {
 	connMu    sync.RWMutex
 
 	cancelFunc context.CancelFunc
+	wg         sync.WaitGroup
 }
 
 // New creates a new WhatsApp adapter.
@@ -101,15 +102,25 @@ func (a *Adapter) Start(ctx context.Context) error {
 			return fmt.Errorf("failed to connect: %w", err)
 		}
 
-		// Handle QR code events
+		// Handle QR code events with context cancellation
+		a.wg.Add(1)
 		go func() {
-			for evt := range qrChan {
-				if evt.Event == "code" {
-					a.Logger().Info("scan QR code to login",
-						"code", evt.Code)
-					select {
-					case a.qrChan <- evt.Code:
-					default:
+			defer a.wg.Done()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case evt, ok := <-qrChan:
+					if !ok {
+						return
+					}
+					if evt.Event == "code" {
+						a.Logger().Info("scan QR code to login",
+							"code", evt.Code)
+						select {
+						case a.qrChan <- evt.Code:
+						default:
+						}
 					}
 				}
 			}
@@ -129,8 +140,21 @@ func (a *Adapter) Stop(ctx context.Context) error {
 	if a.cancelFunc != nil {
 		a.cancelFunc()
 	}
+
+	// Wait for goroutines to exit before closing resources
+	a.wg.Wait()
+
+	// Close qrChan to unblock any receivers
+	close(a.qrChan)
+
 	if a.client != nil {
 		a.client.Disconnect()
+	}
+	// Close the SQLite store to release database connection
+	if a.store != nil {
+		if err := a.store.Close(); err != nil {
+			a.Logger().Warn("failed to close store", "error", err)
+		}
 	}
 	a.SetStatus(false, "")
 	a.BaseAdapter.Close()

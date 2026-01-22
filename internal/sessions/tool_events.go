@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"sync"
 	"time"
 )
 
@@ -176,6 +177,7 @@ func (s *SQLToolEventStore) GetToolCallsByMessage(ctx context.Context, messageID
 
 // MemoryToolEventStore implements ToolEventStore in memory for testing.
 type MemoryToolEventStore struct {
+	mu      sync.RWMutex
 	calls   []ToolCall
 	results []ToolResult
 }
@@ -191,6 +193,9 @@ func (s *MemoryToolEventStore) AddToolCall(ctx context.Context, sessionID, messa
 		return nil
 	}
 
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	tc := *call
 	tc.SessionID = sessionID
 	tc.MessageID = messageID
@@ -205,6 +210,9 @@ func (s *MemoryToolEventStore) AddToolResult(ctx context.Context, sessionID, mes
 		return nil
 	}
 
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	tr := *result
 	tr.SessionID = sessionID
 	tr.MessageID = messageID
@@ -216,6 +224,9 @@ func (s *MemoryToolEventStore) AddToolResult(ctx context.Context, sessionID, mes
 
 // GetToolCalls retrieves tool calls from memory.
 func (s *MemoryToolEventStore) GetToolCalls(ctx context.Context, sessionID string, limit int) ([]ToolCall, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	var calls []ToolCall
 	for _, c := range s.calls {
 		if c.SessionID == sessionID {
@@ -238,6 +249,9 @@ func (s *MemoryToolEventStore) GetToolCalls(ctx context.Context, sessionID strin
 
 // GetToolResults retrieves tool results from memory.
 func (s *MemoryToolEventStore) GetToolResults(ctx context.Context, sessionID string, limit int) ([]ToolResult, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	var results []ToolResult
 	for _, r := range s.results {
 		if r.SessionID == sessionID {
@@ -260,6 +274,9 @@ func (s *MemoryToolEventStore) GetToolResults(ctx context.Context, sessionID str
 
 // GetToolCallsByMessage retrieves tool calls for a specific message from memory.
 func (s *MemoryToolEventStore) GetToolCallsByMessage(ctx context.Context, messageID string) ([]ToolCall, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	var calls []ToolCall
 	for _, c := range s.calls {
 		if c.MessageID == messageID {

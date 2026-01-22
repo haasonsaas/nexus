@@ -501,12 +501,12 @@ func TestExecutor_Execute_RetryBackoff(t *testing.T) {
 }
 
 func TestExecutor_Execute_ContextCancelDuringRetryBackoff(t *testing.T) {
-	attempts := 0
+	var attempts int64
 	registry := NewToolRegistry()
 	registry.Register(&mockTool{
 		name: "always_fails",
 		execFunc: func(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
-			attempts++
+			atomic.AddInt64(&attempts, 1)
 			return nil, errors.New("timeout: always failing")
 		},
 	})
@@ -531,8 +531,9 @@ func TestExecutor_Execute_ContextCancelDuringRetryBackoff(t *testing.T) {
 	}
 
 	// Should have been cancelled during backoff, not completed all retries
-	if attempts > 3 {
-		t.Errorf("too many attempts (%d), should have been cancelled", attempts)
+	attemptCount := atomic.LoadInt64(&attempts)
+	if attemptCount > 3 {
+		t.Errorf("too many attempts (%d), should have been cancelled", attemptCount)
 	}
 }
 

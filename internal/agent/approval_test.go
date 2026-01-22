@@ -273,6 +273,7 @@ func TestApprovalChecker_DefaultDecision(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			checker := NewApprovalChecker(&ApprovalPolicy{
 				DefaultDecision: tt.defaultDecision,
+				AskFallback:     true, // Required to get pending instead of denied when UI unavailable
 			})
 
 			decision, _ := checker.Check(context.Background(), "", models.ToolCall{Name: "unknown_tool"})
@@ -285,7 +286,8 @@ func TestApprovalChecker_DefaultDecision(t *testing.T) {
 
 func TestApprovalChecker_SuffixPattern(t *testing.T) {
 	checker := NewApprovalChecker(&ApprovalPolicy{
-		Allowlist: []string{"*_read", "*_list"},
+		Allowlist:   []string{"*_read", "*_list"},
+		AskFallback: true, // Required for pending instead of denied when UI unavailable
 	})
 
 	tests := []struct {

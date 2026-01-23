@@ -45,7 +45,7 @@ func (s *taskService) CreateTask(ctx context.Context, req *proto.CreateTaskReque
 	}
 
 	// Validate schedule
-	_, err := cronParser.Parse(req.Schedule)
+	sched, err := cronParser.Parse(req.Schedule)
 	if err != nil {
 		return nil, fmt.Errorf("invalid cron schedule: %w", err)
 	}
@@ -55,12 +55,11 @@ func (s *taskService) CreateTask(ctx context.Context, req *proto.CreateTaskReque
 	// Calculate next run time
 	loc := time.UTC
 	if req.Timezone != "" {
-		loc, _ = time.LoadLocation(req.Timezone)
-		if loc == nil {
-			loc = time.UTC
+		loc, err = time.LoadLocation(req.Timezone)
+		if err != nil {
+			return nil, fmt.Errorf("invalid timezone %q: %w", req.Timezone, err)
 		}
 	}
-	sched, _ := cronParser.Parse(req.Schedule)
 	nextRun := sched.Next(now.In(loc))
 
 	task := &tasks.ScheduledTask{
@@ -194,7 +193,8 @@ func (s *taskService) UpdateTask(ctx context.Context, req *proto.UpdateTaskReque
 		task.Description = req.Description
 	}
 	if req.Schedule != "" {
-		if _, err := cronParser.Parse(req.Schedule); err != nil {
+		sched, err := cronParser.Parse(req.Schedule)
+		if err != nil {
 			return nil, fmt.Errorf("invalid cron schedule: %w", err)
 		}
 		task.Schedule = req.Schedule
@@ -206,12 +206,11 @@ func (s *taskService) UpdateTask(ctx context.Context, req *proto.UpdateTaskReque
 			tz = task.Timezone
 		}
 		if tz != "" {
-			loc, _ = time.LoadLocation(tz)
-			if loc == nil {
-				loc = time.UTC
+			loc, err = time.LoadLocation(tz)
+			if err != nil {
+				return nil, fmt.Errorf("invalid timezone %q: %w", tz, err)
 			}
 		}
-		sched, _ := cronParser.Parse(req.Schedule)
 		task.NextRunAt = sched.Next(time.Now().In(loc))
 	}
 	if req.Timezone != "" {
@@ -310,12 +309,15 @@ func (s *taskService) ResumeTask(ctx context.Context, req *proto.ResumeTaskReque
 	// Recalculate next run time
 	loc := time.UTC
 	if task.Timezone != "" {
-		loc, _ = time.LoadLocation(task.Timezone)
-		if loc == nil {
-			loc = time.UTC
+		loc, err = time.LoadLocation(task.Timezone)
+		if err != nil {
+			return nil, fmt.Errorf("invalid timezone %q: %w", task.Timezone, err)
 		}
 	}
-	sched, _ := cronParser.Parse(task.Schedule)
+	sched, err := cronParser.Parse(task.Schedule)
+	if err != nil {
+		return nil, fmt.Errorf("invalid cron schedule: %w", err)
+	}
 	task.NextRunAt = sched.Next(time.Now().In(loc))
 
 	if err := s.server.taskStore.UpdateTask(ctx, task); err != nil {

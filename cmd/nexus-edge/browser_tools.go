@@ -488,7 +488,13 @@ func handleBrowserAct(ctx context.Context, input string) (*ToolResult, error) {
 				IsError: true,
 			}, nil
 		}
-		resultJSON, _ := json.Marshal(evalResult)
+		resultJSON, err := json.Marshal(evalResult)
+		if err != nil {
+			return &ToolResult{
+				Content: fmt.Sprintf("Evaluate result marshal failed: %v", err),
+				IsError: true,
+			}, nil
+		}
 		return &ToolResult{
 			Content: fmt.Sprintf("Evaluate result: %s", string(resultJSON)),
 		}, nil

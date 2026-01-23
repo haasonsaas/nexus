@@ -46,19 +46,7 @@ func NewS3Store(ctx context.Context, cfg S3Config) (*S3Store, error) {
 		config.WithRegion(region),
 	}
 
-	if endpoint := strings.TrimSpace(cfg.Endpoint); endpoint != "" {
-		resolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
-			if service == s3.ServiceID {
-				return aws.Endpoint{
-					URL:               endpoint,
-					HostnameImmutable: true,
-					SigningRegion:     region,
-				}, nil
-			}
-			return aws.Endpoint{}, &aws.EndpointNotFoundError{}
-		})
-		loadOptions = append(loadOptions, config.WithEndpointResolverWithOptions(resolver))
-	}
+	endpoint := strings.TrimSpace(cfg.Endpoint)
 
 	awsCfg, err := config.LoadDefaultConfig(ctx, loadOptions...)
 	if err != nil {
@@ -66,6 +54,9 @@ func NewS3Store(ctx context.Context, cfg S3Config) (*S3Store, error) {
 	}
 
 	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
+		if endpoint != "" {
+			o.BaseEndpoint = aws.String(endpoint)
+		}
 		if cfg.ForcePathStyle {
 			o.UsePathStyle = true
 		}

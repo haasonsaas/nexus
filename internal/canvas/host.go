@@ -31,6 +31,7 @@ type Host struct {
 	host         string
 	port         int
 	root         string
+	rootReal     string
 	namespace    string
 	a2uiRoot     string
 	liveReload   bool
@@ -96,6 +97,11 @@ func (h *Host) Start(ctx context.Context) error {
 	if err := h.ensureRoot(); err != nil {
 		return err
 	}
+	rootReal, err := filepath.EvalSymlinks(h.root)
+	if err != nil {
+		return fmt.Errorf("resolve canvas root: %w", err)
+	}
+	h.rootReal = rootReal
 	if h.autoIndex {
 		h.ensureIndex(h.root)
 	}
@@ -226,20 +232,29 @@ func (h *Host) CanvasURL(requestHost string) string {
 
 func (h *Host) canvasHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			_, _ = w.Write([]byte("Method Not Allowed")) //nolint:errcheck
+			return
+		}
 		clean := path.Clean("/" + strings.TrimPrefix(r.URL.Path, "/"))
 		if strings.HasPrefix(clean, "/..") {
 			http.NotFound(w, r)
 			return
 		}
-		rel := strings.TrimPrefix(clean, "/")
-		fullPath := filepath.Join(h.root, filepath.FromSlash(rel))
-		info, err := os.Stat(fullPath)
-		if err == nil && info.IsDir() {
-			if h.autoIndex {
-				h.ensureIndex(fullPath)
+		fullPath, err := h.resolveFilePath(clean)
+		if err != nil {
+			if clean == "/" || strings.HasSuffix(clean, "/") {
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte("<!doctype html><meta charset=\"utf-8\" /><title>Nexus Canvas</title><pre>Missing file. Create index.html</pre>")) //nolint:errcheck
+				return
 			}
-			fullPath = filepath.Join(fullPath, "index.html")
+			http.NotFound(w, r)
+			return
 		}
+		w.Header().Set("Cache-Control", "no-store")
 		if strings.HasSuffix(strings.ToLower(fullPath), ".html") {
 			h.serveHTML(w, r, fullPath)
 			return
@@ -285,6 +300,7 @@ func (h *Host) serveHTML(w http.ResponseWriter, r *http.Request, fullPath string
 	if h.injectClient && h.liveReload {
 		html = h.injectLiveReload(html)
 	}
+	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if _, err := io.WriteString(w, html); err != nil {
 		h.logger.Warn("failed to write canvas html", "error", err)
@@ -399,6 +415,9 @@ func (h *Host) watchLoop(ctx context.Context, watcher *fsnotify.Watcher) {
 				return
 			}
 			if evt.Op&(fsnotify.Create|fsnotify.Write|fsnotify.Remove|fsnotify.Rename) != 0 {
+				if shouldIgnorePath(evt.Name) {
+					continue
+				}
 				if evt.Op&fsnotify.Create != 0 {
 					info, err := os.Stat(evt.Name)
 					if err == nil && info.IsDir() {
@@ -425,6 +444,9 @@ func (h *Host) watchRecursive(watcher *fsnotify.Watcher, root string) error {
 		}
 		if !d.IsDir() {
 			return nil
+		}
+		if path != root && shouldIgnorePath(path) {
+			return filepath.SkipDir
 		}
 		return watcher.Add(path)
 	})
@@ -498,4 +520,73 @@ func normalizeNamespace(namespace string) string {
 		clean = "/"
 	}
 	return clean
+}
+
+func (h *Host) resolveFilePath(urlPath string) (string, error) {
+	rootReal := strings.TrimSpace(h.rootReal)
+	if rootReal == "" {
+		rootReal = h.root
+		if resolved, err := filepath.EvalSymlinks(h.root); err == nil {
+			rootReal = resolved
+		}
+	}
+
+	normalized := path.Clean("/" + strings.TrimPrefix(urlPath, "/"))
+	if strings.HasPrefix(normalized, "/..") {
+		return "", os.ErrNotExist
+	}
+	rel := strings.TrimPrefix(normalized, "/")
+	candidate := filepath.Join(h.root, filepath.FromSlash(rel))
+
+	info, err := os.Stat(candidate)
+	if err == nil && info.IsDir() {
+		if h.autoIndex {
+			h.ensureIndex(candidate)
+		}
+		candidate = filepath.Join(candidate, "index.html")
+	}
+
+	lstat, err := os.Lstat(candidate)
+	if err != nil {
+		return "", err
+	}
+	if lstat.Mode()&os.ModeSymlink != 0 {
+		return "", os.ErrNotExist
+	}
+	realPath, err := filepath.EvalSymlinks(candidate)
+	if err != nil {
+		return "", err
+	}
+
+	rootReal = filepath.Clean(rootReal)
+	realPath = filepath.Clean(realPath)
+	rootPrefix := rootReal
+	if !strings.HasSuffix(rootPrefix, string(os.PathSeparator)) {
+		rootPrefix += string(os.PathSeparator)
+	}
+	if realPath != rootReal && !strings.HasPrefix(realPath, rootPrefix) {
+		return "", os.ErrNotExist
+	}
+	return realPath, nil
+}
+
+func shouldIgnorePath(p string) bool {
+	if p == "" {
+		return false
+	}
+	parts := strings.FieldsFunc(p, func(r rune) bool {
+		return r == '/' || r == '\\'
+	})
+	for _, part := range parts {
+		if part == "" || part == "." || part == ".." {
+			continue
+		}
+		if strings.HasPrefix(part, ".") {
+			return true
+		}
+		if part == "node_modules" {
+			return true
+		}
+	}
+	return false
 }

@@ -298,8 +298,8 @@ func TestSourceConfig_Struct(t *testing.T) {
 
 func TestLoadConfig_Struct(t *testing.T) {
 	cfg := &LoadConfig{
-		ExtraDirs:      []string{"/extra/dir1", "/extra/dir2"},
-		Watch:          true,
+		ExtraDirs:       []string{"/extra/dir1", "/extra/dir2"},
+		Watch:           true,
 		WatchDebounceMs: 100,
 	}
 

@@ -117,6 +117,168 @@ const (
   </main>
 </body>
 </html>`
+	defaultA2UIIndexHTML = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nexus A2UI</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Space Grotesk", "Sora", "Fira Sans", sans-serif;
+      background: radial-gradient(1200px 600px at 85% 15%, #f6f1ff, #f2f6ff 55%, #e9eef8 100%);
+      color: #14121a;
+    }
+    main {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 32px;
+    }
+    .panel {
+      width: min(860px, 100%);
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid #d9d7e8;
+      border-radius: 22px;
+      padding: 28px;
+      box-shadow: 0 30px 70px rgba(26, 20, 52, 0.12);
+      backdrop-filter: blur(8px);
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      letter-spacing: 0.3px;
+    }
+    .badge {
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: #2b1d4f;
+      color: #f8f6ff;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+    p {
+      margin: 12px 0 0;
+      color: #3c3a4a;
+      line-height: 1.6;
+    }
+    .grid {
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+    }
+    button {
+      appearance: none;
+      border: 1px solid #d6d2e6;
+      background: #f7f6fb;
+      padding: 12px 14px;
+      border-radius: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 20px rgba(39, 28, 80, 0.08);
+    }
+    .log {
+      margin-top: 18px;
+      font-family: "IBM Plex Mono", "Fira Mono", "Menlo", monospace;
+      font-size: 12px;
+      background: #f3f0fb;
+      border: 1px solid #ddd8f0;
+      padding: 12px;
+      border-radius: 12px;
+      color: #2a243d;
+      min-height: 96px;
+      white-space: pre-wrap;
+    }
+    .status {
+      margin-top: 12px;
+      font-size: 12px;
+      color: #5b5970;
+    }
+    code {
+      font-family: "IBM Plex Mono", "Fira Mono", "Menlo", monospace;
+      background: #efeaf8;
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="panel">
+      <div class="header">
+        <h1>Nexus A2UI Bridge</h1>
+        <span class="badge">demo</span>
+      </div>
+      <p>Use this page to validate A2UI action bridges. Click a button to send a user action.</p>
+      <div class="grid">
+        <button data-action="hello" data-source="demo.hello">Hello</button>
+        <button data-action="time" data-source="demo.time">Time</button>
+        <button data-action="photo" data-source="demo.photo">Photo</button>
+        <button data-action="dalek" data-source="demo.dalek">Dalek</button>
+      </div>
+      <div class="status" id="status">Bridge: checking...</div>
+      <div class="log" id="log">Ready.</div>
+      <p>Tip: replace this file in <code>a2ui_root</code> with your own UI when ready.</p>
+    </section>
+  </main>
+  <script>
+  (() => {
+    const logEl = document.getElementById("log");
+    const statusEl = document.getElementById("status");
+    const log = (msg) => { logEl.textContent = String(msg); };
+
+    const send =
+      window.nexusSendUserAction ||
+      window.Nexus?.sendUserAction ||
+      window.clawdbotSendUserAction ||
+      window.Clawdbot?.sendUserAction;
+
+    const hasIOS = () => !!(window.webkit && window.webkit.messageHandlers &&
+      (window.webkit.messageHandlers.nexusCanvasA2UIAction || window.webkit.messageHandlers.clawdbotCanvasA2UIAction));
+    const hasAndroid = () => !!(window.nexusCanvasA2UIAction || window.clawdbotCanvasA2UIAction);
+    statusEl.textContent =
+      "Bridge: " + (send ? "ready" : "missing") +
+      " · iOS=" + (hasIOS() ? "yes" : "no") +
+      " · Android=" + (hasAndroid() ? "yes" : "no");
+
+    const sendAction = (name, sourceComponentId) => {
+      if (typeof send !== "function") {
+        log("No action bridge found. Open this page in a Nexus node with A2UI enabled.");
+        return;
+      }
+      const ok = send({
+        name,
+        surfaceId: "main",
+        sourceComponentId,
+        context: { t: Date.now() },
+      });
+      log(ok ? ("Sent action: " + name) : ("Failed to send action: " + name));
+    };
+
+    document.querySelectorAll("button[data-action]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        sendAction(btn.dataset.action, btn.dataset.source);
+      });
+    });
+  })();
+  </script>
+</body>
+</html>`
 )
 
 // Host serves a canvas directory on a dedicated HTTP server with optional live reload.
@@ -205,6 +367,9 @@ func (h *Host) Start(ctx context.Context) error {
 	h.rootReal = rootReal
 	if h.autoIndex {
 		h.ensureIndex(h.root)
+		if h.a2uiRoot != "" {
+			h.ensureA2UI(h.a2uiRoot)
+		}
 	}
 
 	mux := http.NewServeMux()
@@ -677,6 +842,23 @@ func (h *Host) ensureIndex(dir string) {
 	}
 	if err := os.WriteFile(indexPath, []byte(defaultIndexHTML), 0o644); err != nil {
 		h.logger.Warn("failed to write canvas index", "path", indexPath, "error", err)
+	}
+}
+
+func (h *Host) ensureA2UI(dir string) {
+	if strings.TrimSpace(dir) == "" {
+		return
+	}
+	indexPath := filepath.Join(dir, "index.html")
+	if _, err := os.Stat(indexPath); err == nil {
+		return
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		h.logger.Warn("failed to create a2ui directory", "path", dir, "error", err)
+		return
+	}
+	if err := os.WriteFile(indexPath, []byte(defaultA2UIIndexHTML), 0o644); err != nil {
+		h.logger.Warn("failed to write a2ui index", "path", indexPath, "error", err)
 	}
 }
 

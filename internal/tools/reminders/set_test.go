@@ -1,8 +1,13 @@
 package reminders
 
 import (
+	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/haasonsaas/nexus/internal/tasks"
 )
 
 func TestParseWhen_RelativeTime(t *testing.T) {
@@ -99,4 +104,290 @@ func TestFormatReminderName(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestListTool_Name(t *testing.T) {
+	tool := NewListTool(nil)
+	if name := tool.Name(); name != "reminder_list" {
+		t.Errorf("Name() = %q, want %q", name, "reminder_list")
+	}
+}
+
+func TestListTool_Description(t *testing.T) {
+	tool := NewListTool(nil)
+	desc := tool.Description()
+	if desc == "" {
+		t.Error("Description should not be empty")
+	}
+}
+
+func TestListTool_Schema(t *testing.T) {
+	tool := NewListTool(nil)
+	schema := tool.Schema()
+	if len(schema) == 0 {
+		t.Error("Schema should not be empty")
+	}
+
+	// Validate it's valid JSON
+	var parsed map[string]any
+	if err := json.Unmarshal(schema, &parsed); err != nil {
+		t.Errorf("Schema is not valid JSON: %v", err)
+	}
+}
+
+func TestListTool_Execute_NilStore(t *testing.T) {
+	tool := NewListTool(nil)
+	result, err := tool.Execute(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !result.IsError {
+		t.Error("expected error result for nil store")
+	}
+	if !strings.Contains(result.Content, "unavailable") {
+		t.Errorf("Content = %q, want to contain 'unavailable'", result.Content)
+	}
+}
+
+func TestListInput_Struct(t *testing.T) {
+	input := ListInput{
+		IncludeCompleted: true,
+		Limit:            50,
+	}
+	if !input.IncludeCompleted {
+		t.Error("IncludeCompleted should be true")
+	}
+	if input.Limit != 50 {
+		t.Errorf("Limit = %d, want 50", input.Limit)
+	}
+}
+
+func TestCancelTool_Name(t *testing.T) {
+	tool := NewCancelTool(nil)
+	if name := tool.Name(); name != "reminder_cancel" {
+		t.Errorf("Name() = %q, want %q", name, "reminder_cancel")
+	}
+}
+
+func TestCancelTool_Description(t *testing.T) {
+	tool := NewCancelTool(nil)
+	desc := tool.Description()
+	if desc == "" {
+		t.Error("Description should not be empty")
+	}
+}
+
+func TestCancelTool_Schema(t *testing.T) {
+	tool := NewCancelTool(nil)
+	schema := tool.Schema()
+	if len(schema) == 0 {
+		t.Error("Schema should not be empty")
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal(schema, &parsed); err != nil {
+		t.Errorf("Schema is not valid JSON: %v", err)
+	}
+
+	// Check required field
+	required, ok := parsed["required"].([]any)
+	if !ok {
+		t.Fatal("schema required field not found")
+	}
+	found := false
+	for _, r := range required {
+		if r == "reminder_id" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("reminder_id should be required")
+	}
+}
+
+func TestCancelTool_Execute_NilStore(t *testing.T) {
+	tool := NewCancelTool(nil)
+	result, err := tool.Execute(context.Background(), json.RawMessage(`{"reminder_id": "test-123"}`))
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !result.IsError {
+		t.Error("expected error result for nil store")
+	}
+}
+
+func TestCancelTool_Execute_EmptyReminderID(t *testing.T) {
+	tool := NewCancelTool(&mockStore{})
+	result, err := tool.Execute(context.Background(), json.RawMessage(`{"reminder_id": ""}`))
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !result.IsError {
+		t.Error("expected error result for empty reminder_id")
+	}
+	if !strings.Contains(result.Content, "required") {
+		t.Errorf("Content = %q, want to contain 'required'", result.Content)
+	}
+}
+
+func TestCancelInput_Struct(t *testing.T) {
+	input := CancelInput{
+		ReminderID: "reminder-123",
+	}
+	if input.ReminderID != "reminder-123" {
+		t.Errorf("ReminderID = %q, want %q", input.ReminderID, "reminder-123")
+	}
+}
+
+func TestSetTool_Name(t *testing.T) {
+	tool := NewSetTool(nil)
+	if name := tool.Name(); name != "reminder_set" {
+		t.Errorf("Name() = %q, want %q", name, "reminder_set")
+	}
+}
+
+func TestSetTool_Description(t *testing.T) {
+	tool := NewSetTool(nil)
+	desc := tool.Description()
+	if desc == "" {
+		t.Error("Description should not be empty")
+	}
+}
+
+func TestSetTool_Schema(t *testing.T) {
+	tool := NewSetTool(nil)
+	schema := tool.Schema()
+	if len(schema) == 0 {
+		t.Error("Schema should not be empty")
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal(schema, &parsed); err != nil {
+		t.Errorf("Schema is not valid JSON: %v", err)
+	}
+}
+
+func TestSetTool_Execute_NilStore(t *testing.T) {
+	tool := NewSetTool(nil)
+	params := json.RawMessage(`{"message": "test", "when": "in 5 minutes"}`)
+	result, err := tool.Execute(context.Background(), params)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !result.IsError {
+		t.Error("expected error result for nil store")
+	}
+}
+
+func TestSetTool_Execute_InvalidJSON(t *testing.T) {
+	tool := NewSetTool(&mockStore{})
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{invalid json}`))
+	if err == nil {
+		t.Error("expected error for invalid JSON")
+	}
+}
+
+func TestSetTool_Execute_MissingMessage(t *testing.T) {
+	tool := NewSetTool(&mockStore{})
+	params := json.RawMessage(`{"when": "in 5 minutes"}`)
+	result, err := tool.Execute(context.Background(), params)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !result.IsError {
+		t.Error("expected error for missing message")
+	}
+}
+
+func TestSetTool_Execute_MissingWhen(t *testing.T) {
+	tool := NewSetTool(&mockStore{})
+	params := json.RawMessage(`{"message": "test"}`)
+	result, err := tool.Execute(context.Background(), params)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !result.IsError {
+		t.Error("expected error for missing when")
+	}
+}
+
+func TestSetInput_Struct(t *testing.T) {
+	input := SetInput{
+		Message: "Don't forget!",
+		When:    "in 5 minutes",
+		Title:   "My Reminder",
+	}
+	if input.Message != "Don't forget!" {
+		t.Errorf("Message = %q", input.Message)
+	}
+	if input.When != "in 5 minutes" {
+		t.Errorf("When = %q", input.When)
+	}
+	if input.Title != "My Reminder" {
+		t.Errorf("Title = %q", input.Title)
+	}
+}
+
+// mockStore is a minimal mock for testing
+type mockStore struct{}
+
+func (m *mockStore) CreateTask(ctx context.Context, task *tasks.ScheduledTask) error {
+	return nil
+}
+
+func (m *mockStore) GetTask(ctx context.Context, id string) (*tasks.ScheduledTask, error) {
+	return nil, nil
+}
+
+func (m *mockStore) UpdateTask(ctx context.Context, task *tasks.ScheduledTask) error {
+	return nil
+}
+
+func (m *mockStore) DeleteTask(ctx context.Context, id string) error {
+	return nil
+}
+
+func (m *mockStore) ListTasks(ctx context.Context, opts tasks.ListTasksOptions) ([]*tasks.ScheduledTask, error) {
+	return nil, nil
+}
+
+func (m *mockStore) CreateExecution(ctx context.Context, exec *tasks.TaskExecution) error {
+	return nil
+}
+
+func (m *mockStore) GetExecution(ctx context.Context, id string) (*tasks.TaskExecution, error) {
+	return nil, nil
+}
+
+func (m *mockStore) UpdateExecution(ctx context.Context, exec *tasks.TaskExecution) error {
+	return nil
+}
+
+func (m *mockStore) ListExecutions(ctx context.Context, taskID string, opts tasks.ListExecutionsOptions) ([]*tasks.TaskExecution, error) {
+	return nil, nil
+}
+
+func (m *mockStore) GetDueTasks(ctx context.Context, now time.Time, limit int) ([]*tasks.ScheduledTask, error) {
+	return nil, nil
+}
+
+func (m *mockStore) AcquireExecution(ctx context.Context, workerID string, lockDuration time.Duration) (*tasks.TaskExecution, error) {
+	return nil, nil
+}
+
+func (m *mockStore) ReleaseExecution(ctx context.Context, executionID string) error {
+	return nil
+}
+
+func (m *mockStore) CompleteExecution(ctx context.Context, executionID string, status tasks.ExecutionStatus, response string, errStr string) error {
+	return nil
+}
+
+func (m *mockStore) GetRunningExecutions(ctx context.Context, taskID string) ([]*tasks.TaskExecution, error) {
+	return nil, nil
+}
+
+func (m *mockStore) CleanupStaleExecutions(ctx context.Context, timeout time.Duration) (int, error) {
+	return 0, nil
 }

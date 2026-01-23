@@ -31,6 +31,9 @@ func buildArtifactSetup(cfg *config.Config, logger *slog.Logger) (*artifactSetup
 		FilenamePatterns: cfg.Artifacts.Redaction.FilenamePatterns,
 	})
 	if err != nil {
+		if closer, ok := repo.(interface{ Close() error }); ok {
+			_ = closer.Close()
+		}
 		return nil, err
 	}
 
@@ -96,21 +99,25 @@ func BuildArtifactRepository(ctx context.Context, cfg *config.Config, logger *sl
 		}
 		repo, err := artifacts.NewPersistentRepository(store, metadataPath, logger)
 		if err != nil {
+			_ = store.Close()
 			return nil, err
 		}
 		return repo, nil
 	case "database", "db":
 		db, err := openArtifactDB(cfg)
 		if err != nil {
+			_ = store.Close()
 			return nil, err
 		}
 		repo, err := artifacts.NewSQLRepository(db, store, logger)
 		if err != nil {
 			_ = db.Close()
+			_ = store.Close()
 			return nil, err
 		}
 		return repo, nil
 	default:
+		_ = store.Close()
 		return nil, fmt.Errorf("unsupported artifacts metadata backend %q", metadataBackend)
 	}
 }

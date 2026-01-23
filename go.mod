@@ -43,6 +43,7 @@ require (
 	github.com/chromedp/cdproto v0.0.0-20250724212937-08a3db8b4327
 	github.com/chromedp/chromedp v0.14.2
 	github.com/fsnotify/fsnotify v1.9.0
+	github.com/gorilla/websocket v1.5.3
 	github.com/robfig/cron/v3 v3.0.1
 	golang.org/x/image v0.35.0
 	golang.org/x/text v0.33.0
@@ -106,7 +107,6 @@ require (
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/s2a-go v0.1.8 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.4 // indirect
-	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.3 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect

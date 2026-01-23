@@ -13,6 +13,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
+	"net/http"
 	"sync"
 	"time"
 
@@ -125,6 +127,10 @@ type Server struct {
 
 	// streamingRegistry manages streaming behavior per channel
 	streamingRegistry *StreamingRegistry
+
+	// httpServer serves the HTTP dashboard, API, and control plane WebSocket
+	httpServer   *http.Server
+	httpListener net.Listener
 }
 
 // NewServer creates a new gateway server with the given configuration and logger.

@@ -98,6 +98,9 @@ func (r *PersistentRepository) StoreArtifact(ctx context.Context, artifact *pb.A
 		r.mu.Lock()
 		r.metadata[artifact.Id] = meta
 		err := r.persistLocked()
+		if err != nil {
+			delete(r.metadata, artifact.Id)
+		}
 		r.mu.Unlock()
 		if err != nil {
 			return err
@@ -130,6 +133,9 @@ func (r *PersistentRepository) StoreArtifact(ctx context.Context, artifact *pb.A
 	r.mu.Lock()
 	r.metadata[artifact.Id] = meta
 	err = r.persistLocked()
+	if err != nil {
+		delete(r.metadata, artifact.Id)
+	}
 	r.mu.Unlock()
 	if err != nil {
 		_ = r.store.Delete(ctx, artifact.Id)
@@ -231,27 +237,28 @@ func (r *PersistentRepository) ListArtifacts(ctx context.Context, filter Filter)
 
 // DeleteArtifact removes an artifact and its data.
 func (r *PersistentRepository) DeleteArtifact(ctx context.Context, artifactID string) error {
-	r.mu.Lock()
+	r.mu.RLock()
 	meta, ok := r.metadata[artifactID]
-	if ok {
-		delete(r.metadata, artifactID)
-	}
-	err := r.persistLocked()
-	r.mu.Unlock()
-	if err != nil {
-		return err
-	}
-
+	r.mu.RUnlock()
 	if !ok {
 		return nil
 	}
 
 	if meta.Reference != "" && !strings.HasPrefix(meta.Reference, "redacted://") {
 		if err := r.store.Delete(ctx, artifactID); err != nil {
-			r.logger.Warn("failed to delete artifact from store",
-				"id", artifactID,
-				"error", err)
+			return fmt.Errorf("delete artifact data: %w", err)
 		}
+	}
+
+	r.mu.Lock()
+	delete(r.metadata, artifactID)
+	err := r.persistLocked()
+	if err != nil {
+		r.metadata[artifactID] = meta
+	}
+	r.mu.Unlock()
+	if err != nil {
+		return err
 	}
 
 	r.logger.Info("artifact deleted", "id", artifactID)

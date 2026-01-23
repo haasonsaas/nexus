@@ -777,6 +777,9 @@ type ArtifactConfig struct {
 	// LocalPath is the directory for local storage.
 	LocalPath string `yaml:"local_path"`
 
+	// MetadataPath is the file path for artifact metadata persistence.
+	MetadataPath string `yaml:"metadata_path"`
+
 	// S3Bucket is the bucket name for S3/MinIO storage.
 	S3Bucket string `yaml:"s3_bucket"`
 
@@ -1182,6 +1185,9 @@ func applyArtifactDefaults(cfg *ArtifactConfig) {
 	}
 	if cfg.LocalPath == "" {
 		cfg.LocalPath = filepath.Join(os.TempDir(), "nexus-artifacts")
+	}
+	if cfg.MetadataPath == "" {
+		cfg.MetadataPath = filepath.Join(cfg.LocalPath, "metadata.json")
 	}
 	if cfg.PruneInterval == 0 {
 		cfg.PruneInterval = time.Hour

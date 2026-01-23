@@ -350,7 +350,12 @@ func (l *AgenticLoop) executeToolsPhase(ctx context.Context, state *LoopState, c
 
 		// Stream tool result if configured
 		if l.config.StreamToolResults {
-			chunks <- &ResponseChunk{ToolResult: &toolResults[i]}
+			chunk := &ResponseChunk{ToolResult: &toolResults[i]}
+			// Include artifacts from tool execution
+			if r.Result != nil && len(r.Result.Artifacts) > 0 {
+				chunk.Artifacts = r.Result.Artifacts
+			}
+			chunks <- chunk
 		}
 	}
 

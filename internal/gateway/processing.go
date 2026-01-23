@@ -6,6 +6,7 @@ package gateway
 
 import (
 	"context"
+	"encoding/base64"
 	"strconv"
 	"strings"
 	"sync"
@@ -295,6 +296,7 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 
 	var response strings.Builder
 	var toolResults []models.ToolResult
+	var attachments []models.Attachment
 	var truncated bool
 	for chunk := range chunks {
 		if chunk.Error != nil {
@@ -363,6 +365,12 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 			}
 			mu.Unlock()
 		}
+		// Collect artifacts from tool executions for sending as attachments
+		if len(chunk.Artifacts) > 0 {
+			for _, art := range chunk.Artifacts {
+				attachments = append(attachments, s.artifactToAttachment(art))
+			}
+		}
 	}
 
 	if response.Len() == 0 && len(toolResults) == 0 {
@@ -371,6 +379,7 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 
 	outboundMsg.Content = response.String()
 	outboundMsg.ToolResults = toolResults
+	outboundMsg.Attachments = attachments
 
 	// Final update or send
 	mu.Lock()
@@ -442,6 +451,48 @@ func (s *Server) sendImmediateReply(ctx context.Context, session *models.Session
 			s.logger.Error("failed to write memory log", "error", err)
 		}
 	}
+}
+
+// artifactToAttachment converts an agent.Artifact to a models.Attachment.
+// Artifacts from edge tools (like screenshots) are converted to attachments
+// so they can be sent via messaging channels like WhatsApp.
+func (s *Server) artifactToAttachment(art agent.Artifact) models.Attachment {
+	// Determine attachment type from artifact type or mime type
+	attType := "file"
+	switch art.Type {
+	case "screenshot", "image":
+		attType = "image"
+	case "recording", "video":
+		attType = "video"
+	case "audio":
+		attType = "audio"
+	default:
+		if strings.HasPrefix(art.MimeType, "image/") {
+			attType = "image"
+		} else if strings.HasPrefix(art.MimeType, "video/") {
+			attType = "video"
+		} else if strings.HasPrefix(art.MimeType, "audio/") {
+			attType = "audio"
+		}
+	}
+
+	att := models.Attachment{
+		ID:       art.ID,
+		Type:     attType,
+		Filename: art.Filename,
+		MimeType: art.MimeType,
+		Size:     int64(len(art.Data)),
+	}
+
+	// If artifact has a URL, use it; otherwise create a data URL
+	if art.URL != "" {
+		att.URL = art.URL
+	} else if len(art.Data) > 0 {
+		// Create data URL for inline artifacts
+		att.URL = "data:" + art.MimeType + ";base64," + base64.StdEncoding.EncodeToString(art.Data)
+	}
+
+	return att
 }
 
 // extractPeerID extracts a peer identifier from the message metadata.

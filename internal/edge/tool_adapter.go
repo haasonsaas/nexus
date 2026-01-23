@@ -126,9 +126,22 @@ func (a *ToolAdapter) Execute(ctx context.Context, params json.RawMessage) (*age
 		}, nil
 	}
 
+	// Convert edge artifacts to agent artifacts
+	var artifacts []agent.Artifact
+	for _, art := range result.Artifacts {
+		artifacts = append(artifacts, agent.Artifact{
+			ID:       art.Id,
+			Type:     art.Type,
+			MimeType: art.MimeType,
+			Filename: art.Filename,
+			Data:     art.Data,
+		})
+	}
+
 	return &agent.ToolResult{
-		Content: result.Content,
-		IsError: false,
+		Content:   result.Content,
+		IsError:   false,
+		Artifacts: artifacts,
 	}, nil
 }
 

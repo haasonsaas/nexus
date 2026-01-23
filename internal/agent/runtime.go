@@ -471,6 +471,31 @@ type ToolResult struct {
 
 	// IsError indicates this result represents an error condition
 	IsError bool `json:"is_error,omitempty"`
+
+	// Artifacts contains any files/media produced by the tool.
+	// These are converted to message attachments when sent to channels.
+	Artifacts []Artifact `json:"artifacts,omitempty"`
+}
+
+// Artifact represents a file or media produced by a tool execution.
+type Artifact struct {
+	// ID is the unique identifier for the artifact.
+	ID string `json:"id"`
+
+	// Type describes the artifact type (screenshot, recording, file).
+	Type string `json:"type"`
+
+	// MimeType is the MIME type of the artifact data.
+	MimeType string `json:"mime_type"`
+
+	// Filename is the suggested filename for the artifact.
+	Filename string `json:"filename,omitempty"`
+
+	// Data contains the raw artifact bytes.
+	Data []byte `json:"data,omitempty"`
+
+	// URL is an optional URL where the artifact can be accessed.
+	URL string `json:"url,omitempty"`
 }
 
 // ToolEventStore persists tool calls and results for audit, replay, and analytics.
@@ -1606,6 +1631,9 @@ type ResponseChunk struct {
 	ToolEvent  *models.ToolEvent    `json:"tool_event,omitempty"`
 	Event      *models.RuntimeEvent `json:"event,omitempty"`
 	Error      error                `json:"-"`
+	// Artifacts contains any files/media produced by tool executions.
+	// These should be converted to message attachments when sending to channels.
+	Artifacts []Artifact `json:"artifacts,omitempty"`
 }
 
 // ToolRegistry manages available tools with thread-safe registration and lookup.

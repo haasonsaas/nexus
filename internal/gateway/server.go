@@ -30,6 +30,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/edge"
 	"github.com/haasonsaas/nexus/internal/hooks"
 	"github.com/haasonsaas/nexus/internal/hooks/bundled"
+	"github.com/haasonsaas/nexus/internal/identity"
 	"github.com/haasonsaas/nexus/internal/jobs"
 	"github.com/haasonsaas/nexus/internal/mcp"
 	"github.com/haasonsaas/nexus/internal/media"
@@ -105,6 +106,9 @@ type Server struct {
 	// Event timeline for observability and debugging
 	eventStore    *observability.MemoryEventStore
 	eventRecorder *observability.EventRecorder
+
+	// Identity linking for cross-channel user mapping
+	identityStore identity.Store
 
 	// messageSem limits concurrent message processing to prevent unbounded goroutine growth
 	messageSem chan struct{}
@@ -347,6 +351,15 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	eventStore := observability.NewMemoryEventStore(10000) // Store up to 10k events
 	eventRecorder := observability.NewEventRecorder(eventStore, nil)
 
+	// Initialize identity store for cross-channel linking
+	identityStore := identity.NewMemoryStore()
+	// Import identity links from config if present
+	if len(cfg.Session.Scoping.IdentityLinks) > 0 {
+		if err := identityStore.ImportFromConfig(context.Background(), cfg.Session.Scoping.IdentityLinks); err != nil {
+			logger.Warn("failed to import identity links from config", "error", err)
+		}
+	}
+
 	startupCancelUsed = true
 	server := &Server{
 		config:             cfg,
@@ -372,6 +385,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		edgeService:        edgeService,
 		eventStore:         eventStore,
 		eventRecorder:      eventRecorder,
+		identityStore:      identityStore,
 		commandRegistry:    commandRegistry,
 		commandParser:      commandParser,
 		activeRuns:         make(map[string]activeRun),
@@ -386,6 +400,9 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	proto.RegisterChannelServiceServer(grpcServer, grpcSvc)
 	proto.RegisterHealthServiceServer(grpcServer, grpcSvc)
 	proto.RegisterEventServiceServer(grpcServer, newEventService(server))
+	proto.RegisterTaskServiceServer(grpcServer, newTaskService(server))
+	proto.RegisterMessageServiceServer(grpcServer, newMessageService(server))
+	proto.RegisterIdentityServiceServer(grpcServer, newIdentityService(identityStore))
 	if edgeService != nil {
 		proto.RegisterEdgeServiceServer(grpcServer, edgeService)
 	}

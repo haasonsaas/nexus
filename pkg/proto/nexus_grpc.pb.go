@@ -1378,3 +1378,971 @@ var EventService_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "pkg/proto/nexus.proto",
 }
+
+const (
+	TaskService_CreateTask_FullMethodName     = "/nexus.v1.TaskService/CreateTask"
+	TaskService_GetTask_FullMethodName        = "/nexus.v1.TaskService/GetTask"
+	TaskService_ListTasks_FullMethodName      = "/nexus.v1.TaskService/ListTasks"
+	TaskService_UpdateTask_FullMethodName     = "/nexus.v1.TaskService/UpdateTask"
+	TaskService_DeleteTask_FullMethodName     = "/nexus.v1.TaskService/DeleteTask"
+	TaskService_PauseTask_FullMethodName      = "/nexus.v1.TaskService/PauseTask"
+	TaskService_ResumeTask_FullMethodName     = "/nexus.v1.TaskService/ResumeTask"
+	TaskService_TriggerTask_FullMethodName    = "/nexus.v1.TaskService/TriggerTask"
+	TaskService_ListExecutions_FullMethodName = "/nexus.v1.TaskService/ListExecutions"
+)
+
+// TaskServiceClient is the client API for TaskService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// TaskService manages scheduled tasks for proactive messaging and automation.
+type TaskServiceClient interface {
+	// CreateTask creates a new scheduled task.
+	CreateTask(ctx context.Context, in *CreateTaskRequest, opts ...grpc.CallOption) (*CreateTaskResponse, error)
+	// GetTask retrieves a task by ID.
+	GetTask(ctx context.Context, in *GetTaskRequest, opts ...grpc.CallOption) (*GetTaskResponse, error)
+	// ListTasks lists tasks with optional filtering.
+	ListTasks(ctx context.Context, in *ListTasksRequest, opts ...grpc.CallOption) (*ListTasksResponse, error)
+	// UpdateTask updates an existing task.
+	UpdateTask(ctx context.Context, in *UpdateTaskRequest, opts ...grpc.CallOption) (*UpdateTaskResponse, error)
+	// DeleteTask deletes a task.
+	DeleteTask(ctx context.Context, in *DeleteTaskRequest, opts ...grpc.CallOption) (*DeleteTaskResponse, error)
+	// PauseTask pauses a task's schedule.
+	PauseTask(ctx context.Context, in *PauseTaskRequest, opts ...grpc.CallOption) (*PauseTaskResponse, error)
+	// ResumeTask resumes a paused task.
+	ResumeTask(ctx context.Context, in *ResumeTaskRequest, opts ...grpc.CallOption) (*ResumeTaskResponse, error)
+	// TriggerTask manually triggers a task to run immediately.
+	TriggerTask(ctx context.Context, in *TriggerTaskRequest, opts ...grpc.CallOption) (*TriggerTaskResponse, error)
+	// ListExecutions lists executions for a task.
+	ListExecutions(ctx context.Context, in *ListExecutionsRequest, opts ...grpc.CallOption) (*ListExecutionsResponse, error)
+}
+
+type taskServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewTaskServiceClient(cc grpc.ClientConnInterface) TaskServiceClient {
+	return &taskServiceClient{cc}
+}
+
+func (c *taskServiceClient) CreateTask(ctx context.Context, in *CreateTaskRequest, opts ...grpc.CallOption) (*CreateTaskResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateTaskResponse)
+	err := c.cc.Invoke(ctx, TaskService_CreateTask_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *taskServiceClient) GetTask(ctx context.Context, in *GetTaskRequest, opts ...grpc.CallOption) (*GetTaskResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetTaskResponse)
+	err := c.cc.Invoke(ctx, TaskService_GetTask_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *taskServiceClient) ListTasks(ctx context.Context, in *ListTasksRequest, opts ...grpc.CallOption) (*ListTasksResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListTasksResponse)
+	err := c.cc.Invoke(ctx, TaskService_ListTasks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *taskServiceClient) UpdateTask(ctx context.Context, in *UpdateTaskRequest, opts ...grpc.CallOption) (*UpdateTaskResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateTaskResponse)
+	err := c.cc.Invoke(ctx, TaskService_UpdateTask_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *taskServiceClient) DeleteTask(ctx context.Context, in *DeleteTaskRequest, opts ...grpc.CallOption) (*DeleteTaskResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteTaskResponse)
+	err := c.cc.Invoke(ctx, TaskService_DeleteTask_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *taskServiceClient) PauseTask(ctx context.Context, in *PauseTaskRequest, opts ...grpc.CallOption) (*PauseTaskResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PauseTaskResponse)
+	err := c.cc.Invoke(ctx, TaskService_PauseTask_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *taskServiceClient) ResumeTask(ctx context.Context, in *ResumeTaskRequest, opts ...grpc.CallOption) (*ResumeTaskResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResumeTaskResponse)
+	err := c.cc.Invoke(ctx, TaskService_ResumeTask_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *taskServiceClient) TriggerTask(ctx context.Context, in *TriggerTaskRequest, opts ...grpc.CallOption) (*TriggerTaskResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TriggerTaskResponse)
+	err := c.cc.Invoke(ctx, TaskService_TriggerTask_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *taskServiceClient) ListExecutions(ctx context.Context, in *ListExecutionsRequest, opts ...grpc.CallOption) (*ListExecutionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListExecutionsResponse)
+	err := c.cc.Invoke(ctx, TaskService_ListExecutions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// TaskServiceServer is the server API for TaskService service.
+// All implementations must embed UnimplementedTaskServiceServer
+// for forward compatibility.
+//
+// TaskService manages scheduled tasks for proactive messaging and automation.
+type TaskServiceServer interface {
+	// CreateTask creates a new scheduled task.
+	CreateTask(context.Context, *CreateTaskRequest) (*CreateTaskResponse, error)
+	// GetTask retrieves a task by ID.
+	GetTask(context.Context, *GetTaskRequest) (*GetTaskResponse, error)
+	// ListTasks lists tasks with optional filtering.
+	ListTasks(context.Context, *ListTasksRequest) (*ListTasksResponse, error)
+	// UpdateTask updates an existing task.
+	UpdateTask(context.Context, *UpdateTaskRequest) (*UpdateTaskResponse, error)
+	// DeleteTask deletes a task.
+	DeleteTask(context.Context, *DeleteTaskRequest) (*DeleteTaskResponse, error)
+	// PauseTask pauses a task's schedule.
+	PauseTask(context.Context, *PauseTaskRequest) (*PauseTaskResponse, error)
+	// ResumeTask resumes a paused task.
+	ResumeTask(context.Context, *ResumeTaskRequest) (*ResumeTaskResponse, error)
+	// TriggerTask manually triggers a task to run immediately.
+	TriggerTask(context.Context, *TriggerTaskRequest) (*TriggerTaskResponse, error)
+	// ListExecutions lists executions for a task.
+	ListExecutions(context.Context, *ListExecutionsRequest) (*ListExecutionsResponse, error)
+	mustEmbedUnimplementedTaskServiceServer()
+}
+
+// UnimplementedTaskServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedTaskServiceServer struct{}
+
+func (UnimplementedTaskServiceServer) CreateTask(context.Context, *CreateTaskRequest) (*CreateTaskResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateTask not implemented")
+}
+func (UnimplementedTaskServiceServer) GetTask(context.Context, *GetTaskRequest) (*GetTaskResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetTask not implemented")
+}
+func (UnimplementedTaskServiceServer) ListTasks(context.Context, *ListTasksRequest) (*ListTasksResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListTasks not implemented")
+}
+func (UnimplementedTaskServiceServer) UpdateTask(context.Context, *UpdateTaskRequest) (*UpdateTaskResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateTask not implemented")
+}
+func (UnimplementedTaskServiceServer) DeleteTask(context.Context, *DeleteTaskRequest) (*DeleteTaskResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteTask not implemented")
+}
+func (UnimplementedTaskServiceServer) PauseTask(context.Context, *PauseTaskRequest) (*PauseTaskResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PauseTask not implemented")
+}
+func (UnimplementedTaskServiceServer) ResumeTask(context.Context, *ResumeTaskRequest) (*ResumeTaskResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResumeTask not implemented")
+}
+func (UnimplementedTaskServiceServer) TriggerTask(context.Context, *TriggerTaskRequest) (*TriggerTaskResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TriggerTask not implemented")
+}
+func (UnimplementedTaskServiceServer) ListExecutions(context.Context, *ListExecutionsRequest) (*ListExecutionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListExecutions not implemented")
+}
+func (UnimplementedTaskServiceServer) mustEmbedUnimplementedTaskServiceServer() {}
+func (UnimplementedTaskServiceServer) testEmbeddedByValue()                     {}
+
+// UnsafeTaskServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to TaskServiceServer will
+// result in compilation errors.
+type UnsafeTaskServiceServer interface {
+	mustEmbedUnimplementedTaskServiceServer()
+}
+
+func RegisterTaskServiceServer(s grpc.ServiceRegistrar, srv TaskServiceServer) {
+	// If the following call panics, it indicates UnimplementedTaskServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&TaskService_ServiceDesc, srv)
+}
+
+func _TaskService_CreateTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateTaskRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskServiceServer).CreateTask(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TaskService_CreateTask_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskServiceServer).CreateTask(ctx, req.(*CreateTaskRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TaskService_GetTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTaskRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskServiceServer).GetTask(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TaskService_GetTask_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskServiceServer).GetTask(ctx, req.(*GetTaskRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TaskService_ListTasks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListTasksRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskServiceServer).ListTasks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TaskService_ListTasks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskServiceServer).ListTasks(ctx, req.(*ListTasksRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TaskService_UpdateTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateTaskRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskServiceServer).UpdateTask(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TaskService_UpdateTask_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskServiceServer).UpdateTask(ctx, req.(*UpdateTaskRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TaskService_DeleteTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteTaskRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskServiceServer).DeleteTask(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TaskService_DeleteTask_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskServiceServer).DeleteTask(ctx, req.(*DeleteTaskRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TaskService_PauseTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PauseTaskRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskServiceServer).PauseTask(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TaskService_PauseTask_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskServiceServer).PauseTask(ctx, req.(*PauseTaskRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TaskService_ResumeTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResumeTaskRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskServiceServer).ResumeTask(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TaskService_ResumeTask_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskServiceServer).ResumeTask(ctx, req.(*ResumeTaskRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TaskService_TriggerTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TriggerTaskRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskServiceServer).TriggerTask(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TaskService_TriggerTask_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskServiceServer).TriggerTask(ctx, req.(*TriggerTaskRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TaskService_ListExecutions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListExecutionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskServiceServer).ListExecutions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TaskService_ListExecutions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskServiceServer).ListExecutions(ctx, req.(*ListExecutionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// TaskService_ServiceDesc is the grpc.ServiceDesc for TaskService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var TaskService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "nexus.v1.TaskService",
+	HandlerType: (*TaskServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "CreateTask",
+			Handler:    _TaskService_CreateTask_Handler,
+		},
+		{
+			MethodName: "GetTask",
+			Handler:    _TaskService_GetTask_Handler,
+		},
+		{
+			MethodName: "ListTasks",
+			Handler:    _TaskService_ListTasks_Handler,
+		},
+		{
+			MethodName: "UpdateTask",
+			Handler:    _TaskService_UpdateTask_Handler,
+		},
+		{
+			MethodName: "DeleteTask",
+			Handler:    _TaskService_DeleteTask_Handler,
+		},
+		{
+			MethodName: "PauseTask",
+			Handler:    _TaskService_PauseTask_Handler,
+		},
+		{
+			MethodName: "ResumeTask",
+			Handler:    _TaskService_ResumeTask_Handler,
+		},
+		{
+			MethodName: "TriggerTask",
+			Handler:    _TaskService_TriggerTask_Handler,
+		},
+		{
+			MethodName: "ListExecutions",
+			Handler:    _TaskService_ListExecutions_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "pkg/proto/nexus.proto",
+}
+
+const (
+	MessageService_SendMessage_FullMethodName      = "/nexus.v1.MessageService/SendMessage"
+	MessageService_BroadcastMessage_FullMethodName = "/nexus.v1.MessageService/BroadcastMessage"
+)
+
+// MessageServiceClient is the client API for MessageService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// MessageService provides proactive message sending capabilities.
+type MessageServiceClient interface {
+	// SendMessage sends a message to a specific channel/peer without requiring an inbound message.
+	SendMessage(ctx context.Context, in *ProactiveSendRequest, opts ...grpc.CallOption) (*ProactiveSendResponse, error)
+	// BroadcastMessage sends a message to multiple recipients.
+	BroadcastMessage(ctx context.Context, in *BroadcastMessageRequest, opts ...grpc.CallOption) (*BroadcastMessageResponse, error)
+}
+
+type messageServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewMessageServiceClient(cc grpc.ClientConnInterface) MessageServiceClient {
+	return &messageServiceClient{cc}
+}
+
+func (c *messageServiceClient) SendMessage(ctx context.Context, in *ProactiveSendRequest, opts ...grpc.CallOption) (*ProactiveSendResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ProactiveSendResponse)
+	err := c.cc.Invoke(ctx, MessageService_SendMessage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *messageServiceClient) BroadcastMessage(ctx context.Context, in *BroadcastMessageRequest, opts ...grpc.CallOption) (*BroadcastMessageResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BroadcastMessageResponse)
+	err := c.cc.Invoke(ctx, MessageService_BroadcastMessage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// MessageServiceServer is the server API for MessageService service.
+// All implementations must embed UnimplementedMessageServiceServer
+// for forward compatibility.
+//
+// MessageService provides proactive message sending capabilities.
+type MessageServiceServer interface {
+	// SendMessage sends a message to a specific channel/peer without requiring an inbound message.
+	SendMessage(context.Context, *ProactiveSendRequest) (*ProactiveSendResponse, error)
+	// BroadcastMessage sends a message to multiple recipients.
+	BroadcastMessage(context.Context, *BroadcastMessageRequest) (*BroadcastMessageResponse, error)
+	mustEmbedUnimplementedMessageServiceServer()
+}
+
+// UnimplementedMessageServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedMessageServiceServer struct{}
+
+func (UnimplementedMessageServiceServer) SendMessage(context.Context, *ProactiveSendRequest) (*ProactiveSendResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SendMessage not implemented")
+}
+func (UnimplementedMessageServiceServer) BroadcastMessage(context.Context, *BroadcastMessageRequest) (*BroadcastMessageResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BroadcastMessage not implemented")
+}
+func (UnimplementedMessageServiceServer) mustEmbedUnimplementedMessageServiceServer() {}
+func (UnimplementedMessageServiceServer) testEmbeddedByValue()                        {}
+
+// UnsafeMessageServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to MessageServiceServer will
+// result in compilation errors.
+type UnsafeMessageServiceServer interface {
+	mustEmbedUnimplementedMessageServiceServer()
+}
+
+func RegisterMessageServiceServer(s grpc.ServiceRegistrar, srv MessageServiceServer) {
+	// If the following call panics, it indicates UnimplementedMessageServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&MessageService_ServiceDesc, srv)
+}
+
+func _MessageService_SendMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProactiveSendRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessageServiceServer).SendMessage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MessageService_SendMessage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessageServiceServer).SendMessage(ctx, req.(*ProactiveSendRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MessageService_BroadcastMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BroadcastMessageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessageServiceServer).BroadcastMessage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MessageService_BroadcastMessage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessageServiceServer).BroadcastMessage(ctx, req.(*BroadcastMessageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// MessageService_ServiceDesc is the grpc.ServiceDesc for MessageService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var MessageService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "nexus.v1.MessageService",
+	HandlerType: (*MessageServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "SendMessage",
+			Handler:    _MessageService_SendMessage_Handler,
+		},
+		{
+			MethodName: "BroadcastMessage",
+			Handler:    _MessageService_BroadcastMessage_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "pkg/proto/nexus.proto",
+}
+
+const (
+	IdentityService_CreateIdentity_FullMethodName  = "/nexus.v1.IdentityService/CreateIdentity"
+	IdentityService_GetIdentity_FullMethodName     = "/nexus.v1.IdentityService/GetIdentity"
+	IdentityService_ListIdentities_FullMethodName  = "/nexus.v1.IdentityService/ListIdentities"
+	IdentityService_DeleteIdentity_FullMethodName  = "/nexus.v1.IdentityService/DeleteIdentity"
+	IdentityService_LinkPeer_FullMethodName        = "/nexus.v1.IdentityService/LinkPeer"
+	IdentityService_UnlinkPeer_FullMethodName      = "/nexus.v1.IdentityService/UnlinkPeer"
+	IdentityService_ResolveIdentity_FullMethodName = "/nexus.v1.IdentityService/ResolveIdentity"
+	IdentityService_GetLinkedPeers_FullMethodName  = "/nexus.v1.IdentityService/GetLinkedPeers"
+)
+
+// IdentityServiceClient is the client API for IdentityService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// IdentityService manages cross-channel identity linking.
+// This allows mapping platform-specific user IDs (e.g., telegram:123456) to
+// canonical identities for unified session management.
+type IdentityServiceClient interface {
+	// CreateIdentity creates a new canonical identity.
+	CreateIdentity(ctx context.Context, in *CreateIdentityRequest, opts ...grpc.CallOption) (*CreateIdentityResponse, error)
+	// GetIdentity retrieves an identity by canonical ID.
+	GetIdentity(ctx context.Context, in *GetIdentityRequest, opts ...grpc.CallOption) (*GetIdentityResponse, error)
+	// ListIdentities lists all identities.
+	ListIdentities(ctx context.Context, in *ListIdentitiesRequest, opts ...grpc.CallOption) (*ListIdentitiesResponse, error)
+	// DeleteIdentity deletes an identity and all its links.
+	DeleteIdentity(ctx context.Context, in *DeleteIdentityRequest, opts ...grpc.CallOption) (*DeleteIdentityResponse, error)
+	// LinkPeer links a platform-specific peer ID to a canonical identity.
+	LinkPeer(ctx context.Context, in *LinkPeerRequest, opts ...grpc.CallOption) (*LinkPeerResponse, error)
+	// UnlinkPeer removes a peer link from an identity.
+	UnlinkPeer(ctx context.Context, in *UnlinkPeerRequest, opts ...grpc.CallOption) (*UnlinkPeerResponse, error)
+	// ResolveIdentity resolves a platform peer ID to its canonical identity.
+	ResolveIdentity(ctx context.Context, in *ResolveIdentityRequest, opts ...grpc.CallOption) (*ResolveIdentityResponse, error)
+	// GetLinkedPeers returns all peer IDs linked to an identity.
+	GetLinkedPeers(ctx context.Context, in *GetLinkedPeersRequest, opts ...grpc.CallOption) (*GetLinkedPeersResponse, error)
+}
+
+type identityServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewIdentityServiceClient(cc grpc.ClientConnInterface) IdentityServiceClient {
+	return &identityServiceClient{cc}
+}
+
+func (c *identityServiceClient) CreateIdentity(ctx context.Context, in *CreateIdentityRequest, opts ...grpc.CallOption) (*CreateIdentityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateIdentityResponse)
+	err := c.cc.Invoke(ctx, IdentityService_CreateIdentity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) GetIdentity(ctx context.Context, in *GetIdentityRequest, opts ...grpc.CallOption) (*GetIdentityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetIdentityResponse)
+	err := c.cc.Invoke(ctx, IdentityService_GetIdentity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) ListIdentities(ctx context.Context, in *ListIdentitiesRequest, opts ...grpc.CallOption) (*ListIdentitiesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListIdentitiesResponse)
+	err := c.cc.Invoke(ctx, IdentityService_ListIdentities_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) DeleteIdentity(ctx context.Context, in *DeleteIdentityRequest, opts ...grpc.CallOption) (*DeleteIdentityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteIdentityResponse)
+	err := c.cc.Invoke(ctx, IdentityService_DeleteIdentity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) LinkPeer(ctx context.Context, in *LinkPeerRequest, opts ...grpc.CallOption) (*LinkPeerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LinkPeerResponse)
+	err := c.cc.Invoke(ctx, IdentityService_LinkPeer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) UnlinkPeer(ctx context.Context, in *UnlinkPeerRequest, opts ...grpc.CallOption) (*UnlinkPeerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UnlinkPeerResponse)
+	err := c.cc.Invoke(ctx, IdentityService_UnlinkPeer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) ResolveIdentity(ctx context.Context, in *ResolveIdentityRequest, opts ...grpc.CallOption) (*ResolveIdentityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveIdentityResponse)
+	err := c.cc.Invoke(ctx, IdentityService_ResolveIdentity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) GetLinkedPeers(ctx context.Context, in *GetLinkedPeersRequest, opts ...grpc.CallOption) (*GetLinkedPeersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetLinkedPeersResponse)
+	err := c.cc.Invoke(ctx, IdentityService_GetLinkedPeers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// IdentityServiceServer is the server API for IdentityService service.
+// All implementations must embed UnimplementedIdentityServiceServer
+// for forward compatibility.
+//
+// IdentityService manages cross-channel identity linking.
+// This allows mapping platform-specific user IDs (e.g., telegram:123456) to
+// canonical identities for unified session management.
+type IdentityServiceServer interface {
+	// CreateIdentity creates a new canonical identity.
+	CreateIdentity(context.Context, *CreateIdentityRequest) (*CreateIdentityResponse, error)
+	// GetIdentity retrieves an identity by canonical ID.
+	GetIdentity(context.Context, *GetIdentityRequest) (*GetIdentityResponse, error)
+	// ListIdentities lists all identities.
+	ListIdentities(context.Context, *ListIdentitiesRequest) (*ListIdentitiesResponse, error)
+	// DeleteIdentity deletes an identity and all its links.
+	DeleteIdentity(context.Context, *DeleteIdentityRequest) (*DeleteIdentityResponse, error)
+	// LinkPeer links a platform-specific peer ID to a canonical identity.
+	LinkPeer(context.Context, *LinkPeerRequest) (*LinkPeerResponse, error)
+	// UnlinkPeer removes a peer link from an identity.
+	UnlinkPeer(context.Context, *UnlinkPeerRequest) (*UnlinkPeerResponse, error)
+	// ResolveIdentity resolves a platform peer ID to its canonical identity.
+	ResolveIdentity(context.Context, *ResolveIdentityRequest) (*ResolveIdentityResponse, error)
+	// GetLinkedPeers returns all peer IDs linked to an identity.
+	GetLinkedPeers(context.Context, *GetLinkedPeersRequest) (*GetLinkedPeersResponse, error)
+	mustEmbedUnimplementedIdentityServiceServer()
+}
+
+// UnimplementedIdentityServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedIdentityServiceServer struct{}
+
+func (UnimplementedIdentityServiceServer) CreateIdentity(context.Context, *CreateIdentityRequest) (*CreateIdentityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateIdentity not implemented")
+}
+func (UnimplementedIdentityServiceServer) GetIdentity(context.Context, *GetIdentityRequest) (*GetIdentityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetIdentity not implemented")
+}
+func (UnimplementedIdentityServiceServer) ListIdentities(context.Context, *ListIdentitiesRequest) (*ListIdentitiesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListIdentities not implemented")
+}
+func (UnimplementedIdentityServiceServer) DeleteIdentity(context.Context, *DeleteIdentityRequest) (*DeleteIdentityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteIdentity not implemented")
+}
+func (UnimplementedIdentityServiceServer) LinkPeer(context.Context, *LinkPeerRequest) (*LinkPeerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LinkPeer not implemented")
+}
+func (UnimplementedIdentityServiceServer) UnlinkPeer(context.Context, *UnlinkPeerRequest) (*UnlinkPeerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UnlinkPeer not implemented")
+}
+func (UnimplementedIdentityServiceServer) ResolveIdentity(context.Context, *ResolveIdentityRequest) (*ResolveIdentityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveIdentity not implemented")
+}
+func (UnimplementedIdentityServiceServer) GetLinkedPeers(context.Context, *GetLinkedPeersRequest) (*GetLinkedPeersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetLinkedPeers not implemented")
+}
+func (UnimplementedIdentityServiceServer) mustEmbedUnimplementedIdentityServiceServer() {}
+func (UnimplementedIdentityServiceServer) testEmbeddedByValue()                         {}
+
+// UnsafeIdentityServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to IdentityServiceServer will
+// result in compilation errors.
+type UnsafeIdentityServiceServer interface {
+	mustEmbedUnimplementedIdentityServiceServer()
+}
+
+func RegisterIdentityServiceServer(s grpc.ServiceRegistrar, srv IdentityServiceServer) {
+	// If the following call panics, it indicates UnimplementedIdentityServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&IdentityService_ServiceDesc, srv)
+}
+
+func _IdentityService_CreateIdentity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateIdentityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).CreateIdentity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_CreateIdentity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).CreateIdentity(ctx, req.(*CreateIdentityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_GetIdentity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetIdentityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).GetIdentity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_GetIdentity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).GetIdentity(ctx, req.(*GetIdentityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_ListIdentities_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListIdentitiesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).ListIdentities(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_ListIdentities_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).ListIdentities(ctx, req.(*ListIdentitiesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_DeleteIdentity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteIdentityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).DeleteIdentity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_DeleteIdentity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).DeleteIdentity(ctx, req.(*DeleteIdentityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_LinkPeer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LinkPeerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).LinkPeer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_LinkPeer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).LinkPeer(ctx, req.(*LinkPeerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_UnlinkPeer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnlinkPeerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).UnlinkPeer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_UnlinkPeer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).UnlinkPeer(ctx, req.(*UnlinkPeerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_ResolveIdentity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveIdentityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).ResolveIdentity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_ResolveIdentity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).ResolveIdentity(ctx, req.(*ResolveIdentityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_GetLinkedPeers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetLinkedPeersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).GetLinkedPeers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_GetLinkedPeers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).GetLinkedPeers(ctx, req.(*GetLinkedPeersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// IdentityService_ServiceDesc is the grpc.ServiceDesc for IdentityService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var IdentityService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "nexus.v1.IdentityService",
+	HandlerType: (*IdentityServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "CreateIdentity",
+			Handler:    _IdentityService_CreateIdentity_Handler,
+		},
+		{
+			MethodName: "GetIdentity",
+			Handler:    _IdentityService_GetIdentity_Handler,
+		},
+		{
+			MethodName: "ListIdentities",
+			Handler:    _IdentityService_ListIdentities_Handler,
+		},
+		{
+			MethodName: "DeleteIdentity",
+			Handler:    _IdentityService_DeleteIdentity_Handler,
+		},
+		{
+			MethodName: "LinkPeer",
+			Handler:    _IdentityService_LinkPeer_Handler,
+		},
+		{
+			MethodName: "UnlinkPeer",
+			Handler:    _IdentityService_UnlinkPeer_Handler,
+		},
+		{
+			MethodName: "ResolveIdentity",
+			Handler:    _IdentityService_ResolveIdentity_Handler,
+		},
+		{
+			MethodName: "GetLinkedPeers",
+			Handler:    _IdentityService_GetLinkedPeers_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "pkg/proto/nexus.proto",
+}

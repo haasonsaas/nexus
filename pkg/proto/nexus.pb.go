@@ -138,6 +138,9 @@ const (
 	ChannelType_CHANNEL_TYPE_DISCORD     ChannelType = 2
 	ChannelType_CHANNEL_TYPE_SLACK       ChannelType = 3
 	ChannelType_CHANNEL_TYPE_API         ChannelType = 4
+	ChannelType_CHANNEL_TYPE_IMESSAGE    ChannelType = 5 // Edge-only: macOS iMessage
+	ChannelType_CHANNEL_TYPE_SIGNAL      ChannelType = 6 // Edge-only: Signal bridge
+	ChannelType_CHANNEL_TYPE_WHATSAPP    ChannelType = 7 // Edge-only: WhatsApp bridge
 )
 
 // Enum value maps for ChannelType.
@@ -148,6 +151,9 @@ var (
 		2: "CHANNEL_TYPE_DISCORD",
 		3: "CHANNEL_TYPE_SLACK",
 		4: "CHANNEL_TYPE_API",
+		5: "CHANNEL_TYPE_IMESSAGE",
+		6: "CHANNEL_TYPE_SIGNAL",
+		7: "CHANNEL_TYPE_WHATSAPP",
 	}
 	ChannelType_value = map[string]int32{
 		"CHANNEL_TYPE_UNSPECIFIED": 0,
@@ -155,6 +161,9 @@ var (
 		"CHANNEL_TYPE_DISCORD":     2,
 		"CHANNEL_TYPE_SLACK":       3,
 		"CHANNEL_TYPE_API":         4,
+		"CHANNEL_TYPE_IMESSAGE":    5,
+		"CHANNEL_TYPE_SIGNAL":      6,
+		"CHANNEL_TYPE_WHATSAPP":    7,
 	}
 )
 
@@ -521,6 +530,61 @@ func (CoreEventType) EnumDescriptor() ([]byte, []int) {
 	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{8}
 }
 
+type ChannelDeliveryStatus int32
+
+const (
+	ChannelDeliveryStatus_CHANNEL_DELIVERY_STATUS_UNSPECIFIED ChannelDeliveryStatus = 0
+	ChannelDeliveryStatus_CHANNEL_DELIVERY_STATUS_SENT        ChannelDeliveryStatus = 1
+	ChannelDeliveryStatus_CHANNEL_DELIVERY_STATUS_DELIVERED   ChannelDeliveryStatus = 2
+	ChannelDeliveryStatus_CHANNEL_DELIVERY_STATUS_READ        ChannelDeliveryStatus = 3
+	ChannelDeliveryStatus_CHANNEL_DELIVERY_STATUS_FAILED      ChannelDeliveryStatus = 4
+)
+
+// Enum value maps for ChannelDeliveryStatus.
+var (
+	ChannelDeliveryStatus_name = map[int32]string{
+		0: "CHANNEL_DELIVERY_STATUS_UNSPECIFIED",
+		1: "CHANNEL_DELIVERY_STATUS_SENT",
+		2: "CHANNEL_DELIVERY_STATUS_DELIVERED",
+		3: "CHANNEL_DELIVERY_STATUS_READ",
+		4: "CHANNEL_DELIVERY_STATUS_FAILED",
+	}
+	ChannelDeliveryStatus_value = map[string]int32{
+		"CHANNEL_DELIVERY_STATUS_UNSPECIFIED": 0,
+		"CHANNEL_DELIVERY_STATUS_SENT":        1,
+		"CHANNEL_DELIVERY_STATUS_DELIVERED":   2,
+		"CHANNEL_DELIVERY_STATUS_READ":        3,
+		"CHANNEL_DELIVERY_STATUS_FAILED":      4,
+	}
+)
+
+func (x ChannelDeliveryStatus) Enum() *ChannelDeliveryStatus {
+	p := new(ChannelDeliveryStatus)
+	*p = x
+	return p
+}
+
+func (x ChannelDeliveryStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ChannelDeliveryStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_pkg_proto_nexus_proto_enumTypes[9].Descriptor()
+}
+
+func (ChannelDeliveryStatus) Type() protoreflect.EnumType {
+	return &file_pkg_proto_nexus_proto_enumTypes[9]
+}
+
+func (x ChannelDeliveryStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ChannelDeliveryStatus.Descriptor instead.
+func (ChannelDeliveryStatus) EnumDescriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{9}
+}
+
 type EdgeConnectionStatus int32
 
 const (
@@ -557,11 +621,11 @@ func (x EdgeConnectionStatus) String() string {
 }
 
 func (EdgeConnectionStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_pkg_proto_nexus_proto_enumTypes[9].Descriptor()
+	return file_pkg_proto_nexus_proto_enumTypes[10].Descriptor()
 }
 
 func (EdgeConnectionStatus) Type() protoreflect.EnumType {
-	return &file_pkg_proto_nexus_proto_enumTypes[9]
+	return &file_pkg_proto_nexus_proto_enumTypes[10]
 }
 
 func (x EdgeConnectionStatus) Number() protoreflect.EnumNumber {
@@ -570,7 +634,7 @@ func (x EdgeConnectionStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use EdgeConnectionStatus.Descriptor instead.
 func (EdgeConnectionStatus) EnumDescriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{9}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{10}
 }
 
 // RiskLevel indicates the risk level of a tool operation.
@@ -613,11 +677,11 @@ func (x RiskLevel) String() string {
 }
 
 func (RiskLevel) Descriptor() protoreflect.EnumDescriptor {
-	return file_pkg_proto_nexus_proto_enumTypes[10].Descriptor()
+	return file_pkg_proto_nexus_proto_enumTypes[11].Descriptor()
 }
 
 func (RiskLevel) Type() protoreflect.EnumType {
-	return &file_pkg_proto_nexus_proto_enumTypes[10]
+	return &file_pkg_proto_nexus_proto_enumTypes[11]
 }
 
 func (x RiskLevel) Number() protoreflect.EnumNumber {
@@ -626,7 +690,7 @@ func (x RiskLevel) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use RiskLevel.Descriptor instead.
 func (RiskLevel) EnumDescriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{10}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{11}
 }
 
 // ToolCategory categorizes tools for policy and display.
@@ -678,11 +742,11 @@ func (x ToolCategory) String() string {
 }
 
 func (ToolCategory) Descriptor() protoreflect.EnumDescriptor {
-	return file_pkg_proto_nexus_proto_enumTypes[11].Descriptor()
+	return file_pkg_proto_nexus_proto_enumTypes[12].Descriptor()
 }
 
 func (ToolCategory) Type() protoreflect.EnumType {
-	return &file_pkg_proto_nexus_proto_enumTypes[11]
+	return &file_pkg_proto_nexus_proto_enumTypes[12]
 }
 
 func (x ToolCategory) Number() protoreflect.EnumNumber {
@@ -691,7 +755,120 @@ func (x ToolCategory) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ToolCategory.Descriptor instead.
 func (ToolCategory) EnumDescriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{11}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{12}
+}
+
+type TaskStatus int32
+
+const (
+	TaskStatus_TASK_STATUS_UNSPECIFIED TaskStatus = 0
+	TaskStatus_TASK_STATUS_ACTIVE      TaskStatus = 1
+	TaskStatus_TASK_STATUS_PAUSED      TaskStatus = 2
+	TaskStatus_TASK_STATUS_DISABLED    TaskStatus = 3
+)
+
+// Enum value maps for TaskStatus.
+var (
+	TaskStatus_name = map[int32]string{
+		0: "TASK_STATUS_UNSPECIFIED",
+		1: "TASK_STATUS_ACTIVE",
+		2: "TASK_STATUS_PAUSED",
+		3: "TASK_STATUS_DISABLED",
+	}
+	TaskStatus_value = map[string]int32{
+		"TASK_STATUS_UNSPECIFIED": 0,
+		"TASK_STATUS_ACTIVE":      1,
+		"TASK_STATUS_PAUSED":      2,
+		"TASK_STATUS_DISABLED":    3,
+	}
+)
+
+func (x TaskStatus) Enum() *TaskStatus {
+	p := new(TaskStatus)
+	*p = x
+	return p
+}
+
+func (x TaskStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (TaskStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_pkg_proto_nexus_proto_enumTypes[13].Descriptor()
+}
+
+func (TaskStatus) Type() protoreflect.EnumType {
+	return &file_pkg_proto_nexus_proto_enumTypes[13]
+}
+
+func (x TaskStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use TaskStatus.Descriptor instead.
+func (TaskStatus) EnumDescriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{13}
+}
+
+type ExecutionStatus int32
+
+const (
+	ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED ExecutionStatus = 0
+	ExecutionStatus_EXECUTION_STATUS_PENDING     ExecutionStatus = 1
+	ExecutionStatus_EXECUTION_STATUS_RUNNING     ExecutionStatus = 2
+	ExecutionStatus_EXECUTION_STATUS_SUCCEEDED   ExecutionStatus = 3
+	ExecutionStatus_EXECUTION_STATUS_FAILED      ExecutionStatus = 4
+	ExecutionStatus_EXECUTION_STATUS_TIMED_OUT   ExecutionStatus = 5
+	ExecutionStatus_EXECUTION_STATUS_CANCELLED   ExecutionStatus = 6
+)
+
+// Enum value maps for ExecutionStatus.
+var (
+	ExecutionStatus_name = map[int32]string{
+		0: "EXECUTION_STATUS_UNSPECIFIED",
+		1: "EXECUTION_STATUS_PENDING",
+		2: "EXECUTION_STATUS_RUNNING",
+		3: "EXECUTION_STATUS_SUCCEEDED",
+		4: "EXECUTION_STATUS_FAILED",
+		5: "EXECUTION_STATUS_TIMED_OUT",
+		6: "EXECUTION_STATUS_CANCELLED",
+	}
+	ExecutionStatus_value = map[string]int32{
+		"EXECUTION_STATUS_UNSPECIFIED": 0,
+		"EXECUTION_STATUS_PENDING":     1,
+		"EXECUTION_STATUS_RUNNING":     2,
+		"EXECUTION_STATUS_SUCCEEDED":   3,
+		"EXECUTION_STATUS_FAILED":      4,
+		"EXECUTION_STATUS_TIMED_OUT":   5,
+		"EXECUTION_STATUS_CANCELLED":   6,
+	}
+)
+
+func (x ExecutionStatus) Enum() *ExecutionStatus {
+	p := new(ExecutionStatus)
+	*p = x
+	return p
+}
+
+func (x ExecutionStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ExecutionStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_pkg_proto_nexus_proto_enumTypes[14].Descriptor()
+}
+
+func (ExecutionStatus) Type() protoreflect.EnumType {
+	return &file_pkg_proto_nexus_proto_enumTypes[14]
+}
+
+func (x ExecutionStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ExecutionStatus.Descriptor instead.
+func (ExecutionStatus) EnumDescriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{14}
 }
 
 // ClientMessage represents messages sent from client to server.
@@ -4088,6 +4265,8 @@ type EdgeMessage struct {
 	//	*EdgeMessage_Heartbeat
 	//	*EdgeMessage_ToolResult
 	//	*EdgeMessage_Event
+	//	*EdgeMessage_ChannelInbound
+	//	*EdgeMessage_ChannelAck
 	Message       isEdgeMessage_Message `protobuf_oneof:"message"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -4166,6 +4345,24 @@ func (x *EdgeMessage) GetEvent() *EdgeEvent {
 	return nil
 }
 
+func (x *EdgeMessage) GetChannelInbound() *EdgeChannelInbound {
+	if x != nil {
+		if x, ok := x.Message.(*EdgeMessage_ChannelInbound); ok {
+			return x.ChannelInbound
+		}
+	}
+	return nil
+}
+
+func (x *EdgeMessage) GetChannelAck() *EdgeChannelAck {
+	if x != nil {
+		if x, ok := x.Message.(*EdgeMessage_ChannelAck); ok {
+			return x.ChannelAck
+		}
+	}
+	return nil
+}
+
 type isEdgeMessage_Message interface {
 	isEdgeMessage_Message()
 }
@@ -4186,6 +4383,14 @@ type EdgeMessage_Event struct {
 	Event *EdgeEvent `protobuf:"bytes,4,opt,name=event,proto3,oneof"`
 }
 
+type EdgeMessage_ChannelInbound struct {
+	ChannelInbound *EdgeChannelInbound `protobuf:"bytes,5,opt,name=channel_inbound,json=channelInbound,proto3,oneof"` // Channel message from user
+}
+
+type EdgeMessage_ChannelAck struct {
+	ChannelAck *EdgeChannelAck `protobuf:"bytes,6,opt,name=channel_ack,json=channelAck,proto3,oneof"` // Delivery acknowledgment
+}
+
 func (*EdgeMessage_Register) isEdgeMessage_Message() {}
 
 func (*EdgeMessage_Heartbeat) isEdgeMessage_Message() {}
@@ -4193,6 +4398,10 @@ func (*EdgeMessage_Heartbeat) isEdgeMessage_Message() {}
 func (*EdgeMessage_ToolResult) isEdgeMessage_Message() {}
 
 func (*EdgeMessage_Event) isEdgeMessage_Message() {}
+
+func (*EdgeMessage_ChannelInbound) isEdgeMessage_Message() {}
+
+func (*EdgeMessage_ChannelAck) isEdgeMessage_Message() {}
 
 // CoreMessage represents messages sent from core to edge daemon.
 type CoreMessage struct {
@@ -4203,6 +4412,7 @@ type CoreMessage struct {
 	//	*CoreMessage_ToolRequest
 	//	*CoreMessage_ToolCancel
 	//	*CoreMessage_Event
+	//	*CoreMessage_ChannelOutbound
 	Message       isCoreMessage_Message `protobuf_oneof:"message"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -4281,6 +4491,15 @@ func (x *CoreMessage) GetEvent() *CoreEvent {
 	return nil
 }
 
+func (x *CoreMessage) GetChannelOutbound() *CoreChannelOutbound {
+	if x != nil {
+		if x, ok := x.Message.(*CoreMessage_ChannelOutbound); ok {
+			return x.ChannelOutbound
+		}
+	}
+	return nil
+}
+
 type isCoreMessage_Message interface {
 	isCoreMessage_Message()
 }
@@ -4301,6 +4520,10 @@ type CoreMessage_Event struct {
 	Event *CoreEvent `protobuf:"bytes,4,opt,name=event,proto3,oneof"`
 }
 
+type CoreMessage_ChannelOutbound struct {
+	ChannelOutbound *CoreChannelOutbound `protobuf:"bytes,5,opt,name=channel_outbound,json=channelOutbound,proto3,oneof"` // Channel message to user
+}
+
 func (*CoreMessage_Registered) isCoreMessage_Message() {}
 
 func (*CoreMessage_ToolRequest) isCoreMessage_Message() {}
@@ -4308,6 +4531,8 @@ func (*CoreMessage_ToolRequest) isCoreMessage_Message() {}
 func (*CoreMessage_ToolCancel) isCoreMessage_Message() {}
 
 func (*CoreMessage_Event) isCoreMessage_Message() {}
+
+func (*CoreMessage_ChannelOutbound) isCoreMessage_Message() {}
 
 // EdgeRegister is sent by the edge to register with the core.
 type EdgeRegister struct {
@@ -5311,6 +5536,324 @@ func (x *CoreEvent) GetData() *structpb.Struct {
 	return nil
 }
 
+// EdgeChannelInbound forwards an inbound message from an edge-hosted channel.
+// Used for channels that can only run locally (iMessage, Signal, etc.).
+type EdgeChannelInbound struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Edge identifier.
+	EdgeId string `protobuf:"bytes,1,opt,name=edge_id,json=edgeId,proto3" json:"edge_id,omitempty"`
+	// Channel type (must be an edge-only type like IMESSAGE, SIGNAL).
+	ChannelType ChannelType `protobuf:"varint,2,opt,name=channel_type,json=channelType,proto3,enum=nexus.v1.ChannelType" json:"channel_type,omitempty"`
+	// Channel-specific identifier (e.g., phone number, chat ID).
+	ChannelId string `protobuf:"bytes,3,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
+	// Session key for routing (derived from channel_id + user context).
+	SessionKey string `protobuf:"bytes,4,opt,name=session_key,json=sessionKey,proto3" json:"session_key,omitempty"`
+	// The normalized message content.
+	Content string `protobuf:"bytes,5,opt,name=content,proto3" json:"content,omitempty"`
+	// Sender information.
+	SenderId   string `protobuf:"bytes,6,opt,name=sender_id,json=senderId,proto3" json:"sender_id,omitempty"`
+	SenderName string `protobuf:"bytes,7,opt,name=sender_name,json=senderName,proto3" json:"sender_name,omitempty"`
+	// Attachments (images, files, etc.).
+	Attachments []*Attachment `protobuf:"bytes,8,rep,name=attachments,proto3" json:"attachments,omitempty"`
+	// Channel-specific metadata.
+	Metadata map[string]string `protobuf:"bytes,9,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// When the message was received by the edge.
+	ReceivedAt    *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=received_at,json=receivedAt,proto3" json:"received_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EdgeChannelInbound) Reset() {
+	*x = EdgeChannelInbound{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[66]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EdgeChannelInbound) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EdgeChannelInbound) ProtoMessage() {}
+
+func (x *EdgeChannelInbound) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[66]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EdgeChannelInbound.ProtoReflect.Descriptor instead.
+func (*EdgeChannelInbound) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{66}
+}
+
+func (x *EdgeChannelInbound) GetEdgeId() string {
+	if x != nil {
+		return x.EdgeId
+	}
+	return ""
+}
+
+func (x *EdgeChannelInbound) GetChannelType() ChannelType {
+	if x != nil {
+		return x.ChannelType
+	}
+	return ChannelType_CHANNEL_TYPE_UNSPECIFIED
+}
+
+func (x *EdgeChannelInbound) GetChannelId() string {
+	if x != nil {
+		return x.ChannelId
+	}
+	return ""
+}
+
+func (x *EdgeChannelInbound) GetSessionKey() string {
+	if x != nil {
+		return x.SessionKey
+	}
+	return ""
+}
+
+func (x *EdgeChannelInbound) GetContent() string {
+	if x != nil {
+		return x.Content
+	}
+	return ""
+}
+
+func (x *EdgeChannelInbound) GetSenderId() string {
+	if x != nil {
+		return x.SenderId
+	}
+	return ""
+}
+
+func (x *EdgeChannelInbound) GetSenderName() string {
+	if x != nil {
+		return x.SenderName
+	}
+	return ""
+}
+
+func (x *EdgeChannelInbound) GetAttachments() []*Attachment {
+	if x != nil {
+		return x.Attachments
+	}
+	return nil
+}
+
+func (x *EdgeChannelInbound) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+func (x *EdgeChannelInbound) GetReceivedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ReceivedAt
+	}
+	return nil
+}
+
+// CoreChannelOutbound sends an outbound message through an edge channel.
+type CoreChannelOutbound struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Unique message ID for acknowledgment.
+	MessageId string `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	// Session ID this message belongs to.
+	SessionId string `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	// Channel type to send through.
+	ChannelType ChannelType `protobuf:"varint,3,opt,name=channel_type,json=channelType,proto3,enum=nexus.v1.ChannelType" json:"channel_type,omitempty"`
+	// Channel-specific destination (phone number, chat ID).
+	ChannelId string `protobuf:"bytes,4,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
+	// The message content to send.
+	Content string `protobuf:"bytes,5,opt,name=content,proto3" json:"content,omitempty"`
+	// Attachments to send.
+	Attachments []*Attachment `protobuf:"bytes,6,rep,name=attachments,proto3" json:"attachments,omitempty"`
+	// Reply context if this is a reply.
+	ReplyToId string `protobuf:"bytes,7,opt,name=reply_to_id,json=replyToId,proto3" json:"reply_to_id,omitempty"`
+	// Channel-specific options.
+	Options       map[string]string `protobuf:"bytes,8,rep,name=options,proto3" json:"options,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CoreChannelOutbound) Reset() {
+	*x = CoreChannelOutbound{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[67]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CoreChannelOutbound) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CoreChannelOutbound) ProtoMessage() {}
+
+func (x *CoreChannelOutbound) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[67]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CoreChannelOutbound.ProtoReflect.Descriptor instead.
+func (*CoreChannelOutbound) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{67}
+}
+
+func (x *CoreChannelOutbound) GetMessageId() string {
+	if x != nil {
+		return x.MessageId
+	}
+	return ""
+}
+
+func (x *CoreChannelOutbound) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *CoreChannelOutbound) GetChannelType() ChannelType {
+	if x != nil {
+		return x.ChannelType
+	}
+	return ChannelType_CHANNEL_TYPE_UNSPECIFIED
+}
+
+func (x *CoreChannelOutbound) GetChannelId() string {
+	if x != nil {
+		return x.ChannelId
+	}
+	return ""
+}
+
+func (x *CoreChannelOutbound) GetContent() string {
+	if x != nil {
+		return x.Content
+	}
+	return ""
+}
+
+func (x *CoreChannelOutbound) GetAttachments() []*Attachment {
+	if x != nil {
+		return x.Attachments
+	}
+	return nil
+}
+
+func (x *CoreChannelOutbound) GetReplyToId() string {
+	if x != nil {
+		return x.ReplyToId
+	}
+	return ""
+}
+
+func (x *CoreChannelOutbound) GetOptions() map[string]string {
+	if x != nil {
+		return x.Options
+	}
+	return nil
+}
+
+// EdgeChannelAck acknowledges receipt/delivery of an outbound message.
+type EdgeChannelAck struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The message ID being acknowledged.
+	MessageId string `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	// Delivery status.
+	Status ChannelDeliveryStatus `protobuf:"varint,2,opt,name=status,proto3,enum=nexus.v1.ChannelDeliveryStatus" json:"status,omitempty"`
+	// Error message if delivery failed.
+	Error string `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	// Channel-assigned message ID after sending.
+	ExternalId string `protobuf:"bytes,4,opt,name=external_id,json=externalId,proto3" json:"external_id,omitempty"`
+	// When the message was delivered.
+	DeliveredAt   *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=delivered_at,json=deliveredAt,proto3" json:"delivered_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EdgeChannelAck) Reset() {
+	*x = EdgeChannelAck{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[68]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EdgeChannelAck) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EdgeChannelAck) ProtoMessage() {}
+
+func (x *EdgeChannelAck) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[68]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EdgeChannelAck.ProtoReflect.Descriptor instead.
+func (*EdgeChannelAck) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{68}
+}
+
+func (x *EdgeChannelAck) GetMessageId() string {
+	if x != nil {
+		return x.MessageId
+	}
+	return ""
+}
+
+func (x *EdgeChannelAck) GetStatus() ChannelDeliveryStatus {
+	if x != nil {
+		return x.Status
+	}
+	return ChannelDeliveryStatus_CHANNEL_DELIVERY_STATUS_UNSPECIFIED
+}
+
+func (x *EdgeChannelAck) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *EdgeChannelAck) GetExternalId() string {
+	if x != nil {
+		return x.ExternalId
+	}
+	return ""
+}
+
+func (x *EdgeChannelAck) GetDeliveredAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.DeliveredAt
+	}
+	return nil
+}
+
 type GetEdgeStatusRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	EdgeId        string                 `protobuf:"bytes,1,opt,name=edge_id,json=edgeId,proto3" json:"edge_id,omitempty"`
@@ -5320,7 +5863,7 @@ type GetEdgeStatusRequest struct {
 
 func (x *GetEdgeStatusRequest) Reset() {
 	*x = GetEdgeStatusRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[66]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5332,7 +5875,7 @@ func (x *GetEdgeStatusRequest) String() string {
 func (*GetEdgeStatusRequest) ProtoMessage() {}
 
 func (x *GetEdgeStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[66]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5345,7 +5888,7 @@ func (x *GetEdgeStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEdgeStatusRequest.ProtoReflect.Descriptor instead.
 func (*GetEdgeStatusRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{66}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *GetEdgeStatusRequest) GetEdgeId() string {
@@ -5364,7 +5907,7 @@ type GetEdgeStatusResponse struct {
 
 func (x *GetEdgeStatusResponse) Reset() {
 	*x = GetEdgeStatusResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[67]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5376,7 +5919,7 @@ func (x *GetEdgeStatusResponse) String() string {
 func (*GetEdgeStatusResponse) ProtoMessage() {}
 
 func (x *GetEdgeStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[67]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5389,7 +5932,7 @@ func (x *GetEdgeStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEdgeStatusResponse.ProtoReflect.Descriptor instead.
 func (*GetEdgeStatusResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{67}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *GetEdgeStatusResponse) GetStatus() *EdgeStatus {
@@ -5409,7 +5952,7 @@ type ListEdgesRequest struct {
 
 func (x *ListEdgesRequest) Reset() {
 	*x = ListEdgesRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[68]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5421,7 +5964,7 @@ func (x *ListEdgesRequest) String() string {
 func (*ListEdgesRequest) ProtoMessage() {}
 
 func (x *ListEdgesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[68]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5434,7 +5977,7 @@ func (x *ListEdgesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListEdgesRequest.ProtoReflect.Descriptor instead.
 func (*ListEdgesRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{68}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *ListEdgesRequest) GetPageSize() int32 {
@@ -5462,7 +6005,7 @@ type ListEdgesResponse struct {
 
 func (x *ListEdgesResponse) Reset() {
 	*x = ListEdgesResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[69]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5474,7 +6017,7 @@ func (x *ListEdgesResponse) String() string {
 func (*ListEdgesResponse) ProtoMessage() {}
 
 func (x *ListEdgesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[69]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5487,7 +6030,7 @@ func (x *ListEdgesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListEdgesResponse.ProtoReflect.Descriptor instead.
 func (*ListEdgesResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{69}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *ListEdgesResponse) GetEdges() []*EdgeStatus {
@@ -5540,7 +6083,7 @@ type EdgeStatus struct {
 
 func (x *EdgeStatus) Reset() {
 	*x = EdgeStatus{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[70]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5552,7 +6095,7 @@ func (x *EdgeStatus) String() string {
 func (*EdgeStatus) ProtoMessage() {}
 
 func (x *EdgeStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[70]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5565,7 +6108,7 @@ func (x *EdgeStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EdgeStatus.ProtoReflect.Descriptor instead.
 func (*EdgeStatus) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{70}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *EdgeStatus) GetEdgeId() string {
@@ -5654,7 +6197,7 @@ type GetEventsRequest struct {
 
 func (x *GetEventsRequest) Reset() {
 	*x = GetEventsRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[71]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5666,7 +6209,7 @@ func (x *GetEventsRequest) String() string {
 func (*GetEventsRequest) ProtoMessage() {}
 
 func (x *GetEventsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[71]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5679,7 +6222,7 @@ func (x *GetEventsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEventsRequest.ProtoReflect.Descriptor instead.
 func (*GetEventsRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{71}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *GetEventsRequest) GetRunId() string {
@@ -5720,7 +6263,7 @@ type GetEventsResponse struct {
 
 func (x *GetEventsResponse) Reset() {
 	*x = GetEventsResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[72]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5732,7 +6275,7 @@ func (x *GetEventsResponse) String() string {
 func (*GetEventsResponse) ProtoMessage() {}
 
 func (x *GetEventsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[72]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5745,7 +6288,7 @@ func (x *GetEventsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEventsResponse.ProtoReflect.Descriptor instead.
 func (*GetEventsResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{72}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *GetEventsResponse) GetEvents() []*TimelineEvent {
@@ -5772,7 +6315,7 @@ type GetTimelineRequest struct {
 
 func (x *GetTimelineRequest) Reset() {
 	*x = GetTimelineRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[73]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5784,7 +6327,7 @@ func (x *GetTimelineRequest) String() string {
 func (*GetTimelineRequest) ProtoMessage() {}
 
 func (x *GetTimelineRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[73]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5797,7 +6340,7 @@ func (x *GetTimelineRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTimelineRequest.ProtoReflect.Descriptor instead.
 func (*GetTimelineRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{73}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *GetTimelineRequest) GetRunId() string {
@@ -5830,7 +6373,7 @@ type GetTimelineResponse struct {
 
 func (x *GetTimelineResponse) Reset() {
 	*x = GetTimelineResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[74]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5842,7 +6385,7 @@ func (x *GetTimelineResponse) String() string {
 func (*GetTimelineResponse) ProtoMessage() {}
 
 func (x *GetTimelineResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[74]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5855,7 +6398,7 @@ func (x *GetTimelineResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTimelineResponse.ProtoReflect.Descriptor instead.
 func (*GetTimelineResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{74}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *GetTimelineResponse) GetRunId() string {
@@ -5934,7 +6477,7 @@ type TimelineEvent struct {
 
 func (x *TimelineEvent) Reset() {
 	*x = TimelineEvent{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[75]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5946,7 +6489,7 @@ func (x *TimelineEvent) String() string {
 func (*TimelineEvent) ProtoMessage() {}
 
 func (x *TimelineEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[75]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5959,7 +6502,7 @@ func (x *TimelineEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TimelineEvent.ProtoReflect.Descriptor instead.
 func (*TimelineEvent) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{75}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *TimelineEvent) GetId() string {
@@ -6060,7 +6603,7 @@ type TimelineSummary struct {
 
 func (x *TimelineSummary) Reset() {
 	*x = TimelineSummary{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[76]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6072,7 +6615,7 @@ func (x *TimelineSummary) String() string {
 func (*TimelineSummary) ProtoMessage() {}
 
 func (x *TimelineSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[76]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6085,7 +6628,7 @@ func (x *TimelineSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TimelineSummary.ProtoReflect.Descriptor instead.
 func (*TimelineSummary) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{76}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *TimelineSummary) GetTotalEvents() int32 {
@@ -6128,6 +6671,2749 @@ func (x *TimelineSummary) GetTotalDurationMs() int64 {
 		return x.TotalDurationMs
 	}
 	return 0
+}
+
+// ScheduledTask represents a task that runs on a schedule.
+type ScheduledTask struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Unique identifier.
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// Human-readable name.
+	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// Task description.
+	Description string `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	// Agent to execute the task.
+	AgentId string `protobuf:"bytes,4,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	// Cron expression (standard 5-field or extended 6-field with seconds).
+	Schedule string `protobuf:"bytes,5,opt,name=schedule,proto3" json:"schedule,omitempty"`
+	// Timezone for schedule (e.g., "America/New_York"). Defaults to UTC.
+	Timezone string `protobuf:"bytes,6,opt,name=timezone,proto3" json:"timezone,omitempty"`
+	// Prompt to send to the agent when task executes.
+	Prompt string `protobuf:"bytes,7,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	// Task configuration.
+	Config *TaskConfig `protobuf:"bytes,8,opt,name=config,proto3" json:"config,omitempty"`
+	// Current status.
+	Status TaskStatus `protobuf:"varint,9,opt,name=status,proto3,enum=nexus.v1.TaskStatus" json:"status,omitempty"`
+	// Next scheduled run time.
+	NextRunAt *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=next_run_at,json=nextRunAt,proto3" json:"next_run_at,omitempty"`
+	// Last run time.
+	LastRunAt *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=last_run_at,json=lastRunAt,proto3" json:"last_run_at,omitempty"`
+	// Last execution ID.
+	LastExecutionId string `protobuf:"bytes,12,opt,name=last_execution_id,json=lastExecutionId,proto3" json:"last_execution_id,omitempty"`
+	// Creation timestamp.
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// Last update timestamp.
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,14,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	// Arbitrary metadata.
+	Metadata      map[string]string `protobuf:"bytes,15,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ScheduledTask) Reset() {
+	*x = ScheduledTask{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[80]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ScheduledTask) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ScheduledTask) ProtoMessage() {}
+
+func (x *ScheduledTask) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[80]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ScheduledTask.ProtoReflect.Descriptor instead.
+func (*ScheduledTask) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{80}
+}
+
+func (x *ScheduledTask) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *ScheduledTask) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ScheduledTask) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *ScheduledTask) GetAgentId() string {
+	if x != nil {
+		return x.AgentId
+	}
+	return ""
+}
+
+func (x *ScheduledTask) GetSchedule() string {
+	if x != nil {
+		return x.Schedule
+	}
+	return ""
+}
+
+func (x *ScheduledTask) GetTimezone() string {
+	if x != nil {
+		return x.Timezone
+	}
+	return ""
+}
+
+func (x *ScheduledTask) GetPrompt() string {
+	if x != nil {
+		return x.Prompt
+	}
+	return ""
+}
+
+func (x *ScheduledTask) GetConfig() *TaskConfig {
+	if x != nil {
+		return x.Config
+	}
+	return nil
+}
+
+func (x *ScheduledTask) GetStatus() TaskStatus {
+	if x != nil {
+		return x.Status
+	}
+	return TaskStatus_TASK_STATUS_UNSPECIFIED
+}
+
+func (x *ScheduledTask) GetNextRunAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.NextRunAt
+	}
+	return nil
+}
+
+func (x *ScheduledTask) GetLastRunAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastRunAt
+	}
+	return nil
+}
+
+func (x *ScheduledTask) GetLastExecutionId() string {
+	if x != nil {
+		return x.LastExecutionId
+	}
+	return ""
+}
+
+func (x *ScheduledTask) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *ScheduledTask) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+func (x *ScheduledTask) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+// TaskConfig holds task configuration options.
+type TaskConfig struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Timeout in seconds (default: 300).
+	TimeoutSeconds int32 `protobuf:"varint,1,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`
+	// Number of retry attempts on failure.
+	MaxRetries int32 `protobuf:"varint,2,opt,name=max_retries,json=maxRetries,proto3" json:"max_retries,omitempty"`
+	// Delay between retries in seconds.
+	RetryDelaySeconds int32 `protobuf:"varint,3,opt,name=retry_delay_seconds,json=retryDelaySeconds,proto3" json:"retry_delay_seconds,omitempty"`
+	// Allow overlapping executions.
+	AllowOverlap bool `protobuf:"varint,4,opt,name=allow_overlap,json=allowOverlap,proto3" json:"allow_overlap,omitempty"`
+	// Channel type for execution context.
+	Channel string `protobuf:"bytes,5,opt,name=channel,proto3" json:"channel,omitempty"`
+	// Channel ID for execution context.
+	ChannelId string `protobuf:"bytes,6,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
+	// Fixed session ID (optional, creates new if empty).
+	SessionId string `protobuf:"bytes,7,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	// Override system prompt for this task.
+	SystemPrompt string `protobuf:"bytes,8,opt,name=system_prompt,json=systemPrompt,proto3" json:"system_prompt,omitempty"`
+	// Override model for this task.
+	Model string `protobuf:"bytes,9,opt,name=model,proto3" json:"model,omitempty"`
+	// Target peer for proactive messages.
+	TargetPeerId  string `protobuf:"bytes,10,opt,name=target_peer_id,json=targetPeerId,proto3" json:"target_peer_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TaskConfig) Reset() {
+	*x = TaskConfig{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[81]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TaskConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TaskConfig) ProtoMessage() {}
+
+func (x *TaskConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[81]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TaskConfig.ProtoReflect.Descriptor instead.
+func (*TaskConfig) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{81}
+}
+
+func (x *TaskConfig) GetTimeoutSeconds() int32 {
+	if x != nil {
+		return x.TimeoutSeconds
+	}
+	return 0
+}
+
+func (x *TaskConfig) GetMaxRetries() int32 {
+	if x != nil {
+		return x.MaxRetries
+	}
+	return 0
+}
+
+func (x *TaskConfig) GetRetryDelaySeconds() int32 {
+	if x != nil {
+		return x.RetryDelaySeconds
+	}
+	return 0
+}
+
+func (x *TaskConfig) GetAllowOverlap() bool {
+	if x != nil {
+		return x.AllowOverlap
+	}
+	return false
+}
+
+func (x *TaskConfig) GetChannel() string {
+	if x != nil {
+		return x.Channel
+	}
+	return ""
+}
+
+func (x *TaskConfig) GetChannelId() string {
+	if x != nil {
+		return x.ChannelId
+	}
+	return ""
+}
+
+func (x *TaskConfig) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *TaskConfig) GetSystemPrompt() string {
+	if x != nil {
+		return x.SystemPrompt
+	}
+	return ""
+}
+
+func (x *TaskConfig) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *TaskConfig) GetTargetPeerId() string {
+	if x != nil {
+		return x.TargetPeerId
+	}
+	return ""
+}
+
+// TaskExecution represents a single execution of a task.
+type TaskExecution struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	TaskId        string                 `protobuf:"bytes,2,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	Status        ExecutionStatus        `protobuf:"varint,3,opt,name=status,proto3,enum=nexus.v1.ExecutionStatus" json:"status,omitempty"`
+	ScheduledAt   *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=scheduled_at,json=scheduledAt,proto3" json:"scheduled_at,omitempty"`
+	StartedAt     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	FinishedAt    *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
+	SessionId     string                 `protobuf:"bytes,7,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Prompt        string                 `protobuf:"bytes,8,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	Response      string                 `protobuf:"bytes,9,opt,name=response,proto3" json:"response,omitempty"`
+	Error         string                 `protobuf:"bytes,10,opt,name=error,proto3" json:"error,omitempty"`
+	AttemptNumber int32                  `protobuf:"varint,11,opt,name=attempt_number,json=attemptNumber,proto3" json:"attempt_number,omitempty"`
+	DurationMs    int64                  `protobuf:"varint,12,opt,name=duration_ms,json=durationMs,proto3" json:"duration_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TaskExecution) Reset() {
+	*x = TaskExecution{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[82]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TaskExecution) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TaskExecution) ProtoMessage() {}
+
+func (x *TaskExecution) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[82]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TaskExecution.ProtoReflect.Descriptor instead.
+func (*TaskExecution) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{82}
+}
+
+func (x *TaskExecution) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *TaskExecution) GetTaskId() string {
+	if x != nil {
+		return x.TaskId
+	}
+	return ""
+}
+
+func (x *TaskExecution) GetStatus() ExecutionStatus {
+	if x != nil {
+		return x.Status
+	}
+	return ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED
+}
+
+func (x *TaskExecution) GetScheduledAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ScheduledAt
+	}
+	return nil
+}
+
+func (x *TaskExecution) GetStartedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.StartedAt
+	}
+	return nil
+}
+
+func (x *TaskExecution) GetFinishedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.FinishedAt
+	}
+	return nil
+}
+
+func (x *TaskExecution) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *TaskExecution) GetPrompt() string {
+	if x != nil {
+		return x.Prompt
+	}
+	return ""
+}
+
+func (x *TaskExecution) GetResponse() string {
+	if x != nil {
+		return x.Response
+	}
+	return ""
+}
+
+func (x *TaskExecution) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *TaskExecution) GetAttemptNumber() int32 {
+	if x != nil {
+		return x.AttemptNumber
+	}
+	return 0
+}
+
+func (x *TaskExecution) GetDurationMs() int64 {
+	if x != nil {
+		return x.DurationMs
+	}
+	return 0
+}
+
+// Task Service Request/Response Messages
+type CreateTaskRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Description   string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
+	AgentId       string                 `protobuf:"bytes,3,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	Schedule      string                 `protobuf:"bytes,4,opt,name=schedule,proto3" json:"schedule,omitempty"`
+	Timezone      string                 `protobuf:"bytes,5,opt,name=timezone,proto3" json:"timezone,omitempty"`
+	Prompt        string                 `protobuf:"bytes,6,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	Config        *TaskConfig            `protobuf:"bytes,7,opt,name=config,proto3" json:"config,omitempty"`
+	Metadata      map[string]string      `protobuf:"bytes,8,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateTaskRequest) Reset() {
+	*x = CreateTaskRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[83]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateTaskRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateTaskRequest) ProtoMessage() {}
+
+func (x *CreateTaskRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[83]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateTaskRequest.ProtoReflect.Descriptor instead.
+func (*CreateTaskRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{83}
+}
+
+func (x *CreateTaskRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *CreateTaskRequest) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *CreateTaskRequest) GetAgentId() string {
+	if x != nil {
+		return x.AgentId
+	}
+	return ""
+}
+
+func (x *CreateTaskRequest) GetSchedule() string {
+	if x != nil {
+		return x.Schedule
+	}
+	return ""
+}
+
+func (x *CreateTaskRequest) GetTimezone() string {
+	if x != nil {
+		return x.Timezone
+	}
+	return ""
+}
+
+func (x *CreateTaskRequest) GetPrompt() string {
+	if x != nil {
+		return x.Prompt
+	}
+	return ""
+}
+
+func (x *CreateTaskRequest) GetConfig() *TaskConfig {
+	if x != nil {
+		return x.Config
+	}
+	return nil
+}
+
+func (x *CreateTaskRequest) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+type CreateTaskResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Task          *ScheduledTask         `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateTaskResponse) Reset() {
+	*x = CreateTaskResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[84]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateTaskResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateTaskResponse) ProtoMessage() {}
+
+func (x *CreateTaskResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[84]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateTaskResponse.ProtoReflect.Descriptor instead.
+func (*CreateTaskResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{84}
+}
+
+func (x *CreateTaskResponse) GetTask() *ScheduledTask {
+	if x != nil {
+		return x.Task
+	}
+	return nil
+}
+
+type GetTaskRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetTaskRequest) Reset() {
+	*x = GetTaskRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[85]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetTaskRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetTaskRequest) ProtoMessage() {}
+
+func (x *GetTaskRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[85]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetTaskRequest.ProtoReflect.Descriptor instead.
+func (*GetTaskRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{85}
+}
+
+func (x *GetTaskRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type GetTaskResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Task          *ScheduledTask         `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetTaskResponse) Reset() {
+	*x = GetTaskResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[86]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetTaskResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetTaskResponse) ProtoMessage() {}
+
+func (x *GetTaskResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[86]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetTaskResponse.ProtoReflect.Descriptor instead.
+func (*GetTaskResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{86}
+}
+
+func (x *GetTaskResponse) GetTask() *ScheduledTask {
+	if x != nil {
+		return x.Task
+	}
+	return nil
+}
+
+type ListTasksRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	Status        TaskStatus             `protobuf:"varint,2,opt,name=status,proto3,enum=nexus.v1.TaskStatus" json:"status,omitempty"`
+	PageSize      int32                  `protobuf:"varint,3,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	PageToken     string                 `protobuf:"bytes,4,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListTasksRequest) Reset() {
+	*x = ListTasksRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[87]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListTasksRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListTasksRequest) ProtoMessage() {}
+
+func (x *ListTasksRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[87]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListTasksRequest.ProtoReflect.Descriptor instead.
+func (*ListTasksRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{87}
+}
+
+func (x *ListTasksRequest) GetAgentId() string {
+	if x != nil {
+		return x.AgentId
+	}
+	return ""
+}
+
+func (x *ListTasksRequest) GetStatus() TaskStatus {
+	if x != nil {
+		return x.Status
+	}
+	return TaskStatus_TASK_STATUS_UNSPECIFIED
+}
+
+func (x *ListTasksRequest) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+func (x *ListTasksRequest) GetPageToken() string {
+	if x != nil {
+		return x.PageToken
+	}
+	return ""
+}
+
+type ListTasksResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tasks         []*ScheduledTask       `protobuf:"bytes,1,rep,name=tasks,proto3" json:"tasks,omitempty"`
+	NextPageToken string                 `protobuf:"bytes,2,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
+	TotalCount    int32                  `protobuf:"varint,3,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListTasksResponse) Reset() {
+	*x = ListTasksResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[88]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListTasksResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListTasksResponse) ProtoMessage() {}
+
+func (x *ListTasksResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[88]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListTasksResponse.ProtoReflect.Descriptor instead.
+func (*ListTasksResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{88}
+}
+
+func (x *ListTasksResponse) GetTasks() []*ScheduledTask {
+	if x != nil {
+		return x.Tasks
+	}
+	return nil
+}
+
+func (x *ListTasksResponse) GetNextPageToken() string {
+	if x != nil {
+		return x.NextPageToken
+	}
+	return ""
+}
+
+func (x *ListTasksResponse) GetTotalCount() int32 {
+	if x != nil {
+		return x.TotalCount
+	}
+	return 0
+}
+
+type UpdateTaskRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Description   string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	Schedule      string                 `protobuf:"bytes,4,opt,name=schedule,proto3" json:"schedule,omitempty"`
+	Timezone      string                 `protobuf:"bytes,5,opt,name=timezone,proto3" json:"timezone,omitempty"`
+	Prompt        string                 `protobuf:"bytes,6,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	Config        *TaskConfig            `protobuf:"bytes,7,opt,name=config,proto3" json:"config,omitempty"`
+	Metadata      map[string]string      `protobuf:"bytes,8,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateTaskRequest) Reset() {
+	*x = UpdateTaskRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[89]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateTaskRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateTaskRequest) ProtoMessage() {}
+
+func (x *UpdateTaskRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[89]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateTaskRequest.ProtoReflect.Descriptor instead.
+func (*UpdateTaskRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{89}
+}
+
+func (x *UpdateTaskRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *UpdateTaskRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *UpdateTaskRequest) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *UpdateTaskRequest) GetSchedule() string {
+	if x != nil {
+		return x.Schedule
+	}
+	return ""
+}
+
+func (x *UpdateTaskRequest) GetTimezone() string {
+	if x != nil {
+		return x.Timezone
+	}
+	return ""
+}
+
+func (x *UpdateTaskRequest) GetPrompt() string {
+	if x != nil {
+		return x.Prompt
+	}
+	return ""
+}
+
+func (x *UpdateTaskRequest) GetConfig() *TaskConfig {
+	if x != nil {
+		return x.Config
+	}
+	return nil
+}
+
+func (x *UpdateTaskRequest) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+type UpdateTaskResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Task          *ScheduledTask         `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateTaskResponse) Reset() {
+	*x = UpdateTaskResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[90]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateTaskResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateTaskResponse) ProtoMessage() {}
+
+func (x *UpdateTaskResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[90]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateTaskResponse.ProtoReflect.Descriptor instead.
+func (*UpdateTaskResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{90}
+}
+
+func (x *UpdateTaskResponse) GetTask() *ScheduledTask {
+	if x != nil {
+		return x.Task
+	}
+	return nil
+}
+
+type DeleteTaskRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteTaskRequest) Reset() {
+	*x = DeleteTaskRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[91]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteTaskRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteTaskRequest) ProtoMessage() {}
+
+func (x *DeleteTaskRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[91]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteTaskRequest.ProtoReflect.Descriptor instead.
+func (*DeleteTaskRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{91}
+}
+
+func (x *DeleteTaskRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type DeleteTaskResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteTaskResponse) Reset() {
+	*x = DeleteTaskResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[92]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteTaskResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteTaskResponse) ProtoMessage() {}
+
+func (x *DeleteTaskResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[92]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteTaskResponse.ProtoReflect.Descriptor instead.
+func (*DeleteTaskResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{92}
+}
+
+func (x *DeleteTaskResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+type PauseTaskRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PauseTaskRequest) Reset() {
+	*x = PauseTaskRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[93]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PauseTaskRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PauseTaskRequest) ProtoMessage() {}
+
+func (x *PauseTaskRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[93]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PauseTaskRequest.ProtoReflect.Descriptor instead.
+func (*PauseTaskRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{93}
+}
+
+func (x *PauseTaskRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type PauseTaskResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Task          *ScheduledTask         `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PauseTaskResponse) Reset() {
+	*x = PauseTaskResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[94]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PauseTaskResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PauseTaskResponse) ProtoMessage() {}
+
+func (x *PauseTaskResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[94]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PauseTaskResponse.ProtoReflect.Descriptor instead.
+func (*PauseTaskResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{94}
+}
+
+func (x *PauseTaskResponse) GetTask() *ScheduledTask {
+	if x != nil {
+		return x.Task
+	}
+	return nil
+}
+
+type ResumeTaskRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResumeTaskRequest) Reset() {
+	*x = ResumeTaskRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[95]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResumeTaskRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResumeTaskRequest) ProtoMessage() {}
+
+func (x *ResumeTaskRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[95]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResumeTaskRequest.ProtoReflect.Descriptor instead.
+func (*ResumeTaskRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{95}
+}
+
+func (x *ResumeTaskRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type ResumeTaskResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Task          *ScheduledTask         `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResumeTaskResponse) Reset() {
+	*x = ResumeTaskResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[96]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResumeTaskResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResumeTaskResponse) ProtoMessage() {}
+
+func (x *ResumeTaskResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[96]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResumeTaskResponse.ProtoReflect.Descriptor instead.
+func (*ResumeTaskResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{96}
+}
+
+func (x *ResumeTaskResponse) GetTask() *ScheduledTask {
+	if x != nil {
+		return x.Task
+	}
+	return nil
+}
+
+type TriggerTaskRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TriggerTaskRequest) Reset() {
+	*x = TriggerTaskRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[97]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TriggerTaskRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TriggerTaskRequest) ProtoMessage() {}
+
+func (x *TriggerTaskRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[97]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TriggerTaskRequest.ProtoReflect.Descriptor instead.
+func (*TriggerTaskRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{97}
+}
+
+func (x *TriggerTaskRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type TriggerTaskResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Execution     *TaskExecution         `protobuf:"bytes,1,opt,name=execution,proto3" json:"execution,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TriggerTaskResponse) Reset() {
+	*x = TriggerTaskResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[98]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TriggerTaskResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TriggerTaskResponse) ProtoMessage() {}
+
+func (x *TriggerTaskResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[98]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TriggerTaskResponse.ProtoReflect.Descriptor instead.
+func (*TriggerTaskResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{98}
+}
+
+func (x *TriggerTaskResponse) GetExecution() *TaskExecution {
+	if x != nil {
+		return x.Execution
+	}
+	return nil
+}
+
+type ListExecutionsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	Status        ExecutionStatus        `protobuf:"varint,2,opt,name=status,proto3,enum=nexus.v1.ExecutionStatus" json:"status,omitempty"`
+	PageSize      int32                  `protobuf:"varint,3,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	PageToken     string                 `protobuf:"bytes,4,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListExecutionsRequest) Reset() {
+	*x = ListExecutionsRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[99]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListExecutionsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListExecutionsRequest) ProtoMessage() {}
+
+func (x *ListExecutionsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[99]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListExecutionsRequest.ProtoReflect.Descriptor instead.
+func (*ListExecutionsRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{99}
+}
+
+func (x *ListExecutionsRequest) GetTaskId() string {
+	if x != nil {
+		return x.TaskId
+	}
+	return ""
+}
+
+func (x *ListExecutionsRequest) GetStatus() ExecutionStatus {
+	if x != nil {
+		return x.Status
+	}
+	return ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED
+}
+
+func (x *ListExecutionsRequest) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+func (x *ListExecutionsRequest) GetPageToken() string {
+	if x != nil {
+		return x.PageToken
+	}
+	return ""
+}
+
+type ListExecutionsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Executions    []*TaskExecution       `protobuf:"bytes,1,rep,name=executions,proto3" json:"executions,omitempty"`
+	NextPageToken string                 `protobuf:"bytes,2,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
+	TotalCount    int32                  `protobuf:"varint,3,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListExecutionsResponse) Reset() {
+	*x = ListExecutionsResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[100]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListExecutionsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListExecutionsResponse) ProtoMessage() {}
+
+func (x *ListExecutionsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[100]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListExecutionsResponse.ProtoReflect.Descriptor instead.
+func (*ListExecutionsResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{100}
+}
+
+func (x *ListExecutionsResponse) GetExecutions() []*TaskExecution {
+	if x != nil {
+		return x.Executions
+	}
+	return nil
+}
+
+func (x *ListExecutionsResponse) GetNextPageToken() string {
+	if x != nil {
+		return x.NextPageToken
+	}
+	return ""
+}
+
+func (x *ListExecutionsResponse) GetTotalCount() int32 {
+	if x != nil {
+		return x.TotalCount
+	}
+	return 0
+}
+
+// Proactive Message Service Request/Response Messages
+type ProactiveSendRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Channel type to send to.
+	Channel string `protobuf:"bytes,1,opt,name=channel,proto3" json:"channel,omitempty"`
+	// Channel-specific recipient ID (e.g., chat_id for Telegram).
+	PeerId string `protobuf:"bytes,2,opt,name=peer_id,json=peerId,proto3" json:"peer_id,omitempty"`
+	// Message content.
+	Content string `protobuf:"bytes,3,opt,name=content,proto3" json:"content,omitempty"`
+	// Optional agent ID for context.
+	AgentId string `protobuf:"bytes,4,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	// Optional session ID for conversation continuity.
+	SessionId string `protobuf:"bytes,5,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	// Optional attachments.
+	Attachments []*Attachment `protobuf:"bytes,6,rep,name=attachments,proto3" json:"attachments,omitempty"`
+	// Message metadata.
+	Metadata      map[string]string `protobuf:"bytes,7,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProactiveSendRequest) Reset() {
+	*x = ProactiveSendRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[101]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProactiveSendRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProactiveSendRequest) ProtoMessage() {}
+
+func (x *ProactiveSendRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[101]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProactiveSendRequest.ProtoReflect.Descriptor instead.
+func (*ProactiveSendRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{101}
+}
+
+func (x *ProactiveSendRequest) GetChannel() string {
+	if x != nil {
+		return x.Channel
+	}
+	return ""
+}
+
+func (x *ProactiveSendRequest) GetPeerId() string {
+	if x != nil {
+		return x.PeerId
+	}
+	return ""
+}
+
+func (x *ProactiveSendRequest) GetContent() string {
+	if x != nil {
+		return x.Content
+	}
+	return ""
+}
+
+func (x *ProactiveSendRequest) GetAgentId() string {
+	if x != nil {
+		return x.AgentId
+	}
+	return ""
+}
+
+func (x *ProactiveSendRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *ProactiveSendRequest) GetAttachments() []*Attachment {
+	if x != nil {
+		return x.Attachments
+	}
+	return nil
+}
+
+func (x *ProactiveSendRequest) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+type ProactiveSendResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Whether the message was sent successfully.
+	Success bool `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	// Message ID assigned by the channel.
+	MessageId string `protobuf:"bytes,2,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	// Session ID (created if not provided).
+	SessionId string `protobuf:"bytes,3,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	// Error message if failed.
+	Error         string `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProactiveSendResponse) Reset() {
+	*x = ProactiveSendResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[102]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProactiveSendResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProactiveSendResponse) ProtoMessage() {}
+
+func (x *ProactiveSendResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[102]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProactiveSendResponse.ProtoReflect.Descriptor instead.
+func (*ProactiveSendResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{102}
+}
+
+func (x *ProactiveSendResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *ProactiveSendResponse) GetMessageId() string {
+	if x != nil {
+		return x.MessageId
+	}
+	return ""
+}
+
+func (x *ProactiveSendResponse) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *ProactiveSendResponse) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+type BroadcastMessageRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Channel type to send to.
+	Channel string `protobuf:"bytes,1,opt,name=channel,proto3" json:"channel,omitempty"`
+	// List of peer IDs to send to.
+	PeerIds []string `protobuf:"bytes,2,rep,name=peer_ids,json=peerIds,proto3" json:"peer_ids,omitempty"`
+	// Message content.
+	Content string `protobuf:"bytes,3,opt,name=content,proto3" json:"content,omitempty"`
+	// Optional agent ID.
+	AgentId string `protobuf:"bytes,4,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	// Optional attachments.
+	Attachments []*Attachment `protobuf:"bytes,5,rep,name=attachments,proto3" json:"attachments,omitempty"`
+	// Message metadata.
+	Metadata      map[string]string `protobuf:"bytes,6,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BroadcastMessageRequest) Reset() {
+	*x = BroadcastMessageRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[103]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BroadcastMessageRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BroadcastMessageRequest) ProtoMessage() {}
+
+func (x *BroadcastMessageRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[103]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BroadcastMessageRequest.ProtoReflect.Descriptor instead.
+func (*BroadcastMessageRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{103}
+}
+
+func (x *BroadcastMessageRequest) GetChannel() string {
+	if x != nil {
+		return x.Channel
+	}
+	return ""
+}
+
+func (x *BroadcastMessageRequest) GetPeerIds() []string {
+	if x != nil {
+		return x.PeerIds
+	}
+	return nil
+}
+
+func (x *BroadcastMessageRequest) GetContent() string {
+	if x != nil {
+		return x.Content
+	}
+	return ""
+}
+
+func (x *BroadcastMessageRequest) GetAgentId() string {
+	if x != nil {
+		return x.AgentId
+	}
+	return ""
+}
+
+func (x *BroadcastMessageRequest) GetAttachments() []*Attachment {
+	if x != nil {
+		return x.Attachments
+	}
+	return nil
+}
+
+func (x *BroadcastMessageRequest) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+type BroadcastMessageResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Number of messages sent successfully.
+	SuccessCount int32 `protobuf:"varint,1,opt,name=success_count,json=successCount,proto3" json:"success_count,omitempty"`
+	// Number of messages that failed.
+	FailureCount int32 `protobuf:"varint,2,opt,name=failure_count,json=failureCount,proto3" json:"failure_count,omitempty"`
+	// Details per recipient.
+	Results       []*BroadcastResult `protobuf:"bytes,3,rep,name=results,proto3" json:"results,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BroadcastMessageResponse) Reset() {
+	*x = BroadcastMessageResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[104]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BroadcastMessageResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BroadcastMessageResponse) ProtoMessage() {}
+
+func (x *BroadcastMessageResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[104]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BroadcastMessageResponse.ProtoReflect.Descriptor instead.
+func (*BroadcastMessageResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{104}
+}
+
+func (x *BroadcastMessageResponse) GetSuccessCount() int32 {
+	if x != nil {
+		return x.SuccessCount
+	}
+	return 0
+}
+
+func (x *BroadcastMessageResponse) GetFailureCount() int32 {
+	if x != nil {
+		return x.FailureCount
+	}
+	return 0
+}
+
+func (x *BroadcastMessageResponse) GetResults() []*BroadcastResult {
+	if x != nil {
+		return x.Results
+	}
+	return nil
+}
+
+type BroadcastResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PeerId        string                 `protobuf:"bytes,1,opt,name=peer_id,json=peerId,proto3" json:"peer_id,omitempty"`
+	Success       bool                   `protobuf:"varint,2,opt,name=success,proto3" json:"success,omitempty"`
+	MessageId     string                 `protobuf:"bytes,3,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	Error         string                 `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BroadcastResult) Reset() {
+	*x = BroadcastResult{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[105]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BroadcastResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BroadcastResult) ProtoMessage() {}
+
+func (x *BroadcastResult) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[105]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BroadcastResult.ProtoReflect.Descriptor instead.
+func (*BroadcastResult) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{105}
+}
+
+func (x *BroadcastResult) GetPeerId() string {
+	if x != nil {
+		return x.PeerId
+	}
+	return ""
+}
+
+func (x *BroadcastResult) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *BroadcastResult) GetMessageId() string {
+	if x != nil {
+		return x.MessageId
+	}
+	return ""
+}
+
+func (x *BroadcastResult) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+// Identity represents a canonical user identity that can span multiple channels.
+type Identity struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Canonical identifier (e.g., "user_alice", "user_12345").
+	CanonicalId string `protobuf:"bytes,1,opt,name=canonical_id,json=canonicalId,proto3" json:"canonical_id,omitempty"`
+	// Display name for the identity.
+	DisplayName string `protobuf:"bytes,2,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	// Email (optional, for matching).
+	Email string `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
+	// Linked platform peer IDs (format: "channel:peer_id").
+	LinkedPeers []string `protobuf:"bytes,4,rep,name=linked_peers,json=linkedPeers,proto3" json:"linked_peers,omitempty"`
+	// Arbitrary metadata.
+	Metadata map[string]string `protobuf:"bytes,5,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// Creation timestamp.
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// Last update timestamp.
+	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Identity) Reset() {
+	*x = Identity{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[106]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Identity) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Identity) ProtoMessage() {}
+
+func (x *Identity) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[106]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Identity.ProtoReflect.Descriptor instead.
+func (*Identity) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{106}
+}
+
+func (x *Identity) GetCanonicalId() string {
+	if x != nil {
+		return x.CanonicalId
+	}
+	return ""
+}
+
+func (x *Identity) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *Identity) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *Identity) GetLinkedPeers() []string {
+	if x != nil {
+		return x.LinkedPeers
+	}
+	return nil
+}
+
+func (x *Identity) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+func (x *Identity) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *Identity) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+type CreateIdentityRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Canonical ID (required, must be unique).
+	CanonicalId string `protobuf:"bytes,1,opt,name=canonical_id,json=canonicalId,proto3" json:"canonical_id,omitempty"`
+	// Display name.
+	DisplayName string `protobuf:"bytes,2,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	// Email (optional).
+	Email string `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
+	// Initial linked peers (format: "channel:peer_id").
+	LinkedPeers []string `protobuf:"bytes,4,rep,name=linked_peers,json=linkedPeers,proto3" json:"linked_peers,omitempty"`
+	// Metadata.
+	Metadata      map[string]string `protobuf:"bytes,5,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateIdentityRequest) Reset() {
+	*x = CreateIdentityRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[107]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateIdentityRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateIdentityRequest) ProtoMessage() {}
+
+func (x *CreateIdentityRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[107]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateIdentityRequest.ProtoReflect.Descriptor instead.
+func (*CreateIdentityRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{107}
+}
+
+func (x *CreateIdentityRequest) GetCanonicalId() string {
+	if x != nil {
+		return x.CanonicalId
+	}
+	return ""
+}
+
+func (x *CreateIdentityRequest) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *CreateIdentityRequest) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *CreateIdentityRequest) GetLinkedPeers() []string {
+	if x != nil {
+		return x.LinkedPeers
+	}
+	return nil
+}
+
+func (x *CreateIdentityRequest) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+type CreateIdentityResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Identity      *Identity              `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateIdentityResponse) Reset() {
+	*x = CreateIdentityResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[108]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateIdentityResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateIdentityResponse) ProtoMessage() {}
+
+func (x *CreateIdentityResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[108]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateIdentityResponse.ProtoReflect.Descriptor instead.
+func (*CreateIdentityResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{108}
+}
+
+func (x *CreateIdentityResponse) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+type GetIdentityRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CanonicalId   string                 `protobuf:"bytes,1,opt,name=canonical_id,json=canonicalId,proto3" json:"canonical_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetIdentityRequest) Reset() {
+	*x = GetIdentityRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[109]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetIdentityRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetIdentityRequest) ProtoMessage() {}
+
+func (x *GetIdentityRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[109]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetIdentityRequest.ProtoReflect.Descriptor instead.
+func (*GetIdentityRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{109}
+}
+
+func (x *GetIdentityRequest) GetCanonicalId() string {
+	if x != nil {
+		return x.CanonicalId
+	}
+	return ""
+}
+
+type GetIdentityResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Identity      *Identity              `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetIdentityResponse) Reset() {
+	*x = GetIdentityResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[110]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetIdentityResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetIdentityResponse) ProtoMessage() {}
+
+func (x *GetIdentityResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[110]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetIdentityResponse.ProtoReflect.Descriptor instead.
+func (*GetIdentityResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{110}
+}
+
+func (x *GetIdentityResponse) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+type ListIdentitiesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PageSize      int32                  `protobuf:"varint,1,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	PageToken     string                 `protobuf:"bytes,2,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListIdentitiesRequest) Reset() {
+	*x = ListIdentitiesRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[111]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListIdentitiesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListIdentitiesRequest) ProtoMessage() {}
+
+func (x *ListIdentitiesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[111]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListIdentitiesRequest.ProtoReflect.Descriptor instead.
+func (*ListIdentitiesRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{111}
+}
+
+func (x *ListIdentitiesRequest) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+func (x *ListIdentitiesRequest) GetPageToken() string {
+	if x != nil {
+		return x.PageToken
+	}
+	return ""
+}
+
+type ListIdentitiesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Identities    []*Identity            `protobuf:"bytes,1,rep,name=identities,proto3" json:"identities,omitempty"`
+	NextPageToken string                 `protobuf:"bytes,2,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
+	TotalCount    int32                  `protobuf:"varint,3,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListIdentitiesResponse) Reset() {
+	*x = ListIdentitiesResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[112]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListIdentitiesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListIdentitiesResponse) ProtoMessage() {}
+
+func (x *ListIdentitiesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[112]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListIdentitiesResponse.ProtoReflect.Descriptor instead.
+func (*ListIdentitiesResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{112}
+}
+
+func (x *ListIdentitiesResponse) GetIdentities() []*Identity {
+	if x != nil {
+		return x.Identities
+	}
+	return nil
+}
+
+func (x *ListIdentitiesResponse) GetNextPageToken() string {
+	if x != nil {
+		return x.NextPageToken
+	}
+	return ""
+}
+
+func (x *ListIdentitiesResponse) GetTotalCount() int32 {
+	if x != nil {
+		return x.TotalCount
+	}
+	return 0
+}
+
+type DeleteIdentityRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CanonicalId   string                 `protobuf:"bytes,1,opt,name=canonical_id,json=canonicalId,proto3" json:"canonical_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteIdentityRequest) Reset() {
+	*x = DeleteIdentityRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[113]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteIdentityRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteIdentityRequest) ProtoMessage() {}
+
+func (x *DeleteIdentityRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[113]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteIdentityRequest.ProtoReflect.Descriptor instead.
+func (*DeleteIdentityRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{113}
+}
+
+func (x *DeleteIdentityRequest) GetCanonicalId() string {
+	if x != nil {
+		return x.CanonicalId
+	}
+	return ""
+}
+
+type DeleteIdentityResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteIdentityResponse) Reset() {
+	*x = DeleteIdentityResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[114]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteIdentityResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteIdentityResponse) ProtoMessage() {}
+
+func (x *DeleteIdentityResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[114]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteIdentityResponse.ProtoReflect.Descriptor instead.
+func (*DeleteIdentityResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{114}
+}
+
+func (x *DeleteIdentityResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+type LinkPeerRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Canonical identity to link to.
+	CanonicalId string `protobuf:"bytes,1,opt,name=canonical_id,json=canonicalId,proto3" json:"canonical_id,omitempty"`
+	// Channel type (e.g., "telegram", "discord", "slack").
+	Channel string `protobuf:"bytes,2,opt,name=channel,proto3" json:"channel,omitempty"`
+	// Peer ID on the channel.
+	PeerId        string `protobuf:"bytes,3,opt,name=peer_id,json=peerId,proto3" json:"peer_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LinkPeerRequest) Reset() {
+	*x = LinkPeerRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[115]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LinkPeerRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LinkPeerRequest) ProtoMessage() {}
+
+func (x *LinkPeerRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[115]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LinkPeerRequest.ProtoReflect.Descriptor instead.
+func (*LinkPeerRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{115}
+}
+
+func (x *LinkPeerRequest) GetCanonicalId() string {
+	if x != nil {
+		return x.CanonicalId
+	}
+	return ""
+}
+
+func (x *LinkPeerRequest) GetChannel() string {
+	if x != nil {
+		return x.Channel
+	}
+	return ""
+}
+
+func (x *LinkPeerRequest) GetPeerId() string {
+	if x != nil {
+		return x.PeerId
+	}
+	return ""
+}
+
+type LinkPeerResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Identity      *Identity              `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LinkPeerResponse) Reset() {
+	*x = LinkPeerResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[116]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LinkPeerResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LinkPeerResponse) ProtoMessage() {}
+
+func (x *LinkPeerResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[116]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LinkPeerResponse.ProtoReflect.Descriptor instead.
+func (*LinkPeerResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{116}
+}
+
+func (x *LinkPeerResponse) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+type UnlinkPeerRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Canonical identity to unlink from.
+	CanonicalId string `protobuf:"bytes,1,opt,name=canonical_id,json=canonicalId,proto3" json:"canonical_id,omitempty"`
+	// Channel type.
+	Channel string `protobuf:"bytes,2,opt,name=channel,proto3" json:"channel,omitempty"`
+	// Peer ID.
+	PeerId        string `protobuf:"bytes,3,opt,name=peer_id,json=peerId,proto3" json:"peer_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UnlinkPeerRequest) Reset() {
+	*x = UnlinkPeerRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[117]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnlinkPeerRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnlinkPeerRequest) ProtoMessage() {}
+
+func (x *UnlinkPeerRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[117]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnlinkPeerRequest.ProtoReflect.Descriptor instead.
+func (*UnlinkPeerRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{117}
+}
+
+func (x *UnlinkPeerRequest) GetCanonicalId() string {
+	if x != nil {
+		return x.CanonicalId
+	}
+	return ""
+}
+
+func (x *UnlinkPeerRequest) GetChannel() string {
+	if x != nil {
+		return x.Channel
+	}
+	return ""
+}
+
+func (x *UnlinkPeerRequest) GetPeerId() string {
+	if x != nil {
+		return x.PeerId
+	}
+	return ""
+}
+
+type UnlinkPeerResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Identity      *Identity              `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UnlinkPeerResponse) Reset() {
+	*x = UnlinkPeerResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[118]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnlinkPeerResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnlinkPeerResponse) ProtoMessage() {}
+
+func (x *UnlinkPeerResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[118]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnlinkPeerResponse.ProtoReflect.Descriptor instead.
+func (*UnlinkPeerResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{118}
+}
+
+func (x *UnlinkPeerResponse) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+type ResolveIdentityRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Channel type.
+	Channel string `protobuf:"bytes,1,opt,name=channel,proto3" json:"channel,omitempty"`
+	// Peer ID.
+	PeerId        string `protobuf:"bytes,2,opt,name=peer_id,json=peerId,proto3" json:"peer_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResolveIdentityRequest) Reset() {
+	*x = ResolveIdentityRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[119]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolveIdentityRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolveIdentityRequest) ProtoMessage() {}
+
+func (x *ResolveIdentityRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[119]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolveIdentityRequest.ProtoReflect.Descriptor instead.
+func (*ResolveIdentityRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{119}
+}
+
+func (x *ResolveIdentityRequest) GetChannel() string {
+	if x != nil {
+		return x.Channel
+	}
+	return ""
+}
+
+func (x *ResolveIdentityRequest) GetPeerId() string {
+	if x != nil {
+		return x.PeerId
+	}
+	return ""
+}
+
+type ResolveIdentityResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// True if a linked identity was found.
+	Found bool `protobuf:"varint,1,opt,name=found,proto3" json:"found,omitempty"`
+	// The canonical identity, if found.
+	Identity *Identity `protobuf:"bytes,2,opt,name=identity,proto3" json:"identity,omitempty"`
+	// The resolved ID (canonical_id if linked, channel:peer_id if not).
+	ResolvedId    string `protobuf:"bytes,3,opt,name=resolved_id,json=resolvedId,proto3" json:"resolved_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResolveIdentityResponse) Reset() {
+	*x = ResolveIdentityResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[120]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolveIdentityResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolveIdentityResponse) ProtoMessage() {}
+
+func (x *ResolveIdentityResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[120]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolveIdentityResponse.ProtoReflect.Descriptor instead.
+func (*ResolveIdentityResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{120}
+}
+
+func (x *ResolveIdentityResponse) GetFound() bool {
+	if x != nil {
+		return x.Found
+	}
+	return false
+}
+
+func (x *ResolveIdentityResponse) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+func (x *ResolveIdentityResponse) GetResolvedId() string {
+	if x != nil {
+		return x.ResolvedId
+	}
+	return ""
+}
+
+type GetLinkedPeersRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CanonicalId   string                 `protobuf:"bytes,1,opt,name=canonical_id,json=canonicalId,proto3" json:"canonical_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetLinkedPeersRequest) Reset() {
+	*x = GetLinkedPeersRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[121]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetLinkedPeersRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetLinkedPeersRequest) ProtoMessage() {}
+
+func (x *GetLinkedPeersRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[121]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetLinkedPeersRequest.ProtoReflect.Descriptor instead.
+func (*GetLinkedPeersRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{121}
+}
+
+func (x *GetLinkedPeersRequest) GetCanonicalId() string {
+	if x != nil {
+		return x.CanonicalId
+	}
+	return ""
+}
+
+type GetLinkedPeersResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// List of linked peer IDs (format: "channel:peer_id").
+	LinkedPeers   []string `protobuf:"bytes,1,rep,name=linked_peers,json=linkedPeers,proto3" json:"linked_peers,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetLinkedPeersResponse) Reset() {
+	*x = GetLinkedPeersResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[122]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetLinkedPeersResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetLinkedPeersResponse) ProtoMessage() {}
+
+func (x *GetLinkedPeersResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[122]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetLinkedPeersResponse.ProtoReflect.Descriptor instead.
+func (*GetLinkedPeersResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{122}
+}
+
+func (x *GetLinkedPeersResponse) GetLinkedPeers() []string {
+	if x != nil {
+		return x.LinkedPeers
+	}
+	return nil
 }
 
 var File_pkg_proto_nexus_proto protoreflect.FileDescriptor
@@ -6443,14 +9729,17 @@ const file_pkg_proto_nexus_proto_rawDesc = "" +
 	"\ttimestamp\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xf6\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xfc\x02\n" +
 	"\vEdgeMessage\x124\n" +
 	"\bregister\x18\x01 \x01(\v2\x16.nexus.v1.EdgeRegisterH\x00R\bregister\x127\n" +
 	"\theartbeat\x18\x02 \x01(\v2\x17.nexus.v1.EdgeHeartbeatH\x00R\theartbeat\x12@\n" +
 	"\vtool_result\x18\x03 \x01(\v2\x1d.nexus.v1.ToolExecutionResultH\x00R\n" +
 	"toolResult\x12+\n" +
-	"\x05event\x18\x04 \x01(\v2\x13.nexus.v1.EdgeEventH\x00R\x05eventB\t\n" +
-	"\amessage\"\x85\x02\n" +
+	"\x05event\x18\x04 \x01(\v2\x13.nexus.v1.EdgeEventH\x00R\x05event\x12G\n" +
+	"\x0fchannel_inbound\x18\x05 \x01(\v2\x1c.nexus.v1.EdgeChannelInboundH\x00R\x0echannelInbound\x12;\n" +
+	"\vchannel_ack\x18\x06 \x01(\v2\x18.nexus.v1.EdgeChannelAckH\x00R\n" +
+	"channelAckB\t\n" +
+	"\amessage\"\xd1\x02\n" +
 	"\vCoreMessage\x12:\n" +
 	"\n" +
 	"registered\x18\x01 \x01(\v2\x18.nexus.v1.EdgeRegisteredH\x00R\n" +
@@ -6458,7 +9747,8 @@ const file_pkg_proto_nexus_proto_rawDesc = "" +
 	"\ftool_request\x18\x02 \x01(\v2\x1e.nexus.v1.ToolExecutionRequestH\x00R\vtoolRequest\x12=\n" +
 	"\vtool_cancel\x18\x03 \x01(\v2\x1a.nexus.v1.ToolCancellationH\x00R\n" +
 	"toolCancel\x12+\n" +
-	"\x05event\x18\x04 \x01(\v2\x13.nexus.v1.CoreEventH\x00R\x05eventB\t\n" +
+	"\x05event\x18\x04 \x01(\v2\x13.nexus.v1.CoreEventH\x00R\x05event\x12J\n" +
+	"\x10channel_outbound\x18\x05 \x01(\v2\x1d.nexus.v1.CoreChannelOutboundH\x00R\x0fchannelOutboundB\t\n" +
 	"\amessage\"\x8c\x03\n" +
 	"\fEdgeRegister\x12\x17\n" +
 	"\aedge_id\x18\x01 \x01(\tR\x06edgeId\x12\x12\n" +
@@ -6544,7 +9834,49 @@ const file_pkg_proto_nexus_proto_rawDesc = "" +
 	"\tCoreEvent\x12+\n" +
 	"\x04type\x18\x01 \x01(\x0e2\x17.nexus.v1.CoreEventTypeR\x04type\x128\n" +
 	"\ttimestamp\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12+\n" +
-	"\x04data\x18\x03 \x01(\v2\x17.google.protobuf.StructR\x04data\"/\n" +
+	"\x04data\x18\x03 \x01(\v2\x17.google.protobuf.StructR\x04data\"\xf9\x03\n" +
+	"\x12EdgeChannelInbound\x12\x17\n" +
+	"\aedge_id\x18\x01 \x01(\tR\x06edgeId\x128\n" +
+	"\fchannel_type\x18\x02 \x01(\x0e2\x15.nexus.v1.ChannelTypeR\vchannelType\x12\x1d\n" +
+	"\n" +
+	"channel_id\x18\x03 \x01(\tR\tchannelId\x12\x1f\n" +
+	"\vsession_key\x18\x04 \x01(\tR\n" +
+	"sessionKey\x12\x18\n" +
+	"\acontent\x18\x05 \x01(\tR\acontent\x12\x1b\n" +
+	"\tsender_id\x18\x06 \x01(\tR\bsenderId\x12\x1f\n" +
+	"\vsender_name\x18\a \x01(\tR\n" +
+	"senderName\x126\n" +
+	"\vattachments\x18\b \x03(\v2\x14.nexus.v1.AttachmentR\vattachments\x12F\n" +
+	"\bmetadata\x18\t \x03(\v2*.nexus.v1.EdgeChannelInbound.MetadataEntryR\bmetadata\x12;\n" +
+	"\vreceived_at\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"receivedAt\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xa0\x03\n" +
+	"\x13CoreChannelOutbound\x12\x1d\n" +
+	"\n" +
+	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\x128\n" +
+	"\fchannel_type\x18\x03 \x01(\x0e2\x15.nexus.v1.ChannelTypeR\vchannelType\x12\x1d\n" +
+	"\n" +
+	"channel_id\x18\x04 \x01(\tR\tchannelId\x12\x18\n" +
+	"\acontent\x18\x05 \x01(\tR\acontent\x126\n" +
+	"\vattachments\x18\x06 \x03(\v2\x14.nexus.v1.AttachmentR\vattachments\x12\x1e\n" +
+	"\vreply_to_id\x18\a \x01(\tR\treplyToId\x12D\n" +
+	"\aoptions\x18\b \x03(\v2*.nexus.v1.CoreChannelOutbound.OptionsEntryR\aoptions\x1a:\n" +
+	"\fOptionsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xde\x01\n" +
+	"\x0eEdgeChannelAck\x12\x1d\n" +
+	"\n" +
+	"message_id\x18\x01 \x01(\tR\tmessageId\x127\n" +
+	"\x06status\x18\x02 \x01(\x0e2\x1f.nexus.v1.ChannelDeliveryStatusR\x06status\x12\x14\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\x12\x1f\n" +
+	"\vexternal_id\x18\x04 \x01(\tR\n" +
+	"externalId\x12=\n" +
+	"\fdelivered_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\vdeliveredAt\"/\n" +
 	"\x14GetEdgeStatusRequest\x12\x17\n" +
 	"\aedge_id\x18\x01 \x01(\tR\x06edgeId\"E\n" +
 	"\x15GetEdgeStatusResponse\x12,\n" +
@@ -6630,7 +9962,241 @@ const file_pkg_proto_nexus_proto_rawDesc = "" +
 	"\tllm_calls\x18\x04 \x01(\x05R\bllmCalls\x12\x1f\n" +
 	"\vedge_events\x18\x05 \x01(\x05R\n" +
 	"edgeEvents\x12*\n" +
-	"\x11total_duration_ms\x18\x06 \x01(\x03R\x0ftotalDurationMs*o\n" +
+	"\x11total_duration_ms\x18\x06 \x01(\x03R\x0ftotalDurationMs\"\xb6\x05\n" +
+	"\rScheduledTask\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\x12\x19\n" +
+	"\bagent_id\x18\x04 \x01(\tR\aagentId\x12\x1a\n" +
+	"\bschedule\x18\x05 \x01(\tR\bschedule\x12\x1a\n" +
+	"\btimezone\x18\x06 \x01(\tR\btimezone\x12\x16\n" +
+	"\x06prompt\x18\a \x01(\tR\x06prompt\x12,\n" +
+	"\x06config\x18\b \x01(\v2\x14.nexus.v1.TaskConfigR\x06config\x12,\n" +
+	"\x06status\x18\t \x01(\x0e2\x14.nexus.v1.TaskStatusR\x06status\x12:\n" +
+	"\vnext_run_at\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\tnextRunAt\x12:\n" +
+	"\vlast_run_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tlastRunAt\x12*\n" +
+	"\x11last_execution_id\x18\f \x01(\tR\x0flastExecutionId\x129\n" +
+	"\n" +
+	"created_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"\n" +
+	"updated_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12A\n" +
+	"\bmetadata\x18\x0f \x03(\v2%.nexus.v1.ScheduledTask.MetadataEntryR\bmetadata\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xe4\x02\n" +
+	"\n" +
+	"TaskConfig\x12'\n" +
+	"\x0ftimeout_seconds\x18\x01 \x01(\x05R\x0etimeoutSeconds\x12\x1f\n" +
+	"\vmax_retries\x18\x02 \x01(\x05R\n" +
+	"maxRetries\x12.\n" +
+	"\x13retry_delay_seconds\x18\x03 \x01(\x05R\x11retryDelaySeconds\x12#\n" +
+	"\rallow_overlap\x18\x04 \x01(\bR\fallowOverlap\x12\x18\n" +
+	"\achannel\x18\x05 \x01(\tR\achannel\x12\x1d\n" +
+	"\n" +
+	"channel_id\x18\x06 \x01(\tR\tchannelId\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\a \x01(\tR\tsessionId\x12#\n" +
+	"\rsystem_prompt\x18\b \x01(\tR\fsystemPrompt\x12\x14\n" +
+	"\x05model\x18\t \x01(\tR\x05model\x12$\n" +
+	"\x0etarget_peer_id\x18\n" +
+	" \x01(\tR\ftargetPeerId\"\xd3\x03\n" +
+	"\rTaskExecution\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
+	"\atask_id\x18\x02 \x01(\tR\x06taskId\x121\n" +
+	"\x06status\x18\x03 \x01(\x0e2\x19.nexus.v1.ExecutionStatusR\x06status\x12=\n" +
+	"\fscheduled_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\vscheduledAt\x129\n" +
+	"\n" +
+	"started_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12;\n" +
+	"\vfinished_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"finishedAt\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\a \x01(\tR\tsessionId\x12\x16\n" +
+	"\x06prompt\x18\b \x01(\tR\x06prompt\x12\x1a\n" +
+	"\bresponse\x18\t \x01(\tR\bresponse\x12\x14\n" +
+	"\x05error\x18\n" +
+	" \x01(\tR\x05error\x12%\n" +
+	"\x0eattempt_number\x18\v \x01(\x05R\rattemptNumber\x12\x1f\n" +
+	"\vduration_ms\x18\f \x01(\x03R\n" +
+	"durationMs\"\xe6\x02\n" +
+	"\x11CreateTaskRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
+	"\vdescription\x18\x02 \x01(\tR\vdescription\x12\x19\n" +
+	"\bagent_id\x18\x03 \x01(\tR\aagentId\x12\x1a\n" +
+	"\bschedule\x18\x04 \x01(\tR\bschedule\x12\x1a\n" +
+	"\btimezone\x18\x05 \x01(\tR\btimezone\x12\x16\n" +
+	"\x06prompt\x18\x06 \x01(\tR\x06prompt\x12,\n" +
+	"\x06config\x18\a \x01(\v2\x14.nexus.v1.TaskConfigR\x06config\x12E\n" +
+	"\bmetadata\x18\b \x03(\v2).nexus.v1.CreateTaskRequest.MetadataEntryR\bmetadata\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"A\n" +
+	"\x12CreateTaskResponse\x12+\n" +
+	"\x04task\x18\x01 \x01(\v2\x17.nexus.v1.ScheduledTaskR\x04task\" \n" +
+	"\x0eGetTaskRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\">\n" +
+	"\x0fGetTaskResponse\x12+\n" +
+	"\x04task\x18\x01 \x01(\v2\x17.nexus.v1.ScheduledTaskR\x04task\"\x97\x01\n" +
+	"\x10ListTasksRequest\x12\x19\n" +
+	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12,\n" +
+	"\x06status\x18\x02 \x01(\x0e2\x14.nexus.v1.TaskStatusR\x06status\x12\x1b\n" +
+	"\tpage_size\x18\x03 \x01(\x05R\bpageSize\x12\x1d\n" +
+	"\n" +
+	"page_token\x18\x04 \x01(\tR\tpageToken\"\x8b\x01\n" +
+	"\x11ListTasksResponse\x12-\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x17.nexus.v1.ScheduledTaskR\x05tasks\x12&\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\x12\x1f\n" +
+	"\vtotal_count\x18\x03 \x01(\x05R\n" +
+	"totalCount\"\xdb\x02\n" +
+	"\x11UpdateTaskRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\x12\x1a\n" +
+	"\bschedule\x18\x04 \x01(\tR\bschedule\x12\x1a\n" +
+	"\btimezone\x18\x05 \x01(\tR\btimezone\x12\x16\n" +
+	"\x06prompt\x18\x06 \x01(\tR\x06prompt\x12,\n" +
+	"\x06config\x18\a \x01(\v2\x14.nexus.v1.TaskConfigR\x06config\x12E\n" +
+	"\bmetadata\x18\b \x03(\v2).nexus.v1.UpdateTaskRequest.MetadataEntryR\bmetadata\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"A\n" +
+	"\x12UpdateTaskResponse\x12+\n" +
+	"\x04task\x18\x01 \x01(\v2\x17.nexus.v1.ScheduledTaskR\x04task\"#\n" +
+	"\x11DeleteTaskRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\".\n" +
+	"\x12DeleteTaskResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"\"\n" +
+	"\x10PauseTaskRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"@\n" +
+	"\x11PauseTaskResponse\x12+\n" +
+	"\x04task\x18\x01 \x01(\v2\x17.nexus.v1.ScheduledTaskR\x04task\"#\n" +
+	"\x11ResumeTaskRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"A\n" +
+	"\x12ResumeTaskResponse\x12+\n" +
+	"\x04task\x18\x01 \x01(\v2\x17.nexus.v1.ScheduledTaskR\x04task\"$\n" +
+	"\x12TriggerTaskRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"L\n" +
+	"\x13TriggerTaskResponse\x125\n" +
+	"\texecution\x18\x01 \x01(\v2\x17.nexus.v1.TaskExecutionR\texecution\"\x9f\x01\n" +
+	"\x15ListExecutionsRequest\x12\x17\n" +
+	"\atask_id\x18\x01 \x01(\tR\x06taskId\x121\n" +
+	"\x06status\x18\x02 \x01(\x0e2\x19.nexus.v1.ExecutionStatusR\x06status\x12\x1b\n" +
+	"\tpage_size\x18\x03 \x01(\x05R\bpageSize\x12\x1d\n" +
+	"\n" +
+	"page_token\x18\x04 \x01(\tR\tpageToken\"\x9a\x01\n" +
+	"\x16ListExecutionsResponse\x127\n" +
+	"\n" +
+	"executions\x18\x01 \x03(\v2\x17.nexus.v1.TaskExecutionR\n" +
+	"executions\x12&\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\x12\x1f\n" +
+	"\vtotal_count\x18\x03 \x01(\x05R\n" +
+	"totalCount\"\xdc\x02\n" +
+	"\x14ProactiveSendRequest\x12\x18\n" +
+	"\achannel\x18\x01 \x01(\tR\achannel\x12\x17\n" +
+	"\apeer_id\x18\x02 \x01(\tR\x06peerId\x12\x18\n" +
+	"\acontent\x18\x03 \x01(\tR\acontent\x12\x19\n" +
+	"\bagent_id\x18\x04 \x01(\tR\aagentId\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x05 \x01(\tR\tsessionId\x126\n" +
+	"\vattachments\x18\x06 \x03(\v2\x14.nexus.v1.AttachmentR\vattachments\x12H\n" +
+	"\bmetadata\x18\a \x03(\v2,.nexus.v1.ProactiveSendRequest.MetadataEntryR\bmetadata\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x85\x01\n" +
+	"\x15ProactiveSendResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x1d\n" +
+	"\n" +
+	"message_id\x18\x02 \x01(\tR\tmessageId\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x03 \x01(\tR\tsessionId\x12\x14\n" +
+	"\x05error\x18\x04 \x01(\tR\x05error\"\xc5\x02\n" +
+	"\x17BroadcastMessageRequest\x12\x18\n" +
+	"\achannel\x18\x01 \x01(\tR\achannel\x12\x19\n" +
+	"\bpeer_ids\x18\x02 \x03(\tR\apeerIds\x12\x18\n" +
+	"\acontent\x18\x03 \x01(\tR\acontent\x12\x19\n" +
+	"\bagent_id\x18\x04 \x01(\tR\aagentId\x126\n" +
+	"\vattachments\x18\x05 \x03(\v2\x14.nexus.v1.AttachmentR\vattachments\x12K\n" +
+	"\bmetadata\x18\x06 \x03(\v2/.nexus.v1.BroadcastMessageRequest.MetadataEntryR\bmetadata\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x99\x01\n" +
+	"\x18BroadcastMessageResponse\x12#\n" +
+	"\rsuccess_count\x18\x01 \x01(\x05R\fsuccessCount\x12#\n" +
+	"\rfailure_count\x18\x02 \x01(\x05R\ffailureCount\x123\n" +
+	"\aresults\x18\x03 \x03(\v2\x19.nexus.v1.BroadcastResultR\aresults\"y\n" +
+	"\x0fBroadcastResult\x12\x17\n" +
+	"\apeer_id\x18\x01 \x01(\tR\x06peerId\x12\x18\n" +
+	"\asuccess\x18\x02 \x01(\bR\asuccess\x12\x1d\n" +
+	"\n" +
+	"message_id\x18\x03 \x01(\tR\tmessageId\x12\x14\n" +
+	"\x05error\x18\x04 \x01(\tR\x05error\"\xfa\x02\n" +
+	"\bIdentity\x12!\n" +
+	"\fcanonical_id\x18\x01 \x01(\tR\vcanonicalId\x12!\n" +
+	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x14\n" +
+	"\x05email\x18\x03 \x01(\tR\x05email\x12!\n" +
+	"\flinked_peers\x18\x04 \x03(\tR\vlinkedPeers\x12<\n" +
+	"\bmetadata\x18\x05 \x03(\v2 .nexus.v1.Identity.MetadataEntryR\bmetadata\x129\n" +
+	"\n" +
+	"created_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"\n" +
+	"updated_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x9e\x02\n" +
+	"\x15CreateIdentityRequest\x12!\n" +
+	"\fcanonical_id\x18\x01 \x01(\tR\vcanonicalId\x12!\n" +
+	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x14\n" +
+	"\x05email\x18\x03 \x01(\tR\x05email\x12!\n" +
+	"\flinked_peers\x18\x04 \x03(\tR\vlinkedPeers\x12I\n" +
+	"\bmetadata\x18\x05 \x03(\v2-.nexus.v1.CreateIdentityRequest.MetadataEntryR\bmetadata\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"H\n" +
+	"\x16CreateIdentityResponse\x12.\n" +
+	"\bidentity\x18\x01 \x01(\v2\x12.nexus.v1.IdentityR\bidentity\"7\n" +
+	"\x12GetIdentityRequest\x12!\n" +
+	"\fcanonical_id\x18\x01 \x01(\tR\vcanonicalId\"E\n" +
+	"\x13GetIdentityResponse\x12.\n" +
+	"\bidentity\x18\x01 \x01(\v2\x12.nexus.v1.IdentityR\bidentity\"S\n" +
+	"\x15ListIdentitiesRequest\x12\x1b\n" +
+	"\tpage_size\x18\x01 \x01(\x05R\bpageSize\x12\x1d\n" +
+	"\n" +
+	"page_token\x18\x02 \x01(\tR\tpageToken\"\x95\x01\n" +
+	"\x16ListIdentitiesResponse\x122\n" +
+	"\n" +
+	"identities\x18\x01 \x03(\v2\x12.nexus.v1.IdentityR\n" +
+	"identities\x12&\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\x12\x1f\n" +
+	"\vtotal_count\x18\x03 \x01(\x05R\n" +
+	"totalCount\":\n" +
+	"\x15DeleteIdentityRequest\x12!\n" +
+	"\fcanonical_id\x18\x01 \x01(\tR\vcanonicalId\"2\n" +
+	"\x16DeleteIdentityResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"g\n" +
+	"\x0fLinkPeerRequest\x12!\n" +
+	"\fcanonical_id\x18\x01 \x01(\tR\vcanonicalId\x12\x18\n" +
+	"\achannel\x18\x02 \x01(\tR\achannel\x12\x17\n" +
+	"\apeer_id\x18\x03 \x01(\tR\x06peerId\"B\n" +
+	"\x10LinkPeerResponse\x12.\n" +
+	"\bidentity\x18\x01 \x01(\v2\x12.nexus.v1.IdentityR\bidentity\"i\n" +
+	"\x11UnlinkPeerRequest\x12!\n" +
+	"\fcanonical_id\x18\x01 \x01(\tR\vcanonicalId\x12\x18\n" +
+	"\achannel\x18\x02 \x01(\tR\achannel\x12\x17\n" +
+	"\apeer_id\x18\x03 \x01(\tR\x06peerId\"D\n" +
+	"\x12UnlinkPeerResponse\x12.\n" +
+	"\bidentity\x18\x01 \x01(\v2\x12.nexus.v1.IdentityR\bidentity\"K\n" +
+	"\x16ResolveIdentityRequest\x12\x18\n" +
+	"\achannel\x18\x01 \x01(\tR\achannel\x12\x17\n" +
+	"\apeer_id\x18\x02 \x01(\tR\x06peerId\"\x80\x01\n" +
+	"\x17ResolveIdentityResponse\x12\x14\n" +
+	"\x05found\x18\x01 \x01(\bR\x05found\x12.\n" +
+	"\bidentity\x18\x02 \x01(\v2\x12.nexus.v1.IdentityR\bidentity\x12\x1f\n" +
+	"\vresolved_id\x18\x03 \x01(\tR\n" +
+	"resolvedId\":\n" +
+	"\x15GetLinkedPeersRequest\x12!\n" +
+	"\fcanonical_id\x18\x01 \x01(\tR\vcanonicalId\";\n" +
+	"\x16GetLinkedPeersResponse\x12!\n" +
+	"\flinked_peers\x18\x01 \x03(\tR\vlinkedPeers*o\n" +
 	"\tChunkType\x12\x1a\n" +
 	"\x16CHUNK_TYPE_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fCHUNK_TYPE_TEXT\x10\x01\x12\x18\n" +
@@ -6641,13 +10207,16 @@ const file_pkg_proto_nexus_proto_rawDesc = "" +
 	"\x17EVENT_TYPE_TYPING_START\x10\x01\x12\x1a\n" +
 	"\x16EVENT_TYPE_TYPING_STOP\x10\x02\x12\x13\n" +
 	"\x0fEVENT_TYPE_READ\x10\x03\x12\x17\n" +
-	"\x13EVENT_TYPE_PRESENCE\x10\x04*\x8e\x01\n" +
+	"\x13EVENT_TYPE_PRESENCE\x10\x04*\xdd\x01\n" +
 	"\vChannelType\x12\x1c\n" +
 	"\x18CHANNEL_TYPE_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15CHANNEL_TYPE_TELEGRAM\x10\x01\x12\x18\n" +
 	"\x14CHANNEL_TYPE_DISCORD\x10\x02\x12\x16\n" +
 	"\x12CHANNEL_TYPE_SLACK\x10\x03\x12\x14\n" +
-	"\x10CHANNEL_TYPE_API\x10\x04*U\n" +
+	"\x10CHANNEL_TYPE_API\x10\x04\x12\x19\n" +
+	"\x15CHANNEL_TYPE_IMESSAGE\x10\x05\x12\x17\n" +
+	"\x13CHANNEL_TYPE_SIGNAL\x10\x06\x12\x19\n" +
+	"\x15CHANNEL_TYPE_WHATSAPP\x10\a*U\n" +
 	"\tDirection\x12\x19\n" +
 	"\x15DIRECTION_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11DIRECTION_INBOUND\x10\x01\x12\x16\n" +
@@ -6685,7 +10254,13 @@ const file_pkg_proto_nexus_proto_rawDesc = "" +
 	" CORE_EVENT_TYPE_APPROVAL_GRANTED\x10\x01\x12#\n" +
 	"\x1fCORE_EVENT_TYPE_APPROVAL_DENIED\x10\x02\x12!\n" +
 	"\x1dCORE_EVENT_TYPE_CONFIG_UPDATE\x10\x03\x12\x1c\n" +
-	"\x18CORE_EVENT_TYPE_SHUTDOWN\x10\x04*\xb6\x01\n" +
+	"\x18CORE_EVENT_TYPE_SHUTDOWN\x10\x04*\xcf\x01\n" +
+	"\x15ChannelDeliveryStatus\x12'\n" +
+	"#CHANNEL_DELIVERY_STATUS_UNSPECIFIED\x10\x00\x12 \n" +
+	"\x1cCHANNEL_DELIVERY_STATUS_SENT\x10\x01\x12%\n" +
+	"!CHANNEL_DELIVERY_STATUS_DELIVERED\x10\x02\x12 \n" +
+	"\x1cCHANNEL_DELIVERY_STATUS_READ\x10\x03\x12\"\n" +
+	"\x1eCHANNEL_DELIVERY_STATUS_FAILED\x10\x04*\xb6\x01\n" +
 	"\x14EdgeConnectionStatus\x12&\n" +
 	"\"EDGE_CONNECTION_STATUS_UNSPECIFIED\x10\x00\x12$\n" +
 	" EDGE_CONNECTION_STATUS_CONNECTED\x10\x01\x12'\n" +
@@ -6705,7 +10280,21 @@ const file_pkg_proto_nexus_proto_rawDesc = "" +
 	"\x1bTOOL_CATEGORY_COMMUNICATION\x10\x04\x12\x16\n" +
 	"\x12TOOL_CATEGORY_DATA\x10\x05\x12\x1c\n" +
 	"\x18TOOL_CATEGORY_AUTOMATION\x10\x06\x12\x18\n" +
-	"\x14TOOL_CATEGORY_CUSTOM\x10\a2N\n" +
+	"\x14TOOL_CATEGORY_CUSTOM\x10\a*s\n" +
+	"\n" +
+	"TaskStatus\x12\x1b\n" +
+	"\x17TASK_STATUS_UNSPECIFIED\x10\x00\x12\x16\n" +
+	"\x12TASK_STATUS_ACTIVE\x10\x01\x12\x16\n" +
+	"\x12TASK_STATUS_PAUSED\x10\x02\x12\x18\n" +
+	"\x14TASK_STATUS_DISABLED\x10\x03*\xec\x01\n" +
+	"\x0fExecutionStatus\x12 \n" +
+	"\x1cEXECUTION_STATUS_UNSPECIFIED\x10\x00\x12\x1c\n" +
+	"\x18EXECUTION_STATUS_PENDING\x10\x01\x12\x1c\n" +
+	"\x18EXECUTION_STATUS_RUNNING\x10\x02\x12\x1e\n" +
+	"\x1aEXECUTION_STATUS_SUCCEEDED\x10\x03\x12\x1b\n" +
+	"\x17EXECUTION_STATUS_FAILED\x10\x04\x12\x1e\n" +
+	"\x1aEXECUTION_STATUS_TIMED_OUT\x10\x05\x12\x1e\n" +
+	"\x1aEXECUTION_STATUS_CANCELLED\x10\x062N\n" +
 	"\fNexusGateway\x12>\n" +
 	"\x06Stream\x12\x17.nexus.v1.ClientMessage\x1a\x17.nexus.v1.ServerMessage(\x010\x012\x9e\x03\n" +
 	"\x0eSessionService\x12P\n" +
@@ -6736,7 +10325,34 @@ const file_pkg_proto_nexus_proto_rawDesc = "" +
 	"\tListEdges\x12\x1a.nexus.v1.ListEdgesRequest\x1a\x1b.nexus.v1.ListEdgesResponse2\xa0\x01\n" +
 	"\fEventService\x12D\n" +
 	"\tGetEvents\x12\x1a.nexus.v1.GetEventsRequest\x1a\x1b.nexus.v1.GetEventsResponse\x12J\n" +
-	"\vGetTimeline\x12\x1c.nexus.v1.GetTimelineRequest\x1a\x1d.nexus.v1.GetTimelineResponseB-Z+github.com/haasonsaas/nexus/pkg/proto;protob\x06proto3"
+	"\vGetTimeline\x12\x1c.nexus.v1.GetTimelineRequest\x1a\x1d.nexus.v1.GetTimelineResponse2\x9e\x05\n" +
+	"\vTaskService\x12G\n" +
+	"\n" +
+	"CreateTask\x12\x1b.nexus.v1.CreateTaskRequest\x1a\x1c.nexus.v1.CreateTaskResponse\x12>\n" +
+	"\aGetTask\x12\x18.nexus.v1.GetTaskRequest\x1a\x19.nexus.v1.GetTaskResponse\x12D\n" +
+	"\tListTasks\x12\x1a.nexus.v1.ListTasksRequest\x1a\x1b.nexus.v1.ListTasksResponse\x12G\n" +
+	"\n" +
+	"UpdateTask\x12\x1b.nexus.v1.UpdateTaskRequest\x1a\x1c.nexus.v1.UpdateTaskResponse\x12G\n" +
+	"\n" +
+	"DeleteTask\x12\x1b.nexus.v1.DeleteTaskRequest\x1a\x1c.nexus.v1.DeleteTaskResponse\x12D\n" +
+	"\tPauseTask\x12\x1a.nexus.v1.PauseTaskRequest\x1a\x1b.nexus.v1.PauseTaskResponse\x12G\n" +
+	"\n" +
+	"ResumeTask\x12\x1b.nexus.v1.ResumeTaskRequest\x1a\x1c.nexus.v1.ResumeTaskResponse\x12J\n" +
+	"\vTriggerTask\x12\x1c.nexus.v1.TriggerTaskRequest\x1a\x1d.nexus.v1.TriggerTaskResponse\x12S\n" +
+	"\x0eListExecutions\x12\x1f.nexus.v1.ListExecutionsRequest\x1a .nexus.v1.ListExecutionsResponse2\xbb\x01\n" +
+	"\x0eMessageService\x12N\n" +
+	"\vSendMessage\x12\x1e.nexus.v1.ProactiveSendRequest\x1a\x1f.nexus.v1.ProactiveSendResponse\x12Y\n" +
+	"\x10BroadcastMessage\x12!.nexus.v1.BroadcastMessageRequest\x1a\".nexus.v1.BroadcastMessageResponse2\x95\x05\n" +
+	"\x0fIdentityService\x12S\n" +
+	"\x0eCreateIdentity\x12\x1f.nexus.v1.CreateIdentityRequest\x1a .nexus.v1.CreateIdentityResponse\x12J\n" +
+	"\vGetIdentity\x12\x1c.nexus.v1.GetIdentityRequest\x1a\x1d.nexus.v1.GetIdentityResponse\x12S\n" +
+	"\x0eListIdentities\x12\x1f.nexus.v1.ListIdentitiesRequest\x1a .nexus.v1.ListIdentitiesResponse\x12S\n" +
+	"\x0eDeleteIdentity\x12\x1f.nexus.v1.DeleteIdentityRequest\x1a .nexus.v1.DeleteIdentityResponse\x12A\n" +
+	"\bLinkPeer\x12\x19.nexus.v1.LinkPeerRequest\x1a\x1a.nexus.v1.LinkPeerResponse\x12G\n" +
+	"\n" +
+	"UnlinkPeer\x12\x1b.nexus.v1.UnlinkPeerRequest\x1a\x1c.nexus.v1.UnlinkPeerResponse\x12V\n" +
+	"\x0fResolveIdentity\x12 .nexus.v1.ResolveIdentityRequest\x1a!.nexus.v1.ResolveIdentityResponse\x12S\n" +
+	"\x0eGetLinkedPeers\x12\x1f.nexus.v1.GetLinkedPeersRequest\x1a .nexus.v1.GetLinkedPeersResponseB-Z+github.com/haasonsaas/nexus/pkg/proto;protob\x06proto3"
 
 var (
 	file_pkg_proto_nexus_proto_rawDescOnce sync.Once
@@ -6750,8 +10366,8 @@ func file_pkg_proto_nexus_proto_rawDescGZIP() []byte {
 	return file_pkg_proto_nexus_proto_rawDescData
 }
 
-var file_pkg_proto_nexus_proto_enumTypes = make([]protoimpl.EnumInfo, 12)
-var file_pkg_proto_nexus_proto_msgTypes = make([]protoimpl.MessageInfo, 93)
+var file_pkg_proto_nexus_proto_enumTypes = make([]protoimpl.EnumInfo, 15)
+var file_pkg_proto_nexus_proto_msgTypes = make([]protoimpl.MessageInfo, 148)
 var file_pkg_proto_nexus_proto_goTypes = []any{
 	(ChunkType)(0),                    // 0: nexus.v1.ChunkType
 	(EventType)(0),                    // 1: nexus.v1.EventType
@@ -6762,262 +10378,410 @@ var file_pkg_proto_nexus_proto_goTypes = []any{
 	(ServingStatus)(0),                // 6: nexus.v1.ServingStatus
 	(EdgeEventType)(0),                // 7: nexus.v1.EdgeEventType
 	(CoreEventType)(0),                // 8: nexus.v1.CoreEventType
-	(EdgeConnectionStatus)(0),         // 9: nexus.v1.EdgeConnectionStatus
-	(RiskLevel)(0),                    // 10: nexus.v1.RiskLevel
-	(ToolCategory)(0),                 // 11: nexus.v1.ToolCategory
-	(*ClientMessage)(nil),             // 12: nexus.v1.ClientMessage
-	(*ServerMessage)(nil),             // 13: nexus.v1.ServerMessage
-	(*SendMessageRequest)(nil),        // 14: nexus.v1.SendMessageRequest
-	(*MessageChunk)(nil),              // 15: nexus.v1.MessageChunk
-	(*MessageComplete)(nil),           // 16: nexus.v1.MessageComplete
-	(*ToolCallRequest)(nil),           // 17: nexus.v1.ToolCallRequest
-	(*SessionEvent)(nil),              // 18: nexus.v1.SessionEvent
-	(*SessionEventNotification)(nil),  // 19: nexus.v1.SessionEventNotification
-	(*SubscribeRequest)(nil),          // 20: nexus.v1.SubscribeRequest
-	(*UnsubscribeRequest)(nil),        // 21: nexus.v1.UnsubscribeRequest
-	(*PingRequest)(nil),               // 22: nexus.v1.PingRequest
-	(*PongResponse)(nil),              // 23: nexus.v1.PongResponse
-	(*ErrorNotification)(nil),         // 24: nexus.v1.ErrorNotification
-	(*Message)(nil),                   // 25: nexus.v1.Message
-	(*Attachment)(nil),                // 26: nexus.v1.Attachment
-	(*ToolCall)(nil),                  // 27: nexus.v1.ToolCall
-	(*ToolResult)(nil),                // 28: nexus.v1.ToolResult
-	(*Session)(nil),                   // 29: nexus.v1.Session
-	(*Agent)(nil),                     // 30: nexus.v1.Agent
-	(*User)(nil),                      // 31: nexus.v1.User
-	(*APIKey)(nil),                    // 32: nexus.v1.APIKey
-	(*CreateSessionRequest)(nil),      // 33: nexus.v1.CreateSessionRequest
-	(*CreateSessionResponse)(nil),     // 34: nexus.v1.CreateSessionResponse
-	(*GetSessionRequest)(nil),         // 35: nexus.v1.GetSessionRequest
-	(*GetSessionResponse)(nil),        // 36: nexus.v1.GetSessionResponse
-	(*ListSessionsRequest)(nil),       // 37: nexus.v1.ListSessionsRequest
-	(*ListSessionsResponse)(nil),      // 38: nexus.v1.ListSessionsResponse
-	(*DeleteSessionRequest)(nil),      // 39: nexus.v1.DeleteSessionRequest
-	(*DeleteSessionResponse)(nil),     // 40: nexus.v1.DeleteSessionResponse
-	(*UpdateSessionRequest)(nil),      // 41: nexus.v1.UpdateSessionRequest
-	(*UpdateSessionResponse)(nil),     // 42: nexus.v1.UpdateSessionResponse
-	(*CreateAgentRequest)(nil),        // 43: nexus.v1.CreateAgentRequest
-	(*CreateAgentResponse)(nil),       // 44: nexus.v1.CreateAgentResponse
-	(*GetAgentRequest)(nil),           // 45: nexus.v1.GetAgentRequest
-	(*GetAgentResponse)(nil),          // 46: nexus.v1.GetAgentResponse
-	(*ListAgentsRequest)(nil),         // 47: nexus.v1.ListAgentsRequest
-	(*ListAgentsResponse)(nil),        // 48: nexus.v1.ListAgentsResponse
-	(*UpdateAgentRequest)(nil),        // 49: nexus.v1.UpdateAgentRequest
-	(*UpdateAgentResponse)(nil),       // 50: nexus.v1.UpdateAgentResponse
-	(*DeleteAgentRequest)(nil),        // 51: nexus.v1.DeleteAgentRequest
-	(*DeleteAgentResponse)(nil),       // 52: nexus.v1.DeleteAgentResponse
-	(*ConnectChannelRequest)(nil),     // 53: nexus.v1.ConnectChannelRequest
-	(*ConnectChannelResponse)(nil),    // 54: nexus.v1.ConnectChannelResponse
-	(*DisconnectChannelRequest)(nil),  // 55: nexus.v1.DisconnectChannelRequest
-	(*DisconnectChannelResponse)(nil), // 56: nexus.v1.DisconnectChannelResponse
-	(*GetChannelStatusRequest)(nil),   // 57: nexus.v1.GetChannelStatusRequest
-	(*GetChannelStatusResponse)(nil),  // 58: nexus.v1.GetChannelStatusResponse
-	(*ListChannelsRequest)(nil),       // 59: nexus.v1.ListChannelsRequest
-	(*ListChannelsResponse)(nil),      // 60: nexus.v1.ListChannelsResponse
-	(*ChannelConnection)(nil),         // 61: nexus.v1.ChannelConnection
-	(*HealthCheckRequest)(nil),        // 62: nexus.v1.HealthCheckRequest
-	(*HealthCheckResponse)(nil),       // 63: nexus.v1.HealthCheckResponse
-	(*EdgeMessage)(nil),               // 64: nexus.v1.EdgeMessage
-	(*CoreMessage)(nil),               // 65: nexus.v1.CoreMessage
-	(*EdgeRegister)(nil),              // 66: nexus.v1.EdgeRegister
-	(*EdgeToolDefinition)(nil),        // 67: nexus.v1.EdgeToolDefinition
-	(*EdgeCapabilities)(nil),          // 68: nexus.v1.EdgeCapabilities
-	(*EdgeRegistered)(nil),            // 69: nexus.v1.EdgeRegistered
-	(*EdgeHeartbeat)(nil),             // 70: nexus.v1.EdgeHeartbeat
-	(*EdgeMetrics)(nil),               // 71: nexus.v1.EdgeMetrics
-	(*ToolExecutionRequest)(nil),      // 72: nexus.v1.ToolExecutionRequest
-	(*ToolExecutionResult)(nil),       // 73: nexus.v1.ToolExecutionResult
-	(*Artifact)(nil),                  // 74: nexus.v1.Artifact
-	(*ToolCancellation)(nil),          // 75: nexus.v1.ToolCancellation
-	(*EdgeEvent)(nil),                 // 76: nexus.v1.EdgeEvent
-	(*CoreEvent)(nil),                 // 77: nexus.v1.CoreEvent
-	(*GetEdgeStatusRequest)(nil),      // 78: nexus.v1.GetEdgeStatusRequest
-	(*GetEdgeStatusResponse)(nil),     // 79: nexus.v1.GetEdgeStatusResponse
-	(*ListEdgesRequest)(nil),          // 80: nexus.v1.ListEdgesRequest
-	(*ListEdgesResponse)(nil),         // 81: nexus.v1.ListEdgesResponse
-	(*EdgeStatus)(nil),                // 82: nexus.v1.EdgeStatus
-	(*GetEventsRequest)(nil),          // 83: nexus.v1.GetEventsRequest
-	(*GetEventsResponse)(nil),         // 84: nexus.v1.GetEventsResponse
-	(*GetTimelineRequest)(nil),        // 85: nexus.v1.GetTimelineRequest
-	(*GetTimelineResponse)(nil),       // 86: nexus.v1.GetTimelineResponse
-	(*TimelineEvent)(nil),             // 87: nexus.v1.TimelineEvent
-	(*TimelineSummary)(nil),           // 88: nexus.v1.TimelineSummary
-	nil,                               // 89: nexus.v1.SendMessageRequest.MetadataEntry
-	nil,                               // 90: nexus.v1.Message.MetadataEntry
-	nil,                               // 91: nexus.v1.Session.MetadataEntry
-	nil,                               // 92: nexus.v1.Agent.ConfigEntry
-	nil,                               // 93: nexus.v1.CreateSessionRequest.MetadataEntry
-	nil,                               // 94: nexus.v1.UpdateSessionRequest.MetadataEntry
-	nil,                               // 95: nexus.v1.CreateAgentRequest.ConfigEntry
-	nil,                               // 96: nexus.v1.UpdateAgentRequest.ConfigEntry
-	nil,                               // 97: nexus.v1.ConnectChannelRequest.CredentialsEntry
-	nil,                               // 98: nexus.v1.ConnectChannelRequest.ConfigEntry
-	nil,                               // 99: nexus.v1.ChannelConnection.ConfigEntry
-	nil,                               // 100: nexus.v1.HealthCheckResponse.MetadataEntry
-	nil,                               // 101: nexus.v1.EdgeRegister.MetadataEntry
-	nil,                               // 102: nexus.v1.ToolExecutionRequest.MetadataEntry
-	nil,                               // 103: nexus.v1.EdgeStatus.MetadataEntry
-	nil,                               // 104: nexus.v1.TimelineEvent.DataEntry
-	(*structpb.Struct)(nil),           // 105: google.protobuf.Struct
-	(*timestamppb.Timestamp)(nil),     // 106: google.protobuf.Timestamp
+	(ChannelDeliveryStatus)(0),        // 9: nexus.v1.ChannelDeliveryStatus
+	(EdgeConnectionStatus)(0),         // 10: nexus.v1.EdgeConnectionStatus
+	(RiskLevel)(0),                    // 11: nexus.v1.RiskLevel
+	(ToolCategory)(0),                 // 12: nexus.v1.ToolCategory
+	(TaskStatus)(0),                   // 13: nexus.v1.TaskStatus
+	(ExecutionStatus)(0),              // 14: nexus.v1.ExecutionStatus
+	(*ClientMessage)(nil),             // 15: nexus.v1.ClientMessage
+	(*ServerMessage)(nil),             // 16: nexus.v1.ServerMessage
+	(*SendMessageRequest)(nil),        // 17: nexus.v1.SendMessageRequest
+	(*MessageChunk)(nil),              // 18: nexus.v1.MessageChunk
+	(*MessageComplete)(nil),           // 19: nexus.v1.MessageComplete
+	(*ToolCallRequest)(nil),           // 20: nexus.v1.ToolCallRequest
+	(*SessionEvent)(nil),              // 21: nexus.v1.SessionEvent
+	(*SessionEventNotification)(nil),  // 22: nexus.v1.SessionEventNotification
+	(*SubscribeRequest)(nil),          // 23: nexus.v1.SubscribeRequest
+	(*UnsubscribeRequest)(nil),        // 24: nexus.v1.UnsubscribeRequest
+	(*PingRequest)(nil),               // 25: nexus.v1.PingRequest
+	(*PongResponse)(nil),              // 26: nexus.v1.PongResponse
+	(*ErrorNotification)(nil),         // 27: nexus.v1.ErrorNotification
+	(*Message)(nil),                   // 28: nexus.v1.Message
+	(*Attachment)(nil),                // 29: nexus.v1.Attachment
+	(*ToolCall)(nil),                  // 30: nexus.v1.ToolCall
+	(*ToolResult)(nil),                // 31: nexus.v1.ToolResult
+	(*Session)(nil),                   // 32: nexus.v1.Session
+	(*Agent)(nil),                     // 33: nexus.v1.Agent
+	(*User)(nil),                      // 34: nexus.v1.User
+	(*APIKey)(nil),                    // 35: nexus.v1.APIKey
+	(*CreateSessionRequest)(nil),      // 36: nexus.v1.CreateSessionRequest
+	(*CreateSessionResponse)(nil),     // 37: nexus.v1.CreateSessionResponse
+	(*GetSessionRequest)(nil),         // 38: nexus.v1.GetSessionRequest
+	(*GetSessionResponse)(nil),        // 39: nexus.v1.GetSessionResponse
+	(*ListSessionsRequest)(nil),       // 40: nexus.v1.ListSessionsRequest
+	(*ListSessionsResponse)(nil),      // 41: nexus.v1.ListSessionsResponse
+	(*DeleteSessionRequest)(nil),      // 42: nexus.v1.DeleteSessionRequest
+	(*DeleteSessionResponse)(nil),     // 43: nexus.v1.DeleteSessionResponse
+	(*UpdateSessionRequest)(nil),      // 44: nexus.v1.UpdateSessionRequest
+	(*UpdateSessionResponse)(nil),     // 45: nexus.v1.UpdateSessionResponse
+	(*CreateAgentRequest)(nil),        // 46: nexus.v1.CreateAgentRequest
+	(*CreateAgentResponse)(nil),       // 47: nexus.v1.CreateAgentResponse
+	(*GetAgentRequest)(nil),           // 48: nexus.v1.GetAgentRequest
+	(*GetAgentResponse)(nil),          // 49: nexus.v1.GetAgentResponse
+	(*ListAgentsRequest)(nil),         // 50: nexus.v1.ListAgentsRequest
+	(*ListAgentsResponse)(nil),        // 51: nexus.v1.ListAgentsResponse
+	(*UpdateAgentRequest)(nil),        // 52: nexus.v1.UpdateAgentRequest
+	(*UpdateAgentResponse)(nil),       // 53: nexus.v1.UpdateAgentResponse
+	(*DeleteAgentRequest)(nil),        // 54: nexus.v1.DeleteAgentRequest
+	(*DeleteAgentResponse)(nil),       // 55: nexus.v1.DeleteAgentResponse
+	(*ConnectChannelRequest)(nil),     // 56: nexus.v1.ConnectChannelRequest
+	(*ConnectChannelResponse)(nil),    // 57: nexus.v1.ConnectChannelResponse
+	(*DisconnectChannelRequest)(nil),  // 58: nexus.v1.DisconnectChannelRequest
+	(*DisconnectChannelResponse)(nil), // 59: nexus.v1.DisconnectChannelResponse
+	(*GetChannelStatusRequest)(nil),   // 60: nexus.v1.GetChannelStatusRequest
+	(*GetChannelStatusResponse)(nil),  // 61: nexus.v1.GetChannelStatusResponse
+	(*ListChannelsRequest)(nil),       // 62: nexus.v1.ListChannelsRequest
+	(*ListChannelsResponse)(nil),      // 63: nexus.v1.ListChannelsResponse
+	(*ChannelConnection)(nil),         // 64: nexus.v1.ChannelConnection
+	(*HealthCheckRequest)(nil),        // 65: nexus.v1.HealthCheckRequest
+	(*HealthCheckResponse)(nil),       // 66: nexus.v1.HealthCheckResponse
+	(*EdgeMessage)(nil),               // 67: nexus.v1.EdgeMessage
+	(*CoreMessage)(nil),               // 68: nexus.v1.CoreMessage
+	(*EdgeRegister)(nil),              // 69: nexus.v1.EdgeRegister
+	(*EdgeToolDefinition)(nil),        // 70: nexus.v1.EdgeToolDefinition
+	(*EdgeCapabilities)(nil),          // 71: nexus.v1.EdgeCapabilities
+	(*EdgeRegistered)(nil),            // 72: nexus.v1.EdgeRegistered
+	(*EdgeHeartbeat)(nil),             // 73: nexus.v1.EdgeHeartbeat
+	(*EdgeMetrics)(nil),               // 74: nexus.v1.EdgeMetrics
+	(*ToolExecutionRequest)(nil),      // 75: nexus.v1.ToolExecutionRequest
+	(*ToolExecutionResult)(nil),       // 76: nexus.v1.ToolExecutionResult
+	(*Artifact)(nil),                  // 77: nexus.v1.Artifact
+	(*ToolCancellation)(nil),          // 78: nexus.v1.ToolCancellation
+	(*EdgeEvent)(nil),                 // 79: nexus.v1.EdgeEvent
+	(*CoreEvent)(nil),                 // 80: nexus.v1.CoreEvent
+	(*EdgeChannelInbound)(nil),        // 81: nexus.v1.EdgeChannelInbound
+	(*CoreChannelOutbound)(nil),       // 82: nexus.v1.CoreChannelOutbound
+	(*EdgeChannelAck)(nil),            // 83: nexus.v1.EdgeChannelAck
+	(*GetEdgeStatusRequest)(nil),      // 84: nexus.v1.GetEdgeStatusRequest
+	(*GetEdgeStatusResponse)(nil),     // 85: nexus.v1.GetEdgeStatusResponse
+	(*ListEdgesRequest)(nil),          // 86: nexus.v1.ListEdgesRequest
+	(*ListEdgesResponse)(nil),         // 87: nexus.v1.ListEdgesResponse
+	(*EdgeStatus)(nil),                // 88: nexus.v1.EdgeStatus
+	(*GetEventsRequest)(nil),          // 89: nexus.v1.GetEventsRequest
+	(*GetEventsResponse)(nil),         // 90: nexus.v1.GetEventsResponse
+	(*GetTimelineRequest)(nil),        // 91: nexus.v1.GetTimelineRequest
+	(*GetTimelineResponse)(nil),       // 92: nexus.v1.GetTimelineResponse
+	(*TimelineEvent)(nil),             // 93: nexus.v1.TimelineEvent
+	(*TimelineSummary)(nil),           // 94: nexus.v1.TimelineSummary
+	(*ScheduledTask)(nil),             // 95: nexus.v1.ScheduledTask
+	(*TaskConfig)(nil),                // 96: nexus.v1.TaskConfig
+	(*TaskExecution)(nil),             // 97: nexus.v1.TaskExecution
+	(*CreateTaskRequest)(nil),         // 98: nexus.v1.CreateTaskRequest
+	(*CreateTaskResponse)(nil),        // 99: nexus.v1.CreateTaskResponse
+	(*GetTaskRequest)(nil),            // 100: nexus.v1.GetTaskRequest
+	(*GetTaskResponse)(nil),           // 101: nexus.v1.GetTaskResponse
+	(*ListTasksRequest)(nil),          // 102: nexus.v1.ListTasksRequest
+	(*ListTasksResponse)(nil),         // 103: nexus.v1.ListTasksResponse
+	(*UpdateTaskRequest)(nil),         // 104: nexus.v1.UpdateTaskRequest
+	(*UpdateTaskResponse)(nil),        // 105: nexus.v1.UpdateTaskResponse
+	(*DeleteTaskRequest)(nil),         // 106: nexus.v1.DeleteTaskRequest
+	(*DeleteTaskResponse)(nil),        // 107: nexus.v1.DeleteTaskResponse
+	(*PauseTaskRequest)(nil),          // 108: nexus.v1.PauseTaskRequest
+	(*PauseTaskResponse)(nil),         // 109: nexus.v1.PauseTaskResponse
+	(*ResumeTaskRequest)(nil),         // 110: nexus.v1.ResumeTaskRequest
+	(*ResumeTaskResponse)(nil),        // 111: nexus.v1.ResumeTaskResponse
+	(*TriggerTaskRequest)(nil),        // 112: nexus.v1.TriggerTaskRequest
+	(*TriggerTaskResponse)(nil),       // 113: nexus.v1.TriggerTaskResponse
+	(*ListExecutionsRequest)(nil),     // 114: nexus.v1.ListExecutionsRequest
+	(*ListExecutionsResponse)(nil),    // 115: nexus.v1.ListExecutionsResponse
+	(*ProactiveSendRequest)(nil),      // 116: nexus.v1.ProactiveSendRequest
+	(*ProactiveSendResponse)(nil),     // 117: nexus.v1.ProactiveSendResponse
+	(*BroadcastMessageRequest)(nil),   // 118: nexus.v1.BroadcastMessageRequest
+	(*BroadcastMessageResponse)(nil),  // 119: nexus.v1.BroadcastMessageResponse
+	(*BroadcastResult)(nil),           // 120: nexus.v1.BroadcastResult
+	(*Identity)(nil),                  // 121: nexus.v1.Identity
+	(*CreateIdentityRequest)(nil),     // 122: nexus.v1.CreateIdentityRequest
+	(*CreateIdentityResponse)(nil),    // 123: nexus.v1.CreateIdentityResponse
+	(*GetIdentityRequest)(nil),        // 124: nexus.v1.GetIdentityRequest
+	(*GetIdentityResponse)(nil),       // 125: nexus.v1.GetIdentityResponse
+	(*ListIdentitiesRequest)(nil),     // 126: nexus.v1.ListIdentitiesRequest
+	(*ListIdentitiesResponse)(nil),    // 127: nexus.v1.ListIdentitiesResponse
+	(*DeleteIdentityRequest)(nil),     // 128: nexus.v1.DeleteIdentityRequest
+	(*DeleteIdentityResponse)(nil),    // 129: nexus.v1.DeleteIdentityResponse
+	(*LinkPeerRequest)(nil),           // 130: nexus.v1.LinkPeerRequest
+	(*LinkPeerResponse)(nil),          // 131: nexus.v1.LinkPeerResponse
+	(*UnlinkPeerRequest)(nil),         // 132: nexus.v1.UnlinkPeerRequest
+	(*UnlinkPeerResponse)(nil),        // 133: nexus.v1.UnlinkPeerResponse
+	(*ResolveIdentityRequest)(nil),    // 134: nexus.v1.ResolveIdentityRequest
+	(*ResolveIdentityResponse)(nil),   // 135: nexus.v1.ResolveIdentityResponse
+	(*GetLinkedPeersRequest)(nil),     // 136: nexus.v1.GetLinkedPeersRequest
+	(*GetLinkedPeersResponse)(nil),    // 137: nexus.v1.GetLinkedPeersResponse
+	nil,                               // 138: nexus.v1.SendMessageRequest.MetadataEntry
+	nil,                               // 139: nexus.v1.Message.MetadataEntry
+	nil,                               // 140: nexus.v1.Session.MetadataEntry
+	nil,                               // 141: nexus.v1.Agent.ConfigEntry
+	nil,                               // 142: nexus.v1.CreateSessionRequest.MetadataEntry
+	nil,                               // 143: nexus.v1.UpdateSessionRequest.MetadataEntry
+	nil,                               // 144: nexus.v1.CreateAgentRequest.ConfigEntry
+	nil,                               // 145: nexus.v1.UpdateAgentRequest.ConfigEntry
+	nil,                               // 146: nexus.v1.ConnectChannelRequest.CredentialsEntry
+	nil,                               // 147: nexus.v1.ConnectChannelRequest.ConfigEntry
+	nil,                               // 148: nexus.v1.ChannelConnection.ConfigEntry
+	nil,                               // 149: nexus.v1.HealthCheckResponse.MetadataEntry
+	nil,                               // 150: nexus.v1.EdgeRegister.MetadataEntry
+	nil,                               // 151: nexus.v1.ToolExecutionRequest.MetadataEntry
+	nil,                               // 152: nexus.v1.EdgeChannelInbound.MetadataEntry
+	nil,                               // 153: nexus.v1.CoreChannelOutbound.OptionsEntry
+	nil,                               // 154: nexus.v1.EdgeStatus.MetadataEntry
+	nil,                               // 155: nexus.v1.TimelineEvent.DataEntry
+	nil,                               // 156: nexus.v1.ScheduledTask.MetadataEntry
+	nil,                               // 157: nexus.v1.CreateTaskRequest.MetadataEntry
+	nil,                               // 158: nexus.v1.UpdateTaskRequest.MetadataEntry
+	nil,                               // 159: nexus.v1.ProactiveSendRequest.MetadataEntry
+	nil,                               // 160: nexus.v1.BroadcastMessageRequest.MetadataEntry
+	nil,                               // 161: nexus.v1.Identity.MetadataEntry
+	nil,                               // 162: nexus.v1.CreateIdentityRequest.MetadataEntry
+	(*structpb.Struct)(nil),           // 163: google.protobuf.Struct
+	(*timestamppb.Timestamp)(nil),     // 164: google.protobuf.Timestamp
 }
 var file_pkg_proto_nexus_proto_depIdxs = []int32{
-	14,  // 0: nexus.v1.ClientMessage.send_message:type_name -> nexus.v1.SendMessageRequest
-	18,  // 1: nexus.v1.ClientMessage.session_event:type_name -> nexus.v1.SessionEvent
-	20,  // 2: nexus.v1.ClientMessage.subscribe:type_name -> nexus.v1.SubscribeRequest
-	21,  // 3: nexus.v1.ClientMessage.unsubscribe:type_name -> nexus.v1.UnsubscribeRequest
-	22,  // 4: nexus.v1.ClientMessage.ping:type_name -> nexus.v1.PingRequest
-	15,  // 5: nexus.v1.ServerMessage.message_chunk:type_name -> nexus.v1.MessageChunk
-	16,  // 6: nexus.v1.ServerMessage.message_complete:type_name -> nexus.v1.MessageComplete
-	17,  // 7: nexus.v1.ServerMessage.tool_call_request:type_name -> nexus.v1.ToolCallRequest
-	19,  // 8: nexus.v1.ServerMessage.session_event_notification:type_name -> nexus.v1.SessionEventNotification
-	24,  // 9: nexus.v1.ServerMessage.error_notification:type_name -> nexus.v1.ErrorNotification
-	23,  // 10: nexus.v1.ServerMessage.pong:type_name -> nexus.v1.PongResponse
-	26,  // 11: nexus.v1.SendMessageRequest.attachments:type_name -> nexus.v1.Attachment
-	89,  // 12: nexus.v1.SendMessageRequest.metadata:type_name -> nexus.v1.SendMessageRequest.MetadataEntry
+	17,  // 0: nexus.v1.ClientMessage.send_message:type_name -> nexus.v1.SendMessageRequest
+	21,  // 1: nexus.v1.ClientMessage.session_event:type_name -> nexus.v1.SessionEvent
+	23,  // 2: nexus.v1.ClientMessage.subscribe:type_name -> nexus.v1.SubscribeRequest
+	24,  // 3: nexus.v1.ClientMessage.unsubscribe:type_name -> nexus.v1.UnsubscribeRequest
+	25,  // 4: nexus.v1.ClientMessage.ping:type_name -> nexus.v1.PingRequest
+	18,  // 5: nexus.v1.ServerMessage.message_chunk:type_name -> nexus.v1.MessageChunk
+	19,  // 6: nexus.v1.ServerMessage.message_complete:type_name -> nexus.v1.MessageComplete
+	20,  // 7: nexus.v1.ServerMessage.tool_call_request:type_name -> nexus.v1.ToolCallRequest
+	22,  // 8: nexus.v1.ServerMessage.session_event_notification:type_name -> nexus.v1.SessionEventNotification
+	27,  // 9: nexus.v1.ServerMessage.error_notification:type_name -> nexus.v1.ErrorNotification
+	26,  // 10: nexus.v1.ServerMessage.pong:type_name -> nexus.v1.PongResponse
+	29,  // 11: nexus.v1.SendMessageRequest.attachments:type_name -> nexus.v1.Attachment
+	138, // 12: nexus.v1.SendMessageRequest.metadata:type_name -> nexus.v1.SendMessageRequest.MetadataEntry
 	0,   // 13: nexus.v1.MessageChunk.type:type_name -> nexus.v1.ChunkType
-	25,  // 14: nexus.v1.MessageComplete.message:type_name -> nexus.v1.Message
-	27,  // 15: nexus.v1.ToolCallRequest.tool_calls:type_name -> nexus.v1.ToolCall
+	28,  // 14: nexus.v1.MessageComplete.message:type_name -> nexus.v1.Message
+	30,  // 15: nexus.v1.ToolCallRequest.tool_calls:type_name -> nexus.v1.ToolCall
 	1,   // 16: nexus.v1.SessionEvent.event_type:type_name -> nexus.v1.EventType
-	105, // 17: nexus.v1.SessionEvent.data:type_name -> google.protobuf.Struct
+	163, // 17: nexus.v1.SessionEvent.data:type_name -> google.protobuf.Struct
 	1,   // 18: nexus.v1.SessionEventNotification.event_type:type_name -> nexus.v1.EventType
-	105, // 19: nexus.v1.SessionEventNotification.data:type_name -> google.protobuf.Struct
-	106, // 20: nexus.v1.SessionEventNotification.timestamp:type_name -> google.protobuf.Timestamp
-	106, // 21: nexus.v1.PingRequest.timestamp:type_name -> google.protobuf.Timestamp
-	106, // 22: nexus.v1.PongResponse.timestamp:type_name -> google.protobuf.Timestamp
-	105, // 23: nexus.v1.ErrorNotification.details:type_name -> google.protobuf.Struct
+	163, // 19: nexus.v1.SessionEventNotification.data:type_name -> google.protobuf.Struct
+	164, // 20: nexus.v1.SessionEventNotification.timestamp:type_name -> google.protobuf.Timestamp
+	164, // 21: nexus.v1.PingRequest.timestamp:type_name -> google.protobuf.Timestamp
+	164, // 22: nexus.v1.PongResponse.timestamp:type_name -> google.protobuf.Timestamp
+	163, // 23: nexus.v1.ErrorNotification.details:type_name -> google.protobuf.Struct
 	2,   // 24: nexus.v1.Message.channel:type_name -> nexus.v1.ChannelType
 	3,   // 25: nexus.v1.Message.direction:type_name -> nexus.v1.Direction
 	4,   // 26: nexus.v1.Message.role:type_name -> nexus.v1.Role
-	26,  // 27: nexus.v1.Message.attachments:type_name -> nexus.v1.Attachment
-	27,  // 28: nexus.v1.Message.tool_calls:type_name -> nexus.v1.ToolCall
-	28,  // 29: nexus.v1.Message.tool_results:type_name -> nexus.v1.ToolResult
-	90,  // 30: nexus.v1.Message.metadata:type_name -> nexus.v1.Message.MetadataEntry
-	106, // 31: nexus.v1.Message.created_at:type_name -> google.protobuf.Timestamp
+	29,  // 27: nexus.v1.Message.attachments:type_name -> nexus.v1.Attachment
+	30,  // 28: nexus.v1.Message.tool_calls:type_name -> nexus.v1.ToolCall
+	31,  // 29: nexus.v1.Message.tool_results:type_name -> nexus.v1.ToolResult
+	139, // 30: nexus.v1.Message.metadata:type_name -> nexus.v1.Message.MetadataEntry
+	164, // 31: nexus.v1.Message.created_at:type_name -> google.protobuf.Timestamp
 	2,   // 32: nexus.v1.Session.channel:type_name -> nexus.v1.ChannelType
-	91,  // 33: nexus.v1.Session.metadata:type_name -> nexus.v1.Session.MetadataEntry
-	106, // 34: nexus.v1.Session.created_at:type_name -> google.protobuf.Timestamp
-	106, // 35: nexus.v1.Session.updated_at:type_name -> google.protobuf.Timestamp
-	92,  // 36: nexus.v1.Agent.config:type_name -> nexus.v1.Agent.ConfigEntry
-	106, // 37: nexus.v1.Agent.created_at:type_name -> google.protobuf.Timestamp
-	106, // 38: nexus.v1.Agent.updated_at:type_name -> google.protobuf.Timestamp
-	106, // 39: nexus.v1.User.created_at:type_name -> google.protobuf.Timestamp
-	106, // 40: nexus.v1.User.updated_at:type_name -> google.protobuf.Timestamp
-	106, // 41: nexus.v1.APIKey.last_used_at:type_name -> google.protobuf.Timestamp
-	106, // 42: nexus.v1.APIKey.expires_at:type_name -> google.protobuf.Timestamp
-	106, // 43: nexus.v1.APIKey.created_at:type_name -> google.protobuf.Timestamp
+	140, // 33: nexus.v1.Session.metadata:type_name -> nexus.v1.Session.MetadataEntry
+	164, // 34: nexus.v1.Session.created_at:type_name -> google.protobuf.Timestamp
+	164, // 35: nexus.v1.Session.updated_at:type_name -> google.protobuf.Timestamp
+	141, // 36: nexus.v1.Agent.config:type_name -> nexus.v1.Agent.ConfigEntry
+	164, // 37: nexus.v1.Agent.created_at:type_name -> google.protobuf.Timestamp
+	164, // 38: nexus.v1.Agent.updated_at:type_name -> google.protobuf.Timestamp
+	164, // 39: nexus.v1.User.created_at:type_name -> google.protobuf.Timestamp
+	164, // 40: nexus.v1.User.updated_at:type_name -> google.protobuf.Timestamp
+	164, // 41: nexus.v1.APIKey.last_used_at:type_name -> google.protobuf.Timestamp
+	164, // 42: nexus.v1.APIKey.expires_at:type_name -> google.protobuf.Timestamp
+	164, // 43: nexus.v1.APIKey.created_at:type_name -> google.protobuf.Timestamp
 	2,   // 44: nexus.v1.CreateSessionRequest.channel:type_name -> nexus.v1.ChannelType
-	93,  // 45: nexus.v1.CreateSessionRequest.metadata:type_name -> nexus.v1.CreateSessionRequest.MetadataEntry
-	29,  // 46: nexus.v1.CreateSessionResponse.session:type_name -> nexus.v1.Session
-	29,  // 47: nexus.v1.GetSessionResponse.session:type_name -> nexus.v1.Session
+	142, // 45: nexus.v1.CreateSessionRequest.metadata:type_name -> nexus.v1.CreateSessionRequest.MetadataEntry
+	32,  // 46: nexus.v1.CreateSessionResponse.session:type_name -> nexus.v1.Session
+	32,  // 47: nexus.v1.GetSessionResponse.session:type_name -> nexus.v1.Session
 	2,   // 48: nexus.v1.ListSessionsRequest.channel:type_name -> nexus.v1.ChannelType
-	29,  // 49: nexus.v1.ListSessionsResponse.sessions:type_name -> nexus.v1.Session
-	94,  // 50: nexus.v1.UpdateSessionRequest.metadata:type_name -> nexus.v1.UpdateSessionRequest.MetadataEntry
-	29,  // 51: nexus.v1.UpdateSessionResponse.session:type_name -> nexus.v1.Session
-	95,  // 52: nexus.v1.CreateAgentRequest.config:type_name -> nexus.v1.CreateAgentRequest.ConfigEntry
-	30,  // 53: nexus.v1.CreateAgentResponse.agent:type_name -> nexus.v1.Agent
-	30,  // 54: nexus.v1.GetAgentResponse.agent:type_name -> nexus.v1.Agent
-	30,  // 55: nexus.v1.ListAgentsResponse.agents:type_name -> nexus.v1.Agent
-	96,  // 56: nexus.v1.UpdateAgentRequest.config:type_name -> nexus.v1.UpdateAgentRequest.ConfigEntry
-	30,  // 57: nexus.v1.UpdateAgentResponse.agent:type_name -> nexus.v1.Agent
+	32,  // 49: nexus.v1.ListSessionsResponse.sessions:type_name -> nexus.v1.Session
+	143, // 50: nexus.v1.UpdateSessionRequest.metadata:type_name -> nexus.v1.UpdateSessionRequest.MetadataEntry
+	32,  // 51: nexus.v1.UpdateSessionResponse.session:type_name -> nexus.v1.Session
+	144, // 52: nexus.v1.CreateAgentRequest.config:type_name -> nexus.v1.CreateAgentRequest.ConfigEntry
+	33,  // 53: nexus.v1.CreateAgentResponse.agent:type_name -> nexus.v1.Agent
+	33,  // 54: nexus.v1.GetAgentResponse.agent:type_name -> nexus.v1.Agent
+	33,  // 55: nexus.v1.ListAgentsResponse.agents:type_name -> nexus.v1.Agent
+	145, // 56: nexus.v1.UpdateAgentRequest.config:type_name -> nexus.v1.UpdateAgentRequest.ConfigEntry
+	33,  // 57: nexus.v1.UpdateAgentResponse.agent:type_name -> nexus.v1.Agent
 	2,   // 58: nexus.v1.ConnectChannelRequest.channel_type:type_name -> nexus.v1.ChannelType
-	97,  // 59: nexus.v1.ConnectChannelRequest.credentials:type_name -> nexus.v1.ConnectChannelRequest.CredentialsEntry
-	98,  // 60: nexus.v1.ConnectChannelRequest.config:type_name -> nexus.v1.ConnectChannelRequest.ConfigEntry
-	61,  // 61: nexus.v1.ConnectChannelResponse.connection:type_name -> nexus.v1.ChannelConnection
-	61,  // 62: nexus.v1.GetChannelStatusResponse.connection:type_name -> nexus.v1.ChannelConnection
-	61,  // 63: nexus.v1.ListChannelsResponse.connections:type_name -> nexus.v1.ChannelConnection
+	146, // 59: nexus.v1.ConnectChannelRequest.credentials:type_name -> nexus.v1.ConnectChannelRequest.CredentialsEntry
+	147, // 60: nexus.v1.ConnectChannelRequest.config:type_name -> nexus.v1.ConnectChannelRequest.ConfigEntry
+	64,  // 61: nexus.v1.ConnectChannelResponse.connection:type_name -> nexus.v1.ChannelConnection
+	64,  // 62: nexus.v1.GetChannelStatusResponse.connection:type_name -> nexus.v1.ChannelConnection
+	64,  // 63: nexus.v1.ListChannelsResponse.connections:type_name -> nexus.v1.ChannelConnection
 	2,   // 64: nexus.v1.ChannelConnection.channel_type:type_name -> nexus.v1.ChannelType
 	5,   // 65: nexus.v1.ChannelConnection.status:type_name -> nexus.v1.ConnectionStatus
-	99,  // 66: nexus.v1.ChannelConnection.config:type_name -> nexus.v1.ChannelConnection.ConfigEntry
-	106, // 67: nexus.v1.ChannelConnection.connected_at:type_name -> google.protobuf.Timestamp
-	106, // 68: nexus.v1.ChannelConnection.last_activity_at:type_name -> google.protobuf.Timestamp
+	148, // 66: nexus.v1.ChannelConnection.config:type_name -> nexus.v1.ChannelConnection.ConfigEntry
+	164, // 67: nexus.v1.ChannelConnection.connected_at:type_name -> google.protobuf.Timestamp
+	164, // 68: nexus.v1.ChannelConnection.last_activity_at:type_name -> google.protobuf.Timestamp
 	6,   // 69: nexus.v1.HealthCheckResponse.status:type_name -> nexus.v1.ServingStatus
-	100, // 70: nexus.v1.HealthCheckResponse.metadata:type_name -> nexus.v1.HealthCheckResponse.MetadataEntry
-	106, // 71: nexus.v1.HealthCheckResponse.timestamp:type_name -> google.protobuf.Timestamp
-	66,  // 72: nexus.v1.EdgeMessage.register:type_name -> nexus.v1.EdgeRegister
-	70,  // 73: nexus.v1.EdgeMessage.heartbeat:type_name -> nexus.v1.EdgeHeartbeat
-	73,  // 74: nexus.v1.EdgeMessage.tool_result:type_name -> nexus.v1.ToolExecutionResult
-	76,  // 75: nexus.v1.EdgeMessage.event:type_name -> nexus.v1.EdgeEvent
-	69,  // 76: nexus.v1.CoreMessage.registered:type_name -> nexus.v1.EdgeRegistered
-	72,  // 77: nexus.v1.CoreMessage.tool_request:type_name -> nexus.v1.ToolExecutionRequest
-	75,  // 78: nexus.v1.CoreMessage.tool_cancel:type_name -> nexus.v1.ToolCancellation
-	77,  // 79: nexus.v1.CoreMessage.event:type_name -> nexus.v1.CoreEvent
-	67,  // 80: nexus.v1.EdgeRegister.tools:type_name -> nexus.v1.EdgeToolDefinition
-	68,  // 81: nexus.v1.EdgeRegister.capabilities:type_name -> nexus.v1.EdgeCapabilities
-	101, // 82: nexus.v1.EdgeRegister.metadata:type_name -> nexus.v1.EdgeRegister.MetadataEntry
-	106, // 83: nexus.v1.EdgeHeartbeat.timestamp:type_name -> google.protobuf.Timestamp
-	71,  // 84: nexus.v1.EdgeHeartbeat.metrics:type_name -> nexus.v1.EdgeMetrics
-	102, // 85: nexus.v1.ToolExecutionRequest.metadata:type_name -> nexus.v1.ToolExecutionRequest.MetadataEntry
-	74,  // 86: nexus.v1.ToolExecutionResult.artifacts:type_name -> nexus.v1.Artifact
-	7,   // 87: nexus.v1.EdgeEvent.type:type_name -> nexus.v1.EdgeEventType
-	106, // 88: nexus.v1.EdgeEvent.timestamp:type_name -> google.protobuf.Timestamp
-	105, // 89: nexus.v1.EdgeEvent.data:type_name -> google.protobuf.Struct
-	8,   // 90: nexus.v1.CoreEvent.type:type_name -> nexus.v1.CoreEventType
-	106, // 91: nexus.v1.CoreEvent.timestamp:type_name -> google.protobuf.Timestamp
-	105, // 92: nexus.v1.CoreEvent.data:type_name -> google.protobuf.Struct
-	82,  // 93: nexus.v1.GetEdgeStatusResponse.status:type_name -> nexus.v1.EdgeStatus
-	82,  // 94: nexus.v1.ListEdgesResponse.edges:type_name -> nexus.v1.EdgeStatus
-	9,   // 95: nexus.v1.EdgeStatus.connection_status:type_name -> nexus.v1.EdgeConnectionStatus
-	106, // 96: nexus.v1.EdgeStatus.connected_at:type_name -> google.protobuf.Timestamp
-	106, // 97: nexus.v1.EdgeStatus.last_heartbeat:type_name -> google.protobuf.Timestamp
-	71,  // 98: nexus.v1.EdgeStatus.metrics:type_name -> nexus.v1.EdgeMetrics
-	103, // 99: nexus.v1.EdgeStatus.metadata:type_name -> nexus.v1.EdgeStatus.MetadataEntry
-	87,  // 100: nexus.v1.GetEventsResponse.events:type_name -> nexus.v1.TimelineEvent
-	106, // 101: nexus.v1.GetTimelineResponse.start_time:type_name -> google.protobuf.Timestamp
-	106, // 102: nexus.v1.GetTimelineResponse.end_time:type_name -> google.protobuf.Timestamp
-	87,  // 103: nexus.v1.GetTimelineResponse.events:type_name -> nexus.v1.TimelineEvent
-	88,  // 104: nexus.v1.GetTimelineResponse.summary:type_name -> nexus.v1.TimelineSummary
-	106, // 105: nexus.v1.TimelineEvent.timestamp:type_name -> google.protobuf.Timestamp
-	104, // 106: nexus.v1.TimelineEvent.data:type_name -> nexus.v1.TimelineEvent.DataEntry
-	12,  // 107: nexus.v1.NexusGateway.Stream:input_type -> nexus.v1.ClientMessage
-	33,  // 108: nexus.v1.SessionService.CreateSession:input_type -> nexus.v1.CreateSessionRequest
-	35,  // 109: nexus.v1.SessionService.GetSession:input_type -> nexus.v1.GetSessionRequest
-	37,  // 110: nexus.v1.SessionService.ListSessions:input_type -> nexus.v1.ListSessionsRequest
-	39,  // 111: nexus.v1.SessionService.DeleteSession:input_type -> nexus.v1.DeleteSessionRequest
-	41,  // 112: nexus.v1.SessionService.UpdateSession:input_type -> nexus.v1.UpdateSessionRequest
-	43,  // 113: nexus.v1.AgentService.CreateAgent:input_type -> nexus.v1.CreateAgentRequest
-	45,  // 114: nexus.v1.AgentService.GetAgent:input_type -> nexus.v1.GetAgentRequest
-	47,  // 115: nexus.v1.AgentService.ListAgents:input_type -> nexus.v1.ListAgentsRequest
-	49,  // 116: nexus.v1.AgentService.UpdateAgent:input_type -> nexus.v1.UpdateAgentRequest
-	51,  // 117: nexus.v1.AgentService.DeleteAgent:input_type -> nexus.v1.DeleteAgentRequest
-	53,  // 118: nexus.v1.ChannelService.ConnectChannel:input_type -> nexus.v1.ConnectChannelRequest
-	55,  // 119: nexus.v1.ChannelService.DisconnectChannel:input_type -> nexus.v1.DisconnectChannelRequest
-	57,  // 120: nexus.v1.ChannelService.GetChannelStatus:input_type -> nexus.v1.GetChannelStatusRequest
-	59,  // 121: nexus.v1.ChannelService.ListChannels:input_type -> nexus.v1.ListChannelsRequest
-	62,  // 122: nexus.v1.HealthService.Check:input_type -> nexus.v1.HealthCheckRequest
-	62,  // 123: nexus.v1.HealthService.Watch:input_type -> nexus.v1.HealthCheckRequest
-	64,  // 124: nexus.v1.EdgeService.Connect:input_type -> nexus.v1.EdgeMessage
-	78,  // 125: nexus.v1.EdgeService.GetEdgeStatus:input_type -> nexus.v1.GetEdgeStatusRequest
-	80,  // 126: nexus.v1.EdgeService.ListEdges:input_type -> nexus.v1.ListEdgesRequest
-	83,  // 127: nexus.v1.EventService.GetEvents:input_type -> nexus.v1.GetEventsRequest
-	85,  // 128: nexus.v1.EventService.GetTimeline:input_type -> nexus.v1.GetTimelineRequest
-	13,  // 129: nexus.v1.NexusGateway.Stream:output_type -> nexus.v1.ServerMessage
-	34,  // 130: nexus.v1.SessionService.CreateSession:output_type -> nexus.v1.CreateSessionResponse
-	36,  // 131: nexus.v1.SessionService.GetSession:output_type -> nexus.v1.GetSessionResponse
-	38,  // 132: nexus.v1.SessionService.ListSessions:output_type -> nexus.v1.ListSessionsResponse
-	40,  // 133: nexus.v1.SessionService.DeleteSession:output_type -> nexus.v1.DeleteSessionResponse
-	42,  // 134: nexus.v1.SessionService.UpdateSession:output_type -> nexus.v1.UpdateSessionResponse
-	44,  // 135: nexus.v1.AgentService.CreateAgent:output_type -> nexus.v1.CreateAgentResponse
-	46,  // 136: nexus.v1.AgentService.GetAgent:output_type -> nexus.v1.GetAgentResponse
-	48,  // 137: nexus.v1.AgentService.ListAgents:output_type -> nexus.v1.ListAgentsResponse
-	50,  // 138: nexus.v1.AgentService.UpdateAgent:output_type -> nexus.v1.UpdateAgentResponse
-	52,  // 139: nexus.v1.AgentService.DeleteAgent:output_type -> nexus.v1.DeleteAgentResponse
-	54,  // 140: nexus.v1.ChannelService.ConnectChannel:output_type -> nexus.v1.ConnectChannelResponse
-	56,  // 141: nexus.v1.ChannelService.DisconnectChannel:output_type -> nexus.v1.DisconnectChannelResponse
-	58,  // 142: nexus.v1.ChannelService.GetChannelStatus:output_type -> nexus.v1.GetChannelStatusResponse
-	60,  // 143: nexus.v1.ChannelService.ListChannels:output_type -> nexus.v1.ListChannelsResponse
-	63,  // 144: nexus.v1.HealthService.Check:output_type -> nexus.v1.HealthCheckResponse
-	63,  // 145: nexus.v1.HealthService.Watch:output_type -> nexus.v1.HealthCheckResponse
-	65,  // 146: nexus.v1.EdgeService.Connect:output_type -> nexus.v1.CoreMessage
-	79,  // 147: nexus.v1.EdgeService.GetEdgeStatus:output_type -> nexus.v1.GetEdgeStatusResponse
-	81,  // 148: nexus.v1.EdgeService.ListEdges:output_type -> nexus.v1.ListEdgesResponse
-	84,  // 149: nexus.v1.EventService.GetEvents:output_type -> nexus.v1.GetEventsResponse
-	86,  // 150: nexus.v1.EventService.GetTimeline:output_type -> nexus.v1.GetTimelineResponse
-	129, // [129:151] is the sub-list for method output_type
-	107, // [107:129] is the sub-list for method input_type
-	107, // [107:107] is the sub-list for extension type_name
-	107, // [107:107] is the sub-list for extension extendee
-	0,   // [0:107] is the sub-list for field type_name
+	149, // 70: nexus.v1.HealthCheckResponse.metadata:type_name -> nexus.v1.HealthCheckResponse.MetadataEntry
+	164, // 71: nexus.v1.HealthCheckResponse.timestamp:type_name -> google.protobuf.Timestamp
+	69,  // 72: nexus.v1.EdgeMessage.register:type_name -> nexus.v1.EdgeRegister
+	73,  // 73: nexus.v1.EdgeMessage.heartbeat:type_name -> nexus.v1.EdgeHeartbeat
+	76,  // 74: nexus.v1.EdgeMessage.tool_result:type_name -> nexus.v1.ToolExecutionResult
+	79,  // 75: nexus.v1.EdgeMessage.event:type_name -> nexus.v1.EdgeEvent
+	81,  // 76: nexus.v1.EdgeMessage.channel_inbound:type_name -> nexus.v1.EdgeChannelInbound
+	83,  // 77: nexus.v1.EdgeMessage.channel_ack:type_name -> nexus.v1.EdgeChannelAck
+	72,  // 78: nexus.v1.CoreMessage.registered:type_name -> nexus.v1.EdgeRegistered
+	75,  // 79: nexus.v1.CoreMessage.tool_request:type_name -> nexus.v1.ToolExecutionRequest
+	78,  // 80: nexus.v1.CoreMessage.tool_cancel:type_name -> nexus.v1.ToolCancellation
+	80,  // 81: nexus.v1.CoreMessage.event:type_name -> nexus.v1.CoreEvent
+	82,  // 82: nexus.v1.CoreMessage.channel_outbound:type_name -> nexus.v1.CoreChannelOutbound
+	70,  // 83: nexus.v1.EdgeRegister.tools:type_name -> nexus.v1.EdgeToolDefinition
+	71,  // 84: nexus.v1.EdgeRegister.capabilities:type_name -> nexus.v1.EdgeCapabilities
+	150, // 85: nexus.v1.EdgeRegister.metadata:type_name -> nexus.v1.EdgeRegister.MetadataEntry
+	164, // 86: nexus.v1.EdgeHeartbeat.timestamp:type_name -> google.protobuf.Timestamp
+	74,  // 87: nexus.v1.EdgeHeartbeat.metrics:type_name -> nexus.v1.EdgeMetrics
+	151, // 88: nexus.v1.ToolExecutionRequest.metadata:type_name -> nexus.v1.ToolExecutionRequest.MetadataEntry
+	77,  // 89: nexus.v1.ToolExecutionResult.artifacts:type_name -> nexus.v1.Artifact
+	7,   // 90: nexus.v1.EdgeEvent.type:type_name -> nexus.v1.EdgeEventType
+	164, // 91: nexus.v1.EdgeEvent.timestamp:type_name -> google.protobuf.Timestamp
+	163, // 92: nexus.v1.EdgeEvent.data:type_name -> google.protobuf.Struct
+	8,   // 93: nexus.v1.CoreEvent.type:type_name -> nexus.v1.CoreEventType
+	164, // 94: nexus.v1.CoreEvent.timestamp:type_name -> google.protobuf.Timestamp
+	163, // 95: nexus.v1.CoreEvent.data:type_name -> google.protobuf.Struct
+	2,   // 96: nexus.v1.EdgeChannelInbound.channel_type:type_name -> nexus.v1.ChannelType
+	29,  // 97: nexus.v1.EdgeChannelInbound.attachments:type_name -> nexus.v1.Attachment
+	152, // 98: nexus.v1.EdgeChannelInbound.metadata:type_name -> nexus.v1.EdgeChannelInbound.MetadataEntry
+	164, // 99: nexus.v1.EdgeChannelInbound.received_at:type_name -> google.protobuf.Timestamp
+	2,   // 100: nexus.v1.CoreChannelOutbound.channel_type:type_name -> nexus.v1.ChannelType
+	29,  // 101: nexus.v1.CoreChannelOutbound.attachments:type_name -> nexus.v1.Attachment
+	153, // 102: nexus.v1.CoreChannelOutbound.options:type_name -> nexus.v1.CoreChannelOutbound.OptionsEntry
+	9,   // 103: nexus.v1.EdgeChannelAck.status:type_name -> nexus.v1.ChannelDeliveryStatus
+	164, // 104: nexus.v1.EdgeChannelAck.delivered_at:type_name -> google.protobuf.Timestamp
+	88,  // 105: nexus.v1.GetEdgeStatusResponse.status:type_name -> nexus.v1.EdgeStatus
+	88,  // 106: nexus.v1.ListEdgesResponse.edges:type_name -> nexus.v1.EdgeStatus
+	10,  // 107: nexus.v1.EdgeStatus.connection_status:type_name -> nexus.v1.EdgeConnectionStatus
+	164, // 108: nexus.v1.EdgeStatus.connected_at:type_name -> google.protobuf.Timestamp
+	164, // 109: nexus.v1.EdgeStatus.last_heartbeat:type_name -> google.protobuf.Timestamp
+	74,  // 110: nexus.v1.EdgeStatus.metrics:type_name -> nexus.v1.EdgeMetrics
+	154, // 111: nexus.v1.EdgeStatus.metadata:type_name -> nexus.v1.EdgeStatus.MetadataEntry
+	93,  // 112: nexus.v1.GetEventsResponse.events:type_name -> nexus.v1.TimelineEvent
+	164, // 113: nexus.v1.GetTimelineResponse.start_time:type_name -> google.protobuf.Timestamp
+	164, // 114: nexus.v1.GetTimelineResponse.end_time:type_name -> google.protobuf.Timestamp
+	93,  // 115: nexus.v1.GetTimelineResponse.events:type_name -> nexus.v1.TimelineEvent
+	94,  // 116: nexus.v1.GetTimelineResponse.summary:type_name -> nexus.v1.TimelineSummary
+	164, // 117: nexus.v1.TimelineEvent.timestamp:type_name -> google.protobuf.Timestamp
+	155, // 118: nexus.v1.TimelineEvent.data:type_name -> nexus.v1.TimelineEvent.DataEntry
+	96,  // 119: nexus.v1.ScheduledTask.config:type_name -> nexus.v1.TaskConfig
+	13,  // 120: nexus.v1.ScheduledTask.status:type_name -> nexus.v1.TaskStatus
+	164, // 121: nexus.v1.ScheduledTask.next_run_at:type_name -> google.protobuf.Timestamp
+	164, // 122: nexus.v1.ScheduledTask.last_run_at:type_name -> google.protobuf.Timestamp
+	164, // 123: nexus.v1.ScheduledTask.created_at:type_name -> google.protobuf.Timestamp
+	164, // 124: nexus.v1.ScheduledTask.updated_at:type_name -> google.protobuf.Timestamp
+	156, // 125: nexus.v1.ScheduledTask.metadata:type_name -> nexus.v1.ScheduledTask.MetadataEntry
+	14,  // 126: nexus.v1.TaskExecution.status:type_name -> nexus.v1.ExecutionStatus
+	164, // 127: nexus.v1.TaskExecution.scheduled_at:type_name -> google.protobuf.Timestamp
+	164, // 128: nexus.v1.TaskExecution.started_at:type_name -> google.protobuf.Timestamp
+	164, // 129: nexus.v1.TaskExecution.finished_at:type_name -> google.protobuf.Timestamp
+	96,  // 130: nexus.v1.CreateTaskRequest.config:type_name -> nexus.v1.TaskConfig
+	157, // 131: nexus.v1.CreateTaskRequest.metadata:type_name -> nexus.v1.CreateTaskRequest.MetadataEntry
+	95,  // 132: nexus.v1.CreateTaskResponse.task:type_name -> nexus.v1.ScheduledTask
+	95,  // 133: nexus.v1.GetTaskResponse.task:type_name -> nexus.v1.ScheduledTask
+	13,  // 134: nexus.v1.ListTasksRequest.status:type_name -> nexus.v1.TaskStatus
+	95,  // 135: nexus.v1.ListTasksResponse.tasks:type_name -> nexus.v1.ScheduledTask
+	96,  // 136: nexus.v1.UpdateTaskRequest.config:type_name -> nexus.v1.TaskConfig
+	158, // 137: nexus.v1.UpdateTaskRequest.metadata:type_name -> nexus.v1.UpdateTaskRequest.MetadataEntry
+	95,  // 138: nexus.v1.UpdateTaskResponse.task:type_name -> nexus.v1.ScheduledTask
+	95,  // 139: nexus.v1.PauseTaskResponse.task:type_name -> nexus.v1.ScheduledTask
+	95,  // 140: nexus.v1.ResumeTaskResponse.task:type_name -> nexus.v1.ScheduledTask
+	97,  // 141: nexus.v1.TriggerTaskResponse.execution:type_name -> nexus.v1.TaskExecution
+	14,  // 142: nexus.v1.ListExecutionsRequest.status:type_name -> nexus.v1.ExecutionStatus
+	97,  // 143: nexus.v1.ListExecutionsResponse.executions:type_name -> nexus.v1.TaskExecution
+	29,  // 144: nexus.v1.ProactiveSendRequest.attachments:type_name -> nexus.v1.Attachment
+	159, // 145: nexus.v1.ProactiveSendRequest.metadata:type_name -> nexus.v1.ProactiveSendRequest.MetadataEntry
+	29,  // 146: nexus.v1.BroadcastMessageRequest.attachments:type_name -> nexus.v1.Attachment
+	160, // 147: nexus.v1.BroadcastMessageRequest.metadata:type_name -> nexus.v1.BroadcastMessageRequest.MetadataEntry
+	120, // 148: nexus.v1.BroadcastMessageResponse.results:type_name -> nexus.v1.BroadcastResult
+	161, // 149: nexus.v1.Identity.metadata:type_name -> nexus.v1.Identity.MetadataEntry
+	164, // 150: nexus.v1.Identity.created_at:type_name -> google.protobuf.Timestamp
+	164, // 151: nexus.v1.Identity.updated_at:type_name -> google.protobuf.Timestamp
+	162, // 152: nexus.v1.CreateIdentityRequest.metadata:type_name -> nexus.v1.CreateIdentityRequest.MetadataEntry
+	121, // 153: nexus.v1.CreateIdentityResponse.identity:type_name -> nexus.v1.Identity
+	121, // 154: nexus.v1.GetIdentityResponse.identity:type_name -> nexus.v1.Identity
+	121, // 155: nexus.v1.ListIdentitiesResponse.identities:type_name -> nexus.v1.Identity
+	121, // 156: nexus.v1.LinkPeerResponse.identity:type_name -> nexus.v1.Identity
+	121, // 157: nexus.v1.UnlinkPeerResponse.identity:type_name -> nexus.v1.Identity
+	121, // 158: nexus.v1.ResolveIdentityResponse.identity:type_name -> nexus.v1.Identity
+	15,  // 159: nexus.v1.NexusGateway.Stream:input_type -> nexus.v1.ClientMessage
+	36,  // 160: nexus.v1.SessionService.CreateSession:input_type -> nexus.v1.CreateSessionRequest
+	38,  // 161: nexus.v1.SessionService.GetSession:input_type -> nexus.v1.GetSessionRequest
+	40,  // 162: nexus.v1.SessionService.ListSessions:input_type -> nexus.v1.ListSessionsRequest
+	42,  // 163: nexus.v1.SessionService.DeleteSession:input_type -> nexus.v1.DeleteSessionRequest
+	44,  // 164: nexus.v1.SessionService.UpdateSession:input_type -> nexus.v1.UpdateSessionRequest
+	46,  // 165: nexus.v1.AgentService.CreateAgent:input_type -> nexus.v1.CreateAgentRequest
+	48,  // 166: nexus.v1.AgentService.GetAgent:input_type -> nexus.v1.GetAgentRequest
+	50,  // 167: nexus.v1.AgentService.ListAgents:input_type -> nexus.v1.ListAgentsRequest
+	52,  // 168: nexus.v1.AgentService.UpdateAgent:input_type -> nexus.v1.UpdateAgentRequest
+	54,  // 169: nexus.v1.AgentService.DeleteAgent:input_type -> nexus.v1.DeleteAgentRequest
+	56,  // 170: nexus.v1.ChannelService.ConnectChannel:input_type -> nexus.v1.ConnectChannelRequest
+	58,  // 171: nexus.v1.ChannelService.DisconnectChannel:input_type -> nexus.v1.DisconnectChannelRequest
+	60,  // 172: nexus.v1.ChannelService.GetChannelStatus:input_type -> nexus.v1.GetChannelStatusRequest
+	62,  // 173: nexus.v1.ChannelService.ListChannels:input_type -> nexus.v1.ListChannelsRequest
+	65,  // 174: nexus.v1.HealthService.Check:input_type -> nexus.v1.HealthCheckRequest
+	65,  // 175: nexus.v1.HealthService.Watch:input_type -> nexus.v1.HealthCheckRequest
+	67,  // 176: nexus.v1.EdgeService.Connect:input_type -> nexus.v1.EdgeMessage
+	84,  // 177: nexus.v1.EdgeService.GetEdgeStatus:input_type -> nexus.v1.GetEdgeStatusRequest
+	86,  // 178: nexus.v1.EdgeService.ListEdges:input_type -> nexus.v1.ListEdgesRequest
+	89,  // 179: nexus.v1.EventService.GetEvents:input_type -> nexus.v1.GetEventsRequest
+	91,  // 180: nexus.v1.EventService.GetTimeline:input_type -> nexus.v1.GetTimelineRequest
+	98,  // 181: nexus.v1.TaskService.CreateTask:input_type -> nexus.v1.CreateTaskRequest
+	100, // 182: nexus.v1.TaskService.GetTask:input_type -> nexus.v1.GetTaskRequest
+	102, // 183: nexus.v1.TaskService.ListTasks:input_type -> nexus.v1.ListTasksRequest
+	104, // 184: nexus.v1.TaskService.UpdateTask:input_type -> nexus.v1.UpdateTaskRequest
+	106, // 185: nexus.v1.TaskService.DeleteTask:input_type -> nexus.v1.DeleteTaskRequest
+	108, // 186: nexus.v1.TaskService.PauseTask:input_type -> nexus.v1.PauseTaskRequest
+	110, // 187: nexus.v1.TaskService.ResumeTask:input_type -> nexus.v1.ResumeTaskRequest
+	112, // 188: nexus.v1.TaskService.TriggerTask:input_type -> nexus.v1.TriggerTaskRequest
+	114, // 189: nexus.v1.TaskService.ListExecutions:input_type -> nexus.v1.ListExecutionsRequest
+	116, // 190: nexus.v1.MessageService.SendMessage:input_type -> nexus.v1.ProactiveSendRequest
+	118, // 191: nexus.v1.MessageService.BroadcastMessage:input_type -> nexus.v1.BroadcastMessageRequest
+	122, // 192: nexus.v1.IdentityService.CreateIdentity:input_type -> nexus.v1.CreateIdentityRequest
+	124, // 193: nexus.v1.IdentityService.GetIdentity:input_type -> nexus.v1.GetIdentityRequest
+	126, // 194: nexus.v1.IdentityService.ListIdentities:input_type -> nexus.v1.ListIdentitiesRequest
+	128, // 195: nexus.v1.IdentityService.DeleteIdentity:input_type -> nexus.v1.DeleteIdentityRequest
+	130, // 196: nexus.v1.IdentityService.LinkPeer:input_type -> nexus.v1.LinkPeerRequest
+	132, // 197: nexus.v1.IdentityService.UnlinkPeer:input_type -> nexus.v1.UnlinkPeerRequest
+	134, // 198: nexus.v1.IdentityService.ResolveIdentity:input_type -> nexus.v1.ResolveIdentityRequest
+	136, // 199: nexus.v1.IdentityService.GetLinkedPeers:input_type -> nexus.v1.GetLinkedPeersRequest
+	16,  // 200: nexus.v1.NexusGateway.Stream:output_type -> nexus.v1.ServerMessage
+	37,  // 201: nexus.v1.SessionService.CreateSession:output_type -> nexus.v1.CreateSessionResponse
+	39,  // 202: nexus.v1.SessionService.GetSession:output_type -> nexus.v1.GetSessionResponse
+	41,  // 203: nexus.v1.SessionService.ListSessions:output_type -> nexus.v1.ListSessionsResponse
+	43,  // 204: nexus.v1.SessionService.DeleteSession:output_type -> nexus.v1.DeleteSessionResponse
+	45,  // 205: nexus.v1.SessionService.UpdateSession:output_type -> nexus.v1.UpdateSessionResponse
+	47,  // 206: nexus.v1.AgentService.CreateAgent:output_type -> nexus.v1.CreateAgentResponse
+	49,  // 207: nexus.v1.AgentService.GetAgent:output_type -> nexus.v1.GetAgentResponse
+	51,  // 208: nexus.v1.AgentService.ListAgents:output_type -> nexus.v1.ListAgentsResponse
+	53,  // 209: nexus.v1.AgentService.UpdateAgent:output_type -> nexus.v1.UpdateAgentResponse
+	55,  // 210: nexus.v1.AgentService.DeleteAgent:output_type -> nexus.v1.DeleteAgentResponse
+	57,  // 211: nexus.v1.ChannelService.ConnectChannel:output_type -> nexus.v1.ConnectChannelResponse
+	59,  // 212: nexus.v1.ChannelService.DisconnectChannel:output_type -> nexus.v1.DisconnectChannelResponse
+	61,  // 213: nexus.v1.ChannelService.GetChannelStatus:output_type -> nexus.v1.GetChannelStatusResponse
+	63,  // 214: nexus.v1.ChannelService.ListChannels:output_type -> nexus.v1.ListChannelsResponse
+	66,  // 215: nexus.v1.HealthService.Check:output_type -> nexus.v1.HealthCheckResponse
+	66,  // 216: nexus.v1.HealthService.Watch:output_type -> nexus.v1.HealthCheckResponse
+	68,  // 217: nexus.v1.EdgeService.Connect:output_type -> nexus.v1.CoreMessage
+	85,  // 218: nexus.v1.EdgeService.GetEdgeStatus:output_type -> nexus.v1.GetEdgeStatusResponse
+	87,  // 219: nexus.v1.EdgeService.ListEdges:output_type -> nexus.v1.ListEdgesResponse
+	90,  // 220: nexus.v1.EventService.GetEvents:output_type -> nexus.v1.GetEventsResponse
+	92,  // 221: nexus.v1.EventService.GetTimeline:output_type -> nexus.v1.GetTimelineResponse
+	99,  // 222: nexus.v1.TaskService.CreateTask:output_type -> nexus.v1.CreateTaskResponse
+	101, // 223: nexus.v1.TaskService.GetTask:output_type -> nexus.v1.GetTaskResponse
+	103, // 224: nexus.v1.TaskService.ListTasks:output_type -> nexus.v1.ListTasksResponse
+	105, // 225: nexus.v1.TaskService.UpdateTask:output_type -> nexus.v1.UpdateTaskResponse
+	107, // 226: nexus.v1.TaskService.DeleteTask:output_type -> nexus.v1.DeleteTaskResponse
+	109, // 227: nexus.v1.TaskService.PauseTask:output_type -> nexus.v1.PauseTaskResponse
+	111, // 228: nexus.v1.TaskService.ResumeTask:output_type -> nexus.v1.ResumeTaskResponse
+	113, // 229: nexus.v1.TaskService.TriggerTask:output_type -> nexus.v1.TriggerTaskResponse
+	115, // 230: nexus.v1.TaskService.ListExecutions:output_type -> nexus.v1.ListExecutionsResponse
+	117, // 231: nexus.v1.MessageService.SendMessage:output_type -> nexus.v1.ProactiveSendResponse
+	119, // 232: nexus.v1.MessageService.BroadcastMessage:output_type -> nexus.v1.BroadcastMessageResponse
+	123, // 233: nexus.v1.IdentityService.CreateIdentity:output_type -> nexus.v1.CreateIdentityResponse
+	125, // 234: nexus.v1.IdentityService.GetIdentity:output_type -> nexus.v1.GetIdentityResponse
+	127, // 235: nexus.v1.IdentityService.ListIdentities:output_type -> nexus.v1.ListIdentitiesResponse
+	129, // 236: nexus.v1.IdentityService.DeleteIdentity:output_type -> nexus.v1.DeleteIdentityResponse
+	131, // 237: nexus.v1.IdentityService.LinkPeer:output_type -> nexus.v1.LinkPeerResponse
+	133, // 238: nexus.v1.IdentityService.UnlinkPeer:output_type -> nexus.v1.UnlinkPeerResponse
+	135, // 239: nexus.v1.IdentityService.ResolveIdentity:output_type -> nexus.v1.ResolveIdentityResponse
+	137, // 240: nexus.v1.IdentityService.GetLinkedPeers:output_type -> nexus.v1.GetLinkedPeersResponse
+	200, // [200:241] is the sub-list for method output_type
+	159, // [159:200] is the sub-list for method input_type
+	159, // [159:159] is the sub-list for extension type_name
+	159, // [159:159] is the sub-list for extension extendee
+	0,   // [0:159] is the sub-list for field type_name
 }
 
 func init() { file_pkg_proto_nexus_proto_init() }
@@ -7045,22 +10809,25 @@ func file_pkg_proto_nexus_proto_init() {
 		(*EdgeMessage_Heartbeat)(nil),
 		(*EdgeMessage_ToolResult)(nil),
 		(*EdgeMessage_Event)(nil),
+		(*EdgeMessage_ChannelInbound)(nil),
+		(*EdgeMessage_ChannelAck)(nil),
 	}
 	file_pkg_proto_nexus_proto_msgTypes[53].OneofWrappers = []any{
 		(*CoreMessage_Registered)(nil),
 		(*CoreMessage_ToolRequest)(nil),
 		(*CoreMessage_ToolCancel)(nil),
 		(*CoreMessage_Event)(nil),
+		(*CoreMessage_ChannelOutbound)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pkg_proto_nexus_proto_rawDesc), len(file_pkg_proto_nexus_proto_rawDesc)),
-			NumEnums:      12,
-			NumMessages:   93,
+			NumEnums:      15,
+			NumMessages:   148,
 			NumExtensions: 0,
-			NumServices:   7,
+			NumServices:   10,
 		},
 		GoTypes:           file_pkg_proto_nexus_proto_goTypes,
 		DependencyIndexes: file_pkg_proto_nexus_proto_depIdxs,

@@ -561,12 +561,22 @@ func convertSlackMessage(event *slackevents.MessageEvent, botToken string) *mode
 		Role:      models.RoleUser,
 		Content:   text,
 		Metadata: map[string]any{
-			"slack_user_id":   event.User,
-			"slack_channel":   event.Channel,
-			"slack_ts":        event.TimeStamp,
-			"slack_thread_ts": event.ThreadTimeStamp,
+			"slack_user_id":     event.User,
+			"slack_channel":     event.Channel,
+			"slack_ts":          event.TimeStamp,
+			"slack_thread_ts":   event.ThreadTimeStamp,
+			"sender_id":         event.User,
+			"conversation_type": "group",
 		},
 		CreatedAt: createdAt,
+	}
+	if event.Username != "" {
+		msg.Metadata["sender_name"] = event.Username
+	} else if event.User != "" {
+		msg.Metadata["sender_name"] = event.User
+	}
+	if strings.HasPrefix(event.Channel, "D") {
+		msg.Metadata["conversation_type"] = "dm"
 	}
 
 	// Process file attachments from the Message field if present

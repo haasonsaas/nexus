@@ -69,6 +69,14 @@ func extractSenderID(msg *models.Message) string {
 	if sender, ok := msg.Metadata["sender_id"].(string); ok && sender != "" {
 		return sender
 	}
+	if sender, ok := msg.Metadata["sender_id"]; ok {
+		switch v := sender.(type) {
+		case int64:
+			return strconv.FormatInt(v, 10)
+		case int:
+			return strconv.Itoa(v)
+		}
+	}
 	switch msg.Channel {
 	case models.ChannelTelegram:
 		if userID, ok := msg.Metadata["user_id"]; ok {

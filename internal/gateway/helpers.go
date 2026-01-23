@@ -231,6 +231,13 @@ func (s *Server) buildReplyMetadata(msg *models.Message) map[string]any {
 		} else if channelID, ok := msg.Metadata["discord_channel_id"].(string); ok {
 			metadata["discord_channel_id"] = channelID
 		}
+	case models.ChannelWhatsApp, models.ChannelSignal, models.ChannelIMessage, models.ChannelMatrix:
+		if peerID, ok := msg.Metadata["peer_id"].(string); ok && peerID != "" {
+			metadata["peer_id"] = peerID
+		}
+		if groupID, ok := msg.Metadata["group_id"].(string); ok && groupID != "" {
+			metadata["group_id"] = groupID
+		}
 	}
 
 	return metadata

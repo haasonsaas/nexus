@@ -110,6 +110,10 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		msg.Content = msg.Content[:maxInputSize]
 	}
 
+	if s.enforceAccessPolicy(ctx, msg) {
+		return
+	}
+
 	runtime, err := s.ensureRuntime(ctx)
 	if err != nil {
 		s.logger.Error("runtime initialization failed", "error", err)

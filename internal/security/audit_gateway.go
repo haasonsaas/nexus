@@ -125,36 +125,50 @@ func auditChannelSecurity(cfg *config.Config) []Finding {
 		}
 	}
 
-	// Note: Discord, Telegram, Slack, WhatsApp, Signal don't have allowlist configs
-	// Flag this as a potential security concern for public-facing bots
+	findings = append(findings, auditChannelPolicy("telegram", cfg.Channels.Telegram.Enabled, cfg.Channels.Telegram.DM, cfg.Channels.Telegram.Group)...)
+	findings = append(findings, auditChannelPolicy("discord", cfg.Channels.Discord.Enabled, cfg.Channels.Discord.DM, cfg.Channels.Discord.Group)...)
+	findings = append(findings, auditChannelPolicy("slack", cfg.Channels.Slack.Enabled, cfg.Channels.Slack.DM, cfg.Channels.Slack.Group)...)
+	findings = append(findings, auditChannelPolicy("whatsapp", cfg.Channels.WhatsApp.Enabled, cfg.Channels.WhatsApp.DM, cfg.Channels.WhatsApp.Group)...)
+	findings = append(findings, auditChannelPolicy("signal", cfg.Channels.Signal.Enabled, cfg.Channels.Signal.DM, cfg.Channels.Signal.Group)...)
+	findings = append(findings, auditChannelPolicy("imessage", cfg.Channels.IMessage.Enabled, cfg.Channels.IMessage.DM, cfg.Channels.IMessage.Group)...)
+	findings = append(findings, auditChannelPolicy("matrix", cfg.Channels.Matrix.Enabled, cfg.Channels.Matrix.DM, cfg.Channels.Matrix.Group)...)
+	findings = append(findings, auditChannelPolicy("teams", cfg.Channels.Teams.Enabled, cfg.Channels.Teams.DM, cfg.Channels.Teams.Group)...)
 
-	if cfg.Channels.Discord.Enabled {
+	return findings
+}
+
+func auditChannelPolicy(channel string, enabled bool, dm config.ChannelPolicyConfig, group config.ChannelPolicyConfig) []Finding {
+	if !enabled {
+		return nil
+	}
+	findings := make([]Finding, 0, 2)
+	findings = append(findings, auditChannelPolicyScope(channel, "dm", dm)...)
+	findings = append(findings, auditChannelPolicyScope(channel, "group", group)...)
+	return findings
+}
+
+func auditChannelPolicyScope(channel string, scope string, policy config.ChannelPolicyConfig) []Finding {
+	var findings []Finding
+	policyValue := strings.ToLower(strings.TrimSpace(policy.Policy))
+	if policyValue == "" {
+		policyValue = "open"
+	}
+	if policyValue == "open" {
 		findings = append(findings, Finding{
-			CheckID:  "channel.discord.no_allowlist_support",
+			CheckID:  fmt.Sprintf("channel.%s.%s.open", channel, scope),
 			Severity: SeverityInfo,
-			Title:    "Discord lacks user/channel allowlists",
-			Detail:   "Discord adapter doesn't support allowed_users or allowed_channels config.",
+			Title:    fmt.Sprintf("%s %s policy is open", strings.Title(channel), strings.ToUpper(scope)),
+			Detail:   fmt.Sprintf("channels.%s.%s.policy is set to open.", channel, scope),
 		})
 	}
-
-	if cfg.Channels.Telegram.Enabled {
+	if (policyValue == "allowlist" || policyValue == "pairing") && len(policy.AllowFrom) == 0 {
 		findings = append(findings, Finding{
-			CheckID:  "channel.telegram.no_allowlist_support",
+			CheckID:  fmt.Sprintf("channel.%s.%s.allowlist_empty", channel, scope),
 			Severity: SeverityInfo,
-			Title:    "Telegram lacks user/chat allowlists",
-			Detail:   "Telegram adapter doesn't support allowed_users or allowed_chats config.",
+			Title:    fmt.Sprintf("%s %s allowlist is empty", strings.Title(channel), strings.ToUpper(scope)),
+			Detail:   fmt.Sprintf("channels.%s.%s.allow_from has no entries. Pairing approvals or allowlist files must be used to grant access.", channel, scope),
 		})
 	}
-
-	if cfg.Channels.Slack.Enabled {
-		findings = append(findings, Finding{
-			CheckID:  "channel.slack.no_allowlist_support",
-			Severity: SeverityInfo,
-			Title:    "Slack lacks user/channel allowlists",
-			Detail:   "Slack adapter doesn't support allowed_users or allowed_channels config.",
-		})
-	}
-
 	return findings
 }
 

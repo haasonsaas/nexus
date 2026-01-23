@@ -410,7 +410,7 @@ func (a *Adapter) fetchNewMessages(ctx context.Context) error {
 	}
 
 	for _, chat := range chats {
-		if err := a.fetchChatMessages(ctx, chat.ID); err != nil {
+		if err := a.fetchChatMessages(ctx, chat.ID, chat.ChatType); err != nil {
 			a.logger.Warn("failed to fetch chat messages",
 				"chat_id", chat.ID,
 				"error", err,
@@ -485,7 +485,7 @@ type TeamsMessage struct {
 }
 
 // fetchChatMessages fetches messages from a specific chat.
-func (a *Adapter) fetchChatMessages(ctx context.Context, chatID string) error {
+func (a *Adapter) fetchChatMessages(ctx context.Context, chatID string, chatType string) error {
 	endpoint := fmt.Sprintf("%s/me/chats/%s/messages?$top=10&$orderby=createdDateTime desc", graphBaseURL, chatID)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
@@ -519,14 +519,14 @@ func (a *Adapter) fetchChatMessages(ctx context.Context, chatID string) error {
 	// Process messages (newest first, so reverse)
 	for i := len(result.Value) - 1; i >= 0; i-- {
 		msg := result.Value[i]
-		a.processMessage(chatID, &msg)
+		a.processMessage(chatID, chatType, &msg)
 	}
 
 	return nil
 }
 
 // processMessage converts a Teams message to a Nexus message and sends it to the channel.
-func (a *Adapter) processMessage(chatID string, msg *TeamsMessage) {
+func (a *Adapter) processMessage(chatID string, chatType string, msg *TeamsMessage) {
 	// Skip if we've seen this message
 	a.seenMu.Lock()
 	if a.seenMessages[msg.ID] {
@@ -556,11 +556,16 @@ func (a *Adapter) processMessage(chatID string, msg *TeamsMessage) {
 		Content:   a.extractContent(msg),
 		CreatedAt: msg.CreatedDateTime,
 		Metadata: map[string]any{
-			"teams_message_id": msg.ID,
-			"sender_id":        msg.From.User.ID,
-			"sender_name":      msg.From.User.DisplayName,
-			"chat_id":          chatID,
+			"teams_message_id":  msg.ID,
+			"sender_id":         msg.From.User.ID,
+			"sender_name":       msg.From.User.DisplayName,
+			"chat_id":           chatID,
+			"chat_type":         chatType,
+			"conversation_type": "group",
 		},
+	}
+	if strings.EqualFold(chatType, "oneOnOne") {
+		nexusMsg.Metadata["conversation_type"] = "dm"
 	}
 
 	// Handle attachments

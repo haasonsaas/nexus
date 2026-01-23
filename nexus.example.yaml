@@ -149,12 +149,24 @@ channels:
     bot_token: ${TELEGRAM_BOT_TOKEN}
     # Optional: webhook URL for production
     # webhook: https://your-domain.com/webhook/telegram
+    dm:
+      policy: open # open | allowlist | pairing | disabled
+      # allow_from: ["123456789"]
+    group:
+      policy: allowlist
+      # allow_from: ["-123456789"]
 
   discord:
     enabled: true
     # Get from Discord Developer Portal
     bot_token: ${DISCORD_BOT_TOKEN}
     app_id: ${DISCORD_APP_ID}
+    dm:
+      policy: pairing
+      # allow_from: ["1234567890"]
+    group:
+      policy: allowlist
+      # allow_from: ["123456789012345678"]
 
   slack:
     enabled: true
@@ -162,6 +174,12 @@ channels:
     bot_token: ${SLACK_BOT_TOKEN}      # xoxb-...
     app_token: ${SLACK_APP_TOKEN}      # xapp-... (for Socket Mode)
     signing_secret: ${SLACK_SIGNING_SECRET}
+    dm:
+      policy: pairing
+      # allow_from: ["U1234567890"]
+    group:
+      policy: allowlist
+      # allow_from: ["C1234567890"]
 
 llm:
   default_provider: anthropic

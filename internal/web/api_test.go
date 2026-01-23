@@ -496,3 +496,201 @@ func TestNodeSummary_JSON(t *testing.T) {
 
 // Compile-time interface check
 var _ edge.ExecuteOptions = edgeExecuteOptions{}.toExecuteOptions()
+
+// Tests for handlers.go helper functions
+
+func TestParseIntSafe(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected int
+		ok       bool
+	}{
+		{"123", 123, true},
+		{"0", 0, true},
+		{"999", 999, true},
+		{"1", 1, true},
+		{"abc", 0, false},
+		{"-1", 0, false},
+		{"12a", 0, false},
+		{"1.5", 0, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			var result int
+			ok, _ := parseIntSafe(tt.input, &result)
+			if ok != tt.ok {
+				t.Errorf("parseIntSafe(%q) ok = %v, want %v", tt.input, ok, tt.ok)
+			}
+			if ok && result != tt.expected {
+				t.Errorf("parseIntSafe(%q) = %d, want %d", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestTruncateTitle(t *testing.T) {
+	t.Run("nil session", func(t *testing.T) {
+		result := truncateTitle(nil)
+		if result != "" {
+			t.Errorf("truncateTitle(nil) = %q, want empty", result)
+		}
+	})
+
+	t.Run("session with title", func(t *testing.T) {
+		s := &models.Session{
+			ID:    "session-123",
+			Title: "Short Title",
+		}
+		result := truncateTitle(s)
+		if result != "Short Title" {
+			t.Errorf("truncateTitle() = %q, want %q", result, "Short Title")
+		}
+	})
+
+	t.Run("session with long title", func(t *testing.T) {
+		s := &models.Session{
+			ID:    "session-123",
+			Title: "This is a very long title that should be truncated",
+		}
+		result := truncateTitle(s)
+		if len(result) > 33 { // 30 + "..."
+			t.Errorf("truncateTitle() = %q, too long", result)
+		}
+	})
+
+	t.Run("session without title uses ID", func(t *testing.T) {
+		s := &models.Session{
+			ID: "session-123-456-789",
+		}
+		result := truncateTitle(s)
+		if len(result) > 15 { // 12 + "..."
+			t.Errorf("truncateTitle() = %q, too long", result)
+		}
+	})
+}
+
+func TestMin(t *testing.T) {
+	tests := []struct {
+		a, b, expected int
+	}{
+		{1, 2, 1},
+		{2, 1, 1},
+		{0, 0, 0},
+		{-1, 1, -1},
+		{100, 50, 50},
+	}
+
+	for _, tt := range tests {
+		t.Run("", func(t *testing.T) {
+			result := min(tt.a, tt.b)
+			if result != tt.expected {
+				t.Errorf("min(%d, %d) = %d, want %d", tt.a, tt.b, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestPageData_Struct(t *testing.T) {
+	data := PageData{
+		Title:       "Test Page",
+		CurrentPath: "/test",
+		Error:       "test error",
+		Flash:       "test flash",
+	}
+
+	if data.Title != "Test Page" {
+		t.Errorf("Title = %q, want %q", data.Title, "Test Page")
+	}
+	if data.CurrentPath != "/test" {
+		t.Errorf("CurrentPath = %q, want %q", data.CurrentPath, "/test")
+	}
+}
+
+func TestSessionListData_Struct(t *testing.T) {
+	data := SessionListData{
+		PageData:      PageData{Title: "Sessions"},
+		ChannelFilter: "telegram",
+		AgentFilter:   "agent-1",
+		Channels:      []string{"telegram", "slack"},
+		TotalCount:    10,
+		Page:          1,
+		PageSize:      50,
+		HasMore:       true,
+	}
+
+	if data.ChannelFilter != "telegram" {
+		t.Errorf("ChannelFilter = %q, want %q", data.ChannelFilter, "telegram")
+	}
+	if data.TotalCount != 10 {
+		t.Errorf("TotalCount = %d, want 10", data.TotalCount)
+	}
+	if !data.HasMore {
+		t.Error("HasMore should be true")
+	}
+}
+
+func TestSessionDetailData_Struct(t *testing.T) {
+	data := SessionDetailData{
+		PageData: PageData{Title: "Session Detail"},
+		Page:     2,
+		PageSize: 50,
+		HasMore:  false,
+	}
+
+	if data.Page != 2 {
+		t.Errorf("Page = %d, want 2", data.Page)
+	}
+	if data.PageSize != 50 {
+		t.Errorf("PageSize = %d, want 50", data.PageSize)
+	}
+}
+
+func TestStatusData_Struct(t *testing.T) {
+	status := &SystemStatus{
+		UptimeString: "1h30m",
+	}
+	data := StatusData{
+		PageData: PageData{Title: "Status"},
+		Status:   status,
+	}
+
+	if data.Status.UptimeString != "1h30m" {
+		t.Errorf("Status.UptimeString = %q, want %q", data.Status.UptimeString, "1h30m")
+	}
+}
+
+func TestCronData_Struct(t *testing.T) {
+	data := CronData{
+		PageData: PageData{Title: "Cron"},
+		Enabled:  true,
+		Jobs:     []*CronJobSummary{},
+	}
+
+	if !data.Enabled {
+		t.Error("Enabled should be true")
+	}
+}
+
+func TestNodesData_Struct(t *testing.T) {
+	data := NodesData{
+		PageData: PageData{Title: "Nodes"},
+		Nodes:    []*NodeSummary{},
+	}
+
+	if data.PageData.Title != "Nodes" {
+		t.Errorf("Title = %q, want %q", data.PageData.Title, "Nodes")
+	}
+}
+
+func TestConfigData_Struct(t *testing.T) {
+	data := ConfigData{
+		PageData:   PageData{Title: "Config"},
+		ConfigPath: "/etc/nexus/config.yaml",
+		ConfigYAML: "server:\n  port: 8080",
+	}
+
+	if data.ConfigPath != "/etc/nexus/config.yaml" {
+		t.Errorf("ConfigPath = %q, want %q", data.ConfigPath, "/etc/nexus/config.yaml")
+	}
+}

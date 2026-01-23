@@ -56,7 +56,7 @@ func (s *Service) ListEdges(ctx context.Context, req *pb.ListEdgesRequest) (*pb.
 	if req.PageToken != "" {
 		decoded, err := base64.StdEncoding.DecodeString(req.PageToken)
 		if err == nil {
-			offset, _ = strconv.Atoi(string(decoded))
+			offset, _ = strconv.Atoi(string(decoded)) //nolint:errcheck // invalid offset defaults to 0
 		}
 	}
 

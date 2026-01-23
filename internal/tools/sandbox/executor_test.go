@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -917,5 +918,356 @@ func TestModeConfig_Struct(t *testing.T) {
 	}
 	if mc.Scope != ScopeSession {
 		t.Errorf("Scope = %q, want %q", mc.Scope, ScopeSession)
+	}
+}
+
+func TestGetMainFilename(t *testing.T) {
+	tests := []struct {
+		language string
+		expected string
+	}{
+		{"python", "main.py"},
+		{"nodejs", "main.js"},
+		{"go", "main.go"},
+		{"bash", "main.sh"},
+		{"unknown", "main.txt"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.language, func(t *testing.T) {
+			result := getMainFilename(tt.language)
+			if result != tt.expected {
+				t.Errorf("getMainFilename(%q) = %q, want %q", tt.language, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsValidLanguage(t *testing.T) {
+	tests := []struct {
+		language string
+		valid    bool
+	}{
+		{"python", true},
+		{"nodejs", true},
+		{"go", true},
+		{"bash", true},
+		{"ruby", false},
+		{"java", false},
+		{"", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.language, func(t *testing.T) {
+			result := isValidLanguage(tt.language)
+			if result != tt.valid {
+				t.Errorf("isValidLanguage(%q) = %v, want %v", tt.language, result, tt.valid)
+			}
+		})
+	}
+}
+
+func TestGetDockerImage(t *testing.T) {
+	tests := []struct {
+		language string
+		expected string
+	}{
+		{"python", "python:3.11-alpine"},
+		{"nodejs", "node:20-alpine"},
+		{"go", "golang:1.22-alpine"},
+		{"bash", "bash:5-alpine"},
+		{"unknown", "alpine:latest"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.language, func(t *testing.T) {
+			result := getDockerImage(tt.language)
+			if result != tt.expected {
+				t.Errorf("getDockerImage(%q) = %q, want %q", tt.language, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGetRunCommand(t *testing.T) {
+	tests := []struct {
+		language string
+		expected []string
+	}{
+		{"python", []string{"python", "main.py"}},
+		{"nodejs", []string{"node", "main.js"}},
+		{"go", []string{"sh", "-c", "go run main.go"}},
+		{"bash", []string{"bash", "main.sh"}},
+		{"unknown", []string{"cat", "main.txt"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.language, func(t *testing.T) {
+			result := getRunCommand(tt.language)
+			if len(result) != len(tt.expected) {
+				t.Errorf("getRunCommand(%q) len = %d, want %d", tt.language, len(result), len(tt.expected))
+				return
+			}
+			for i, v := range result {
+				if v != tt.expected[i] {
+					t.Errorf("getRunCommand(%q)[%d] = %q, want %q", tt.language, i, v, tt.expected[i])
+				}
+			}
+		})
+	}
+}
+
+func TestFormatExecutionResult(t *testing.T) {
+	t.Run("success result", func(t *testing.T) {
+		result := &ExecuteResult{
+			Stdout:   "Hello World\n",
+			Stderr:   "",
+			ExitCode: 0,
+		}
+		output := formatExecutionResult(result)
+		if !strings.Contains(output, "Hello World") {
+			t.Error("expected stdout in output")
+		}
+		if !strings.Contains(output, "Exit code: 0") {
+			t.Error("expected exit code in output")
+		}
+	})
+
+	t.Run("error result", func(t *testing.T) {
+		result := &ExecuteResult{
+			Stdout:   "",
+			Stderr:   "Error: file not found",
+			ExitCode: 1,
+			Error:    "execution failed",
+		}
+		output := formatExecutionResult(result)
+		if !strings.Contains(output, "Error: execution failed") {
+			t.Error("expected error message in output")
+		}
+		if !strings.Contains(output, "file not found") {
+			t.Error("expected stderr in output")
+		}
+	})
+
+	t.Run("timeout result", func(t *testing.T) {
+		result := &ExecuteResult{
+			Timeout: true,
+			Error:   "timeout",
+		}
+		output := formatExecutionResult(result)
+		if !strings.Contains(output, "timed out") {
+			t.Error("expected timeout message in output")
+		}
+	})
+
+	t.Run("stdout without newline", func(t *testing.T) {
+		result := &ExecuteResult{
+			Stdout:   "no newline",
+			ExitCode: 0,
+		}
+		output := formatExecutionResult(result)
+		// Should have newline added
+		if !strings.Contains(output, "no newline\n") {
+			t.Error("expected newline to be added after stdout")
+		}
+	})
+}
+
+func TestExecuteParams_Struct(t *testing.T) {
+	params := ExecuteParams{
+		Language:        "python",
+		Code:            "print('hello')",
+		Stdin:           "input data",
+		Files:           map[string]string{"data.txt": "content"},
+		Timeout:         30,
+		CPULimit:        1000,
+		MemLimit:        512,
+		WorkspaceAccess: WorkspaceReadOnly,
+	}
+
+	if params.Language != "python" {
+		t.Errorf("Language = %q, want %q", params.Language, "python")
+	}
+	if params.Timeout != 30 {
+		t.Errorf("Timeout = %d, want 30", params.Timeout)
+	}
+	if params.WorkspaceAccess != WorkspaceReadOnly {
+		t.Errorf("WorkspaceAccess = %q, want %q", params.WorkspaceAccess, WorkspaceReadOnly)
+	}
+}
+
+func TestExecuteResult_Struct(t *testing.T) {
+	result := ExecuteResult{
+		Stdout:   "output",
+		Stderr:   "error",
+		ExitCode: 1,
+		Error:    "failed",
+		Timeout:  true,
+	}
+
+	if result.Stdout != "output" {
+		t.Errorf("Stdout = %q, want %q", result.Stdout, "output")
+	}
+	if result.ExitCode != 1 {
+		t.Errorf("ExitCode = %d, want 1", result.ExitCode)
+	}
+	if !result.Timeout {
+		t.Error("Timeout should be true")
+	}
+}
+
+func TestWorkspaceAccessModeConstants(t *testing.T) {
+	if WorkspaceNone != "none" {
+		t.Errorf("WorkspaceNone = %q, want %q", WorkspaceNone, "none")
+	}
+	if WorkspaceReadOnly != "ro" {
+		t.Errorf("WorkspaceReadOnly = %q, want %q", WorkspaceReadOnly, "ro")
+	}
+	if WorkspaceReadWrite != "rw" {
+		t.Errorf("WorkspaceReadWrite = %q, want %q", WorkspaceReadWrite, "rw")
+	}
+}
+
+func TestBackendConstants(t *testing.T) {
+	if BackendDocker != "docker" {
+		t.Errorf("BackendDocker = %q, want %q", BackendDocker, "docker")
+	}
+	if BackendFirecracker != "firecracker" {
+		t.Errorf("BackendFirecracker = %q, want %q", BackendFirecracker, "firecracker")
+	}
+}
+
+func TestConfig_Struct(t *testing.T) {
+	cfg := Config{
+		Backend:        BackendDocker,
+		PoolSize:       5,
+		MaxPoolSize:    20,
+		DefaultTimeout: 60 * time.Second,
+		DefaultCPU:     2000,
+		DefaultMemory:  1024,
+		NetworkEnabled: true,
+	}
+
+	if cfg.Backend != BackendDocker {
+		t.Errorf("Backend = %q, want %q", cfg.Backend, BackendDocker)
+	}
+	if cfg.PoolSize != 5 {
+		t.Errorf("PoolSize = %d, want 5", cfg.PoolSize)
+	}
+	if cfg.MaxPoolSize != 20 {
+		t.Errorf("MaxPoolSize = %d, want 20", cfg.MaxPoolSize)
+	}
+	if !cfg.NetworkEnabled {
+		t.Error("NetworkEnabled should be true")
+	}
+}
+
+func TestConfigOptions(t *testing.T) {
+	cfg := &Config{}
+
+	WithBackend(BackendFirecracker)(cfg)
+	if cfg.Backend != BackendFirecracker {
+		t.Errorf("WithBackend: Backend = %q, want %q", cfg.Backend, BackendFirecracker)
+	}
+
+	WithPoolSize(10)(cfg)
+	if cfg.PoolSize != 10 {
+		t.Errorf("WithPoolSize: PoolSize = %d, want 10", cfg.PoolSize)
+	}
+
+	WithMaxPoolSize(50)(cfg)
+	if cfg.MaxPoolSize != 50 {
+		t.Errorf("WithMaxPoolSize: MaxPoolSize = %d, want 50", cfg.MaxPoolSize)
+	}
+
+	WithDefaultTimeout(2 * time.Minute)(cfg)
+	if cfg.DefaultTimeout != 2*time.Minute {
+		t.Errorf("WithDefaultTimeout: DefaultTimeout = %v, want %v", cfg.DefaultTimeout, 2*time.Minute)
+	}
+
+	WithDefaultCPU(3000)(cfg)
+	if cfg.DefaultCPU != 3000 {
+		t.Errorf("WithDefaultCPU: DefaultCPU = %d, want 3000", cfg.DefaultCPU)
+	}
+
+	WithDefaultMemory(2048)(cfg)
+	if cfg.DefaultMemory != 2048 {
+		t.Errorf("WithDefaultMemory: DefaultMemory = %d, want 2048", cfg.DefaultMemory)
+	}
+
+	WithNetworkEnabled(true)(cfg)
+	if !cfg.NetworkEnabled {
+		t.Error("WithNetworkEnabled: NetworkEnabled should be true")
+	}
+}
+
+func TestPoolStats_Struct(t *testing.T) {
+	stats := PoolStats{
+		Language:  "python",
+		Available: 3,
+		Active:    2,
+		MaxSize:   10,
+	}
+
+	if stats.Language != "python" {
+		t.Errorf("Language = %q, want %q", stats.Language, "python")
+	}
+	if stats.Available != 3 {
+		t.Errorf("Available = %d, want 3", stats.Available)
+	}
+	if stats.Active != 2 {
+		t.Errorf("Active = %d, want 2", stats.Active)
+	}
+	if stats.MaxSize != 10 {
+		t.Errorf("MaxSize = %d, want 10", stats.MaxSize)
+	}
+}
+
+func TestNewPool_NilConfig(t *testing.T) {
+	_, err := NewPool(nil)
+	if err == nil {
+		t.Error("expected error for nil config")
+	}
+}
+
+func TestPrepareWorkspace(t *testing.T) {
+	params := &ExecuteParams{
+		Language: "python",
+		Code:     "print('hello')",
+		Files: map[string]string{
+			"data.txt":      "some data",
+			"../escape.txt": "should be sanitized",
+		},
+		Stdin: "input",
+	}
+
+	workspace, err := prepareWorkspace(params)
+	if err != nil {
+		t.Fatalf("prepareWorkspace failed: %v", err)
+	}
+	defer os.RemoveAll(workspace)
+
+	// Check main file exists
+	mainPath := filepath.Join(workspace, "main.py")
+	if _, err := os.Stat(mainPath); err != nil {
+		t.Errorf("main file not found: %v", err)
+	}
+
+	// Check additional file exists (should be sanitized)
+	dataPath := filepath.Join(workspace, "data.txt")
+	if _, err := os.Stat(dataPath); err != nil {
+		t.Errorf("data file not found: %v", err)
+	}
+
+	// Check stdin file exists
+	stdinPath := filepath.Join(workspace, "stdin.txt")
+	if _, err := os.Stat(stdinPath); err != nil {
+		t.Errorf("stdin file not found: %v", err)
+	}
+
+	// Check that the traversal attempt was sanitized
+	escapePath := filepath.Join(workspace, "escape.txt")
+	if _, err := os.Stat(escapePath); err != nil {
+		t.Errorf("escape file should exist (sanitized): %v", err)
 	}
 }

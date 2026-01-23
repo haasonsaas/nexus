@@ -8,6 +8,15 @@ import (
 	"strings"
 )
 
+// ToolPolicyChecker checks if a tool group is allowed by the current policy.
+type ToolPolicyChecker interface {
+	// IsGroupAllowed checks if a tool group (e.g., "group:fs") is allowed.
+	IsGroupAllowed(group string) bool
+
+	// HasEdgeConnected checks if an edge daemon is connected.
+	HasEdgeConnected() bool
+}
+
 // GatingContext provides context for skill eligibility checks.
 type GatingContext struct {
 	// OS is the current operating system (darwin, linux, windows).
@@ -24,6 +33,9 @@ type GatingContext struct {
 
 	// Overrides provides per-skill configuration.
 	Overrides map[string]*SkillConfig
+
+	// ToolPolicy is an optional checker for tool policy integration.
+	ToolPolicy ToolPolicyChecker
 }
 
 // NewGatingContext creates a GatingContext with the current environment.
@@ -214,6 +226,28 @@ func (s *SkillEntry) CheckEligibility(ctx *GatingContext) EligibilityResult {
 					false,
 					fmt.Sprintf("config not truthy: %s", path),
 				}
+			}
+		}
+	}
+
+	// Tool groups check (if policy checker is available)
+	if ctx.ToolPolicy != nil && len(meta.ToolGroups) > 0 {
+		for _, group := range meta.ToolGroups {
+			if !ctx.ToolPolicy.IsGroupAllowed(group) {
+				return EligibilityResult{
+					false,
+					fmt.Sprintf("required tool group not allowed: %s", group),
+				}
+			}
+		}
+	}
+
+	// Execution location check
+	if meta.Execution == ExecEdge && ctx.ToolPolicy != nil {
+		if !ctx.ToolPolicy.HasEdgeConnected() {
+			return EligibilityResult{
+				false,
+				"requires edge daemon connection",
 			}
 		}
 	}

@@ -45,6 +45,20 @@ const (
 	SourceRegistry  SourceType = "registry"  // HTTP registry
 )
 
+// ExecutionLocation specifies where skill tools should execute.
+type ExecutionLocation string
+
+const (
+	// ExecCore runs tools on the Nexus core server.
+	ExecCore ExecutionLocation = "core"
+
+	// ExecEdge routes tools to the connected edge daemon.
+	ExecEdge ExecutionLocation = "edge"
+
+	// ExecAny allows tools to run on either core or edge (default).
+	ExecAny ExecutionLocation = "any"
+)
+
 // SkillMetadata contains gating rules and installation hints.
 type SkillMetadata struct {
 	// Emoji is displayed in UIs next to the skill name.
@@ -67,6 +81,14 @@ type SkillMetadata struct {
 
 	// Install provides installation instructions for different package managers.
 	Install []InstallSpec `json:"install,omitempty" yaml:"install"`
+
+	// Execution specifies where the skill's tools should run.
+	// "core" = nexus server, "edge" = edge daemon, "any" = either (default)
+	Execution ExecutionLocation `json:"execution,omitempty" yaml:"execution"`
+
+	// ToolGroups lists tool policy groups required for this skill.
+	// Skills are ineligible if policy doesn't allow these groups.
+	ToolGroups []string `json:"toolGroups,omitempty" yaml:"toolGroups"`
 }
 
 // SkillRequires defines gating requirements for a skill.
@@ -208,4 +230,25 @@ func (s *SkillEntry) ToSnapshot() *SkillSnapshot {
 		Description: s.Description,
 		Path:        s.Path,
 	}
+}
+
+// ExecutionLocation returns where this skill's tools should execute.
+func (s *SkillEntry) ExecutionLocation() ExecutionLocation {
+	if s.Metadata != nil && s.Metadata.Execution != "" {
+		return s.Metadata.Execution
+	}
+	return ExecAny
+}
+
+// RequiresEdge returns true if this skill requires edge execution.
+func (s *SkillEntry) RequiresEdge() bool {
+	return s.ExecutionLocation() == ExecEdge
+}
+
+// RequiredToolGroups returns the tool groups this skill requires.
+func (s *SkillEntry) RequiredToolGroups() []string {
+	if s.Metadata == nil {
+		return nil
+	}
+	return s.Metadata.ToolGroups
 }

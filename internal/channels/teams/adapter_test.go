@@ -360,3 +360,98 @@ func TestTeamsMessage_Struct(t *testing.T) {
 		t.Errorf("From.User.ID = %q, want %q", msg.From.User.ID, "user-456")
 	}
 }
+
+func TestTeamsMessage_Attachments(t *testing.T) {
+	msg := TeamsMessage{
+		ID: "msg-with-attachments",
+	}
+	msg.Attachments = []struct {
+		ID          string `json:"id"`
+		ContentType string `json:"contentType"`
+		ContentURL  string `json:"contentUrl"`
+		Name        string `json:"name"`
+	}{
+		{
+			ID:          "att-1",
+			ContentType: "image/png",
+			ContentURL:  "https://example.com/image.png",
+			Name:        "screenshot.png",
+		},
+		{
+			ID:          "att-2",
+			ContentType: "application/pdf",
+			ContentURL:  "https://example.com/doc.pdf",
+			Name:        "document.pdf",
+		},
+	}
+
+	if len(msg.Attachments) != 2 {
+		t.Fatalf("expected 2 attachments, got %d", len(msg.Attachments))
+	}
+	if msg.Attachments[0].Name != "screenshot.png" {
+		t.Errorf("Attachments[0].Name = %q, want %q", msg.Attachments[0].Name, "screenshot.png")
+	}
+	if msg.Attachments[1].ContentType != "application/pdf" {
+		t.Errorf("Attachments[1].ContentType = %q, want %q", msg.Attachments[1].ContentType, "application/pdf")
+	}
+}
+
+func TestGraphBaseURLs(t *testing.T) {
+	if graphBaseURL != "https://graph.microsoft.com/v1.0" {
+		t.Errorf("graphBaseURL = %q, want %q", graphBaseURL, "https://graph.microsoft.com/v1.0")
+	}
+	if graphBetaURL != "https://graph.microsoft.com/beta" {
+		t.Errorf("graphBetaURL = %q, want %q", graphBetaURL, "https://graph.microsoft.com/beta")
+	}
+}
+
+func TestAdapter_Initialization(t *testing.T) {
+	cfg := validConfig()
+	cfg.RefreshToken = "refresh-token-123"
+	adapter, err := NewAdapter(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Check that all fields are properly initialized
+	if adapter.httpClient == nil {
+		t.Error("httpClient should not be nil")
+	}
+	if adapter.httpClient.Timeout != 30*time.Second {
+		t.Errorf("httpClient.Timeout = %v, want %v", adapter.httpClient.Timeout, 30*time.Second)
+	}
+	if adapter.rateLimiter == nil {
+		t.Error("rateLimiter should not be nil")
+	}
+	if adapter.metrics == nil {
+		t.Error("metrics should not be nil")
+	}
+	if adapter.logger == nil {
+		t.Error("logger should not be nil")
+	}
+	if adapter.seenMessages == nil {
+		t.Error("seenMessages should not be nil")
+	}
+	if len(adapter.seenMessages) != 0 {
+		t.Error("seenMessages should be empty initially")
+	}
+	if adapter.refreshToken != "refresh-token-123" {
+		t.Errorf("refreshToken = %q, want %q", adapter.refreshToken, "refresh-token-123")
+	}
+}
+
+func TestAdapter_StatusInitialState(t *testing.T) {
+	cfg := validConfig()
+	adapter, err := NewAdapter(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	status := adapter.Status()
+	if status.Connected {
+		t.Error("initial status.Connected should be false")
+	}
+	if status.Error != "" {
+		t.Errorf("initial status.Error should be empty, got %q", status.Error)
+	}
+}

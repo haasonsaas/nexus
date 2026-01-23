@@ -1705,3 +1705,150 @@ message GetLinkedPeersResponse {
   // List of linked peer IDs (format: "channel:peer_id").
   repeated string linked_peers = 1;
 }
+
+// =============================================================================
+// Provisioning Service - Channel Setup Flows
+// =============================================================================
+
+// ProvisioningService manages channel provisioning/login flows.
+// This provides a generic framework for different channel setup processes
+// (QR codes, OAuth, token entry, etc).
+service ProvisioningService {
+  // StartProvisioning begins a new provisioning session for a channel.
+  rpc StartProvisioning(StartProvisioningRequest) returns (StartProvisioningResponse);
+
+  // GetProvisioningStatus retrieves the current status of a provisioning session.
+  rpc GetProvisioningStatus(GetProvisioningStatusRequest) returns (GetProvisioningStatusResponse);
+
+  // SubmitProvisioningStep submits data for a provisioning step.
+  rpc SubmitProvisioningStep(SubmitProvisioningStepRequest) returns (SubmitProvisioningStepResponse);
+
+  // CancelProvisioning cancels an active provisioning session.
+  rpc CancelProvisioning(CancelProvisioningRequest) returns (CancelProvisioningResponse);
+
+  // GetProvisioningRequirements returns the provisioning requirements for a channel type.
+  rpc GetProvisioningRequirements(GetProvisioningRequirementsRequest) returns (GetProvisioningRequirementsResponse);
+}
+
+// ProvisioningSession represents an active channel provisioning flow.
+message ProvisioningSession {
+  string id = 1;
+  string channel_type = 2;
+  ProvisioningStatus status = 3;
+  ProvisioningStep current_step = 4;
+  repeated ProvisioningStep steps = 5;
+  int32 current_step_index = 6;
+  string error = 7;
+  string edge_id = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+  google.protobuf.Timestamp expires_at = 11;
+  map<string, string> data = 12;
+}
+
+enum ProvisioningStatus {
+  PROVISIONING_STATUS_UNSPECIFIED = 0;
+  PROVISIONING_STATUS_PENDING = 1;
+  PROVISIONING_STATUS_IN_PROGRESS = 2;
+  PROVISIONING_STATUS_COMPLETED = 3;
+  PROVISIONING_STATUS_FAILED = 4;
+  PROVISIONING_STATUS_CANCELLED = 5;
+  PROVISIONING_STATUS_EXPIRED = 6;
+}
+
+message ProvisioningStep {
+  string id = 1;
+  ProvisioningStepType type = 2;
+  string title = 3;
+  string description = 4;
+  ProvisioningStepStatus status = 5;
+  map<string, string> data = 6;
+  repeated ProvisioningInputField input_fields = 7;
+  bool requires_edge = 8;
+  int32 timeout_seconds = 9;
+}
+
+enum ProvisioningStepType {
+  PROVISIONING_STEP_TYPE_UNSPECIFIED = 0;
+  PROVISIONING_STEP_TYPE_QR_CODE = 1;
+  PROVISIONING_STEP_TYPE_OAUTH = 2;
+  PROVISIONING_STEP_TYPE_TOKEN_ENTRY = 3;
+  PROVISIONING_STEP_TYPE_PHONE_NUMBER = 4;
+  PROVISIONING_STEP_TYPE_VERIFICATION = 5;
+  PROVISIONING_STEP_TYPE_CONSENT = 6;
+  PROVISIONING_STEP_TYPE_WAIT = 7;
+  PROVISIONING_STEP_TYPE_COMPLETE = 8;
+}
+
+enum ProvisioningStepStatus {
+  PROVISIONING_STEP_STATUS_UNSPECIFIED = 0;
+  PROVISIONING_STEP_STATUS_PENDING = 1;
+  PROVISIONING_STEP_STATUS_ACTIVE = 2;
+  PROVISIONING_STEP_STATUS_COMPLETED = 3;
+  PROVISIONING_STEP_STATUS_FAILED = 4;
+  PROVISIONING_STEP_STATUS_SKIPPED = 5;
+}
+
+message ProvisioningInputField {
+  string name = 1;
+  string label = 2;
+  string type = 3;
+  bool required = 4;
+  string placeholder = 5;
+  string help_text = 6;
+  string pattern = 7;
+}
+
+message ProvisioningRequirements {
+  string channel_type = 1;
+  string display_name = 2;
+  string description = 3;
+  bool requires_edge = 4;
+  repeated ProvisioningStep steps = 5;
+  string estimated_time = 6;
+  string docs_url = 7;
+}
+
+message StartProvisioningRequest {
+  string channel_type = 1;
+  string edge_id = 2;
+  map<string, string> config = 3;
+}
+
+message StartProvisioningResponse {
+  ProvisioningSession session = 1;
+}
+
+message GetProvisioningStatusRequest {
+  string session_id = 1;
+}
+
+message GetProvisioningStatusResponse {
+  ProvisioningSession session = 1;
+}
+
+message SubmitProvisioningStepRequest {
+  string session_id = 1;
+  string step_id = 2;
+  map<string, string> data = 3;
+}
+
+message SubmitProvisioningStepResponse {
+  ProvisioningSession session = 1;
+}
+
+message CancelProvisioningRequest {
+  string session_id = 1;
+}
+
+message CancelProvisioningResponse {
+  bool success = 1;
+}
+
+message GetProvisioningRequirementsRequest {
+  string channel_type = 1;
+}
+
+message GetProvisioningRequirementsResponse {
+  repeated ProvisioningRequirements requirements = 1;
+}

@@ -54,10 +54,6 @@ type providerStatus struct {
 	QRUpdatedAt    string `json:"qr_updated_at,omitempty"`
 }
 
-type providersResponse struct {
-	Providers []providerStatus `json:"providers"`
-}
-
 type apiClient struct {
 	baseURL    string
 	token      string
@@ -94,7 +90,10 @@ func (c *apiClient) getJSON(ctx context.Context, path string, out any) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		if readErr != nil {
+			return fmt.Errorf("request %s failed: %s (read body: %w)", path, resp.Status, readErr)
+		}
 		if len(body) > 0 {
 			return fmt.Errorf("request %s failed: %s (%s)", path, resp.Status, strings.TrimSpace(string(body)))
 		}
@@ -131,7 +130,10 @@ func (c *apiClient) postJSON(ctx context.Context, path string, payload any, out 
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		bodyBytes, readErr := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		if readErr != nil {
+			return fmt.Errorf("request %s failed: %s (read body: %w)", path, resp.Status, readErr)
+		}
 		if len(bodyBytes) > 0 {
 			return fmt.Errorf("request %s failed: %s (%s)", path, resp.Status, strings.TrimSpace(string(bodyBytes)))
 		}

@@ -730,6 +730,15 @@ type ArtifactConfig struct {
 	// S3Region is the AWS region for S3.
 	S3Region string `yaml:"s3_region"`
 
+	// S3Prefix is an optional path prefix for all S3 objects.
+	S3Prefix string `yaml:"s3_prefix"`
+
+	// S3AccessKeyID is the AWS access key ID for S3 authentication.
+	S3AccessKeyID string `yaml:"s3_access_key_id"`
+
+	// S3SecretAccessKey is the AWS secret access key for S3 authentication.
+	S3SecretAccessKey string `yaml:"s3_secret_access_key"`
+
 	// TTLs configures retention period by artifact type.
 	TTLs map[string]time.Duration `yaml:"ttls"`
 

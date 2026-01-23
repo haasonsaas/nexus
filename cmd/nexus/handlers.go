@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/agent"
+	"github.com/haasonsaas/nexus/internal/artifacts"
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/doctor"
 	"github.com/haasonsaas/nexus/internal/gateway"
@@ -3442,4 +3443,247 @@ func formatAgentEventDetail(event models.AgentEvent) string {
 		return event.Text.Text
 	}
 	return ""
+}
+
+// ============================================================================
+// Artifacts Handlers
+// ============================================================================
+
+func runArtifactsList(cmd *cobra.Command, configPath string, limit int, artifactType, sessionID, edgeID string) error {
+	configPath = resolveConfigPath(configPath)
+
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
+	repo, cleanup, err := createArtifactRepository(cfg)
+	if err != nil {
+		return fmt.Errorf("create artifact repository: %w", err)
+	}
+	if cleanup != nil {
+		defer cleanup()
+	}
+	if repo == nil {
+		return fmt.Errorf("artifacts not configured (set artifacts.backend in config)")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	filter := artifacts.Filter{
+		SessionID: sessionID,
+		EdgeID:    edgeID,
+		Type:      artifactType,
+		Limit:     limit,
+	}
+
+	list, err := repo.ListArtifacts(ctx, filter)
+	if err != nil {
+		return fmt.Errorf("list artifacts: %w", err)
+	}
+
+	out := cmd.OutOrStdout()
+	if len(list) == 0 {
+		fmt.Fprintln(out, "No artifacts found")
+		return nil
+	}
+
+	fmt.Fprintf(out, "Found %d artifacts:\n\n", len(list))
+	for _, art := range list {
+		fmt.Fprintf(out, "ID:       %s\n", art.Id)
+		fmt.Fprintf(out, "Type:     %s\n", art.Type)
+		fmt.Fprintf(out, "MIME:     %s\n", art.MimeType)
+		if art.Filename != "" {
+			fmt.Fprintf(out, "Filename: %s\n", art.Filename)
+		}
+		fmt.Fprintf(out, "Size:     %d bytes\n", art.Size)
+		fmt.Fprintf(out, "Ref:      %s\n", art.Reference)
+		fmt.Fprintln(out, "---")
+	}
+
+	return nil
+}
+
+func runArtifactsGet(cmd *cobra.Command, configPath, artifactID, outputPath string) error {
+	configPath = resolveConfigPath(configPath)
+
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
+	repo, cleanup, err := createArtifactRepository(cfg)
+	if err != nil {
+		return fmt.Errorf("create artifact repository: %w", err)
+	}
+	if cleanup != nil {
+		defer cleanup()
+	}
+	if repo == nil {
+		return fmt.Errorf("artifacts not configured (set artifacts.backend in config)")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	art, data, err := repo.GetArtifact(ctx, artifactID)
+	if err != nil {
+		return fmt.Errorf("get artifact: %w", err)
+	}
+	defer data.Close()
+
+	out := cmd.OutOrStdout()
+
+	// Display artifact info
+	fmt.Fprintf(out, "ID:       %s\n", art.Id)
+	fmt.Fprintf(out, "Type:     %s\n", art.Type)
+	fmt.Fprintf(out, "MIME:     %s\n", art.MimeType)
+	if art.Filename != "" {
+		fmt.Fprintf(out, "Filename: %s\n", art.Filename)
+	}
+	fmt.Fprintf(out, "Size:     %d bytes\n", art.Size)
+	fmt.Fprintf(out, "Ref:      %s\n", art.Reference)
+
+	// Save to file if output path specified
+	if outputPath != "" {
+		content, err := io.ReadAll(data)
+		if err != nil {
+			return fmt.Errorf("read artifact data: %w", err)
+		}
+		if err := os.WriteFile(outputPath, content, 0644); err != nil {
+			return fmt.Errorf("write file: %w", err)
+		}
+		fmt.Fprintf(out, "\nSaved to: %s\n", outputPath)
+	} else {
+		// Suggest download path
+		filename := art.Filename
+		if filename == "" {
+			filename = art.Id + extensionForMimeCLI(art.MimeType)
+		}
+		fmt.Fprintf(out, "\nUse -o to save data to file (suggested: %s)\n", filename)
+	}
+
+	return nil
+}
+
+func runArtifactsDelete(cmd *cobra.Command, configPath, artifactID string, force bool) error {
+	if !force {
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Printf("Delete artifact %s? [y/N]: ", artifactID)
+		response, _ := reader.ReadString('\n')
+		response = strings.TrimSpace(strings.ToLower(response))
+		if response != "y" && response != "yes" {
+			fmt.Println("Cancelled")
+			return nil
+		}
+	}
+
+	configPath = resolveConfigPath(configPath)
+
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
+	repo, cleanup, err := createArtifactRepository(cfg)
+	if err != nil {
+		return fmt.Errorf("create artifact repository: %w", err)
+	}
+	if cleanup != nil {
+		defer cleanup()
+	}
+	if repo == nil {
+		return fmt.Errorf("artifacts not configured (set artifacts.backend in config)")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := repo.DeleteArtifact(ctx, artifactID); err != nil {
+		return fmt.Errorf("delete artifact: %w", err)
+	}
+
+	fmt.Printf("Deleted artifact: %s\n", artifactID)
+	return nil
+}
+
+// createArtifactRepository creates an artifact repository from config.
+// Returns nil if artifacts are not configured.
+func createArtifactRepository(cfg *config.Config) (artifacts.Repository, func(), error) {
+	if cfg == nil {
+		return nil, nil, nil
+	}
+	backend := strings.ToLower(strings.TrimSpace(cfg.Artifacts.Backend))
+	if backend == "" || backend == "none" || backend == "disabled" {
+		return nil, nil, nil
+	}
+
+	var store artifacts.Store
+	var cleanup func()
+
+	switch backend {
+	case "local":
+		localStore, err := artifacts.NewLocalStore(cfg.Artifacts.LocalPath)
+		if err != nil {
+			return nil, nil, err
+		}
+		store = localStore
+		cleanup = func() { localStore.Close() }
+	case "s3", "minio":
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		s3Cfg := &artifacts.S3StoreConfig{
+			Endpoint:        cfg.Artifacts.S3Endpoint,
+			Region:          cfg.Artifacts.S3Region,
+			Bucket:          cfg.Artifacts.S3Bucket,
+			Prefix:          cfg.Artifacts.S3Prefix,
+			AccessKeyID:     cfg.Artifacts.S3AccessKeyID,
+			SecretAccessKey: cfg.Artifacts.S3SecretAccessKey,
+			UsePathStyle:    backend == "minio",
+		}
+		if s3Cfg.Region == "" {
+			s3Cfg.Region = "us-east-1"
+		}
+
+		s3Store, err := artifacts.NewS3Store(ctx, s3Cfg)
+		if err != nil {
+			return nil, nil, fmt.Errorf("create S3 store: %w", err)
+		}
+		store = s3Store
+		cleanup = func() { s3Store.Close() }
+	default:
+		return nil, nil, fmt.Errorf("unsupported artifact backend %q", backend)
+	}
+
+	logger := slog.Default()
+	repo := artifacts.NewMemoryRepository(store, logger)
+	return repo, cleanup, nil
+}
+
+// extensionForMimeCLI returns a file extension for a MIME type.
+func extensionForMimeCLI(mimeType string) string {
+	switch mimeType {
+	case "image/png":
+		return ".png"
+	case "image/jpeg":
+		return ".jpg"
+	case "image/gif":
+		return ".gif"
+	case "image/webp":
+		return ".webp"
+	case "video/mp4":
+		return ".mp4"
+	case "video/webm":
+		return ".webm"
+	case "application/pdf":
+		return ".pdf"
+	case "text/plain":
+		return ".txt"
+	case "application/json":
+		return ".json"
+	default:
+		return ".dat"
+	}
 }

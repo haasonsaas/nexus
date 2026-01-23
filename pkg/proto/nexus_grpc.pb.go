@@ -1041,6 +1041,194 @@ var HealthService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	ArtifactService_ListArtifacts_FullMethodName  = "/nexus.v1.ArtifactService/ListArtifacts"
+	ArtifactService_GetArtifact_FullMethodName    = "/nexus.v1.ArtifactService/GetArtifact"
+	ArtifactService_DeleteArtifact_FullMethodName = "/nexus.v1.ArtifactService/DeleteArtifact"
+)
+
+// ArtifactServiceClient is the client API for ArtifactService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// ArtifactService provides access to stored artifacts.
+type ArtifactServiceClient interface {
+	// ListArtifacts returns stored artifacts matching the filter.
+	ListArtifacts(ctx context.Context, in *ListArtifactsRequest, opts ...grpc.CallOption) (*ListArtifactsResponse, error)
+	// GetArtifact retrieves artifact metadata and optional data.
+	GetArtifact(ctx context.Context, in *GetArtifactRequest, opts ...grpc.CallOption) (*GetArtifactResponse, error)
+	// DeleteArtifact removes an artifact and its data.
+	DeleteArtifact(ctx context.Context, in *DeleteArtifactRequest, opts ...grpc.CallOption) (*DeleteArtifactResponse, error)
+}
+
+type artifactServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewArtifactServiceClient(cc grpc.ClientConnInterface) ArtifactServiceClient {
+	return &artifactServiceClient{cc}
+}
+
+func (c *artifactServiceClient) ListArtifacts(ctx context.Context, in *ListArtifactsRequest, opts ...grpc.CallOption) (*ListArtifactsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListArtifactsResponse)
+	err := c.cc.Invoke(ctx, ArtifactService_ListArtifacts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *artifactServiceClient) GetArtifact(ctx context.Context, in *GetArtifactRequest, opts ...grpc.CallOption) (*GetArtifactResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetArtifactResponse)
+	err := c.cc.Invoke(ctx, ArtifactService_GetArtifact_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *artifactServiceClient) DeleteArtifact(ctx context.Context, in *DeleteArtifactRequest, opts ...grpc.CallOption) (*DeleteArtifactResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteArtifactResponse)
+	err := c.cc.Invoke(ctx, ArtifactService_DeleteArtifact_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ArtifactServiceServer is the server API for ArtifactService service.
+// All implementations must embed UnimplementedArtifactServiceServer
+// for forward compatibility.
+//
+// ArtifactService provides access to stored artifacts.
+type ArtifactServiceServer interface {
+	// ListArtifacts returns stored artifacts matching the filter.
+	ListArtifacts(context.Context, *ListArtifactsRequest) (*ListArtifactsResponse, error)
+	// GetArtifact retrieves artifact metadata and optional data.
+	GetArtifact(context.Context, *GetArtifactRequest) (*GetArtifactResponse, error)
+	// DeleteArtifact removes an artifact and its data.
+	DeleteArtifact(context.Context, *DeleteArtifactRequest) (*DeleteArtifactResponse, error)
+	mustEmbedUnimplementedArtifactServiceServer()
+}
+
+// UnimplementedArtifactServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedArtifactServiceServer struct{}
+
+func (UnimplementedArtifactServiceServer) ListArtifacts(context.Context, *ListArtifactsRequest) (*ListArtifactsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListArtifacts not implemented")
+}
+func (UnimplementedArtifactServiceServer) GetArtifact(context.Context, *GetArtifactRequest) (*GetArtifactResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetArtifact not implemented")
+}
+func (UnimplementedArtifactServiceServer) DeleteArtifact(context.Context, *DeleteArtifactRequest) (*DeleteArtifactResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteArtifact not implemented")
+}
+func (UnimplementedArtifactServiceServer) mustEmbedUnimplementedArtifactServiceServer() {}
+func (UnimplementedArtifactServiceServer) testEmbeddedByValue()                         {}
+
+// UnsafeArtifactServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ArtifactServiceServer will
+// result in compilation errors.
+type UnsafeArtifactServiceServer interface {
+	mustEmbedUnimplementedArtifactServiceServer()
+}
+
+func RegisterArtifactServiceServer(s grpc.ServiceRegistrar, srv ArtifactServiceServer) {
+	// If the following call panics, it indicates UnimplementedArtifactServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&ArtifactService_ServiceDesc, srv)
+}
+
+func _ArtifactService_ListArtifacts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListArtifactsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ArtifactServiceServer).ListArtifacts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ArtifactService_ListArtifacts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ArtifactServiceServer).ListArtifacts(ctx, req.(*ListArtifactsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ArtifactService_GetArtifact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetArtifactRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ArtifactServiceServer).GetArtifact(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ArtifactService_GetArtifact_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ArtifactServiceServer).GetArtifact(ctx, req.(*GetArtifactRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ArtifactService_DeleteArtifact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteArtifactRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ArtifactServiceServer).DeleteArtifact(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ArtifactService_DeleteArtifact_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ArtifactServiceServer).DeleteArtifact(ctx, req.(*DeleteArtifactRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// ArtifactService_ServiceDesc is the grpc.ServiceDesc for ArtifactService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var ArtifactService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "nexus.v1.ArtifactService",
+	HandlerType: (*ArtifactServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ListArtifacts",
+			Handler:    _ArtifactService_ListArtifacts_Handler,
+		},
+		{
+			MethodName: "GetArtifact",
+			Handler:    _ArtifactService_GetArtifact_Handler,
+		},
+		{
+			MethodName: "DeleteArtifact",
+			Handler:    _ArtifactService_DeleteArtifact_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "pkg/proto/nexus.proto",
+}
+
+const (
 	NodeService_CreatePairingToken_FullMethodName = "/nexus.v1.NodeService/CreatePairingToken"
 	NodeService_ListNodes_FullMethodName          = "/nexus.v1.NodeService/ListNodes"
 	NodeService_GetNode_FullMethodName            = "/nexus.v1.NodeService/GetNode"
@@ -1422,234 +1610,6 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetNodeAuditLogs",
 			Handler:    _NodeService_GetNodeAuditLogs_Handler,
-		},
-	},
-	Streams:  []grpc.StreamDesc{},
-	Metadata: "pkg/proto/nexus.proto",
-}
-
-const (
-	ArtifactService_GetArtifact_FullMethodName            = "/nexus.v1.ArtifactService/GetArtifact"
-	ArtifactService_ListArtifacts_FullMethodName          = "/nexus.v1.ArtifactService/ListArtifacts"
-	ArtifactService_DeleteArtifact_FullMethodName         = "/nexus.v1.ArtifactService/DeleteArtifact"
-	ArtifactService_GetArtifactDownloadURL_FullMethodName = "/nexus.v1.ArtifactService/GetArtifactDownloadURL"
-)
-
-// ArtifactServiceClient is the client API for ArtifactService service.
-//
-// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-//
-// ArtifactService manages artifacts produced by tool execution.
-type ArtifactServiceClient interface {
-	// GetArtifact retrieves artifact metadata and download URL.
-	GetArtifact(ctx context.Context, in *GetArtifactRequest, opts ...grpc.CallOption) (*GetArtifactResponse, error)
-	// ListArtifacts lists artifacts with optional filtering.
-	ListArtifacts(ctx context.Context, in *ListArtifactsRequest, opts ...grpc.CallOption) (*ListArtifactsResponse, error)
-	// DeleteArtifact deletes an artifact.
-	DeleteArtifact(ctx context.Context, in *DeleteArtifactRequest, opts ...grpc.CallOption) (*DeleteArtifactResponse, error)
-	// GetArtifactDownloadURL generates a presigned URL for artifact download.
-	GetArtifactDownloadURL(ctx context.Context, in *GetArtifactDownloadURLRequest, opts ...grpc.CallOption) (*GetArtifactDownloadURLResponse, error)
-}
-
-type artifactServiceClient struct {
-	cc grpc.ClientConnInterface
-}
-
-func NewArtifactServiceClient(cc grpc.ClientConnInterface) ArtifactServiceClient {
-	return &artifactServiceClient{cc}
-}
-
-func (c *artifactServiceClient) GetArtifact(ctx context.Context, in *GetArtifactRequest, opts ...grpc.CallOption) (*GetArtifactResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetArtifactResponse)
-	err := c.cc.Invoke(ctx, ArtifactService_GetArtifact_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *artifactServiceClient) ListArtifacts(ctx context.Context, in *ListArtifactsRequest, opts ...grpc.CallOption) (*ListArtifactsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListArtifactsResponse)
-	err := c.cc.Invoke(ctx, ArtifactService_ListArtifacts_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *artifactServiceClient) DeleteArtifact(ctx context.Context, in *DeleteArtifactRequest, opts ...grpc.CallOption) (*DeleteArtifactResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DeleteArtifactResponse)
-	err := c.cc.Invoke(ctx, ArtifactService_DeleteArtifact_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *artifactServiceClient) GetArtifactDownloadURL(ctx context.Context, in *GetArtifactDownloadURLRequest, opts ...grpc.CallOption) (*GetArtifactDownloadURLResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetArtifactDownloadURLResponse)
-	err := c.cc.Invoke(ctx, ArtifactService_GetArtifactDownloadURL_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-// ArtifactServiceServer is the server API for ArtifactService service.
-// All implementations must embed UnimplementedArtifactServiceServer
-// for forward compatibility.
-//
-// ArtifactService manages artifacts produced by tool execution.
-type ArtifactServiceServer interface {
-	// GetArtifact retrieves artifact metadata and download URL.
-	GetArtifact(context.Context, *GetArtifactRequest) (*GetArtifactResponse, error)
-	// ListArtifacts lists artifacts with optional filtering.
-	ListArtifacts(context.Context, *ListArtifactsRequest) (*ListArtifactsResponse, error)
-	// DeleteArtifact deletes an artifact.
-	DeleteArtifact(context.Context, *DeleteArtifactRequest) (*DeleteArtifactResponse, error)
-	// GetArtifactDownloadURL generates a presigned URL for artifact download.
-	GetArtifactDownloadURL(context.Context, *GetArtifactDownloadURLRequest) (*GetArtifactDownloadURLResponse, error)
-	mustEmbedUnimplementedArtifactServiceServer()
-}
-
-// UnimplementedArtifactServiceServer must be embedded to have
-// forward compatible implementations.
-//
-// NOTE: this should be embedded by value instead of pointer to avoid a nil
-// pointer dereference when methods are called.
-type UnimplementedArtifactServiceServer struct{}
-
-func (UnimplementedArtifactServiceServer) GetArtifact(context.Context, *GetArtifactRequest) (*GetArtifactResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetArtifact not implemented")
-}
-func (UnimplementedArtifactServiceServer) ListArtifacts(context.Context, *ListArtifactsRequest) (*ListArtifactsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListArtifacts not implemented")
-}
-func (UnimplementedArtifactServiceServer) DeleteArtifact(context.Context, *DeleteArtifactRequest) (*DeleteArtifactResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method DeleteArtifact not implemented")
-}
-func (UnimplementedArtifactServiceServer) GetArtifactDownloadURL(context.Context, *GetArtifactDownloadURLRequest) (*GetArtifactDownloadURLResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetArtifactDownloadURL not implemented")
-}
-func (UnimplementedArtifactServiceServer) mustEmbedUnimplementedArtifactServiceServer() {}
-func (UnimplementedArtifactServiceServer) testEmbeddedByValue()                         {}
-
-// UnsafeArtifactServiceServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to ArtifactServiceServer will
-// result in compilation errors.
-type UnsafeArtifactServiceServer interface {
-	mustEmbedUnimplementedArtifactServiceServer()
-}
-
-func RegisterArtifactServiceServer(s grpc.ServiceRegistrar, srv ArtifactServiceServer) {
-	// If the following call panics, it indicates UnimplementedArtifactServiceServer was
-	// embedded by pointer and is nil.  This will cause panics if an
-	// unimplemented method is ever invoked, so we test this at initialization
-	// time to prevent it from happening at runtime later due to I/O.
-	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
-		t.testEmbeddedByValue()
-	}
-	s.RegisterService(&ArtifactService_ServiceDesc, srv)
-}
-
-func _ArtifactService_GetArtifact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetArtifactRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ArtifactServiceServer).GetArtifact(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ArtifactService_GetArtifact_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArtifactServiceServer).GetArtifact(ctx, req.(*GetArtifactRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ArtifactService_ListArtifacts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListArtifactsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ArtifactServiceServer).ListArtifacts(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ArtifactService_ListArtifacts_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArtifactServiceServer).ListArtifacts(ctx, req.(*ListArtifactsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ArtifactService_DeleteArtifact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeleteArtifactRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ArtifactServiceServer).DeleteArtifact(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ArtifactService_DeleteArtifact_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArtifactServiceServer).DeleteArtifact(ctx, req.(*DeleteArtifactRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ArtifactService_GetArtifactDownloadURL_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetArtifactDownloadURLRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ArtifactServiceServer).GetArtifactDownloadURL(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ArtifactService_GetArtifactDownloadURL_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArtifactServiceServer).GetArtifactDownloadURL(ctx, req.(*GetArtifactDownloadURLRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-// ArtifactService_ServiceDesc is the grpc.ServiceDesc for ArtifactService service.
-// It's only intended for direct use with grpc.RegisterService,
-// and not to be introspected or modified (even as a copy)
-var ArtifactService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "nexus.v1.ArtifactService",
-	HandlerType: (*ArtifactServiceServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "GetArtifact",
-			Handler:    _ArtifactService_GetArtifact_Handler,
-		},
-		{
-			MethodName: "ListArtifacts",
-			Handler:    _ArtifactService_ListArtifacts_Handler,
-		},
-		{
-			MethodName: "DeleteArtifact",
-			Handler:    _ArtifactService_DeleteArtifact_Handler,
-		},
-		{
-			MethodName: "GetArtifactDownloadURL",
-			Handler:    _ArtifactService_GetArtifactDownloadURL_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

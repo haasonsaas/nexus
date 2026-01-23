@@ -262,6 +262,8 @@ artifacts:
   local_path: /tmp/nexus-artifacts
   # Optional metadata file path (defaults to <local_path>/metadata.json)
   metadata_path: /tmp/nexus-artifacts/metadata.json
+  # Metadata backend: file | database
+  metadata_backend: file
   # S3/MinIO settings (used when backend is s3/minio)
   s3_bucket: ${NEXUS_ARTIFACTS_BUCKET}
   s3_endpoint: ${NEXUS_ARTIFACTS_ENDPOINT}

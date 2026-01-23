@@ -2055,6 +2055,7 @@ func TestAdapter_SendAudioError(t *testing.T) {
 type mockTelegramMessage struct {
 	messageID int64
 	chatID    int64
+	chatType  string
 	text      string
 	fromID    int64
 	fromFirst string
@@ -2085,6 +2086,10 @@ func (m *mockTelegramMessage) GetMessageID() int64 {
 
 func (m *mockTelegramMessage) GetChatID() int64 {
 	return m.chatID
+}
+
+func (m *mockTelegramMessage) GetChatType() string {
+	return m.chatType
 }
 
 func (m *mockTelegramMessage) GetText() string {

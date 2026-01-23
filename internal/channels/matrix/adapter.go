@@ -32,6 +32,9 @@ type Adapter struct {
 	running bool
 	stopCh  chan struct{}
 
+	roomTypesMu sync.RWMutex
+	roomTypes   map[id.RoomID]string
+
 	statusMu sync.RWMutex
 	status   channels.Status
 }
@@ -47,19 +50,21 @@ func NewAdapter(cfg Config) (*Adapter, error) {
 	if err != nil {
 		return nil, channels.ErrConnection("create matrix client", err)
 	}
+	client.StateStore = mautrix.NewMemoryStateStore()
 
 	if cfg.DeviceID != "" {
 		client.DeviceID = id.DeviceID(cfg.DeviceID)
 	}
 
 	a := &Adapter{
-		config:   &cfg,
-		client:   client,
-		logger:   cfg.Logger.With("adapter", "matrix"),
-		metrics:  channels.NewMetrics("matrix"),
-		messages: make(chan *models.Message, 100),
-		errors:   make(chan error, 10),
-		stopCh:   make(chan struct{}),
+		config:    &cfg,
+		client:    client,
+		logger:    cfg.Logger.With("adapter", "matrix"),
+		metrics:   channels.NewMetrics("matrix"),
+		messages:  make(chan *models.Message, 100),
+		errors:    make(chan error, 10),
+		stopCh:    make(chan struct{}),
+		roomTypes: make(map[id.RoomID]string),
 	}
 
 	// Build allowed rooms/users maps
@@ -100,6 +105,7 @@ func (a *Adapter) Start(ctx context.Context) error {
 	if !ok {
 		return channels.ErrInternal(fmt.Sprintf("unexpected syncer type: %T", a.client.Syncer), nil)
 	}
+	syncer.OnEvent(a.client.StateStoreSyncHandler)
 
 	// Handle room messages
 	syncer.OnEventType(event.EventMessage, func(ctx context.Context, evt *event.Event) {
@@ -107,11 +113,9 @@ func (a *Adapter) Start(ctx context.Context) error {
 	})
 
 	// Handle room invites
-	if a.config.JoinOnInvite {
-		syncer.OnEventType(event.StateMember, func(ctx context.Context, evt *event.Event) {
-			a.handleMemberEvent(ctx, evt)
-		})
-	}
+	syncer.OnEventType(event.StateMember, func(ctx context.Context, evt *event.Event) {
+		a.handleMemberEvent(ctx, evt)
+	})
 
 	// Start sync in background
 	go a.syncLoop(ctx)
@@ -344,11 +348,21 @@ func (a *Adapter) handleMessage(ctx context.Context, evt *event.Event) {
 		return
 	}
 
+	convType := a.roomConversationType(ctx, evt.RoomID)
+	senderID := string(evt.Sender)
+	senderName := a.lookupSenderName(ctx, evt.RoomID, evt.Sender)
 	metadata := map[string]any{
 		"event_type": evt.Type.Type,
 		"room_id":    evt.RoomID,
-		"sender":     string(evt.Sender),
+		"sender":     senderID,
 		"msg_type":   content.MsgType,
+		"sender_id":  senderID,
+	}
+	if senderName != "" {
+		metadata["sender_name"] = senderName
+	}
+	if convType != "" {
+		metadata["conversation_type"] = convType
 	}
 
 	// Handle reply context
@@ -382,9 +396,10 @@ func (a *Adapter) handleMemberEvent(ctx context.Context, evt *event.Event) {
 	if !ok {
 		return
 	}
+	a.invalidateRoomType(evt.RoomID)
 
 	// Check if this is an invite to us
-	if content.Membership == event.MembershipInvite &&
+	if a.config.JoinOnInvite && content.Membership == event.MembershipInvite &&
 		evt.GetStateKey() == a.config.UserID {
 		a.logger.Info("received room invite", "room_id", evt.RoomID)
 
@@ -398,6 +413,57 @@ func (a *Adapter) handleMemberEvent(ctx context.Context, evt *event.Event) {
 			a.logger.Info("joined room", "room_id", evt.RoomID)
 		}
 	}
+}
+
+func (a *Adapter) roomConversationType(ctx context.Context, roomID id.RoomID) string {
+	if roomID == "" {
+		return "group"
+	}
+	a.roomTypesMu.RLock()
+	if convType, ok := a.roomTypes[roomID]; ok {
+		a.roomTypesMu.RUnlock()
+		return convType
+	}
+	a.roomTypesMu.RUnlock()
+
+	convType := "group"
+	if a.client != nil && a.client.StateStore != nil {
+		if strings.TrimSpace(a.config.UserID) != "" {
+			if member, err := a.client.StateStore.TryGetMember(ctx, roomID, id.UserID(a.config.UserID)); err == nil && member != nil && member.IsDirect {
+				convType = "dm"
+			}
+		}
+		if convType != "dm" {
+			if members, err := a.client.StateStore.GetRoomJoinedOrInvitedMembers(ctx, roomID); err == nil && len(members) > 0 && len(members) <= 2 {
+				convType = "dm"
+			}
+		}
+	}
+
+	a.roomTypesMu.Lock()
+	a.roomTypes[roomID] = convType
+	a.roomTypesMu.Unlock()
+	return convType
+}
+
+func (a *Adapter) invalidateRoomType(roomID id.RoomID) {
+	if roomID == "" {
+		return
+	}
+	a.roomTypesMu.Lock()
+	delete(a.roomTypes, roomID)
+	a.roomTypesMu.Unlock()
+}
+
+func (a *Adapter) lookupSenderName(ctx context.Context, roomID id.RoomID, sender id.UserID) string {
+	if a.client == nil || a.client.StateStore == nil || sender == "" {
+		return ""
+	}
+	member, err := a.client.StateStore.TryGetMember(ctx, roomID, sender)
+	if err != nil || member == nil {
+		return ""
+	}
+	return strings.TrimSpace(member.Displayname)
 }
 
 // markdownToHTML performs basic markdown to HTML conversion.

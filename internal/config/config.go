@@ -257,11 +257,21 @@ type ChannelsConfig struct {
 	Email    EmailConfig    `yaml:"email"`
 }
 
+type ChannelPolicyConfig struct {
+	// Policy controls access: "open", "allowlist", "pairing", or "disabled".
+	Policy string `yaml:"policy"`
+	// AllowFrom is a list of sender identifiers allowed for this policy.
+	AllowFrom []string `yaml:"allow_from"`
+}
+
 type WhatsAppConfig struct {
 	Enabled      bool   `yaml:"enabled"`
 	SessionPath  string `yaml:"session_path"`
 	MediaPath    string `yaml:"media_path"`
 	SyncContacts bool   `yaml:"sync_contacts"`
+
+	DM    ChannelPolicyConfig `yaml:"dm"`
+	Group ChannelPolicyConfig `yaml:"group"`
 
 	Presence WhatsAppPresenceConfig `yaml:"presence"`
 }
@@ -278,6 +288,9 @@ type SignalConfig struct {
 	SignalCLIPath string `yaml:"signal_cli_path"`
 	ConfigDir     string `yaml:"config_dir"`
 
+	DM    ChannelPolicyConfig `yaml:"dm"`
+	Group ChannelPolicyConfig `yaml:"group"`
+
 	Presence SignalPresenceConfig `yaml:"presence"`
 }
 
@@ -290,6 +303,9 @@ type IMessageConfig struct {
 	Enabled      bool   `yaml:"enabled"`
 	DatabasePath string `yaml:"database_path"`
 	PollInterval string `yaml:"poll_interval"`
+
+	DM    ChannelPolicyConfig `yaml:"dm"`
+	Group ChannelPolicyConfig `yaml:"group"`
 }
 
 type MatrixConfig struct {
@@ -301,18 +317,27 @@ type MatrixConfig struct {
 	AllowedRooms []string `yaml:"allowed_rooms"`
 	AllowedUsers []string `yaml:"allowed_users"`
 	JoinOnInvite bool     `yaml:"join_on_invite"`
+
+	DM    ChannelPolicyConfig `yaml:"dm"`
+	Group ChannelPolicyConfig `yaml:"group"`
 }
 
 type TelegramConfig struct {
 	Enabled  bool   `yaml:"enabled"`
 	BotToken string `yaml:"bot_token"`
 	Webhook  string `yaml:"webhook"`
+
+	DM    ChannelPolicyConfig `yaml:"dm"`
+	Group ChannelPolicyConfig `yaml:"group"`
 }
 
 type DiscordConfig struct {
 	Enabled  bool   `yaml:"enabled"`
 	BotToken string `yaml:"bot_token"`
 	AppID    string `yaml:"app_id"`
+
+	DM    ChannelPolicyConfig `yaml:"dm"`
+	Group ChannelPolicyConfig `yaml:"group"`
 }
 
 type SlackConfig struct {
@@ -320,6 +345,9 @@ type SlackConfig struct {
 	BotToken      string `yaml:"bot_token"`
 	AppToken      string `yaml:"app_token"`
 	SigningSecret string `yaml:"signing_secret"`
+
+	DM    ChannelPolicyConfig `yaml:"dm"`
+	Group ChannelPolicyConfig `yaml:"group"`
 }
 
 type TeamsConfig struct {
@@ -331,6 +359,9 @@ type TeamsConfig struct {
 	WebhookURL string `yaml:"webhook_url"`
 	// PollInterval for checking messages when webhooks unavailable (default: 5s)
 	PollInterval string `yaml:"poll_interval"`
+
+	DM    ChannelPolicyConfig `yaml:"dm"`
+	Group ChannelPolicyConfig `yaml:"group"`
 }
 
 type EmailConfig struct {
@@ -869,6 +900,7 @@ func applyDefaults(cfg *Config) {
 	applyServerDefaults(&cfg.Server)
 	applyDatabaseDefaults(&cfg.Database)
 	applyAuthDefaults(&cfg.Auth)
+	applyChannelDefaults(&cfg.Channels)
 	applyCommandsDefaults(&cfg.Commands)
 	applySessionDefaults(&cfg.Session)
 	applyWorkspaceDefaults(&cfg.Workspace)
@@ -909,6 +941,31 @@ func applyDatabaseDefaults(cfg *DatabaseConfig) {
 func applyAuthDefaults(cfg *AuthConfig) {
 	if cfg.TokenExpiry == 0 {
 		cfg.TokenExpiry = 24 * time.Hour
+	}
+}
+
+func applyChannelDefaults(cfg *ChannelsConfig) {
+	applyChannelPolicyDefaults(&cfg.Telegram.DM)
+	applyChannelPolicyDefaults(&cfg.Telegram.Group)
+	applyChannelPolicyDefaults(&cfg.Discord.DM)
+	applyChannelPolicyDefaults(&cfg.Discord.Group)
+	applyChannelPolicyDefaults(&cfg.Slack.DM)
+	applyChannelPolicyDefaults(&cfg.Slack.Group)
+	applyChannelPolicyDefaults(&cfg.WhatsApp.DM)
+	applyChannelPolicyDefaults(&cfg.WhatsApp.Group)
+	applyChannelPolicyDefaults(&cfg.Signal.DM)
+	applyChannelPolicyDefaults(&cfg.Signal.Group)
+	applyChannelPolicyDefaults(&cfg.IMessage.DM)
+	applyChannelPolicyDefaults(&cfg.IMessage.Group)
+	applyChannelPolicyDefaults(&cfg.Matrix.DM)
+	applyChannelPolicyDefaults(&cfg.Matrix.Group)
+	applyChannelPolicyDefaults(&cfg.Teams.DM)
+	applyChannelPolicyDefaults(&cfg.Teams.Group)
+}
+
+func applyChannelPolicyDefaults(cfg *ChannelPolicyConfig) {
+	if strings.TrimSpace(cfg.Policy) == "" {
+		cfg.Policy = "open"
 	}
 }
 
@@ -1264,6 +1321,23 @@ func validateConfig(cfg *Config) error {
 
 	var issues []string
 
+	validateChannelPolicy(&issues, "channels.telegram.dm", cfg.Channels.Telegram.DM)
+	validateChannelPolicy(&issues, "channels.telegram.group", cfg.Channels.Telegram.Group)
+	validateChannelPolicy(&issues, "channels.discord.dm", cfg.Channels.Discord.DM)
+	validateChannelPolicy(&issues, "channels.discord.group", cfg.Channels.Discord.Group)
+	validateChannelPolicy(&issues, "channels.slack.dm", cfg.Channels.Slack.DM)
+	validateChannelPolicy(&issues, "channels.slack.group", cfg.Channels.Slack.Group)
+	validateChannelPolicy(&issues, "channels.whatsapp.dm", cfg.Channels.WhatsApp.DM)
+	validateChannelPolicy(&issues, "channels.whatsapp.group", cfg.Channels.WhatsApp.Group)
+	validateChannelPolicy(&issues, "channels.signal.dm", cfg.Channels.Signal.DM)
+	validateChannelPolicy(&issues, "channels.signal.group", cfg.Channels.Signal.Group)
+	validateChannelPolicy(&issues, "channels.imessage.dm", cfg.Channels.IMessage.DM)
+	validateChannelPolicy(&issues, "channels.imessage.group", cfg.Channels.IMessage.Group)
+	validateChannelPolicy(&issues, "channels.matrix.dm", cfg.Channels.Matrix.DM)
+	validateChannelPolicy(&issues, "channels.matrix.group", cfg.Channels.Matrix.Group)
+	validateChannelPolicy(&issues, "channels.teams.dm", cfg.Channels.Teams.DM)
+	validateChannelPolicy(&issues, "channels.teams.group", cfg.Channels.Teams.Group)
+
 	if !validScope(cfg.Session.SlackScope) {
 		issues = append(issues, "session.slack_scope must be \"thread\" or \"channel\"")
 	}
@@ -1449,6 +1523,25 @@ func validateConfig(cfg *Config) error {
 	}
 
 	return nil
+}
+
+func validateChannelPolicy(issues *[]string, field string, cfg ChannelPolicyConfig) {
+	policy := strings.ToLower(strings.TrimSpace(cfg.Policy))
+	if policy == "" {
+		return
+	}
+	if !validChannelPolicy(policy) {
+		*issues = append(*issues, fmt.Sprintf("%s.policy must be \"open\", \"allowlist\", \"pairing\", or \"disabled\"", field))
+	}
+}
+
+func validChannelPolicy(policy string) bool {
+	switch strings.ToLower(strings.TrimSpace(policy)) {
+	case "open", "allowlist", "pairing", "disabled":
+		return true
+	default:
+		return false
+	}
 }
 
 func validScope(scope string) bool {

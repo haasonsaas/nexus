@@ -135,8 +135,11 @@ func (b *BaseAdapter) NormalizeInbound(raw RawMessage) *models.Message {
 		Role:      models.RoleUser,
 		Content:   raw.Content,
 		Metadata: map[string]any{
-			"peer_id":   raw.PeerID,
-			"peer_name": raw.PeerName,
+			"peer_id":           raw.PeerID,
+			"peer_name":         raw.PeerName,
+			"sender_id":         raw.PeerID,
+			"sender_name":       raw.PeerName,
+			"conversation_type": "dm",
 		},
 		CreatedAt: raw.Timestamp,
 	}
@@ -144,6 +147,7 @@ func (b *BaseAdapter) NormalizeInbound(raw RawMessage) *models.Message {
 	if raw.GroupID != "" {
 		msg.Metadata["group_id"] = raw.GroupID
 		msg.Metadata["group_name"] = raw.GroupName
+		msg.Metadata["conversation_type"] = "group"
 	}
 
 	if raw.ReplyTo != "" {

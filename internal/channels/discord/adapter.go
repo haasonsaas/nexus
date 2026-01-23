@@ -494,6 +494,16 @@ func (a *Adapter) handleInteractionCreate(s *discordgo.Session, i *discordgo.Int
 		"interaction_id", i.ID,
 		"command_name", i.ApplicationCommandData().Name)
 
+	// Extract user info - Member is nil in DMs, use User instead
+	var userID, username string
+	if i.Member != nil && i.Member.User != nil {
+		userID = i.Member.User.ID
+		username = i.Member.User.Username
+	} else if i.User != nil {
+		userID = i.User.ID
+		username = i.User.Username
+	}
+
 	// Convert slash command to message
 	msg := &models.Message{
 		Channel:   models.ChannelDiscord,
@@ -503,12 +513,19 @@ func (a *Adapter) handleInteractionCreate(s *discordgo.Session, i *discordgo.Int
 		Metadata: map[string]any{
 			"discord_interaction_id":  i.ID,
 			"discord_channel_id":      i.ChannelID,
-			"discord_user_id":         i.Member.User.ID,
-			"discord_username":        i.Member.User.Username,
+			"discord_guild_id":        i.GuildID,
+			"discord_user_id":         userID,
+			"discord_username":        username,
 			"discord_command_name":    i.ApplicationCommandData().Name,
 			"discord_command_options": i.ApplicationCommandData().Options,
+			"sender_id":               userID,
+			"sender_name":             username,
+			"conversation_type":       "dm",
 		},
 		CreatedAt: time.Now(),
+	}
+	if i.GuildID != "" {
+		msg.Metadata["conversation_type"] = "group"
 	}
 
 	// Build content from command
@@ -693,10 +710,17 @@ func convertDiscordMessage(m *discordgo.Message) *models.Message {
 		Attachments: make([]models.Attachment, 0, len(m.Attachments)),
 		Metadata: map[string]any{
 			"discord_channel_id": m.ChannelID,
+			"discord_guild_id":   m.GuildID,
 			"discord_user_id":    m.Author.ID,
 			"discord_username":   m.Author.Username,
+			"sender_id":          m.Author.ID,
+			"sender_name":        m.Author.Username,
+			"conversation_type":  "dm",
 		},
 		CreatedAt: time.Now(),
+	}
+	if m.GuildID != "" {
+		msg.Metadata["conversation_type"] = "group"
 	}
 
 	// Use timestamp from Discord message

@@ -831,6 +831,7 @@ func isRateLimitError(err error) bool {
 type telegramMessageInterface interface {
 	GetMessageID() int64
 	GetChatID() int64
+	GetChatType() string
 	GetText() string
 	GetFrom() userInterface
 	GetDate() int64
@@ -865,6 +866,10 @@ func (t *telegramMessageAdapter) GetMessageID() int64 {
 
 func (t *telegramMessageAdapter) GetChatID() int64 {
 	return t.Chat.ID
+}
+
+func (t *telegramMessageAdapter) GetChatType() string {
+	return string(t.Chat.Type)
 }
 
 func (t *telegramMessageAdapter) GetText() string {
@@ -994,12 +999,19 @@ func convertTelegramMessage(msg telegramMessageInterface) *nexusmodels.Message {
 		Role:      nexusmodels.RoleUser,
 		Content:   msg.GetText(),
 		Metadata: map[string]any{
-			"chat_id":    msg.GetChatID(),
-			"user_id":    user.GetID(),
-			"user_first": user.GetFirstName(),
-			"user_last":  user.GetLastName(),
+			"chat_id":           msg.GetChatID(),
+			"chat_type":         msg.GetChatType(),
+			"user_id":           user.GetID(),
+			"user_first":        user.GetFirstName(),
+			"user_last":         user.GetLastName(),
+			"sender_id":         strconv.FormatInt(user.GetID(), 10),
+			"sender_name":       strings.TrimSpace(strings.TrimSpace(user.GetFirstName()) + " " + strings.TrimSpace(user.GetLastName())),
+			"conversation_type": "group",
 		},
 		CreatedAt: time.Unix(msg.GetDate(), 0),
+	}
+	if strings.EqualFold(msg.GetChatType(), "private") || msg.GetChatType() == "" {
+		m.Metadata["conversation_type"] = "dm"
 	}
 
 	// Handle attachments

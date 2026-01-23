@@ -486,6 +486,9 @@ local capabilities like device access, browser relay, and edge-only channels.`,
 				},
 			})
 
+			// Register node tools (camera, screen, location, shell)
+			RegisterNodeTools(daemon)
+
 			// Set up signal handling
 			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 			defer stop()

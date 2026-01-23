@@ -1361,6 +1361,89 @@ func runMigrateClawdbotWorkspace(cmd *cobra.Command, sourcePath, targetWorkspace
 	return nil
 }
 
+// runMigrateSessionsImport handles the migrate sessions-import command.
+func runMigrateSessionsImport(cmd *cobra.Command, configPath, inputFile string, dryRun, skipDuplicates bool, defaultAgent string, preserveIDs bool) error {
+	out := cmd.OutOrStdout()
+
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
+	// Create session store
+	store, err := sessions.NewCockroachStoreFromDSN(cfg.Database.URL, nil)
+	if err != nil {
+		return fmt.Errorf("create store: %w", err)
+	}
+	defer store.Close()
+
+	importer := sessions.NewImporter(store)
+
+	opts := sessions.ImportOptions{
+		DryRun:         dryRun,
+		SkipDuplicates: skipDuplicates,
+		DefaultAgentID: defaultAgent,
+		PreserveIDs:    preserveIDs,
+	}
+
+	fmt.Fprintln(out, "Session History Import")
+	fmt.Fprintln(out, "======================")
+	fmt.Fprintln(out)
+	fmt.Fprintf(out, "Input file: %s\n", inputFile)
+	if dryRun {
+		fmt.Fprintln(out, "Mode: DRY RUN (no changes will be made)")
+	}
+	fmt.Fprintln(out)
+
+	result, err := importer.ImportFromFile(cmd.Context(), inputFile, opts)
+	if err != nil {
+		return fmt.Errorf("import failed: %w", err)
+	}
+
+	fmt.Fprint(out, sessions.FormatImportResult(result))
+
+	if len(result.Errors) > 0 && !dryRun {
+		return fmt.Errorf("import completed with %d errors", len(result.Errors))
+	}
+
+	return nil
+}
+
+// runMigrateSessionsExport handles the migrate sessions-export command.
+func runMigrateSessionsExport(cmd *cobra.Command, configPath, agentID, outputFile string) error {
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
+	// Create session store
+	store, err := sessions.NewCockroachStoreFromDSN(cfg.Database.URL, nil)
+	if err != nil {
+		return fmt.Errorf("create store: %w", err)
+	}
+	defer store.Close()
+
+	var w io.Writer = cmd.OutOrStdout()
+	if outputFile != "" {
+		f, err := os.Create(outputFile)
+		if err != nil {
+			return fmt.Errorf("create output file: %w", err)
+		}
+		defer f.Close()
+		w = f
+	}
+
+	if err := sessions.ExportToJSONL(cmd.Context(), store, w, agentID); err != nil {
+		return fmt.Errorf("export failed: %w", err)
+	}
+
+	if outputFile != "" {
+		fmt.Fprintf(cmd.OutOrStdout(), "Exported to %s\n", outputFile)
+	}
+
+	return nil
+}
+
 // =============================================================================
 // Doctor Command Handler
 // =============================================================================

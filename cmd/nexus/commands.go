@@ -656,6 +656,8 @@ Workspace migrations import data from other systems (e.g., Clawdbot).`,
 	cmd.AddCommand(buildMigrateDownCmd())
 	cmd.AddCommand(buildMigrateStatusCmd())
 	cmd.AddCommand(buildMigrateClawdbotWorkspaceCmd())
+	cmd.AddCommand(buildMigrateSessionsImportCmd())
+	cmd.AddCommand(buildMigrateSessionsExportCmd())
 
 	return cmd
 }
@@ -700,6 +702,81 @@ The doctor command can validate the migrated workspace afterwards.`,
 	cmd.Flags().StringVar(&targetConfig, "target-config", "", "Target config file to update (optional)")
 	cmd.Flags().BoolVar(&overwrite, "overwrite", false, "Overwrite existing files")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview migration without making changes")
+
+	return cmd
+}
+
+func buildMigrateSessionsImportCmd() *cobra.Command {
+	var (
+		configPath     string
+		dryRun         bool
+		skipDuplicates bool
+		defaultAgent   string
+		preserveIDs    bool
+	)
+
+	cmd := &cobra.Command{
+		Use:   "sessions-import <file.jsonl>",
+		Short: "Import session history from JSONL",
+		Long: `Import conversation history and messages from a JSONL file.
+
+The JSONL format contains one record per line, with types:
+- "session": Session/conversation metadata
+- "message": Individual messages within sessions
+
+This enables migrating history from Clawdbot or other systems.
+Use --dry-run to validate without writing to the database.`,
+		Example: `  # Preview import
+  nexus migrate sessions-import history.jsonl --dry-run
+
+  # Import with duplicate skipping
+  nexus migrate sessions-import history.jsonl --skip-duplicates
+
+  # Import preserving original IDs
+  nexus migrate sessions-import history.jsonl --preserve-ids`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
+			return runMigrateSessionsImport(cmd, configPath, args[0], dryRun, skipDuplicates, defaultAgent, preserveIDs)
+		},
+	}
+
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to config file")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Validate without writing")
+	cmd.Flags().BoolVar(&skipDuplicates, "skip-duplicates", true, "Skip records that already exist")
+	cmd.Flags().StringVar(&defaultAgent, "default-agent", "default", "Default agent ID for sessions without one")
+	cmd.Flags().BoolVar(&preserveIDs, "preserve-ids", false, "Keep original IDs instead of generating new ones")
+
+	return cmd
+}
+
+func buildMigrateSessionsExportCmd() *cobra.Command {
+	var (
+		configPath string
+		agentID    string
+		output     string
+	)
+
+	cmd := &cobra.Command{
+		Use:   "sessions-export",
+		Short: "Export session history to JSONL",
+		Long: `Export conversation history and messages to a JSONL file.
+
+The export can be used for backup or migration to another Nexus instance.`,
+		Example: `  # Export all sessions
+  nexus migrate sessions-export -o backup.jsonl
+
+  # Export sessions for a specific agent
+  nexus migrate sessions-export --agent default -o agent-history.jsonl`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
+			return runMigrateSessionsExport(cmd, configPath, agentID, output)
+		},
+	}
+
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to config file")
+	cmd.Flags().StringVar(&agentID, "agent", "", "Export only sessions for this agent ID")
+	cmd.Flags().StringVarP(&output, "output", "o", "", "Output file (default: stdout)")
 
 	return cmd
 }

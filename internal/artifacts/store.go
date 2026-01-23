@@ -102,12 +102,12 @@ func SetDefaultTTLs(ttls map[string]time.Duration) {
 	if ttls == nil {
 		return
 	}
-	defaultTTLsMu.RLock()
+	defaultTTLsMu.Lock()
+	defer defaultTTLsMu.Unlock()
 	merged := make(map[string]time.Duration, len(DefaultTTLs)+len(ttls))
 	for key, value := range DefaultTTLs {
 		merged[key] = value
 	}
-	defaultTTLsMu.RUnlock()
 
 	for key, value := range ttls {
 		k := strings.ToLower(strings.TrimSpace(key))
@@ -119,9 +119,7 @@ func SetDefaultTTLs(ttls map[string]time.Duration) {
 	if _, ok := merged["default"]; !ok {
 		merged["default"] = 24 * time.Hour
 	}
-	defaultTTLsMu.Lock()
 	DefaultTTLs = merged
-	defaultTTLsMu.Unlock()
 }
 
 // GetDefaultTTL returns the default TTL for an artifact type.

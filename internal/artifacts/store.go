@@ -5,6 +5,8 @@ package artifacts
 import (
 	"context"
 	"io"
+	"strings"
+	"sync"
 	"time"
 
 	pb "github.com/haasonsaas/nexus/pkg/proto"
@@ -85,16 +87,47 @@ type Metadata struct {
 }
 
 // DefaultTTLs provides default retention periods by artifact type.
-var DefaultTTLs = map[string]time.Duration{
-	"screenshot": 7 * 24 * time.Hour,  // 7 days
-	"recording":  30 * 24 * time.Hour, // 30 days
-	"file":       14 * 24 * time.Hour, // 14 days
-	"default":    24 * time.Hour,      // 1 day
+var (
+	defaultTTLsMu sync.RWMutex
+	DefaultTTLs   = map[string]time.Duration{
+		"screenshot": 7 * 24 * time.Hour,  // 7 days
+		"recording":  30 * 24 * time.Hour, // 30 days
+		"file":       14 * 24 * time.Hour, // 14 days
+		"default":    24 * time.Hour,      // 1 day
+	}
+)
+
+// SetDefaultTTLs updates the default TTLs for artifact types.
+func SetDefaultTTLs(ttls map[string]time.Duration) {
+	if ttls == nil {
+		return
+	}
+	defaultTTLsMu.Lock()
+	defer defaultTTLsMu.Unlock()
+	merged := make(map[string]time.Duration, len(DefaultTTLs)+len(ttls))
+	for key, value := range DefaultTTLs {
+		merged[key] = value
+	}
+
+	for key, value := range ttls {
+		k := strings.ToLower(strings.TrimSpace(key))
+		if k == "" {
+			continue
+		}
+		merged[k] = value
+	}
+	if _, ok := merged["default"]; !ok {
+		merged["default"] = 24 * time.Hour
+	}
+	DefaultTTLs = merged
 }
 
 // GetDefaultTTL returns the default TTL for an artifact type.
 func GetDefaultTTL(artifactType string) time.Duration {
-	if ttl, ok := DefaultTTLs[artifactType]; ok {
+	key := strings.ToLower(strings.TrimSpace(artifactType))
+	defaultTTLsMu.RLock()
+	defer defaultTTLsMu.RUnlock()
+	if ttl, ok := DefaultTTLs[key]; ok {
 		return ttl
 	}
 	return DefaultTTLs["default"]

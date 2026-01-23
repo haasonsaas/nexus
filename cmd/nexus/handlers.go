@@ -3618,52 +3618,12 @@ func createArtifactRepository(cfg *config.Config) (artifacts.Repository, func(),
 	if cfg == nil {
 		return nil, nil, nil
 	}
-	backend := strings.ToLower(strings.TrimSpace(cfg.Artifacts.Backend))
-	if backend == "" || backend == "none" || backend == "disabled" {
-		return nil, nil, nil
+
+	repo, err := gateway.BuildArtifactRepository(context.Background(), cfg, slog.Default())
+	if err != nil {
+		return nil, nil, err
 	}
-
-	var store artifacts.Store
-	var cleanup func()
-
-	switch backend {
-	case "local":
-		localStore, err := artifacts.NewLocalStore(cfg.Artifacts.LocalPath)
-		if err != nil {
-			return nil, nil, err
-		}
-		store = localStore
-		cleanup = func() { localStore.Close() }
-	case "s3", "minio":
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-
-		s3Cfg := &artifacts.S3StoreConfig{
-			Endpoint:        cfg.Artifacts.S3Endpoint,
-			Region:          cfg.Artifacts.S3Region,
-			Bucket:          cfg.Artifacts.S3Bucket,
-			Prefix:          cfg.Artifacts.S3Prefix,
-			AccessKeyID:     cfg.Artifacts.S3AccessKeyID,
-			SecretAccessKey: cfg.Artifacts.S3SecretAccessKey,
-			UsePathStyle:    backend == "minio",
-		}
-		if s3Cfg.Region == "" {
-			s3Cfg.Region = "us-east-1"
-		}
-
-		s3Store, err := artifacts.NewS3Store(ctx, s3Cfg)
-		if err != nil {
-			return nil, nil, fmt.Errorf("create S3 store: %w", err)
-		}
-		store = s3Store
-		cleanup = func() { s3Store.Close() }
-	default:
-		return nil, nil, fmt.Errorf("unsupported artifact backend %q", backend)
-	}
-
-	logger := slog.Default()
-	repo := artifacts.NewMemoryRepository(store, logger)
-	return repo, cleanup, nil
+	return repo, nil, nil
 }
 
 // extensionForMimeCLI returns a file extension for a MIME type.

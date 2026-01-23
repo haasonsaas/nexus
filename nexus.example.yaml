@@ -255,6 +255,31 @@ tools:
       telegram: ["123456789"]
     tools: ["execute_code"]
 
+artifacts:
+  # Storage backend: local | s3 | minio | none
+  backend: local
+  # Directory for local storage and metadata
+  local_path: /tmp/nexus-artifacts
+  # Optional metadata file path (defaults to <local_path>/metadata.json)
+  metadata_path: /tmp/nexus-artifacts/metadata.json
+  # S3/MinIO settings (used when backend is s3/minio)
+  s3_bucket: ${NEXUS_ARTIFACTS_BUCKET}
+  s3_endpoint: ${NEXUS_ARTIFACTS_ENDPOINT}
+  s3_region: ${AWS_REGION:-us-east-1}
+  # Cleanup interval for expired artifacts
+  prune_interval: 1h
+  # TTLs by artifact type
+  ttls:
+    screenshot: 168h
+    recording: 720h
+    file: 336h
+    default: 24h
+  redaction:
+    enabled: false
+    types: []
+    mime_types: []
+    filename_patterns: []
+
 transcription:
   enabled: false
   provider: openai

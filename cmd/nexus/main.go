@@ -103,6 +103,7 @@ Documentation: https://github.com/haasonsaas/nexus`,
 		buildOnboardCmd(),
 		buildAuthCmd(),
 		buildProfileCmd(),
+		buildArtifactsCmd(),
 		buildSkillsCmd(),
 		buildPluginsCmd(),
 		buildServiceCmd(),
@@ -111,7 +112,6 @@ Documentation: https://github.com/haasonsaas/nexus`,
 		buildTraceCmd(),
 		buildEdgeCmd(),
 		buildEventsCmd(),
-		buildArtifactsCmd(),
 	)
 
 	return rootCmd

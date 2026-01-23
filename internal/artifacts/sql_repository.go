@@ -159,9 +159,8 @@ func (r *SQLRepository) StoreArtifact(ctx context.Context, artifact *pb.Artifact
 
 	if err := r.insertMetadata(ctx, meta, toolCallID, nil); err != nil {
 		// Try to clean up stored data on metadata failure
-		if deleteErr := r.store.Delete(ctx, artifact.Id); deleteErr != nil {
-			r.logger.Warn("failed to clean up artifact after metadata failure",
-				"artifact_id", artifact.Id, "error", deleteErr)
+		if delErr := r.store.Delete(ctx, artifact.Id); delErr != nil {
+			r.logger.Warn("failed to cleanup stored artifact after metadata insert error", "id", artifact.Id, "error", delErr)
 		}
 		return err
 	}
@@ -250,8 +249,8 @@ func (r *SQLRepository) GetArtifact(ctx context.Context, artifactID string) (*pb
 
 	// Check expiration
 	if expiresAt.Valid && time.Now().After(expiresAt.Time) {
-		if deleteErr := r.DeleteArtifact(ctx, artifactID); deleteErr != nil {
-			r.logger.Warn("failed to delete expired artifact", "artifact_id", artifactID, "error", deleteErr)
+		if err := r.DeleteArtifact(ctx, artifactID); err != nil {
+			r.logger.Warn("failed to delete expired artifact", "id", artifactID, "error", err)
 		}
 		return nil, nil, fmt.Errorf("artifact expired: %s", artifactID)
 	}

@@ -3571,7 +3571,11 @@ func runArtifactsDelete(cmd *cobra.Command, configPath, artifactID string, force
 	if !force {
 		reader := bufio.NewReader(os.Stdin)
 		fmt.Printf("Delete artifact %s? [y/N]: ", artifactID)
-		response, _ := reader.ReadString('\n')
+		response, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Println("Cancelled")
+			return nil
+		}
 		response = strings.TrimSpace(strings.ToLower(response))
 		if response != "y" && response != "yes" {
 			fmt.Println("Cancelled")

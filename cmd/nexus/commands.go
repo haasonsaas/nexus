@@ -761,6 +761,7 @@ Nexus supports multiple messaging platforms:
 	cmd.AddCommand(buildChannelsEnableCmd())
 	cmd.AddCommand(buildChannelsDisableCmd())
 	cmd.AddCommand(buildChannelsValidateCmd())
+	cmd.AddCommand(buildChannelsSetupCmd())
 
 	return cmd
 }
@@ -905,6 +906,54 @@ func buildChannelsValidateCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to config file")
+	return cmd
+}
+
+func buildChannelsSetupCmd() *cobra.Command {
+	var (
+		configPath string
+		serverAddr string
+		edgeID     string
+		saveConfig bool
+	)
+
+	cmd := &cobra.Command{
+		Use:   "setup [channel]",
+		Short: "Interactive channel setup wizard",
+		Long: `Guide through the setup process for a messaging channel.
+
+This command provides an interactive wizard that walks you through:
+- Entering required credentials (API tokens, app IDs)
+- OAuth flows (for platforms that support it)
+- QR code scanning (for WhatsApp, requires edge daemon)
+- Validation and testing of the connection
+
+If no channel is specified, displays available channels to set up.`,
+		Example: `  # List available channels
+  nexus channels setup
+
+  # Set up Telegram
+  nexus channels setup telegram
+
+  # Set up WhatsApp (requires edge daemon)
+  nexus channels setup whatsapp --edge-id my-laptop
+
+  # Set up and save to config
+  nexus channels setup telegram --save`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configPath = resolveConfigPath(configPath)
+			channel := ""
+			if len(args) > 0 {
+				channel = args[0]
+			}
+			return runChannelsSetup(cmd, configPath, serverAddr, channel, edgeID, saveConfig)
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to config file")
+	cmd.Flags().StringVar(&serverAddr, "server", "localhost:50051", "Nexus server address for provisioning")
+	cmd.Flags().StringVar(&edgeID, "edge-id", "", "Edge daemon ID for QR code flows")
+	cmd.Flags().BoolVar(&saveConfig, "save", true, "Save credentials to config file on success")
 	return cmd
 }
 

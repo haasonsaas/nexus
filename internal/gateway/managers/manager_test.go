@@ -531,3 +531,155 @@ func TestManagers_Struct_Fields(t *testing.T) {
 		t.Error("Tooling should be nil for new struct")
 	}
 }
+
+func TestRuntimeManager_Accessors(t *testing.T) {
+	m := NewRuntimeManager(RuntimeManagerConfig{})
+
+	// All accessors should return nil before start
+	if m.Sessions() != nil {
+		t.Error("Sessions should be nil before start")
+	}
+	if m.BranchStore() != nil {
+		t.Error("BranchStore should be nil before start")
+	}
+	if m.VectorMemory() != nil {
+		t.Error("VectorMemory should be nil when not provided")
+	}
+	if m.SkillsManager() != nil {
+		t.Error("SkillsManager should be nil when not provided")
+	}
+	if m.ApprovalChecker() != nil {
+		t.Error("ApprovalChecker should be nil before start")
+	}
+	if m.LLMProvider() != nil {
+		t.Error("LLMProvider should be nil before start")
+	}
+	if m.DefaultModel() != "" {
+		t.Errorf("DefaultModel should be empty, got %q", m.DefaultModel())
+	}
+}
+
+func TestRuntimeManager_StopBeforeStart(t *testing.T) {
+	m := NewRuntimeManager(RuntimeManagerConfig{})
+	ctx := context.Background()
+
+	// Stop without start should be safe
+	err := m.Stop(ctx)
+	if err != nil {
+		t.Errorf("Stop without Start should be safe, got: %v", err)
+	}
+}
+
+func TestRuntimeManagerConfig_Struct(t *testing.T) {
+	cfg := RuntimeManagerConfig{
+		Config:        &config.Config{},
+		Logger:        nil,
+		SkillsManager: nil,
+		VectorMemory:  nil,
+	}
+
+	if cfg.Config == nil {
+		t.Error("Config should not be nil")
+	}
+}
+
+func TestChannelManagerConfig_Struct(t *testing.T) {
+	cfg := ChannelManagerConfig{
+		Config: &config.Config{},
+		Logger: nil,
+	}
+
+	if cfg.Config == nil {
+		t.Error("Config should not be nil")
+	}
+}
+
+func TestToolingManagerConfig_Struct(t *testing.T) {
+	cfg := ToolingManagerConfig{
+		Config: &config.Config{},
+		Logger: nil,
+	}
+
+	if cfg.Config == nil {
+		t.Error("Config should not be nil")
+	}
+}
+
+func TestSchedulerManagerConfig_Struct(t *testing.T) {
+	cfg := SchedulerManagerConfig{
+		Config: &config.Config{},
+		Logger: nil,
+	}
+
+	if cfg.Config == nil {
+		t.Error("Config should not be nil")
+	}
+}
+
+func TestSchedulerManager_StartStop(t *testing.T) {
+	t.Run("double start is idempotent", func(t *testing.T) {
+		m, err := NewSchedulerManager(SchedulerManagerConfig{
+			Config: &config.Config{},
+		})
+		if err != nil {
+			t.Fatalf("NewSchedulerManager error: %v", err)
+		}
+		ctx := context.Background()
+
+		if err := m.Start(ctx); err != nil {
+			t.Fatalf("first Start() error: %v", err)
+		}
+		if err := m.Start(ctx); err != nil {
+			t.Errorf("second Start() should be idempotent, got: %v", err)
+		}
+	})
+
+	t.Run("double stop is idempotent", func(t *testing.T) {
+		m, err := NewSchedulerManager(SchedulerManagerConfig{
+			Config: &config.Config{},
+		})
+		if err != nil {
+			t.Fatalf("NewSchedulerManager error: %v", err)
+		}
+		ctx := context.Background()
+
+		if err := m.Start(ctx); err != nil {
+			t.Fatalf("Start() error: %v", err)
+		}
+		if err := m.Stop(ctx); err != nil {
+			t.Fatalf("first Stop() error: %v", err)
+		}
+		if err := m.Stop(ctx); err != nil {
+			t.Errorf("second Stop() should be idempotent, got: %v", err)
+		}
+	})
+
+	t.Run("stop without start is safe", func(t *testing.T) {
+		m, err := NewSchedulerManager(SchedulerManagerConfig{
+			Config: &config.Config{},
+		})
+		if err != nil {
+			t.Fatalf("NewSchedulerManager error: %v", err)
+		}
+		ctx := context.Background()
+
+		if err := m.Stop(ctx); err != nil {
+			t.Errorf("Stop() without Start() should be safe, got: %v", err)
+		}
+	})
+}
+
+func TestRuntimeManager_StartStop(t *testing.T) {
+	t.Run("double stop is idempotent", func(t *testing.T) {
+		m := NewRuntimeManager(RuntimeManagerConfig{})
+		ctx := context.Background()
+
+		// Stop twice without start should be safe
+		if err := m.Stop(ctx); err != nil {
+			t.Errorf("first Stop() should be safe, got: %v", err)
+		}
+		if err := m.Stop(ctx); err != nil {
+			t.Errorf("second Stop() should be safe, got: %v", err)
+		}
+	})
+}

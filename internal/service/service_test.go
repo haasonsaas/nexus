@@ -150,3 +150,112 @@ func TestConstants(t *testing.T) {
 		t.Errorf("LaunchdLabel = %q, want %q", LaunchdLabel, "com.haasonsaas.nexus")
 	}
 }
+
+func TestGenerateSystemdUnit_Content(t *testing.T) {
+	content := GenerateSystemdUnit("/custom/path/nexus", "/custom/config.yaml")
+
+	// Verify all required sections
+	if !strings.Contains(content, "[Unit]") {
+		t.Error("missing [Unit] section")
+	}
+	if !strings.Contains(content, "[Service]") {
+		t.Error("missing [Service] section")
+	}
+	if !strings.Contains(content, "[Install]") {
+		t.Error("missing [Install] section")
+	}
+	if !strings.Contains(content, "Description=Nexus Gateway") {
+		t.Error("missing Description")
+	}
+	if !strings.Contains(content, "After=network.target") {
+		t.Error("missing After=network.target")
+	}
+	if !strings.Contains(content, "ExecStart=/custom/path/nexus serve --config /custom/config.yaml") {
+		t.Error("missing ExecStart with correct paths")
+	}
+	if !strings.Contains(content, "RestartSec=3") {
+		t.Error("missing RestartSec=3")
+	}
+	if !strings.Contains(content, "WantedBy=default.target") {
+		t.Error("missing WantedBy")
+	}
+}
+
+func TestGenerateLaunchdPlist_Content(t *testing.T) {
+	content := GenerateLaunchdPlist("/custom/path/nexus", "/custom/config.yaml")
+
+	// Verify XML structure
+	if !strings.Contains(content, `<?xml version="1.0"`) {
+		t.Error("missing XML declaration")
+	}
+	if !strings.Contains(content, "<!DOCTYPE plist") {
+		t.Error("missing DOCTYPE")
+	}
+	if !strings.Contains(content, `<plist version="1.0">`) {
+		t.Error("missing plist version")
+	}
+	if !strings.Contains(content, "<key>Label</key>") {
+		t.Error("missing Label key")
+	}
+	if !strings.Contains(content, "<string>com.haasonsaas.nexus</string>") {
+		t.Error("missing correct Label value")
+	}
+	if !strings.Contains(content, "<key>RunAtLoad</key>") {
+		t.Error("missing RunAtLoad")
+	}
+	if !strings.Contains(content, "<true/>") {
+		t.Error("missing true values")
+	}
+	if !strings.Contains(content, "<key>KeepAlive</key>") {
+		t.Error("missing KeepAlive")
+	}
+	if !strings.Contains(content, "<string>/custom/path/nexus</string>") {
+		t.Error("missing exec path in arguments")
+	}
+	if !strings.Contains(content, "<string>/custom/config.yaml</string>") {
+		t.Error("missing config path in arguments")
+	}
+	if !strings.Contains(content, "<string>serve</string>") {
+		t.Error("missing serve command")
+	}
+}
+
+func TestRestartUserService_CommandError(t *testing.T) {
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+		t.Skip("restart not supported on this platform")
+	}
+
+	origRunner := commandRunner
+	t.Cleanup(func() { commandRunner = origRunner })
+
+	// Make the first command fail
+	commandRunner = func(ctx context.Context, name string, args ...string) error {
+		return context.DeadlineExceeded
+	}
+
+	_, err := RestartUserService(context.Background())
+	if err == nil {
+		t.Fatal("expected error when command fails")
+	}
+}
+
+func TestContainsAll(t *testing.T) {
+	tests := []struct {
+		content  string
+		needles  []string
+		expected bool
+	}{
+		{"hello world", []string{"hello", "world"}, true},
+		{"hello world", []string{"hello", "foo"}, false},
+		{"", []string{}, true},
+		{"hello", []string{}, true},
+		{"", []string{"hello"}, false},
+	}
+
+	for _, tt := range tests {
+		result := containsAll(tt.content, tt.needles)
+		if result != tt.expected {
+			t.Errorf("containsAll(%q, %v) = %v, want %v", tt.content, tt.needles, result, tt.expected)
+		}
+	}
+}

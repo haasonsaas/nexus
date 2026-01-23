@@ -541,3 +541,353 @@ func TestCallToolParamsJSON(t *testing.T) {
 		t.Errorf("expected Name %q, got %q", params.Name, decoded.Name)
 	}
 }
+
+func TestServerConfig_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  *ServerConfig
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name:    "empty ID returns error",
+			config:  &ServerConfig{},
+			wantErr: true,
+			errMsg:  "server ID is required",
+		},
+		{
+			name: "valid stdio config",
+			config: &ServerConfig{
+				ID:        "test",
+				Transport: TransportStdio,
+				Command:   "/usr/bin/mcp-server",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid http config",
+			config: &ServerConfig{
+				ID:        "test",
+				Transport: TransportHTTP,
+				URL:       "https://example.com/api",
+			},
+			wantErr: false,
+		},
+		{
+			name: "stdio missing command",
+			config: &ServerConfig{
+				ID:        "test",
+				Transport: TransportStdio,
+			},
+			wantErr: true,
+			errMsg:  "command is required",
+		},
+		{
+			name: "http missing URL",
+			config: &ServerConfig{
+				ID:        "test",
+				Transport: TransportHTTP,
+			},
+			wantErr: true,
+			errMsg:  "URL is required",
+		},
+		{
+			name: "http invalid URL scheme",
+			config: &ServerConfig{
+				ID:        "test",
+				Transport: TransportHTTP,
+				URL:       "ftp://example.com",
+			},
+			wantErr: true,
+			errMsg:  "URL must start with http://",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error but got nil")
+				} else if tt.errMsg != "" && !contains(err.Error(), tt.errMsg) {
+					t.Errorf("error %q should contain %q", err.Error(), tt.errMsg)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestContainsShellMetachars(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected bool
+	}{
+		{"normal arg", false},
+		{"--config=value", false},
+		{"/path/to/file", false},
+		{"$(whoami)", true},
+		{"${USER}", true},
+		{"`command`", true},
+		{"cmd && other", true},
+		{"cmd || other", true},
+		{"cmd ; other", true},
+		{"cmd | other", true},
+		{"cmd > file", true},
+		{"cmd < file", true},
+		{"arg\nother", true},
+		{"arg\rother", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := containsShellMetachars(tt.input)
+			if result != tt.expected {
+				t.Errorf("containsShellMetachars(%q) = %v, want %v", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestValidatePath(t *testing.T) {
+	tests := []struct {
+		path      string
+		fieldName string
+		wantErr   bool
+	}{
+		{"", "command", false},
+		{"/usr/bin/command", "command", false},
+		{"./relative/path", "command", false},
+		{"../parent/../traversal", "command", true},
+		{"../../outside", "command", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			err := validatePath(tt.path, tt.fieldName)
+			if tt.wantErr && err == nil {
+				t.Error("expected error but got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestServerConfig_ValidateStdioConfig(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  *ServerConfig
+		wantErr bool
+	}{
+		{
+			name: "valid config",
+			config: &ServerConfig{
+				ID:        "test",
+				Transport: TransportStdio,
+				Command:   "/usr/bin/mcp-server",
+				Args:      []string{"--config", "test.yaml"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "command with path traversal",
+			config: &ServerConfig{
+				ID:        "test",
+				Transport: TransportStdio,
+				Command:   "../../../etc/passwd",
+			},
+			wantErr: true,
+		},
+		{
+			name: "workdir with path traversal",
+			config: &ServerConfig{
+				ID:        "test",
+				Transport: TransportStdio,
+				Command:   "/usr/bin/mcp",
+				WorkDir:   "../../../tmp",
+			},
+			wantErr: true,
+		},
+		{
+			name: "args with shell metachar",
+			config: &ServerConfig{
+				ID:        "test",
+				Transport: TransportStdio,
+				Command:   "/usr/bin/mcp",
+				Args:      []string{"--config", "$(whoami)"},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if tt.wantErr && err == nil {
+				t.Error("expected error but got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestCapabilities_Struct(t *testing.T) {
+	caps := Capabilities{
+		Tools:     &ToolsCapability{ListChanged: true},
+		Resources: &ResourcesCapability{Subscribe: true, ListChanged: true},
+		Prompts:   &PromptsCapability{ListChanged: true},
+		Sampling:  &SamplingCapability{},
+		Roots:     &RootsCapability{ListChanged: true},
+	}
+
+	if caps.Tools == nil || !caps.Tools.ListChanged {
+		t.Error("expected Tools.ListChanged to be true")
+	}
+	if caps.Resources == nil || !caps.Resources.Subscribe {
+		t.Error("expected Resources.Subscribe to be true")
+	}
+	if caps.Sampling == nil {
+		t.Error("expected Sampling to be non-nil")
+	}
+}
+
+func TestListResultsJSON(t *testing.T) {
+	t.Run("ListToolsResult", func(t *testing.T) {
+		result := &ListToolsResult{
+			Tools: []*MCPTool{
+				{Name: "tool1", Description: "First tool"},
+				{Name: "tool2", Description: "Second tool"},
+			},
+		}
+		data, _ := json.Marshal(result)
+		var decoded ListToolsResult
+		json.Unmarshal(data, &decoded)
+		if len(decoded.Tools) != 2 {
+			t.Errorf("expected 2 tools, got %d", len(decoded.Tools))
+		}
+	})
+
+	t.Run("ListResourcesResult", func(t *testing.T) {
+		result := &ListResourcesResult{
+			Resources: []*MCPResource{
+				{URI: "file:///a.txt", Name: "a.txt"},
+			},
+		}
+		data, _ := json.Marshal(result)
+		var decoded ListResourcesResult
+		json.Unmarshal(data, &decoded)
+		if len(decoded.Resources) != 1 {
+			t.Errorf("expected 1 resource, got %d", len(decoded.Resources))
+		}
+	})
+
+	t.Run("ListPromptsResult", func(t *testing.T) {
+		result := &ListPromptsResult{
+			Prompts: []*MCPPrompt{
+				{Name: "prompt1", Description: "First prompt"},
+			},
+		}
+		data, _ := json.Marshal(result)
+		var decoded ListPromptsResult
+		json.Unmarshal(data, &decoded)
+		if len(decoded.Prompts) != 1 {
+			t.Errorf("expected 1 prompt, got %d", len(decoded.Prompts))
+		}
+	})
+}
+
+func TestReadResourceResult(t *testing.T) {
+	result := &ReadResourceResult{
+		Contents: []*ResourceContent{
+			{URI: "file:///test.txt", MimeType: "text/plain", Text: "content"},
+		},
+	}
+	data, _ := json.Marshal(result)
+	var decoded ReadResourceResult
+	json.Unmarshal(data, &decoded)
+	if len(decoded.Contents) != 1 {
+		t.Errorf("expected 1 content, got %d", len(decoded.Contents))
+	}
+}
+
+func TestGetPromptResult(t *testing.T) {
+	result := &GetPromptResult{
+		Description: "A test prompt",
+		Messages: []PromptMessage{
+			{Role: "user", Content: MessageContent{Type: "text", Text: "Hello"}},
+		},
+	}
+	data, _ := json.Marshal(result)
+	var decoded GetPromptResult
+	json.Unmarshal(data, &decoded)
+	if decoded.Description != "A test prompt" {
+		t.Errorf("expected description %q, got %q", "A test prompt", decoded.Description)
+	}
+	if len(decoded.Messages) != 1 {
+		t.Errorf("expected 1 message, got %d", len(decoded.Messages))
+	}
+}
+
+func TestClientInfo_Struct(t *testing.T) {
+	info := ClientInfo{
+		Name:    "test-client",
+		Version: "1.0.0",
+	}
+	if info.Name != "test-client" {
+		t.Errorf("expected name %q, got %q", "test-client", info.Name)
+	}
+}
+
+func TestToolResultContent_Struct(t *testing.T) {
+	content := ToolResultContent{
+		Type:     "image",
+		Data:     "base64data",
+		MimeType: "image/png",
+	}
+	if content.Type != "image" {
+		t.Errorf("expected type %q, got %q", "image", content.Type)
+	}
+	if content.Data != "base64data" {
+		t.Errorf("expected data %q, got %q", "base64data", content.Data)
+	}
+}
+
+func TestMessageContent_WithResource(t *testing.T) {
+	content := MessageContent{
+		Type: "resource",
+		Resource: &ResourceContent{
+			URI:      "file:///test.txt",
+			MimeType: "text/plain",
+			Text:     "content",
+		},
+	}
+	data, _ := json.Marshal(content)
+	var decoded MessageContent
+	json.Unmarshal(data, &decoded)
+	if decoded.Resource == nil {
+		t.Fatal("expected resource to be non-nil")
+	}
+	if decoded.Resource.URI != "file:///test.txt" {
+		t.Errorf("expected URI %q, got %q", "file:///test.txt", decoded.Resource.URI)
+	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
+}
+
+func containsHelper(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}

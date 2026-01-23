@@ -307,3 +307,173 @@ func TestTaskExecution_JSONRoundTrip(t *testing.T) {
 		t.Errorf("AttemptNumber = %d, want %d", decoded.AttemptNumber, original.AttemptNumber)
 	}
 }
+
+func TestTaskExecution_IsTerminal_AllStatuses(t *testing.T) {
+	tests := []struct {
+		status   ExecutionStatus
+		terminal bool
+	}{
+		{ExecutionStatusPending, false},
+		{ExecutionStatusRunning, false},
+		{ExecutionStatusSucceeded, true},
+		{ExecutionStatusFailed, true},
+		{ExecutionStatusTimedOut, true},
+		{ExecutionStatusCancelled, true},
+		{ExecutionStatus("unknown"), false},
+	}
+
+	for _, tt := range tests {
+		exec := &TaskExecution{Status: tt.status}
+		if got := exec.IsTerminal(); got != tt.terminal {
+			t.Errorf("IsTerminal() for %q = %v, want %v", tt.status, got, tt.terminal)
+		}
+	}
+}
+
+func TestTaskConfig_AllFields(t *testing.T) {
+	cfg := TaskConfig{
+		Timeout:       15 * time.Minute,
+		MaxRetries:    5,
+		RetryDelay:    2 * time.Minute,
+		AllowOverlap:  true,
+		ExecutionType: ExecutionTypeMessage,
+		Channel:       "telegram",
+		ChannelID:     "chat-456",
+		SessionID:     "session-789",
+		SystemPrompt:  "You are a task executor",
+		Model:         "claude-3-opus",
+	}
+
+	if cfg.Timeout != 15*time.Minute {
+		t.Errorf("Timeout = %v, want %v", cfg.Timeout, 15*time.Minute)
+	}
+	if cfg.MaxRetries != 5 {
+		t.Errorf("MaxRetries = %d, want 5", cfg.MaxRetries)
+	}
+	if cfg.ExecutionType != ExecutionTypeMessage {
+		t.Errorf("ExecutionType = %v, want %v", cfg.ExecutionType, ExecutionTypeMessage)
+	}
+	if cfg.Channel != "telegram" {
+		t.Errorf("Channel = %q, want %q", cfg.Channel, "telegram")
+	}
+	if cfg.ChannelID != "chat-456" {
+		t.Errorf("ChannelID = %q, want %q", cfg.ChannelID, "chat-456")
+	}
+	if cfg.Model != "claude-3-opus" {
+		t.Errorf("Model = %q, want %q", cfg.Model, "claude-3-opus")
+	}
+}
+
+func TestTaskConfig_MarshalUnmarshalRoundTrip(t *testing.T) {
+	original := TaskConfig{
+		Timeout:       10 * time.Minute,
+		MaxRetries:    3,
+		RetryDelay:    1 * time.Minute,
+		AllowOverlap:  true,
+		ExecutionType: ExecutionTypeAgent,
+		Channel:       "slack",
+		ChannelID:     "C123",
+		SessionID:     "session-abc",
+		SystemPrompt:  "Test prompt",
+		Model:         "gpt-4",
+	}
+
+	data, err := original.MarshalConfig()
+	if err != nil {
+		t.Fatalf("MarshalConfig error: %v", err)
+	}
+
+	decoded, err := UnmarshalConfig(data)
+	if err != nil {
+		t.Fatalf("UnmarshalConfig error: %v", err)
+	}
+
+	if decoded.MaxRetries != original.MaxRetries {
+		t.Errorf("MaxRetries = %d, want %d", decoded.MaxRetries, original.MaxRetries)
+	}
+	if decoded.AllowOverlap != original.AllowOverlap {
+		t.Errorf("AllowOverlap = %v, want %v", decoded.AllowOverlap, original.AllowOverlap)
+	}
+	if decoded.ExecutionType != original.ExecutionType {
+		t.Errorf("ExecutionType = %v, want %v", decoded.ExecutionType, original.ExecutionType)
+	}
+	if decoded.Channel != original.Channel {
+		t.Errorf("Channel = %q, want %q", decoded.Channel, original.Channel)
+	}
+}
+
+func TestScheduledTask_AllFields(t *testing.T) {
+	now := time.Now()
+	lastRun := now.Add(-1 * time.Hour)
+
+	task := ScheduledTask{
+		ID:              "task-id-123",
+		Name:            "Daily Report Task",
+		Description:     "Generates daily reports",
+		AgentID:         "agent-abc",
+		Schedule:        "0 9 * * *",
+		Timezone:        "Europe/London",
+		Prompt:          "Generate the daily report",
+		Config:          DefaultTaskConfig(),
+		Status:          TaskStatusPaused,
+		NextRunAt:       now.Add(24 * time.Hour),
+		LastRunAt:       &lastRun,
+		LastExecutionID: "exec-xyz",
+		CreatedAt:       now,
+		UpdatedAt:       now,
+		Metadata:        map[string]any{"key": "value"},
+	}
+
+	if task.Description != "Generates daily reports" {
+		t.Errorf("Description = %q", task.Description)
+	}
+	if task.Timezone != "Europe/London" {
+		t.Errorf("Timezone = %q, want %q", task.Timezone, "Europe/London")
+	}
+	if task.Status != TaskStatusPaused {
+		t.Errorf("Status = %v, want %v", task.Status, TaskStatusPaused)
+	}
+	if task.Metadata["key"] != "value" {
+		t.Errorf("Metadata[key] = %v, want %q", task.Metadata["key"], "value")
+	}
+}
+
+func TestTaskExecution_AllFields(t *testing.T) {
+	now := time.Now()
+	started := now.Add(-5 * time.Minute)
+	finished := now.Add(-1 * time.Minute)
+	locked := now.Add(-6 * time.Minute)
+	lockedUntil := now.Add(4 * time.Minute)
+
+	exec := TaskExecution{
+		ID:            "exec-id",
+		TaskID:        "task-id",
+		Status:        ExecutionStatusFailed,
+		ScheduledAt:   now.Add(-10 * time.Minute),
+		StartedAt:     &started,
+		FinishedAt:    &finished,
+		SessionID:     "session-123",
+		Prompt:        "Execute task",
+		Response:      "Task response",
+		Error:         "Task failed with error",
+		AttemptNumber: 2,
+		WorkerID:      "worker-abc",
+		LockedAt:      &locked,
+		LockedUntil:   &lockedUntil,
+		Duration:      4 * time.Minute,
+		Metadata:      map[string]any{"retry": true},
+	}
+
+	if exec.Error != "Task failed with error" {
+		t.Errorf("Error = %q", exec.Error)
+	}
+	if exec.Duration != 4*time.Minute {
+		t.Errorf("Duration = %v, want %v", exec.Duration, 4*time.Minute)
+	}
+	if exec.LockedAt == nil {
+		t.Error("LockedAt should not be nil")
+	}
+	if exec.Metadata["retry"] != true {
+		t.Errorf("Metadata[retry] = %v, want true", exec.Metadata["retry"])
+	}
+}

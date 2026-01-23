@@ -24,6 +24,11 @@ func (s *Server) Start(ctx context.Context) error {
 			return fmt.Errorf("failed to start MCP manager: %w", err)
 		}
 	}
+	if s.canvasHost != nil {
+		if err := s.canvasHost.Start(ctx); err != nil {
+			s.logger.Warn("failed to start canvas host", "error", err)
+		}
+	}
 	// Start channel adapters
 	if err := s.channels.StartAll(ctx); err != nil {
 		return fmt.Errorf("failed to start channels: %w", err)
@@ -163,6 +168,11 @@ func (s *Server) Stop(ctx context.Context) error {
 	if s.tracePlugin != nil {
 		if err := s.tracePlugin.Close(); err != nil {
 			s.logger.Error("error closing trace plugin", "error", err)
+		}
+	}
+	if s.canvasHost != nil {
+		if err := s.canvasHost.Close(); err != nil {
+			s.logger.Error("error closing canvas host", "error", err)
 		}
 	}
 	if err := s.stores.Close(); err != nil {

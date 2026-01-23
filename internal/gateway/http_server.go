@@ -26,6 +26,15 @@ func (s *Server) startHTTPServer(ctx context.Context) error {
 
 	mux.Handle("/ws", s.newWSControlPlane())
 
+	if s.canvasHost != nil {
+		mux.Handle("/canvas/live", s.canvasHost.LiveReloadHandler())
+		mux.Handle("/canvas/live.js", s.canvasHost.LiveReloadScriptHandler())
+		mux.Handle("/canvas/", http.StripPrefix("/canvas/", s.canvasHost.Handler()))
+		mux.HandleFunc("/canvas", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/canvas/", http.StatusFound)
+		})
+	}
+
 	webHandler, err := web.NewHandler(&web.Config{
 		BasePath:        "/ui",
 		AuthService:     s.authService,

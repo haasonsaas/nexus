@@ -736,8 +736,8 @@ func localAddressFromRequest(r *http.Request) string {
 	if !ok || addr == nil {
 		return ""
 	}
-	if tcpAddr, ok := addr.(*net.TCPAddr); ok && tcpAddr.IP != nil {
-		return tcpAddr.IP.String()
+	if tcpAddr, ok := addr.(*net.TCPAddr); ok {
+		return tcpAddr.String()
 	}
 	return addr.String()
 }

@@ -86,10 +86,11 @@ type Metadata struct {
 	ExpiresAt  time.Time
 }
 
-// DefaultTTLs provides default retention periods by artifact type.
+// defaultTTLs provides default retention periods by artifact type.
+// Access must go through GetDefaultTTL and SetDefaultTTLs for thread safety.
 var (
 	defaultTTLsMu sync.RWMutex
-	DefaultTTLs   = map[string]time.Duration{
+	defaultTTLs   = map[string]time.Duration{
 		"screenshot": 7 * 24 * time.Hour,  // 7 days
 		"recording":  30 * 24 * time.Hour, // 30 days
 		"file":       14 * 24 * time.Hour, // 14 days
@@ -104,8 +105,8 @@ func SetDefaultTTLs(ttls map[string]time.Duration) {
 	}
 	defaultTTLsMu.Lock()
 	defer defaultTTLsMu.Unlock()
-	merged := make(map[string]time.Duration, len(DefaultTTLs)+len(ttls))
-	for key, value := range DefaultTTLs {
+	merged := make(map[string]time.Duration, len(defaultTTLs)+len(ttls))
+	for key, value := range defaultTTLs {
 		merged[key] = value
 	}
 
@@ -119,7 +120,7 @@ func SetDefaultTTLs(ttls map[string]time.Duration) {
 	if _, ok := merged["default"]; !ok {
 		merged["default"] = 24 * time.Hour
 	}
-	DefaultTTLs = merged
+	defaultTTLs = merged
 }
 
 // GetDefaultTTL returns the default TTL for an artifact type.
@@ -127,8 +128,8 @@ func GetDefaultTTL(artifactType string) time.Duration {
 	key := strings.ToLower(strings.TrimSpace(artifactType))
 	defaultTTLsMu.RLock()
 	defer defaultTTLsMu.RUnlock()
-	if ttl, ok := DefaultTTLs[key]; ok {
+	if ttl, ok := defaultTTLs[key]; ok {
 		return ttl
 	}
-	return DefaultTTLs["default"]
+	return defaultTTLs["default"]
 }

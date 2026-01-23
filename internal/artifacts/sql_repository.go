@@ -46,15 +46,18 @@ func NewSQLRepository(db *sql.DB, store Store, logger *slog.Logger) (*SQLReposit
 
 // Close closes the underlying store and database connection.
 func (r *SQLRepository) Close() error {
+	var errs []error
 	if r.store != nil {
 		if err := r.store.Close(); err != nil {
-			return err
+			errs = append(errs, fmt.Errorf("close store: %w", err))
 		}
 	}
 	if r.db != nil {
-		return r.db.Close()
+		if err := r.db.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close database: %w", err))
+		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // StoreArtifact persists an artifact from tool execution.

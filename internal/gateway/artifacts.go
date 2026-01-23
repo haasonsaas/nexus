@@ -100,12 +100,8 @@ func BuildArtifactRepository(ctx context.Context, cfg *config.Config, logger *sl
 		if metadataPath == "" {
 			metadataPath = filepath.Join(cfg.Artifacts.LocalPath, "metadata.json")
 		}
-		repo, err := artifacts.NewPersistentRepository(store, metadataPath, logger)
-		if err != nil {
-			_ = store.Close()
-			return nil, err
-		}
-		return repo, nil
+		// NewPersistentRepository closes the store on failure
+		return artifacts.NewPersistentRepository(store, metadataPath, logger)
 	case "database", "db":
 		db, err := openArtifactDB(cfg)
 		if err != nil {

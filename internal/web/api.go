@@ -336,7 +336,12 @@ func (h *Handler) apiArtifact(w http.ResponseWriter, r *http.Request) {
 
 	artifact, reader, err := h.config.ArtifactRepo.GetArtifact(r.Context(), artifactID)
 	if err != nil {
-		h.jsonError(w, "Artifact not found", http.StatusNotFound)
+		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "expired") {
+			h.jsonError(w, "Artifact not found", http.StatusNotFound)
+		} else {
+			h.config.Logger.Error("failed to get artifact", "id", artifactID, "error", err)
+			h.jsonError(w, "Failed to retrieve artifact", http.StatusInternalServerError)
+		}
 		return
 	}
 	defer reader.Close()

@@ -55,9 +55,18 @@ func NewPersistentRepository(store Store, metadataPath string, logger *slog.Logg
 		logger:       logger,
 	}
 	if err := repo.loadMetadata(); err != nil {
+		_ = store.Close()
 		return nil, err
 	}
 	return repo, nil
+}
+
+// Close releases resources held by the repository.
+func (r *PersistentRepository) Close() error {
+	if r.store != nil {
+		return r.store.Close()
+	}
+	return nil
 }
 
 // StoreArtifact persists an artifact from tool execution.

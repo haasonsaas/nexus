@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "github.com/haasonsaas/nexus/pkg/proto"
@@ -59,6 +61,9 @@ type Config struct {
 
 	// LogLevel is the logging level.
 	LogLevel string `json:"log_level"`
+
+	// ChannelTypes lists channel types this edge can host (e.g., "imessage", "signal").
+	ChannelTypes []string `json:"channel_types"`
 }
 
 // DefaultConfig returns sensible defaults.
@@ -71,6 +76,7 @@ func DefaultConfig() Config {
 		ReconnectDelay:    5 * time.Second,
 		HeartbeatInterval: 30 * time.Second,
 		LogLevel:          "info",
+		ChannelTypes:      nil,
 	}
 }
 
@@ -219,6 +225,7 @@ func (d *EdgeDaemon) connect(ctx context.Context) error {
 
 // register sends the registration message.
 func (d *EdgeDaemon) register() error {
+	channelTypes := normalizeChannelTypes(d.config.ChannelTypes)
 	toolDefs := make([]*pb.EdgeToolDefinition, len(d.tools))
 	for i, t := range d.tools {
 		toolDefs[i] = &pb.EdgeToolDefinition{
@@ -238,10 +245,10 @@ func (d *EdgeDaemon) register() error {
 				Name:         d.config.Name,
 				AuthToken:    d.config.AuthToken,
 				Tools:        toolDefs,
-				ChannelTypes: []string{}, // TODO: add channel support
+				ChannelTypes: channelTypes,
 				Capabilities: &pb.EdgeCapabilities{
 					Tools:     true,
-					Channels:  false,
+					Channels:  len(channelTypes) > 0,
 					Streaming: true,
 					Artifacts: true,
 				},
@@ -254,6 +261,26 @@ func (d *EdgeDaemon) register() error {
 			},
 		},
 	})
+}
+
+func normalizeChannelTypes(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, raw := range values {
+		normalized := strings.ToLower(strings.TrimSpace(raw))
+		if normalized == "" {
+			continue
+		}
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		out = append(out, normalized)
+	}
+	return out
 }
 
 // heartbeatLoop sends periodic heartbeats.
@@ -426,14 +453,22 @@ func (d *EdgeDaemon) handleCoreEvent(event *pb.CoreEvent) {
 }
 
 // sendEvent sends an event to the core.
-func (d *EdgeDaemon) sendEvent(eventType pb.EdgeEventType, _ map[string]interface{}) error {
+func (d *EdgeDaemon) sendEvent(eventType pb.EdgeEventType, data map[string]interface{}) error {
+	var payload *structpb.Struct
+	if len(data) > 0 {
+		converted, err := structpb.NewStruct(data)
+		if err != nil {
+			return fmt.Errorf("convert event data: %w", err)
+		}
+		payload = converted
+	}
 	return d.stream.Send(&pb.EdgeMessage{
 		Message: &pb.EdgeMessage_Event{
 			Event: &pb.EdgeEvent{
 				EdgeId:    d.config.EdgeID,
 				Type:      eventType,
 				Timestamp: timestamppb.Now(),
-				// TODO: convert data to Struct
+				Data:      payload,
 			},
 		},
 	})
@@ -512,6 +547,7 @@ local capabilities like device access, browser relay, and edge-only channels.`,
 	rootCmd.Flags().StringVar(&config.AuthToken, "token", "", "Authentication token")
 	rootCmd.Flags().DurationVar(&config.ReconnectDelay, "reconnect-delay", config.ReconnectDelay, "Delay between reconnection attempts")
 	rootCmd.Flags().StringVar(&config.LogLevel, "log-level", config.LogLevel, "Log level (debug, info, warn, error)")
+	rootCmd.Flags().StringSliceVar(&config.ChannelTypes, "channels", config.ChannelTypes, "Channel types provided by this edge (comma-separated)")
 
 	rootCmd.AddCommand(&cobra.Command{
 		Use:   "version",

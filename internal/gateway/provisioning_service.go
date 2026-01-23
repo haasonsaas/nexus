@@ -6,12 +6,15 @@ package gateway
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/haasonsaas/nexus/internal/provisioning"
+	"github.com/haasonsaas/nexus/pkg/models"
 	proto "github.com/haasonsaas/nexus/pkg/proto"
 )
 
@@ -186,11 +189,20 @@ func (s *provisioningService) SubmitProvisioningStep(ctx context.Context, req *p
 		// All steps completed
 		session.Status = proto.ProvisioningStatus_PROVISIONING_STATUS_COMPLETED
 
-		// TODO: Actually provision the channel with the collected data
-		s.server.logger.Info("provisioning completed",
-			"session_id", session.ID,
-			"channel_type", session.ChannelType,
-		)
+		if err := s.applyProvisioning(ctx, session); err != nil {
+			session.Status = proto.ProvisioningStatus_PROVISIONING_STATUS_FAILED
+			session.Error = err.Error()
+			s.server.logger.Error("provisioning failed",
+				"session_id", session.ID,
+				"channel_type", session.ChannelType,
+				"error", err,
+			)
+		} else {
+			s.server.logger.Info("provisioning completed",
+				"session_id", session.ID,
+				"channel_type", session.ChannelType,
+			)
+		}
 	}
 
 	s.sessions.Update(session)
@@ -198,6 +210,24 @@ func (s *provisioningService) SubmitProvisioningStep(ctx context.Context, req *p
 	return &proto.SubmitProvisioningStepResponse{
 		Session: provisioningSessionToProto(session),
 	}, nil
+}
+
+func (s *provisioningService) applyProvisioning(ctx context.Context, session *provisioningSession) error {
+	if s == nil || s.server == nil {
+		return fmt.Errorf("server unavailable for provisioning")
+	}
+	if session == nil {
+		return fmt.Errorf("provisioning session is nil")
+	}
+	if s.server.configPath == "" {
+		return fmt.Errorf("config path not configured")
+	}
+	prov := provisioning.NewChannelProvisioner(s.server.configPath, s.server.logger)
+	channelType := models.ChannelType(strings.ToLower(session.ChannelType))
+	if err := prov.ApplyProvisioning(ctx, channelType, session.Data); err != nil {
+		return err
+	}
+	return nil
 }
 
 // CancelProvisioning cancels an active provisioning session.

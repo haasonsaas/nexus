@@ -123,6 +123,100 @@ func (p *ChannelProvisioner) DisableChannel(ctx context.Context, channelType mod
 	return p.updateChannelEnabled(channelType, false)
 }
 
+// ApplyProvisioning updates channel credentials/config and enables the channel.
+func (p *ChannelProvisioner) ApplyProvisioning(ctx context.Context, channelType models.ChannelType, data map[string]string) error {
+	if p == nil {
+		return fmt.Errorf("provisioner is nil")
+	}
+	if p.configPath == "" {
+		return fmt.Errorf("config path is required")
+	}
+
+	channelKey := strings.ToLower(string(channelType))
+
+	// Load raw YAML to preserve formatting
+	raw, err := os.ReadFile(p.configPath)
+	if err != nil {
+		return fmt.Errorf("read config: %w", err)
+	}
+
+	var node yaml.Node
+	if err := yaml.Unmarshal(raw, &node); err != nil {
+		return fmt.Errorf("parse config: %w", err)
+	}
+
+	switch channelType {
+	case models.ChannelTelegram:
+		token := strings.TrimSpace(data["bot_token"])
+		if token == "" {
+			return fmt.Errorf("telegram bot_token is required")
+		}
+		if err := setYAMLValue(&node, []string{"channels", channelKey, "bot_token"}, token); err != nil {
+			return fmt.Errorf("update config: %w", err)
+		}
+	case models.ChannelDiscord:
+		token := strings.TrimSpace(data["bot_token"])
+		appID := strings.TrimSpace(data["application_id"])
+		if token == "" || appID == "" {
+			return fmt.Errorf("discord bot_token and application_id are required")
+		}
+		if err := setYAMLValue(&node, []string{"channels", channelKey, "bot_token"}, token); err != nil {
+			return fmt.Errorf("update config: %w", err)
+		}
+		if err := setYAMLValue(&node, []string{"channels", channelKey, "app_id"}, appID); err != nil {
+			return fmt.Errorf("update config: %w", err)
+		}
+	case models.ChannelSlack:
+		botToken := strings.TrimSpace(data["bot_token"])
+		appToken := strings.TrimSpace(data["app_token"])
+		if botToken == "" || appToken == "" {
+			return fmt.Errorf("slack bot_token and app_token are required")
+		}
+		if err := setYAMLValue(&node, []string{"channels", channelKey, "bot_token"}, botToken); err != nil {
+			return fmt.Errorf("update config: %w", err)
+		}
+		if err := setYAMLValue(&node, []string{"channels", channelKey, "app_token"}, appToken); err != nil {
+			return fmt.Errorf("update config: %w", err)
+		}
+		if secret := strings.TrimSpace(data["signing_secret"]); secret != "" {
+			if err := setYAMLValue(&node, []string{"channels", channelKey, "signing_secret"}, secret); err != nil {
+				return fmt.Errorf("update config: %w", err)
+			}
+		}
+	case models.ChannelSignal:
+		account := strings.TrimSpace(data["phone_number"])
+		if account == "" {
+			return fmt.Errorf("signal phone_number is required")
+		}
+		if err := setYAMLValue(&node, []string{"channels", channelKey, "account"}, account); err != nil {
+			return fmt.Errorf("update config: %w", err)
+		}
+	case models.ChannelWhatsApp:
+		// WhatsApp provisioning relies on edge-based QR flow; no config fields required.
+	default:
+		return fmt.Errorf("unsupported channel type: %s", channelType)
+	}
+
+	if err := setYAMLValue(&node, []string{"channels", channelKey, "enabled"}, true); err != nil {
+		return fmt.Errorf("update config: %w", err)
+	}
+
+	output, err := yaml.Marshal(&node)
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+
+	if err := writeFilePreserveMode(p.configPath, output); err != nil {
+		return fmt.Errorf("write config: %w", err)
+	}
+
+	p.logger.Info("channel provisioned",
+		"type", channelType,
+		"enabled", true)
+
+	return nil
+}
+
 func (p *ChannelProvisioner) updateChannelEnabled(channelType models.ChannelType, enabled bool) error {
 	// Load raw YAML to preserve formatting
 	data, err := os.ReadFile(p.configPath)

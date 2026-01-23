@@ -23,182 +23,59 @@ After reviewing Clawdbot documentation (hooks, multi-agent sandbox, broadcast gr
 | Workspace bootstrap | `internal/workspace/bootstrap.go` | AGENTS/SOUL/USER/IDENTITY/MEMORY files |
 | System prompt assembly | `internal/gateway/system_prompt.go` | Identity, safety, tool notes injection |
 
-## High-Priority Patterns to Adopt
+## High-Priority Patterns - IMPLEMENTED ✅
 
-### 1. Event-Driven Hooks System
+### 1. Event-Driven Hooks System ✅
 
-**What Clawdbot has:**
-- Event types: `command:new`, `command:reset`, `command:stop`, `agent:bootstrap`, `gateway:startup`, `tool_result_persist`
-- HOOK.md metadata discovery in directories
-- Hook packs (npm-style packages)
-- Per-hook configuration and eligibility checking
+**Status:** Implemented at `internal/hooks/types.go`
 
-**Why adopt:**
-- Extends behavior without modifying core code
-- Enables session memory snapshots, command logging, boot automation
-- Clean separation of concerns
+**Implementation:**
+- Event types: `message.*`, `session.*`, `command.*`, `tool.*`, `agent.*`, `gateway.*`
+- Hook registration with priority and filtering
+- Async triggering via registry
+- Gateway lifecycle hooks (startup/shutdown)
 
-**Implementation plan:**
-```go
-// internal/hooks/types.go
-type HookEvent struct {
-    Type       string // "command", "agent", "gateway"
-    Action     string // "new", "reset", "stop", "bootstrap", "startup"
-    SessionKey string
-    Timestamp  time.Time
-    Context    HookContext
-    Messages   []string // Push messages to send to user
-}
+### 2. Broadcast Groups (Multi-Agent Message Processing) ✅
 
-type HookHandler func(ctx context.Context, event *HookEvent) error
+**Status:** Implemented at `internal/gateway/broadcast.go`
 
-type HookConfig struct {
-    Name        string
-    Description string
-    Events      []string
-    Requires    HookRequirements
-    Always      bool
-}
-```
-
-### 2. Broadcast Groups (Multi-Agent Message Processing)
-
-**What Clawdbot has:**
-- Multiple agents process the same message simultaneously
-- Parallel (default) or sequential processing strategy
+**Implementation:**
+- `BroadcastManager` with parallel/sequential strategies
+- `BroadcastGroup` configuration per-peer
 - Session isolation per agent
-- Per-peer configuration (WhatsApp group → agent list)
+- Config: `gateway.broadcast.groups` and `gateway.broadcast.strategy`
 
-**Why adopt:**
-- Specialized agent teams (code reviewer + security auditor + docs generator)
-- Multi-language support
-- QA workflows (agent + reviewer)
+### 3. Advanced Session Scoping ✅
 
-**Implementation plan:**
-```go
-// internal/gateway/broadcast.go
-type BroadcastConfig struct {
-    Strategy string            // "parallel" or "sequential"
-    Groups   map[string][]string // peer_id -> [agent_ids]
-}
+**Status:** Implemented at `internal/sessions/scoping.go` and `internal/config/config.go`
 
-func (g *Gateway) processBroadcast(ctx context.Context, msg InboundMessage) error {
-    agentIDs := g.cfg.Broadcast.Groups[msg.PeerID]
-    if len(agentIDs) == 0 {
-        return g.processNormal(ctx, msg) // fallback to normal routing
-    }
+**Implementation:**
+- `DMScope`: `main`, `per-peer`, `per-channel-peer`
+- `IdentityLinks` with `SessionKeyBuilder.ResolveIdentity()`
+- Reset modes: `never`, `daily`, `idle`, `daily+idle`
+- Per-type and per-channel reset overrides
+- Config validation for scope settings
 
-    if g.cfg.Broadcast.Strategy == "sequential" {
-        for _, agentID := range agentIDs {
-            g.processForAgent(ctx, msg, agentID)
-        }
-    } else {
-        var wg sync.WaitGroup
-        for _, agentID := range agentIDs {
-            wg.Add(1)
-            go func(aid string) {
-                defer wg.Done()
-                g.processForAgent(ctx, msg, aid)
-            }(agentID)
-        }
-        wg.Wait()
-    }
-    return nil
-}
-```
+### 4. Tool Groups and Profiles ✅
 
-### 3. Advanced Session Scoping
+**Status:** Implemented at `internal/tools/policy/groups.go`
 
-**What Clawdbot has:**
-- `dmScope`: `main` (all DMs share session), `per-peer`, `per-channel-peer`
-- `identityLinks`: Map provider-prefixed peer IDs to canonical identity
-- Reset policies: daily (at hour), idle (minutes), per-type, per-channel
+**Implementation:**
+- Groups: `group:runtime`, `group:fs`, `group:sessions`, `group:memory`, `group:ui`, `group:automation`, `group:messaging`
+- Profiles: `coding`, `messaging`, `readonly`, `full`, `minimal`
+- `ExpandGroups()` function for pattern expansion
+- Integration with tool policy resolver
 
-**Why adopt:**
-- Better control over session continuity
-- Cross-channel identity linking
-- Automatic session expiry
+### 5. Multi-Agent Sandbox Modes ✅
 
-**Implementation plan:**
-```go
-// internal/config/session.go
-type SessionScopeConfig struct {
-    DMScope       string            // "main", "per-peer", "per-channel-peer"
-    IdentityLinks map[string][]string // canonical_id -> [provider:peer_id, ...]
-    Reset         SessionResetConfig
-    ResetByType   map[string]SessionResetConfig // "dm", "group", "thread"
-    ResetByChannel map[string]SessionResetConfig
-}
+**Status:** Implemented at `internal/tools/sandbox/modes.go` and `internal/config/config.go`
 
-type SessionResetConfig struct {
-    Mode        string // "daily", "idle"
-    AtHour      int    // for daily mode
-    IdleMinutes int    // for idle mode
-}
-```
-
-### 4. Tool Groups and Profiles
-
-**What Clawdbot has:**
-- Groups: `group:runtime` (exec, bash, process), `group:fs` (read, write, edit), `group:sessions`, `group:memory`, `group:ui`, `group:automation`, `group:messaging`
-- Profiles: `coding`, `messaging`
-- Per-provider tool restrictions
-
-**Why adopt:**
-- Simpler configuration (allow `group:fs` vs listing each tool)
-- Consistent security profiles across agents
-- Provider-specific restrictions
-
-**Implementation plan:**
-```go
-// internal/tools/policy/groups.go
-var ToolGroups = map[string][]string{
-    "group:runtime":    {"exec", "bash", "process"},
-    "group:fs":         {"read", "write", "edit", "apply_patch"},
-    "group:sessions":   {"sessions_list", "sessions_history", "sessions_send", "sessions_spawn", "session_status"},
-    "group:memory":     {"memory_search", "memory_get"},
-    "group:ui":         {"browser", "canvas"},
-    "group:automation": {"cron", "gateway"},
-    "group:messaging":  {"message"},
-}
-
-func ExpandGroups(patterns []string) []string {
-    var result []string
-    for _, p := range patterns {
-        if expanded, ok := ToolGroups[p]; ok {
-            result = append(result, expanded...)
-        } else {
-            result = append(result, p)
-        }
-    }
-    return result
-}
-```
-
-### 5. Multi-Agent Sandbox Modes
-
-**What Clawdbot has:**
-- `mode`: `off`, `all`, `non-main`
-- `scope`: `agent` (one container per agent), `session` (one per session), `shared`
-- Per-agent sandbox overrides
-
-**Why adopt:**
-- Different security profiles for different agents
-- Resource sharing options
-- Main agent unsandboxed, others sandboxed
-
-**Implementation plan:**
-```go
-// internal/config/sandbox.go
-type SandboxConfig struct {
-    Mode            string // "off", "all", "non-main"
-    Scope           string // "agent", "session", "shared"
-    WorkspaceRoot   string
-    WorkspaceAccess string
-    Docker          DockerSandboxConfig
-    Prune           SandboxPruneConfig
-}
-```
+**Implementation:**
+- Modes: `off`, `all`, `non-main`
+- Scopes: `agent`, `session`, `shared`
+- `ShouldSandbox(agentID, isMainAgent)` helper
+- `SandboxKey(agentID, sessionID)` for isolation
+- Config: `tools.sandbox.mode`, `tools.sandbox.scope`, `tools.sandbox.workspace_root`, `tools.sandbox.workspace_access`
 
 ## Medium-Priority Patterns
 
@@ -211,16 +88,24 @@ Track where sessions came from for debugging and UI display:
 - `accountId`: Provider account
 - `threadId`: Thread/topic ID
 
-### 7. Runtime Commands
+### 7. Runtime Commands ✅
 
-In-chat commands for session control:
-- `/new [model]` - Start new session (optional model switch)
-- `/reset` - Reset current session
-- `/status` - Show context usage, toggles, cred freshness
-- `/context list|detail` - Show system prompt contents
-- `/stop` - Abort current run
-- `/compact [instructions]` - Manual compaction
-- `/send on|off|inherit` - Override send policy
+**Status:** Implemented at `internal/commands/builtin.go`
+
+**Implemented commands:**
+- `/new [model]` - Start new session with optional model
+- `/reset`, `/clear` - Aliases for /new
+- `/status` - Show session status
+- `/context [list|detail]` - Show system prompt contents
+- `/stop`, `/abort`, `/cancel` - Abort current run
+- `/compact`, `/summarize` - Manual compaction
+- `/send [on|off|inherit]` - Override send policy
+- `/model [name]` - Show or change model
+- `/think [budget|off]` - Extended thinking control
+- `/memory [query]` - Memory search
+- `/undo` - Undo last message
+- `/whoami` - Show sender identity
+- `/help [command]` - Command help
 
 ### 8. Session Pruning (vs Compaction)
 
@@ -228,12 +113,17 @@ Separate in-memory tool result trimming from persistent compaction:
 - Pruning: Trim old tool results per-request, doesn't persist
 - Compaction: Summarize and persist
 
-### 9. Elevated Mode
+### 9. Elevated Mode ✅
 
-Sender-based allowlist for elevated tool access:
-- Global `tools.elevated` baseline
-- Per-agent `tools.elevated` override
-- Can be disabled globally or per-agent
+**Status:** Implemented at `internal/gateway/elevated.go`
+
+**Implementation:**
+- Global `tools.elevated.enabled` toggle
+- `tools.elevated.allow_from` per-channel sender allowlists
+- `tools.elevated.tools` list of elevated tool names
+- Directive parsing in messages (`/elevate`, etc.)
+- Permission resolution with sender matching
+- Security audit warnings for missing allowlists
 
 ## Low-Priority / Future Patterns
 
@@ -249,20 +139,32 @@ UI clients querying gateway for session state.
 
 Thread isolation for forum-style chats.
 
-## Implementation Order Recommendation
+## Implementation Status Summary
 
-1. **Tool Groups** - Quick win, improves config ergonomics
-2. **Event Hooks** - Foundation for extensibility
-3. **Broadcast Groups** - Enables multi-agent workflows
-4. **Advanced Session Scoping** - Better session control
-5. **Runtime Commands** - User-facing improvements
-6. **Sandbox Modes** - Security flexibility
-7. **Session Pruning** - Performance optimization
-8. **Elevated Mode** - Fine-grained access control
+| Pattern | Status | Location |
+|---------|--------|----------|
+| Event-Driven Hooks | ✅ Done | `internal/hooks/` |
+| Broadcast Groups | ✅ Done | `internal/gateway/broadcast.go` |
+| Session Scoping | ✅ Done | `internal/sessions/scoping.go` |
+| Tool Groups | ✅ Done | `internal/tools/policy/groups.go` |
+| Sandbox Modes | ✅ Done | `internal/tools/sandbox/modes.go` |
+| Runtime Commands | ✅ Done | `internal/commands/builtin.go` |
+| Elevated Mode | ✅ Done | `internal/gateway/elevated.go` |
+| Security Audits | ✅ Done | `internal/doctor/security_audit.go` |
+| AgentDir Collision | ✅ Done | `internal/multiagent/config.go` |
+| Session Pruning | ⏳ Pending | - |
+| Hook Packs | ⏳ Future | - |
+| Telegram Forums | ⏳ Future | - |
+
+## Remaining Work
+
+1. **Session Pruning** - In-memory tool result trimming (separate from persistent compaction)
+2. **Hook Packs** - npm-style hook package installation
+3. **Telegram Forum Support** - Thread isolation for forum-style chats
 
 ## Notes
 
-- Nexus already has strong foundations (approval, compaction, sub-agents, job persistence)
-- Priority should be features that unlock new use cases (hooks, broadcast)
-- Tool groups are a quick ergonomic win
-- Session scoping improvements help with multi-user scenarios
+- All high-priority Clawdbot patterns have been adopted
+- Nexus has strong foundations (approval, compaction, sub-agents, persistence)
+- Security audits extended with channel/elevated/sandbox checks
+- Multi-agent support is comprehensive with broadcast groups and sandbox isolation

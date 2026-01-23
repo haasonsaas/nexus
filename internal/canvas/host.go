@@ -139,12 +139,18 @@ func (h *Host) Start(ctx context.Context) error {
 	if h.liveReload {
 		watcher, err = fsnotify.NewWatcher()
 		if err != nil {
-			_ = listener.Close()
+			if closeErr := listener.Close(); closeErr != nil {
+				h.logger.Warn("failed to close canvas listener", "error", closeErr)
+			}
 			return err
 		}
 		if err := h.watchRecursive(watcher, h.root); err != nil {
-			_ = watcher.Close()
-			_ = listener.Close()
+			if closeErr := watcher.Close(); closeErr != nil {
+				h.logger.Warn("failed to close canvas watcher", "error", closeErr)
+			}
+			if closeErr := listener.Close(); closeErr != nil {
+				h.logger.Warn("failed to close canvas listener", "error", closeErr)
+			}
 			return err
 		}
 	}
@@ -183,7 +189,9 @@ func (h *Host) Close() error {
 		h.watchCancel = nil
 	}
 	if h.watcher != nil {
-		_ = h.watcher.Close()
+		if err := h.watcher.Close(); err != nil {
+			h.logger.Warn("failed to close canvas watcher", "error", err)
+		}
 		h.watcher = nil
 	}
 	if h.server != nil {
@@ -331,7 +339,7 @@ func (h *Host) removeClient(conn *websocket.Conn) {
 	h.mu.Lock()
 	delete(h.clients, conn)
 	h.mu.Unlock()
-	_ = conn.Close()
+	_ = conn.Close() //nolint:errcheck
 }
 
 func (h *Host) closeClients() {
@@ -343,7 +351,7 @@ func (h *Host) closeClients() {
 	h.clients = make(map[*websocket.Conn]struct{})
 	h.mu.Unlock()
 	for _, conn := range clients {
-		_ = conn.Close()
+		_ = conn.Close() //nolint:errcheck
 	}
 }
 
@@ -356,7 +364,7 @@ func (h *Host) broadcastReload() {
 	h.mu.RUnlock()
 
 	for _, conn := range clients {
-		conn.SetWriteDeadline(time.Now().Add(2 * time.Second)) //nolint:errcheck // best-effort deadline
+		_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second)) //nolint:errcheck
 		if err := conn.WriteMessage(websocket.TextMessage, []byte("reload")); err != nil {
 			h.removeClient(conn)
 		}

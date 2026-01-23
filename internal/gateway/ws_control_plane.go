@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -142,6 +143,7 @@ type wsSession struct {
 	cancel  context.CancelFunc
 
 	id          string
+	requestHost string
 	connected   atomic.Bool
 	seq         int64
 	user        *models.User
@@ -157,6 +159,7 @@ func (h *wsControlPlane) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx, cancel := context.WithCancel(r.Context())
+	requestHost := hostFromRequest(r)
 	session := &wsSession{
 		control:     h,
 		conn:        conn,
@@ -164,6 +167,7 @@ func (h *wsControlPlane) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ctx:         ctx,
 		cancel:      cancel,
 		id:          uuid.NewString(),
+		requestHost: requestHost,
 		headerUser:  h.authenticateRequest(r),
 		idempotency: make(map[string]struct{}),
 	}
@@ -598,7 +602,7 @@ func (s *wsSession) buildHelloPayload() map[string]any {
 		"id": s.id,
 	}
 	if s.control != nil && s.control.server != nil && s.control.server.canvasHost != nil {
-		if canvasURL := s.control.server.canvasHost.CanvasURL(); canvasURL != "" {
+		if canvasURL := s.control.server.canvasHost.CanvasURL(s.requestHost); canvasURL != "" {
 			serverPayload["canvasHostUrl"] = canvasURL
 		}
 	}
@@ -684,6 +688,31 @@ func (h *wsControlPlane) authenticateRequest(r *http.Request) *models.User {
 		}
 	}
 	return nil
+}
+
+func hostFromRequest(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	host := strings.TrimSpace(r.Host)
+	if host == "" && r.URL != nil {
+		host = strings.TrimSpace(r.URL.Host)
+	}
+	if host == "" {
+		return ""
+	}
+	if strings.HasPrefix(host, "[") {
+		if parsed, _, err := net.SplitHostPort(host); err == nil {
+			return strings.Trim(parsed, "[]")
+		}
+		return strings.Trim(host, "[]")
+	}
+	if strings.Contains(host, ":") {
+		if parsed, _, err := net.SplitHostPort(host); err == nil {
+			return parsed
+		}
+	}
+	return host
 }
 
 func supportedWSMethods() []string {

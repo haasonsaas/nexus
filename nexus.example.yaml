@@ -9,6 +9,19 @@ server:
   http_port: 8080
   metrics_port: 9090
 
+canvas_host:
+  # Dedicated canvas host for local HTML/JS canvas files.
+  # When enabled, the canvas is available at http://<host>:<port>/__nexus__/canvas/
+  enabled: false
+  # host: 0.0.0.0
+  # port: 18793
+  # root: ./canvas
+  # namespace: /__nexus__
+  # live_reload: true
+  # inject_client: true
+  # auto_index: true
+  # a2ui_root: ./a2ui
+
 commands:
   # Enable text command handling
   enabled: true

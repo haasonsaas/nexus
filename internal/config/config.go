@@ -948,10 +948,7 @@ func applyCanvasHostDefaults(cfg *CanvasHostConfig, rootCfg *Config) {
 	if cfg == nil {
 		return
 	}
-	if cfg.Enabled == nil {
-		enabled := true
-		cfg.Enabled = &enabled
-	}
+	rootSpecified := strings.TrimSpace(cfg.Root) != ""
 	if cfg.Host == "" {
 		if rootCfg != nil && rootCfg.Server.Host != "" {
 			cfg.Host = rootCfg.Server.Host
@@ -999,6 +996,15 @@ func applyCanvasHostDefaults(cfg *CanvasHostConfig, rootCfg *Config) {
 	if cfg.AutoIndex == nil {
 		autoIndex := true
 		cfg.AutoIndex = &autoIndex
+	}
+	if cfg.Enabled == nil {
+		enabled := false
+		if rootSpecified {
+			enabled = true
+		} else if info, err := os.Stat(cfg.Root); err == nil && info.IsDir() {
+			enabled = true
+		}
+		cfg.Enabled = &enabled
 	}
 }
 

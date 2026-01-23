@@ -200,15 +200,20 @@ func (h *Host) Close() error {
 }
 
 // CanvasURL returns the absolute URL for the canvas root.
-func (h *Host) CanvasURL() string {
+// requestHost should be the host name from the incoming client request (without port).
+func (h *Host) CanvasURL(requestHost string) string {
 	if h == nil {
 		return ""
 	}
 	host := strings.TrimSpace(h.host)
 	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = strings.TrimSpace(requestHost)
+	}
+	if host == "" {
 		host = "localhost"
 	}
-	return fmt.Sprintf("http://%s:%d%s/", host, h.port, h.canvasPrefix())
+	hostPort := net.JoinHostPort(host, strconv.Itoa(h.port))
+	return fmt.Sprintf("http://%s%s/", hostPort, h.canvasPrefix())
 }
 
 func (h *Host) canvasHandler() http.Handler {

@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/agent"
+	"github.com/haasonsaas/nexus/internal/artifacts"
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/doctor"
 	"github.com/haasonsaas/nexus/internal/gateway"
@@ -301,6 +302,128 @@ func runProfileInit(cmd *cobra.Command, name, provider string, setActive bool) e
 		}
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "Profile config written: %s\n", path)
+	return nil
+}
+
+// =============================================================================
+// Artifacts Command Handlers
+// =============================================================================
+
+func runArtifactsList(cmd *cobra.Command, configPath, sessionID, edgeID, artifactType string, limit int) error {
+	configPath = resolveConfigPath(configPath)
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	repo, err := gateway.BuildArtifactRepository(cmd.Context(), cfg, slog.Default())
+	if err != nil {
+		return fmt.Errorf("artifact repository: %w", err)
+	}
+	if repo == nil {
+		return fmt.Errorf("artifact storage is disabled")
+	}
+
+	filter := artifacts.Filter{
+		SessionID: sessionID,
+		EdgeID:    edgeID,
+		Type:      artifactType,
+		Limit:     limit,
+	}
+	results, err := repo.ListArtifacts(cmd.Context(), filter)
+	if err != nil {
+		return fmt.Errorf("list artifacts: %w", err)
+	}
+
+	out := cmd.OutOrStdout()
+	if len(results) == 0 {
+		fmt.Fprintln(out, "No artifacts found.")
+		return nil
+	}
+
+	fmt.Fprintln(out, "Artifacts:")
+	for _, art := range results {
+		fmt.Fprintf(out, "  - id=%s type=%s size=%d mime=%s reference=%s\n",
+			art.Id,
+			art.Type,
+			art.Size,
+			art.MimeType,
+			art.Reference,
+		)
+	}
+
+	return nil
+}
+
+func runArtifactsGet(cmd *cobra.Command, configPath, artifactID, outPath string, stdout bool) error {
+	if strings.TrimSpace(artifactID) == "" {
+		return fmt.Errorf("artifact id is required")
+	}
+	if stdout && strings.TrimSpace(outPath) != "" {
+		return fmt.Errorf("cannot combine --stdout with --out")
+	}
+
+	configPath = resolveConfigPath(configPath)
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	repo, err := gateway.BuildArtifactRepository(cmd.Context(), cfg, slog.Default())
+	if err != nil {
+		return fmt.Errorf("artifact repository: %w", err)
+	}
+	if repo == nil {
+		return fmt.Errorf("artifact storage is disabled")
+	}
+
+	artifact, reader, err := repo.GetArtifact(cmd.Context(), artifactID)
+	if err != nil {
+		return fmt.Errorf("get artifact: %w", err)
+	}
+	defer reader.Close()
+
+	metaOut := cmd.OutOrStdout()
+	if stdout {
+		metaOut = cmd.ErrOrStderr()
+	}
+	fmt.Fprintf(metaOut, "Artifact:\n  ID: %s\n  Type: %s\n  Size: %d\n  MIME: %s\n  Reference: %s\n",
+		artifact.Id,
+		artifact.Type,
+		artifact.Size,
+		artifact.MimeType,
+		artifact.Reference,
+	)
+	if strings.HasPrefix(artifact.Reference, "redacted://") {
+		fmt.Fprintln(metaOut, "  Redacted: true")
+	}
+
+	if strings.TrimSpace(outPath) == "" && !stdout {
+		fmt.Fprintln(metaOut, "No output path specified; not writing artifact data.")
+		return nil
+	}
+
+	var dest io.Writer
+	if stdout {
+		dest = cmd.OutOrStdout()
+	} else {
+		if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil && filepath.Dir(outPath) != "." {
+			return fmt.Errorf("create output dir: %w", err)
+		}
+		file, err := os.Create(outPath)
+		if err != nil {
+			return fmt.Errorf("create output file: %w", err)
+		}
+		defer file.Close()
+		dest = file
+	}
+
+	if _, err := io.Copy(dest, reader); err != nil {
+		return fmt.Errorf("write artifact data: %w", err)
+	}
+	if !stdout {
+		fmt.Fprintf(metaOut, "Wrote artifact data to %s\n", outPath)
+	}
 	return nil
 }
 

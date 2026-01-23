@@ -253,6 +253,7 @@ type ChannelsConfig struct {
 	Signal   SignalConfig   `yaml:"signal"`
 	IMessage IMessageConfig `yaml:"imessage"`
 	Matrix   MatrixConfig   `yaml:"matrix"`
+	Teams    TeamsConfig    `yaml:"teams"`
 }
 
 type WhatsAppConfig struct {
@@ -318,6 +319,17 @@ type SlackConfig struct {
 	BotToken      string `yaml:"bot_token"`
 	AppToken      string `yaml:"app_token"`
 	SigningSecret string `yaml:"signing_secret"`
+}
+
+type TeamsConfig struct {
+	Enabled      bool   `yaml:"enabled"`
+	TenantID     string `yaml:"tenant_id"`
+	ClientID     string `yaml:"client_id"`
+	ClientSecret string `yaml:"client_secret"`
+	// WebhookURL is the public URL for receiving Teams notifications
+	WebhookURL string `yaml:"webhook_url"`
+	// PollInterval for checking messages when webhooks unavailable (default: 5s)
+	PollInterval string `yaml:"poll_interval"`
 }
 
 type LLMConfig struct {

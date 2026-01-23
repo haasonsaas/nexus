@@ -17,6 +17,8 @@ const (
 	ChannelSignal   ChannelType = "signal"
 	ChannelIMessage ChannelType = "imessage"
 	ChannelMatrix   ChannelType = "matrix"
+	ChannelTeams    ChannelType = "teams"
+	ChannelEmail    ChannelType = "email"
 )
 
 // Direction indicates if a message is inbound or outbound.

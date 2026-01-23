@@ -4,10 +4,12 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/channels/discord"
 	"github.com/haasonsaas/nexus/internal/channels/slack"
+	"github.com/haasonsaas/nexus/internal/channels/teams"
 	"github.com/haasonsaas/nexus/internal/channels/telegram"
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/pkg/models"
@@ -74,6 +76,7 @@ func registerBuiltinChannelPlugins(registry *channelPluginRegistry) {
 	registry.Register(telegramPlugin{})
 	registry.Register(discordPlugin{})
 	registry.Register(slackPlugin{})
+	registry.Register(teamsPlugin{})
 }
 
 type telegramPlugin struct{}
@@ -150,5 +153,46 @@ func (slackPlugin) Build(cfg *config.Config, logger *slog.Logger) (channels.Adap
 		BotToken: cfg.Channels.Slack.BotToken,
 		AppToken: cfg.Channels.Slack.AppToken,
 		Logger:   logger,
+	})
+}
+
+type teamsPlugin struct{}
+
+func (teamsPlugin) Manifest() ChannelPluginManifest {
+	return ChannelPluginManifest{
+		ID:   models.ChannelTeams,
+		Name: "Microsoft Teams",
+	}
+}
+
+func (teamsPlugin) Enabled(cfg *config.Config) bool {
+	return cfg != nil && cfg.Channels.Teams.Enabled
+}
+
+func (teamsPlugin) Build(cfg *config.Config, logger *slog.Logger) (channels.Adapter, error) {
+	if cfg.Channels.Teams.TenantID == "" {
+		return nil, errors.New("teams tenant_id is required")
+	}
+	if cfg.Channels.Teams.ClientID == "" {
+		return nil, errors.New("teams client_id is required")
+	}
+	if cfg.Channels.Teams.ClientSecret == "" {
+		return nil, errors.New("teams client_secret is required")
+	}
+
+	pollInterval := 5 * time.Second
+	if cfg.Channels.Teams.PollInterval != "" {
+		if d, err := time.ParseDuration(cfg.Channels.Teams.PollInterval); err == nil {
+			pollInterval = d
+		}
+	}
+
+	return teams.NewAdapter(teams.Config{
+		TenantID:     cfg.Channels.Teams.TenantID,
+		ClientID:     cfg.Channels.Teams.ClientID,
+		ClientSecret: cfg.Channels.Teams.ClientSecret,
+		WebhookURL:   strings.TrimSpace(cfg.Channels.Teams.WebhookURL),
+		PollInterval: pollInterval,
+		Logger:       logger,
 	})
 }

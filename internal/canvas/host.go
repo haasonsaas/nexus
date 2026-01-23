@@ -545,7 +545,7 @@ func trimHostBrackets(value string) string {
 }
 
 func isLoopbackHost(value string) bool {
-	normalized := strings.ToLower(strings.TrimSpace(value))
+	normalized := strings.ToLower(strings.TrimSpace(trimHostBrackets(value)))
 	if normalized == "" {
 		return false
 	}

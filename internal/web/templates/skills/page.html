@@ -1,0 +1,56 @@
+{{define "skills/page.html"}}
+<div class="page-header">
+    <h1>Skills</h1>
+    <p class="subtitle">Installed skills and eligibility status</p>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Skills</h3>
+        <button class="btn btn-sm btn-secondary"
+                hx-post="/ui/api/skills/refresh"
+                hx-swap="none">
+            Refresh
+        </button>
+    </div>
+    <div class="card-body">
+        {{if .Skills}}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Description</th>
+                        <th>Source</th>
+                        <th>Execution</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Skills}}
+                    <tr>
+                        <td class="mono">{{if .Emoji}}{{.Emoji}} {{end}}{{.Name}}</td>
+                        <td>{{.Description}}</td>
+                        <td>{{.Source}}</td>
+                        <td>{{.Execution}}</td>
+                        <td>
+                            {{if .Eligible}}
+                            <span class="status-badge status-enabled">Eligible</span>
+                            {{else}}
+                            <span class="status-badge status-disabled">Ineligible</span>
+                            {{if .Reason}}
+                            <div class="text-muted">{{.Reason}}</div>
+                            {{end}}
+                            {{end}}
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        {{else}}
+        <p class="text-muted">No skills discovered</p>
+        {{end}}
+    </div>
+</div>
+{{end}}

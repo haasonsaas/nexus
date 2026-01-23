@@ -1,0 +1,9 @@
+{{define "sessions/title.html"}}
+<div class="session-title" id="session-title">
+    {{if .Title}}
+        <h2>{{.Title}}</h2>
+    {{else}}
+        <h2>Untitled Session</h2>
+    {{end}}
+</div>
+{{end}}

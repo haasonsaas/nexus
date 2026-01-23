@@ -43,6 +43,12 @@ type HealthAdapter interface {
 	Metrics() MetricsSnapshot
 }
 
+// QRAdapter represents adapters that provide QR codes for login/pairing.
+type QRAdapter interface {
+	// QRChannel returns a channel that emits QR codes for pairing/login.
+	QRChannel() <-chan string
+}
+
 // StreamingAdapter represents adapters that support streaming responses.
 // This enables real-time "typing" indicators and progressive message updates.
 type StreamingAdapter interface {

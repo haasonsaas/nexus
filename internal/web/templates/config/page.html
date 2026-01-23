@@ -1,0 +1,31 @@
+{{define "config/page.html"}}
+<div class="page-header">
+    <h1>Config</h1>
+    <p class="subtitle">Current gateway configuration (secrets redacted)</p>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Config File</h3>
+        {{if .ConfigPath}}
+        <span class="text-muted">{{.ConfigPath}}</span>
+        {{end}}
+    </div>
+    <div class="card-body">
+        <div class="config-form">
+            <form hx-post="/ui/api/config" hx-target="#config-output" hx-swap="innerHTML">
+                <div class="filter-group">
+                    <label for="config-path">Path</label>
+                    <input id="config-path" name="path" type="text" class="filter-input" placeholder="llm.default_provider">
+                </div>
+                <div class="filter-group">
+                    <label for="config-value">Value (JSON or string)</label>
+                    <input id="config-value" name="value" type="text" class="filter-input" placeholder="\"anthropic\"">
+                </div>
+                <button type="submit" class="btn btn-secondary btn-sm">Update</button>
+            </form>
+        </div>
+        <pre class="config-output" id="config-output">{{template "config/raw.html" .}}</pre>
+    </div>
+</div>
+{{end}}

@@ -106,8 +106,9 @@ func runServe(ctx context.Context, configPath string, debug bool) error {
 	)
 
 	server, err := gateway.NewManagedServer(gateway.ManagedServerConfig{
-		Config: cfg,
-		Logger: slog.Default(),
+		Config:     cfg,
+		Logger:     slog.Default(),
+		ConfigPath: configPath,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to initialize gateway: %w", err)

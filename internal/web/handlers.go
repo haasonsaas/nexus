@@ -46,6 +46,38 @@ type StatusData struct {
 	Status *SystemStatus
 }
 
+// ProviderData holds data for provider status page.
+type ProviderData struct {
+	PageData
+	Providers []*ProviderStatus
+}
+
+// CronData holds data for cron jobs page.
+type CronData struct {
+	PageData
+	Enabled bool
+	Jobs    []*CronJobSummary
+}
+
+// SkillsData holds data for skills page.
+type SkillsData struct {
+	PageData
+	Skills []*SkillSummary
+}
+
+// NodesData holds data for nodes page.
+type NodesData struct {
+	PageData
+	Nodes []*NodeSummary
+}
+
+// ConfigData holds data for config page.
+type ConfigData struct {
+	PageData
+	ConfigPath string
+	ConfigYAML string
+}
+
 // handleIndex redirects to the sessions list.
 func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
@@ -111,7 +143,7 @@ func (h *Handler) handleSessionList(w http.ResponseWriter, r *http.Request) {
 		Sessions:      sessionList,
 		ChannelFilter: channelFilter,
 		AgentFilter:   agentFilter,
-		Channels:      []string{"telegram", "slack", "discord", "api", "whatsapp"},
+		Channels:      []string{"telegram", "slack", "discord", "api", "whatsapp", "signal", "imessage", "matrix", "teams", "email"},
 		TotalCount:    len(sessionList),
 		Page:          page,
 		PageSize:      pageSize,
@@ -220,6 +252,92 @@ func (h *Handler) handleStatusDashboard(w http.ResponseWriter, r *http.Request) 
 			User:        userFromContext(ctx),
 		},
 		Status: status,
+	}
+
+	h.render(w, "layout.html", data)
+}
+
+// handleProviders renders the provider status page.
+func (h *Handler) handleProviders(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	data := ProviderData{
+		PageData: PageData{
+			Title:       "Providers",
+			CurrentPath: "/providers",
+			User:        userFromContext(ctx),
+		},
+		Providers: h.listProviders(ctx),
+	}
+
+	h.render(w, "layout.html", data)
+}
+
+// handleCron renders the cron jobs page.
+func (h *Handler) handleCron(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	jobs := h.listCronJobs()
+	enabled := h.config != nil && h.config.GatewayConfig != nil && h.config.GatewayConfig.Cron.Enabled
+
+	data := CronData{
+		PageData: PageData{
+			Title:       "Cron Jobs",
+			CurrentPath: "/cron",
+			User:        userFromContext(ctx),
+		},
+		Enabled: enabled,
+		Jobs:    jobs,
+	}
+
+	h.render(w, "layout.html", data)
+}
+
+// handleSkills renders the skills page.
+func (h *Handler) handleSkills(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	data := SkillsData{
+		PageData: PageData{
+			Title:       "Skills",
+			CurrentPath: "/skills",
+			User:        userFromContext(ctx),
+		},
+		Skills: h.listSkills(ctx),
+	}
+
+	h.render(w, "layout.html", data)
+}
+
+// handleNodes renders the nodes page.
+func (h *Handler) handleNodes(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	data := NodesData{
+		PageData: PageData{
+			Title:       "Nodes",
+			CurrentPath: "/nodes",
+			User:        userFromContext(ctx),
+		},
+		Nodes: h.listNodes(),
+	}
+
+	h.render(w, "layout.html", data)
+}
+
+// handleConfig renders the config page.
+func (h *Handler) handleConfig(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	configYAML, configPath := h.configSnapshot()
+	data := ConfigData{
+		PageData: PageData{
+			Title:       "Config",
+			CurrentPath: "/config",
+			User:        userFromContext(ctx),
+		},
+		ConfigPath: configPath,
+		ConfigYAML: configYAML,
 	}
 
 	h.render(w, "layout.html", data)

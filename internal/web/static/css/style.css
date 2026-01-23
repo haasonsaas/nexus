@@ -743,6 +743,100 @@ a:hover {
     animation: spin 0.6s linear infinite;
 }
 
+/* Providers */
+.providers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+}
+
+.provider-card {
+    padding: 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-secondary);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.provider-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.provider-name {
+    font-weight: 600;
+}
+
+.provider-qr {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+}
+
+.provider-qr img {
+    width: 160px;
+    height: 160px;
+    background: #fff;
+    padding: 8px;
+    border-radius: var(--radius);
+}
+
+/* Pills */
+.pill-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.pill {
+    padding: 2px 8px;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    font-size: 12px;
+}
+
+/* Session title */
+.session-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.session-title-form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.session-title h2 {
+    font-size: 18px;
+}
+
+/* Config */
+.config-output {
+    white-space: pre-wrap;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    padding: 12px;
+    border-radius: var(--radius);
+    margin-top: 16px;
+    max-height: 480px;
+    overflow: auto;
+}
+
+.config-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
 @keyframes spin {
     to {
         transform: rotate(360deg);

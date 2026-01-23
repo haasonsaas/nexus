@@ -55,13 +55,14 @@ import (
 // Server is the main Nexus gateway server that handles gRPC requests, manages channels,
 // and coordinates between the agent runtime, session store, and various subsystems.
 type Server struct {
-	config    *config.Config
-	grpc      *grpc.Server
-	channels  *channels.Registry
-	logger    *slog.Logger
-	wg        sync.WaitGroup
-	cancel    context.CancelFunc
-	startTime time.Time
+	config     *config.Config
+	configPath string
+	grpc       *grpc.Server
+	channels   *channels.Registry
+	logger     *slog.Logger
+	wg         sync.WaitGroup
+	cancel     context.CancelFunc
+	startTime  time.Time
 
 	// startupCancel cancels background discovery goroutines launched during initialization
 	startupCancel context.CancelFunc

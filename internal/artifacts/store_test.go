@@ -426,7 +426,7 @@ func TestSetDefaultTTLs(t *testing.T) {
 
 	t.Run("ignores empty keys", func(t *testing.T) {
 		SetDefaultTTLs(map[string]time.Duration{
-			"":     time.Hour,
+			"":    time.Hour,
 			"   ": 2 * time.Hour,
 		})
 		// Should not add empty keys

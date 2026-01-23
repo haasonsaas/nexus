@@ -642,14 +642,19 @@ func (s *wsSession) buildHelloPayload() map[string]any {
 }
 
 func (s *wsSession) buildHealthSnapshot() map[string]any {
+	if s.control == nil || s.control.server == nil {
+		return map[string]any{
+			"uptimeMs": int64(0),
+			"health": map[string]any{
+				"status": "ok",
+			},
+		}
+	}
 	payload := map[string]any{
 		"uptimeMs": time.Since(s.control.server.startTime).Milliseconds(),
 		"health": map[string]any{
 			"status": "ok",
 		},
-	}
-	if s.control.server == nil {
-		return payload
 	}
 
 	channelStatuses := make([]map[string]any, 0)

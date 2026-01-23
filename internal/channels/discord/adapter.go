@@ -494,6 +494,16 @@ func (a *Adapter) handleInteractionCreate(s *discordgo.Session, i *discordgo.Int
 		"interaction_id", i.ID,
 		"command_name", i.ApplicationCommandData().Name)
 
+	// Extract user info - Member is nil in DMs, use User instead
+	var userID, username string
+	if i.Member != nil && i.Member.User != nil {
+		userID = i.Member.User.ID
+		username = i.Member.User.Username
+	} else if i.User != nil {
+		userID = i.User.ID
+		username = i.User.Username
+	}
+
 	// Convert slash command to message
 	msg := &models.Message{
 		Channel:   models.ChannelDiscord,
@@ -504,12 +514,12 @@ func (a *Adapter) handleInteractionCreate(s *discordgo.Session, i *discordgo.Int
 			"discord_interaction_id":  i.ID,
 			"discord_channel_id":      i.ChannelID,
 			"discord_guild_id":        i.GuildID,
-			"discord_user_id":         i.Member.User.ID,
-			"discord_username":        i.Member.User.Username,
+			"discord_user_id":         userID,
+			"discord_username":        username,
 			"discord_command_name":    i.ApplicationCommandData().Name,
 			"discord_command_options": i.ApplicationCommandData().Options,
-			"sender_id":               i.Member.User.ID,
-			"sender_name":             i.Member.User.Username,
+			"sender_id":               userID,
+			"sender_name":             username,
 			"conversation_type":       "dm",
 		},
 		CreatedAt: time.Now(),

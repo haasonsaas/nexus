@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/haasonsaas/nexus/internal/config"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // AuditGatewayConfig checks gateway configuration for security issues.
@@ -157,7 +159,7 @@ func auditChannelPolicyScope(channel string, scope string, policy config.Channel
 		findings = append(findings, Finding{
 			CheckID:  fmt.Sprintf("channel.%s.%s.open", channel, scope),
 			Severity: SeverityInfo,
-			Title:    fmt.Sprintf("%s %s policy is open", strings.Title(channel), strings.ToUpper(scope)),
+			Title:    fmt.Sprintf("%s %s policy is open", cases.Title(language.English).String(channel), strings.ToUpper(scope)),
 			Detail:   fmt.Sprintf("channels.%s.%s.policy is set to open.", channel, scope),
 		})
 	}
@@ -165,7 +167,7 @@ func auditChannelPolicyScope(channel string, scope string, policy config.Channel
 		findings = append(findings, Finding{
 			CheckID:     fmt.Sprintf("channel.%s.%s.pairing_unsupported", channel, scope),
 			Severity:    SeverityWarn,
-			Title:       fmt.Sprintf("%s %s pairing policy will block all messages", strings.Title(channel), strings.ToUpper(scope)),
+			Title:       fmt.Sprintf("%s %s pairing policy will block all messages", cases.Title(language.English).String(channel), strings.ToUpper(scope)),
 			Detail:      fmt.Sprintf("channels.%s.%s.policy is pairing, but pairing is only supported for direct messages.", channel, scope),
 			Remediation: fmt.Sprintf("Set channels.%s.%s.policy to allowlist, open, or disabled.", channel, scope),
 		})
@@ -178,7 +180,7 @@ func auditChannelPolicyScope(channel string, scope string, policy config.Channel
 		findings = append(findings, Finding{
 			CheckID:  fmt.Sprintf("channel.%s.%s.allowlist_empty", channel, scope),
 			Severity: SeverityInfo,
-			Title:    fmt.Sprintf("%s %s allowlist is empty", strings.Title(channel), strings.ToUpper(scope)),
+			Title:    fmt.Sprintf("%s %s allowlist is empty", cases.Title(language.English).String(channel), strings.ToUpper(scope)),
 			Detail:   detail,
 		})
 	}

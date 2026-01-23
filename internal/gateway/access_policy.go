@@ -320,7 +320,7 @@ func extractSenderName(msg *models.Message) string {
 		return strings.TrimSpace(name)
 	}
 	if first, ok := msg.Metadata["user_first"].(string); ok {
-		last, _ := msg.Metadata["user_last"].(string)
+		last, _ := msg.Metadata["user_last"].(string) //nolint:errcheck
 		combined := strings.TrimSpace(strings.TrimSpace(first) + " " + strings.TrimSpace(last))
 		if combined != "" {
 			return combined

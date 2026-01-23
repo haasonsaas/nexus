@@ -21,8 +21,8 @@ import (
 	"github.com/haasonsaas/nexus/internal/tools/memorysearch"
 	"github.com/haasonsaas/nexus/internal/tools/reminders"
 	"github.com/haasonsaas/nexus/internal/tools/sandbox"
-	"github.com/haasonsaas/nexus/internal/tools/servicenow"
 	"github.com/haasonsaas/nexus/internal/tools/sandbox/firecracker"
+	"github.com/haasonsaas/nexus/internal/tools/servicenow"
 	"github.com/haasonsaas/nexus/internal/tools/websearch"
 )
 

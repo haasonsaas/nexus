@@ -12,12 +12,12 @@ import (
 type ItemType string
 
 const (
-	ItemTypeMessage     ItemType = "message"
-	ItemTypeEmail       ItemType = "email"
-	ItemTypeTicket      ItemType = "ticket"
-	ItemTypeMention     ItemType = "mention"
-	ItemTypeTask        ItemType = "task"
-	ItemTypeReminder    ItemType = "reminder"
+	ItemTypeMessage      ItemType = "message"
+	ItemTypeEmail        ItemType = "email"
+	ItemTypeTicket       ItemType = "ticket"
+	ItemTypeMention      ItemType = "mention"
+	ItemTypeTask         ItemType = "task"
+	ItemTypeReminder     ItemType = "reminder"
 	ItemTypeNotification ItemType = "notification"
 )
 
@@ -36,12 +36,12 @@ const (
 type Status string
 
 const (
-	StatusNew       Status = "new"
-	StatusViewed    Status = "viewed"
+	StatusNew        Status = "new"
+	StatusViewed     Status = "viewed"
 	StatusInProgress Status = "in_progress"
-	StatusSnoozed   Status = "snoozed"
-	StatusHandled   Status = "handled"
-	StatusArchived  Status = "archived"
+	StatusSnoozed    Status = "snoozed"
+	StatusHandled    Status = "handled"
+	StatusArchived   Status = "archived"
 )
 
 // Item represents a single attention-requiring event from any channel.
@@ -100,11 +100,11 @@ type Item struct {
 
 // Sender represents who originated an attention item.
 type Sender struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Email       string `json:"email,omitempty"`
-	Channel     models.ChannelType `json:"channel"`
-	AvatarURL   string `json:"avatar_url,omitempty"`
+	ID        string             `json:"id"`
+	Name      string             `json:"name"`
+	Email     string             `json:"email,omitempty"`
+	Channel   models.ChannelType `json:"channel"`
+	AvatarURL string             `json:"avatar_url,omitempty"`
 }
 
 // IsActive returns true if the item still requires attention.

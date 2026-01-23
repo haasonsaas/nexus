@@ -588,12 +588,12 @@ func (a *Adapter) processMessage(ctx context.Context, msg *EmailMessage) {
 		Content:   content,
 		CreatedAt: msg.ReceivedDateTime,
 		Metadata: map[string]any{
-			"email_message_id":  msg.ID,
-			"conversation_id":   msg.ConversationID,
-			"subject":           msg.Subject,
-			"sender_email":      msg.From.EmailAddress.Address,
-			"sender_name":       msg.From.EmailAddress.Name,
-			"has_attachments":   msg.HasAttachments,
+			"email_message_id":    msg.ID,
+			"conversation_id":     msg.ConversationID,
+			"subject":             msg.Subject,
+			"sender_email":        msg.From.EmailAddress.Address,
+			"sender_name":         msg.From.EmailAddress.Name,
+			"has_attachments":     msg.HasAttachments,
 			"reply_to_message_id": msg.ID, // For easy reply
 		},
 	}
@@ -641,11 +641,11 @@ func (a *Adapter) processMessage(ctx context.Context, msg *EmailMessage) {
 
 // Attachment represents an email attachment from Graph API.
 type Attachment struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	ContentType string `json:"contentType"`
-	Size        int    `json:"size"`
-	IsInline    bool   `json:"isInline"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	ContentType  string `json:"contentType"`
+	Size         int    `json:"size"`
+	IsInline     bool   `json:"isInline"`
 	ContentBytes string `json:"contentBytes"`
 }
 

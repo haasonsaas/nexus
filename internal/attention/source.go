@@ -10,9 +10,9 @@ import (
 
 // ChannelSource wraps a channel adapter as an ItemSource.
 type ChannelSource struct {
-	adapter  channels.InboundAdapter
-	items    chan *Item
-	cancel   context.CancelFunc
+	adapter channels.InboundAdapter
+	items   chan *Item
+	cancel  context.CancelFunc
 }
 
 // NewChannelSource creates a source that converts channel messages to attention items.
@@ -160,12 +160,12 @@ func (s *TicketSource) AddTicket(ticket TicketInfo) {
 		Status:     mapTicketStatus(ticket.State),
 		ReceivedAt: ticket.OpenedAt,
 		Metadata: map[string]any{
-			"ticket_number":     ticket.Number,
-			"ticket_state":      ticket.State,
-			"ticket_priority":   ticket.Priority,
-			"assigned_to":       ticket.AssignedTo,
-			"assignment_group":  ticket.AssignmentGroup,
-			"category":          ticket.Category,
+			"ticket_number":    ticket.Number,
+			"ticket_state":     ticket.State,
+			"ticket_priority":  ticket.Priority,
+			"assigned_to":      ticket.AssignedTo,
+			"assignment_group": ticket.AssignmentGroup,
+			"category":         ticket.Category,
 		},
 	}
 

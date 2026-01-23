@@ -60,15 +60,15 @@ const (
 
 // FeedStats provides aggregate statistics about the feed.
 type FeedStats struct {
-	TotalItems    int            `json:"total_items"`
-	NewItems      int            `json:"new_items"`
-	ViewedItems   int            `json:"viewed_items"`
-	SnoozedItems  int            `json:"snoozed_items"`
-	ByChannel     map[string]int `json:"by_channel"`
-	ByType        map[string]int `json:"by_type"`
-	ByPriority    map[int]int    `json:"by_priority"`
-	OldestItem    *time.Time     `json:"oldest_item,omitempty"`
-	NewestItem    *time.Time     `json:"newest_item,omitempty"`
+	TotalItems   int            `json:"total_items"`
+	NewItems     int            `json:"new_items"`
+	ViewedItems  int            `json:"viewed_items"`
+	SnoozedItems int            `json:"snoozed_items"`
+	ByChannel    map[string]int `json:"by_channel"`
+	ByType       map[string]int `json:"by_type"`
+	ByPriority   map[int]int    `json:"by_priority"`
+	OldestItem   *time.Time     `json:"oldest_item,omitempty"`
+	NewestItem   *time.Time     `json:"newest_item,omitempty"`
 }
 
 // Feed aggregates attention items from multiple channels.

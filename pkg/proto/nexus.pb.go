@@ -8483,6 +8483,939 @@ func (x *BroadcastResult) GetError() string {
 	return ""
 }
 
+// Identity represents a canonical user identity that can span multiple channels.
+type Identity struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Canonical identifier (e.g., "user_alice", "user_12345").
+	CanonicalId string `protobuf:"bytes,1,opt,name=canonical_id,json=canonicalId,proto3" json:"canonical_id,omitempty"`
+	// Display name for the identity.
+	DisplayName string `protobuf:"bytes,2,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	// Email (optional, for matching).
+	Email string `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
+	// Linked platform peer IDs (format: "channel:peer_id").
+	LinkedPeers []string `protobuf:"bytes,4,rep,name=linked_peers,json=linkedPeers,proto3" json:"linked_peers,omitempty"`
+	// Arbitrary metadata.
+	Metadata map[string]string `protobuf:"bytes,5,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// Creation timestamp.
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// Last update timestamp.
+	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Identity) Reset() {
+	*x = Identity{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[106]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Identity) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Identity) ProtoMessage() {}
+
+func (x *Identity) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[106]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Identity.ProtoReflect.Descriptor instead.
+func (*Identity) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{106}
+}
+
+func (x *Identity) GetCanonicalId() string {
+	if x != nil {
+		return x.CanonicalId
+	}
+	return ""
+}
+
+func (x *Identity) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *Identity) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *Identity) GetLinkedPeers() []string {
+	if x != nil {
+		return x.LinkedPeers
+	}
+	return nil
+}
+
+func (x *Identity) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+func (x *Identity) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *Identity) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+type CreateIdentityRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Canonical ID (required, must be unique).
+	CanonicalId string `protobuf:"bytes,1,opt,name=canonical_id,json=canonicalId,proto3" json:"canonical_id,omitempty"`
+	// Display name.
+	DisplayName string `protobuf:"bytes,2,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	// Email (optional).
+	Email string `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
+	// Initial linked peers (format: "channel:peer_id").
+	LinkedPeers []string `protobuf:"bytes,4,rep,name=linked_peers,json=linkedPeers,proto3" json:"linked_peers,omitempty"`
+	// Metadata.
+	Metadata      map[string]string `protobuf:"bytes,5,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateIdentityRequest) Reset() {
+	*x = CreateIdentityRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[107]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateIdentityRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateIdentityRequest) ProtoMessage() {}
+
+func (x *CreateIdentityRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[107]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateIdentityRequest.ProtoReflect.Descriptor instead.
+func (*CreateIdentityRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{107}
+}
+
+func (x *CreateIdentityRequest) GetCanonicalId() string {
+	if x != nil {
+		return x.CanonicalId
+	}
+	return ""
+}
+
+func (x *CreateIdentityRequest) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
+func (x *CreateIdentityRequest) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *CreateIdentityRequest) GetLinkedPeers() []string {
+	if x != nil {
+		return x.LinkedPeers
+	}
+	return nil
+}
+
+func (x *CreateIdentityRequest) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+type CreateIdentityResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Identity      *Identity              `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateIdentityResponse) Reset() {
+	*x = CreateIdentityResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[108]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateIdentityResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateIdentityResponse) ProtoMessage() {}
+
+func (x *CreateIdentityResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[108]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateIdentityResponse.ProtoReflect.Descriptor instead.
+func (*CreateIdentityResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{108}
+}
+
+func (x *CreateIdentityResponse) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+type GetIdentityRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CanonicalId   string                 `protobuf:"bytes,1,opt,name=canonical_id,json=canonicalId,proto3" json:"canonical_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetIdentityRequest) Reset() {
+	*x = GetIdentityRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[109]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetIdentityRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetIdentityRequest) ProtoMessage() {}
+
+func (x *GetIdentityRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[109]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetIdentityRequest.ProtoReflect.Descriptor instead.
+func (*GetIdentityRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{109}
+}
+
+func (x *GetIdentityRequest) GetCanonicalId() string {
+	if x != nil {
+		return x.CanonicalId
+	}
+	return ""
+}
+
+type GetIdentityResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Identity      *Identity              `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetIdentityResponse) Reset() {
+	*x = GetIdentityResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[110]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetIdentityResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetIdentityResponse) ProtoMessage() {}
+
+func (x *GetIdentityResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[110]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetIdentityResponse.ProtoReflect.Descriptor instead.
+func (*GetIdentityResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{110}
+}
+
+func (x *GetIdentityResponse) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+type ListIdentitiesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PageSize      int32                  `protobuf:"varint,1,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	PageToken     string                 `protobuf:"bytes,2,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListIdentitiesRequest) Reset() {
+	*x = ListIdentitiesRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[111]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListIdentitiesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListIdentitiesRequest) ProtoMessage() {}
+
+func (x *ListIdentitiesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[111]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListIdentitiesRequest.ProtoReflect.Descriptor instead.
+func (*ListIdentitiesRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{111}
+}
+
+func (x *ListIdentitiesRequest) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+func (x *ListIdentitiesRequest) GetPageToken() string {
+	if x != nil {
+		return x.PageToken
+	}
+	return ""
+}
+
+type ListIdentitiesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Identities    []*Identity            `protobuf:"bytes,1,rep,name=identities,proto3" json:"identities,omitempty"`
+	NextPageToken string                 `protobuf:"bytes,2,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
+	TotalCount    int32                  `protobuf:"varint,3,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListIdentitiesResponse) Reset() {
+	*x = ListIdentitiesResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[112]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListIdentitiesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListIdentitiesResponse) ProtoMessage() {}
+
+func (x *ListIdentitiesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[112]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListIdentitiesResponse.ProtoReflect.Descriptor instead.
+func (*ListIdentitiesResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{112}
+}
+
+func (x *ListIdentitiesResponse) GetIdentities() []*Identity {
+	if x != nil {
+		return x.Identities
+	}
+	return nil
+}
+
+func (x *ListIdentitiesResponse) GetNextPageToken() string {
+	if x != nil {
+		return x.NextPageToken
+	}
+	return ""
+}
+
+func (x *ListIdentitiesResponse) GetTotalCount() int32 {
+	if x != nil {
+		return x.TotalCount
+	}
+	return 0
+}
+
+type DeleteIdentityRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CanonicalId   string                 `protobuf:"bytes,1,opt,name=canonical_id,json=canonicalId,proto3" json:"canonical_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteIdentityRequest) Reset() {
+	*x = DeleteIdentityRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[113]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteIdentityRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteIdentityRequest) ProtoMessage() {}
+
+func (x *DeleteIdentityRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[113]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteIdentityRequest.ProtoReflect.Descriptor instead.
+func (*DeleteIdentityRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{113}
+}
+
+func (x *DeleteIdentityRequest) GetCanonicalId() string {
+	if x != nil {
+		return x.CanonicalId
+	}
+	return ""
+}
+
+type DeleteIdentityResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteIdentityResponse) Reset() {
+	*x = DeleteIdentityResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[114]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteIdentityResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteIdentityResponse) ProtoMessage() {}
+
+func (x *DeleteIdentityResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[114]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteIdentityResponse.ProtoReflect.Descriptor instead.
+func (*DeleteIdentityResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{114}
+}
+
+func (x *DeleteIdentityResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+type LinkPeerRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Canonical identity to link to.
+	CanonicalId string `protobuf:"bytes,1,opt,name=canonical_id,json=canonicalId,proto3" json:"canonical_id,omitempty"`
+	// Channel type (e.g., "telegram", "discord", "slack").
+	Channel string `protobuf:"bytes,2,opt,name=channel,proto3" json:"channel,omitempty"`
+	// Peer ID on the channel.
+	PeerId        string `protobuf:"bytes,3,opt,name=peer_id,json=peerId,proto3" json:"peer_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LinkPeerRequest) Reset() {
+	*x = LinkPeerRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[115]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LinkPeerRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LinkPeerRequest) ProtoMessage() {}
+
+func (x *LinkPeerRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[115]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LinkPeerRequest.ProtoReflect.Descriptor instead.
+func (*LinkPeerRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{115}
+}
+
+func (x *LinkPeerRequest) GetCanonicalId() string {
+	if x != nil {
+		return x.CanonicalId
+	}
+	return ""
+}
+
+func (x *LinkPeerRequest) GetChannel() string {
+	if x != nil {
+		return x.Channel
+	}
+	return ""
+}
+
+func (x *LinkPeerRequest) GetPeerId() string {
+	if x != nil {
+		return x.PeerId
+	}
+	return ""
+}
+
+type LinkPeerResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Identity      *Identity              `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LinkPeerResponse) Reset() {
+	*x = LinkPeerResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[116]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LinkPeerResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LinkPeerResponse) ProtoMessage() {}
+
+func (x *LinkPeerResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[116]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LinkPeerResponse.ProtoReflect.Descriptor instead.
+func (*LinkPeerResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{116}
+}
+
+func (x *LinkPeerResponse) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+type UnlinkPeerRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Canonical identity to unlink from.
+	CanonicalId string `protobuf:"bytes,1,opt,name=canonical_id,json=canonicalId,proto3" json:"canonical_id,omitempty"`
+	// Channel type.
+	Channel string `protobuf:"bytes,2,opt,name=channel,proto3" json:"channel,omitempty"`
+	// Peer ID.
+	PeerId        string `protobuf:"bytes,3,opt,name=peer_id,json=peerId,proto3" json:"peer_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UnlinkPeerRequest) Reset() {
+	*x = UnlinkPeerRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[117]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnlinkPeerRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnlinkPeerRequest) ProtoMessage() {}
+
+func (x *UnlinkPeerRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[117]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnlinkPeerRequest.ProtoReflect.Descriptor instead.
+func (*UnlinkPeerRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{117}
+}
+
+func (x *UnlinkPeerRequest) GetCanonicalId() string {
+	if x != nil {
+		return x.CanonicalId
+	}
+	return ""
+}
+
+func (x *UnlinkPeerRequest) GetChannel() string {
+	if x != nil {
+		return x.Channel
+	}
+	return ""
+}
+
+func (x *UnlinkPeerRequest) GetPeerId() string {
+	if x != nil {
+		return x.PeerId
+	}
+	return ""
+}
+
+type UnlinkPeerResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Identity      *Identity              `protobuf:"bytes,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UnlinkPeerResponse) Reset() {
+	*x = UnlinkPeerResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[118]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnlinkPeerResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnlinkPeerResponse) ProtoMessage() {}
+
+func (x *UnlinkPeerResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[118]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnlinkPeerResponse.ProtoReflect.Descriptor instead.
+func (*UnlinkPeerResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{118}
+}
+
+func (x *UnlinkPeerResponse) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+type ResolveIdentityRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Channel type.
+	Channel string `protobuf:"bytes,1,opt,name=channel,proto3" json:"channel,omitempty"`
+	// Peer ID.
+	PeerId        string `protobuf:"bytes,2,opt,name=peer_id,json=peerId,proto3" json:"peer_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResolveIdentityRequest) Reset() {
+	*x = ResolveIdentityRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[119]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolveIdentityRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolveIdentityRequest) ProtoMessage() {}
+
+func (x *ResolveIdentityRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[119]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolveIdentityRequest.ProtoReflect.Descriptor instead.
+func (*ResolveIdentityRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{119}
+}
+
+func (x *ResolveIdentityRequest) GetChannel() string {
+	if x != nil {
+		return x.Channel
+	}
+	return ""
+}
+
+func (x *ResolveIdentityRequest) GetPeerId() string {
+	if x != nil {
+		return x.PeerId
+	}
+	return ""
+}
+
+type ResolveIdentityResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// True if a linked identity was found.
+	Found bool `protobuf:"varint,1,opt,name=found,proto3" json:"found,omitempty"`
+	// The canonical identity, if found.
+	Identity *Identity `protobuf:"bytes,2,opt,name=identity,proto3" json:"identity,omitempty"`
+	// The resolved ID (canonical_id if linked, channel:peer_id if not).
+	ResolvedId    string `protobuf:"bytes,3,opt,name=resolved_id,json=resolvedId,proto3" json:"resolved_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResolveIdentityResponse) Reset() {
+	*x = ResolveIdentityResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[120]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolveIdentityResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolveIdentityResponse) ProtoMessage() {}
+
+func (x *ResolveIdentityResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[120]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolveIdentityResponse.ProtoReflect.Descriptor instead.
+func (*ResolveIdentityResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{120}
+}
+
+func (x *ResolveIdentityResponse) GetFound() bool {
+	if x != nil {
+		return x.Found
+	}
+	return false
+}
+
+func (x *ResolveIdentityResponse) GetIdentity() *Identity {
+	if x != nil {
+		return x.Identity
+	}
+	return nil
+}
+
+func (x *ResolveIdentityResponse) GetResolvedId() string {
+	if x != nil {
+		return x.ResolvedId
+	}
+	return ""
+}
+
+type GetLinkedPeersRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CanonicalId   string                 `protobuf:"bytes,1,opt,name=canonical_id,json=canonicalId,proto3" json:"canonical_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetLinkedPeersRequest) Reset() {
+	*x = GetLinkedPeersRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[121]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetLinkedPeersRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetLinkedPeersRequest) ProtoMessage() {}
+
+func (x *GetLinkedPeersRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[121]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetLinkedPeersRequest.ProtoReflect.Descriptor instead.
+func (*GetLinkedPeersRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{121}
+}
+
+func (x *GetLinkedPeersRequest) GetCanonicalId() string {
+	if x != nil {
+		return x.CanonicalId
+	}
+	return ""
+}
+
+type GetLinkedPeersResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// List of linked peer IDs (format: "channel:peer_id").
+	LinkedPeers   []string `protobuf:"bytes,1,rep,name=linked_peers,json=linkedPeers,proto3" json:"linked_peers,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetLinkedPeersResponse) Reset() {
+	*x = GetLinkedPeersResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[122]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetLinkedPeersResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetLinkedPeersResponse) ProtoMessage() {}
+
+func (x *GetLinkedPeersResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[122]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetLinkedPeersResponse.ProtoReflect.Descriptor instead.
+func (*GetLinkedPeersResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{122}
+}
+
+func (x *GetLinkedPeersResponse) GetLinkedPeers() []string {
+	if x != nil {
+		return x.LinkedPeers
+	}
+	return nil
+}
+
 var File_pkg_proto_nexus_proto protoreflect.FileDescriptor
 
 const file_pkg_proto_nexus_proto_rawDesc = "" +
@@ -9196,7 +10129,74 @@ const file_pkg_proto_nexus_proto_rawDesc = "" +
 	"\asuccess\x18\x02 \x01(\bR\asuccess\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x03 \x01(\tR\tmessageId\x12\x14\n" +
-	"\x05error\x18\x04 \x01(\tR\x05error*o\n" +
+	"\x05error\x18\x04 \x01(\tR\x05error\"\xfa\x02\n" +
+	"\bIdentity\x12!\n" +
+	"\fcanonical_id\x18\x01 \x01(\tR\vcanonicalId\x12!\n" +
+	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x14\n" +
+	"\x05email\x18\x03 \x01(\tR\x05email\x12!\n" +
+	"\flinked_peers\x18\x04 \x03(\tR\vlinkedPeers\x12<\n" +
+	"\bmetadata\x18\x05 \x03(\v2 .nexus.v1.Identity.MetadataEntryR\bmetadata\x129\n" +
+	"\n" +
+	"created_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"\n" +
+	"updated_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x9e\x02\n" +
+	"\x15CreateIdentityRequest\x12!\n" +
+	"\fcanonical_id\x18\x01 \x01(\tR\vcanonicalId\x12!\n" +
+	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x14\n" +
+	"\x05email\x18\x03 \x01(\tR\x05email\x12!\n" +
+	"\flinked_peers\x18\x04 \x03(\tR\vlinkedPeers\x12I\n" +
+	"\bmetadata\x18\x05 \x03(\v2-.nexus.v1.CreateIdentityRequest.MetadataEntryR\bmetadata\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"H\n" +
+	"\x16CreateIdentityResponse\x12.\n" +
+	"\bidentity\x18\x01 \x01(\v2\x12.nexus.v1.IdentityR\bidentity\"7\n" +
+	"\x12GetIdentityRequest\x12!\n" +
+	"\fcanonical_id\x18\x01 \x01(\tR\vcanonicalId\"E\n" +
+	"\x13GetIdentityResponse\x12.\n" +
+	"\bidentity\x18\x01 \x01(\v2\x12.nexus.v1.IdentityR\bidentity\"S\n" +
+	"\x15ListIdentitiesRequest\x12\x1b\n" +
+	"\tpage_size\x18\x01 \x01(\x05R\bpageSize\x12\x1d\n" +
+	"\n" +
+	"page_token\x18\x02 \x01(\tR\tpageToken\"\x95\x01\n" +
+	"\x16ListIdentitiesResponse\x122\n" +
+	"\n" +
+	"identities\x18\x01 \x03(\v2\x12.nexus.v1.IdentityR\n" +
+	"identities\x12&\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\x12\x1f\n" +
+	"\vtotal_count\x18\x03 \x01(\x05R\n" +
+	"totalCount\":\n" +
+	"\x15DeleteIdentityRequest\x12!\n" +
+	"\fcanonical_id\x18\x01 \x01(\tR\vcanonicalId\"2\n" +
+	"\x16DeleteIdentityResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"g\n" +
+	"\x0fLinkPeerRequest\x12!\n" +
+	"\fcanonical_id\x18\x01 \x01(\tR\vcanonicalId\x12\x18\n" +
+	"\achannel\x18\x02 \x01(\tR\achannel\x12\x17\n" +
+	"\apeer_id\x18\x03 \x01(\tR\x06peerId\"B\n" +
+	"\x10LinkPeerResponse\x12.\n" +
+	"\bidentity\x18\x01 \x01(\v2\x12.nexus.v1.IdentityR\bidentity\"i\n" +
+	"\x11UnlinkPeerRequest\x12!\n" +
+	"\fcanonical_id\x18\x01 \x01(\tR\vcanonicalId\x12\x18\n" +
+	"\achannel\x18\x02 \x01(\tR\achannel\x12\x17\n" +
+	"\apeer_id\x18\x03 \x01(\tR\x06peerId\"D\n" +
+	"\x12UnlinkPeerResponse\x12.\n" +
+	"\bidentity\x18\x01 \x01(\v2\x12.nexus.v1.IdentityR\bidentity\"K\n" +
+	"\x16ResolveIdentityRequest\x12\x18\n" +
+	"\achannel\x18\x01 \x01(\tR\achannel\x12\x17\n" +
+	"\apeer_id\x18\x02 \x01(\tR\x06peerId\"\x80\x01\n" +
+	"\x17ResolveIdentityResponse\x12\x14\n" +
+	"\x05found\x18\x01 \x01(\bR\x05found\x12.\n" +
+	"\bidentity\x18\x02 \x01(\v2\x12.nexus.v1.IdentityR\bidentity\x12\x1f\n" +
+	"\vresolved_id\x18\x03 \x01(\tR\n" +
+	"resolvedId\":\n" +
+	"\x15GetLinkedPeersRequest\x12!\n" +
+	"\fcanonical_id\x18\x01 \x01(\tR\vcanonicalId\";\n" +
+	"\x16GetLinkedPeersResponse\x12!\n" +
+	"\flinked_peers\x18\x01 \x03(\tR\vlinkedPeers*o\n" +
 	"\tChunkType\x12\x1a\n" +
 	"\x16CHUNK_TYPE_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fCHUNK_TYPE_TEXT\x10\x01\x12\x18\n" +
@@ -9342,7 +10342,17 @@ const file_pkg_proto_nexus_proto_rawDesc = "" +
 	"\x0eListExecutions\x12\x1f.nexus.v1.ListExecutionsRequest\x1a .nexus.v1.ListExecutionsResponse2\xbb\x01\n" +
 	"\x0eMessageService\x12N\n" +
 	"\vSendMessage\x12\x1e.nexus.v1.ProactiveSendRequest\x1a\x1f.nexus.v1.ProactiveSendResponse\x12Y\n" +
-	"\x10BroadcastMessage\x12!.nexus.v1.BroadcastMessageRequest\x1a\".nexus.v1.BroadcastMessageResponseB-Z+github.com/haasonsaas/nexus/pkg/proto;protob\x06proto3"
+	"\x10BroadcastMessage\x12!.nexus.v1.BroadcastMessageRequest\x1a\".nexus.v1.BroadcastMessageResponse2\x95\x05\n" +
+	"\x0fIdentityService\x12S\n" +
+	"\x0eCreateIdentity\x12\x1f.nexus.v1.CreateIdentityRequest\x1a .nexus.v1.CreateIdentityResponse\x12J\n" +
+	"\vGetIdentity\x12\x1c.nexus.v1.GetIdentityRequest\x1a\x1d.nexus.v1.GetIdentityResponse\x12S\n" +
+	"\x0eListIdentities\x12\x1f.nexus.v1.ListIdentitiesRequest\x1a .nexus.v1.ListIdentitiesResponse\x12S\n" +
+	"\x0eDeleteIdentity\x12\x1f.nexus.v1.DeleteIdentityRequest\x1a .nexus.v1.DeleteIdentityResponse\x12A\n" +
+	"\bLinkPeer\x12\x19.nexus.v1.LinkPeerRequest\x1a\x1a.nexus.v1.LinkPeerResponse\x12G\n" +
+	"\n" +
+	"UnlinkPeer\x12\x1b.nexus.v1.UnlinkPeerRequest\x1a\x1c.nexus.v1.UnlinkPeerResponse\x12V\n" +
+	"\x0fResolveIdentity\x12 .nexus.v1.ResolveIdentityRequest\x1a!.nexus.v1.ResolveIdentityResponse\x12S\n" +
+	"\x0eGetLinkedPeers\x12\x1f.nexus.v1.GetLinkedPeersRequest\x1a .nexus.v1.GetLinkedPeersResponseB-Z+github.com/haasonsaas/nexus/pkg/proto;protob\x06proto3"
 
 var (
 	file_pkg_proto_nexus_proto_rawDescOnce sync.Once
@@ -9357,7 +10367,7 @@ func file_pkg_proto_nexus_proto_rawDescGZIP() []byte {
 }
 
 var file_pkg_proto_nexus_proto_enumTypes = make([]protoimpl.EnumInfo, 15)
-var file_pkg_proto_nexus_proto_msgTypes = make([]protoimpl.MessageInfo, 129)
+var file_pkg_proto_nexus_proto_msgTypes = make([]protoimpl.MessageInfo, 148)
 var file_pkg_proto_nexus_proto_goTypes = []any{
 	(ChunkType)(0),                    // 0: nexus.v1.ChunkType
 	(EventType)(0),                    // 1: nexus.v1.EventType
@@ -9480,31 +10490,50 @@ var file_pkg_proto_nexus_proto_goTypes = []any{
 	(*BroadcastMessageRequest)(nil),   // 118: nexus.v1.BroadcastMessageRequest
 	(*BroadcastMessageResponse)(nil),  // 119: nexus.v1.BroadcastMessageResponse
 	(*BroadcastResult)(nil),           // 120: nexus.v1.BroadcastResult
-	nil,                               // 121: nexus.v1.SendMessageRequest.MetadataEntry
-	nil,                               // 122: nexus.v1.Message.MetadataEntry
-	nil,                               // 123: nexus.v1.Session.MetadataEntry
-	nil,                               // 124: nexus.v1.Agent.ConfigEntry
-	nil,                               // 125: nexus.v1.CreateSessionRequest.MetadataEntry
-	nil,                               // 126: nexus.v1.UpdateSessionRequest.MetadataEntry
-	nil,                               // 127: nexus.v1.CreateAgentRequest.ConfigEntry
-	nil,                               // 128: nexus.v1.UpdateAgentRequest.ConfigEntry
-	nil,                               // 129: nexus.v1.ConnectChannelRequest.CredentialsEntry
-	nil,                               // 130: nexus.v1.ConnectChannelRequest.ConfigEntry
-	nil,                               // 131: nexus.v1.ChannelConnection.ConfigEntry
-	nil,                               // 132: nexus.v1.HealthCheckResponse.MetadataEntry
-	nil,                               // 133: nexus.v1.EdgeRegister.MetadataEntry
-	nil,                               // 134: nexus.v1.ToolExecutionRequest.MetadataEntry
-	nil,                               // 135: nexus.v1.EdgeChannelInbound.MetadataEntry
-	nil,                               // 136: nexus.v1.CoreChannelOutbound.OptionsEntry
-	nil,                               // 137: nexus.v1.EdgeStatus.MetadataEntry
-	nil,                               // 138: nexus.v1.TimelineEvent.DataEntry
-	nil,                               // 139: nexus.v1.ScheduledTask.MetadataEntry
-	nil,                               // 140: nexus.v1.CreateTaskRequest.MetadataEntry
-	nil,                               // 141: nexus.v1.UpdateTaskRequest.MetadataEntry
-	nil,                               // 142: nexus.v1.ProactiveSendRequest.MetadataEntry
-	nil,                               // 143: nexus.v1.BroadcastMessageRequest.MetadataEntry
-	(*structpb.Struct)(nil),           // 144: google.protobuf.Struct
-	(*timestamppb.Timestamp)(nil),     // 145: google.protobuf.Timestamp
+	(*Identity)(nil),                  // 121: nexus.v1.Identity
+	(*CreateIdentityRequest)(nil),     // 122: nexus.v1.CreateIdentityRequest
+	(*CreateIdentityResponse)(nil),    // 123: nexus.v1.CreateIdentityResponse
+	(*GetIdentityRequest)(nil),        // 124: nexus.v1.GetIdentityRequest
+	(*GetIdentityResponse)(nil),       // 125: nexus.v1.GetIdentityResponse
+	(*ListIdentitiesRequest)(nil),     // 126: nexus.v1.ListIdentitiesRequest
+	(*ListIdentitiesResponse)(nil),    // 127: nexus.v1.ListIdentitiesResponse
+	(*DeleteIdentityRequest)(nil),     // 128: nexus.v1.DeleteIdentityRequest
+	(*DeleteIdentityResponse)(nil),    // 129: nexus.v1.DeleteIdentityResponse
+	(*LinkPeerRequest)(nil),           // 130: nexus.v1.LinkPeerRequest
+	(*LinkPeerResponse)(nil),          // 131: nexus.v1.LinkPeerResponse
+	(*UnlinkPeerRequest)(nil),         // 132: nexus.v1.UnlinkPeerRequest
+	(*UnlinkPeerResponse)(nil),        // 133: nexus.v1.UnlinkPeerResponse
+	(*ResolveIdentityRequest)(nil),    // 134: nexus.v1.ResolveIdentityRequest
+	(*ResolveIdentityResponse)(nil),   // 135: nexus.v1.ResolveIdentityResponse
+	(*GetLinkedPeersRequest)(nil),     // 136: nexus.v1.GetLinkedPeersRequest
+	(*GetLinkedPeersResponse)(nil),    // 137: nexus.v1.GetLinkedPeersResponse
+	nil,                               // 138: nexus.v1.SendMessageRequest.MetadataEntry
+	nil,                               // 139: nexus.v1.Message.MetadataEntry
+	nil,                               // 140: nexus.v1.Session.MetadataEntry
+	nil,                               // 141: nexus.v1.Agent.ConfigEntry
+	nil,                               // 142: nexus.v1.CreateSessionRequest.MetadataEntry
+	nil,                               // 143: nexus.v1.UpdateSessionRequest.MetadataEntry
+	nil,                               // 144: nexus.v1.CreateAgentRequest.ConfigEntry
+	nil,                               // 145: nexus.v1.UpdateAgentRequest.ConfigEntry
+	nil,                               // 146: nexus.v1.ConnectChannelRequest.CredentialsEntry
+	nil,                               // 147: nexus.v1.ConnectChannelRequest.ConfigEntry
+	nil,                               // 148: nexus.v1.ChannelConnection.ConfigEntry
+	nil,                               // 149: nexus.v1.HealthCheckResponse.MetadataEntry
+	nil,                               // 150: nexus.v1.EdgeRegister.MetadataEntry
+	nil,                               // 151: nexus.v1.ToolExecutionRequest.MetadataEntry
+	nil,                               // 152: nexus.v1.EdgeChannelInbound.MetadataEntry
+	nil,                               // 153: nexus.v1.CoreChannelOutbound.OptionsEntry
+	nil,                               // 154: nexus.v1.EdgeStatus.MetadataEntry
+	nil,                               // 155: nexus.v1.TimelineEvent.DataEntry
+	nil,                               // 156: nexus.v1.ScheduledTask.MetadataEntry
+	nil,                               // 157: nexus.v1.CreateTaskRequest.MetadataEntry
+	nil,                               // 158: nexus.v1.UpdateTaskRequest.MetadataEntry
+	nil,                               // 159: nexus.v1.ProactiveSendRequest.MetadataEntry
+	nil,                               // 160: nexus.v1.BroadcastMessageRequest.MetadataEntry
+	nil,                               // 161: nexus.v1.Identity.MetadataEntry
+	nil,                               // 162: nexus.v1.CreateIdentityRequest.MetadataEntry
+	(*structpb.Struct)(nil),           // 163: google.protobuf.Struct
+	(*timestamppb.Timestamp)(nil),     // 164: google.protobuf.Timestamp
 }
 var file_pkg_proto_nexus_proto_depIdxs = []int32{
 	17,  // 0: nexus.v1.ClientMessage.send_message:type_name -> nexus.v1.SendMessageRequest
@@ -9519,66 +10548,66 @@ var file_pkg_proto_nexus_proto_depIdxs = []int32{
 	27,  // 9: nexus.v1.ServerMessage.error_notification:type_name -> nexus.v1.ErrorNotification
 	26,  // 10: nexus.v1.ServerMessage.pong:type_name -> nexus.v1.PongResponse
 	29,  // 11: nexus.v1.SendMessageRequest.attachments:type_name -> nexus.v1.Attachment
-	121, // 12: nexus.v1.SendMessageRequest.metadata:type_name -> nexus.v1.SendMessageRequest.MetadataEntry
+	138, // 12: nexus.v1.SendMessageRequest.metadata:type_name -> nexus.v1.SendMessageRequest.MetadataEntry
 	0,   // 13: nexus.v1.MessageChunk.type:type_name -> nexus.v1.ChunkType
 	28,  // 14: nexus.v1.MessageComplete.message:type_name -> nexus.v1.Message
 	30,  // 15: nexus.v1.ToolCallRequest.tool_calls:type_name -> nexus.v1.ToolCall
 	1,   // 16: nexus.v1.SessionEvent.event_type:type_name -> nexus.v1.EventType
-	144, // 17: nexus.v1.SessionEvent.data:type_name -> google.protobuf.Struct
+	163, // 17: nexus.v1.SessionEvent.data:type_name -> google.protobuf.Struct
 	1,   // 18: nexus.v1.SessionEventNotification.event_type:type_name -> nexus.v1.EventType
-	144, // 19: nexus.v1.SessionEventNotification.data:type_name -> google.protobuf.Struct
-	145, // 20: nexus.v1.SessionEventNotification.timestamp:type_name -> google.protobuf.Timestamp
-	145, // 21: nexus.v1.PingRequest.timestamp:type_name -> google.protobuf.Timestamp
-	145, // 22: nexus.v1.PongResponse.timestamp:type_name -> google.protobuf.Timestamp
-	144, // 23: nexus.v1.ErrorNotification.details:type_name -> google.protobuf.Struct
+	163, // 19: nexus.v1.SessionEventNotification.data:type_name -> google.protobuf.Struct
+	164, // 20: nexus.v1.SessionEventNotification.timestamp:type_name -> google.protobuf.Timestamp
+	164, // 21: nexus.v1.PingRequest.timestamp:type_name -> google.protobuf.Timestamp
+	164, // 22: nexus.v1.PongResponse.timestamp:type_name -> google.protobuf.Timestamp
+	163, // 23: nexus.v1.ErrorNotification.details:type_name -> google.protobuf.Struct
 	2,   // 24: nexus.v1.Message.channel:type_name -> nexus.v1.ChannelType
 	3,   // 25: nexus.v1.Message.direction:type_name -> nexus.v1.Direction
 	4,   // 26: nexus.v1.Message.role:type_name -> nexus.v1.Role
 	29,  // 27: nexus.v1.Message.attachments:type_name -> nexus.v1.Attachment
 	30,  // 28: nexus.v1.Message.tool_calls:type_name -> nexus.v1.ToolCall
 	31,  // 29: nexus.v1.Message.tool_results:type_name -> nexus.v1.ToolResult
-	122, // 30: nexus.v1.Message.metadata:type_name -> nexus.v1.Message.MetadataEntry
-	145, // 31: nexus.v1.Message.created_at:type_name -> google.protobuf.Timestamp
+	139, // 30: nexus.v1.Message.metadata:type_name -> nexus.v1.Message.MetadataEntry
+	164, // 31: nexus.v1.Message.created_at:type_name -> google.protobuf.Timestamp
 	2,   // 32: nexus.v1.Session.channel:type_name -> nexus.v1.ChannelType
-	123, // 33: nexus.v1.Session.metadata:type_name -> nexus.v1.Session.MetadataEntry
-	145, // 34: nexus.v1.Session.created_at:type_name -> google.protobuf.Timestamp
-	145, // 35: nexus.v1.Session.updated_at:type_name -> google.protobuf.Timestamp
-	124, // 36: nexus.v1.Agent.config:type_name -> nexus.v1.Agent.ConfigEntry
-	145, // 37: nexus.v1.Agent.created_at:type_name -> google.protobuf.Timestamp
-	145, // 38: nexus.v1.Agent.updated_at:type_name -> google.protobuf.Timestamp
-	145, // 39: nexus.v1.User.created_at:type_name -> google.protobuf.Timestamp
-	145, // 40: nexus.v1.User.updated_at:type_name -> google.protobuf.Timestamp
-	145, // 41: nexus.v1.APIKey.last_used_at:type_name -> google.protobuf.Timestamp
-	145, // 42: nexus.v1.APIKey.expires_at:type_name -> google.protobuf.Timestamp
-	145, // 43: nexus.v1.APIKey.created_at:type_name -> google.protobuf.Timestamp
+	140, // 33: nexus.v1.Session.metadata:type_name -> nexus.v1.Session.MetadataEntry
+	164, // 34: nexus.v1.Session.created_at:type_name -> google.protobuf.Timestamp
+	164, // 35: nexus.v1.Session.updated_at:type_name -> google.protobuf.Timestamp
+	141, // 36: nexus.v1.Agent.config:type_name -> nexus.v1.Agent.ConfigEntry
+	164, // 37: nexus.v1.Agent.created_at:type_name -> google.protobuf.Timestamp
+	164, // 38: nexus.v1.Agent.updated_at:type_name -> google.protobuf.Timestamp
+	164, // 39: nexus.v1.User.created_at:type_name -> google.protobuf.Timestamp
+	164, // 40: nexus.v1.User.updated_at:type_name -> google.protobuf.Timestamp
+	164, // 41: nexus.v1.APIKey.last_used_at:type_name -> google.protobuf.Timestamp
+	164, // 42: nexus.v1.APIKey.expires_at:type_name -> google.protobuf.Timestamp
+	164, // 43: nexus.v1.APIKey.created_at:type_name -> google.protobuf.Timestamp
 	2,   // 44: nexus.v1.CreateSessionRequest.channel:type_name -> nexus.v1.ChannelType
-	125, // 45: nexus.v1.CreateSessionRequest.metadata:type_name -> nexus.v1.CreateSessionRequest.MetadataEntry
+	142, // 45: nexus.v1.CreateSessionRequest.metadata:type_name -> nexus.v1.CreateSessionRequest.MetadataEntry
 	32,  // 46: nexus.v1.CreateSessionResponse.session:type_name -> nexus.v1.Session
 	32,  // 47: nexus.v1.GetSessionResponse.session:type_name -> nexus.v1.Session
 	2,   // 48: nexus.v1.ListSessionsRequest.channel:type_name -> nexus.v1.ChannelType
 	32,  // 49: nexus.v1.ListSessionsResponse.sessions:type_name -> nexus.v1.Session
-	126, // 50: nexus.v1.UpdateSessionRequest.metadata:type_name -> nexus.v1.UpdateSessionRequest.MetadataEntry
+	143, // 50: nexus.v1.UpdateSessionRequest.metadata:type_name -> nexus.v1.UpdateSessionRequest.MetadataEntry
 	32,  // 51: nexus.v1.UpdateSessionResponse.session:type_name -> nexus.v1.Session
-	127, // 52: nexus.v1.CreateAgentRequest.config:type_name -> nexus.v1.CreateAgentRequest.ConfigEntry
+	144, // 52: nexus.v1.CreateAgentRequest.config:type_name -> nexus.v1.CreateAgentRequest.ConfigEntry
 	33,  // 53: nexus.v1.CreateAgentResponse.agent:type_name -> nexus.v1.Agent
 	33,  // 54: nexus.v1.GetAgentResponse.agent:type_name -> nexus.v1.Agent
 	33,  // 55: nexus.v1.ListAgentsResponse.agents:type_name -> nexus.v1.Agent
-	128, // 56: nexus.v1.UpdateAgentRequest.config:type_name -> nexus.v1.UpdateAgentRequest.ConfigEntry
+	145, // 56: nexus.v1.UpdateAgentRequest.config:type_name -> nexus.v1.UpdateAgentRequest.ConfigEntry
 	33,  // 57: nexus.v1.UpdateAgentResponse.agent:type_name -> nexus.v1.Agent
 	2,   // 58: nexus.v1.ConnectChannelRequest.channel_type:type_name -> nexus.v1.ChannelType
-	129, // 59: nexus.v1.ConnectChannelRequest.credentials:type_name -> nexus.v1.ConnectChannelRequest.CredentialsEntry
-	130, // 60: nexus.v1.ConnectChannelRequest.config:type_name -> nexus.v1.ConnectChannelRequest.ConfigEntry
+	146, // 59: nexus.v1.ConnectChannelRequest.credentials:type_name -> nexus.v1.ConnectChannelRequest.CredentialsEntry
+	147, // 60: nexus.v1.ConnectChannelRequest.config:type_name -> nexus.v1.ConnectChannelRequest.ConfigEntry
 	64,  // 61: nexus.v1.ConnectChannelResponse.connection:type_name -> nexus.v1.ChannelConnection
 	64,  // 62: nexus.v1.GetChannelStatusResponse.connection:type_name -> nexus.v1.ChannelConnection
 	64,  // 63: nexus.v1.ListChannelsResponse.connections:type_name -> nexus.v1.ChannelConnection
 	2,   // 64: nexus.v1.ChannelConnection.channel_type:type_name -> nexus.v1.ChannelType
 	5,   // 65: nexus.v1.ChannelConnection.status:type_name -> nexus.v1.ConnectionStatus
-	131, // 66: nexus.v1.ChannelConnection.config:type_name -> nexus.v1.ChannelConnection.ConfigEntry
-	145, // 67: nexus.v1.ChannelConnection.connected_at:type_name -> google.protobuf.Timestamp
-	145, // 68: nexus.v1.ChannelConnection.last_activity_at:type_name -> google.protobuf.Timestamp
+	148, // 66: nexus.v1.ChannelConnection.config:type_name -> nexus.v1.ChannelConnection.ConfigEntry
+	164, // 67: nexus.v1.ChannelConnection.connected_at:type_name -> google.protobuf.Timestamp
+	164, // 68: nexus.v1.ChannelConnection.last_activity_at:type_name -> google.protobuf.Timestamp
 	6,   // 69: nexus.v1.HealthCheckResponse.status:type_name -> nexus.v1.ServingStatus
-	132, // 70: nexus.v1.HealthCheckResponse.metadata:type_name -> nexus.v1.HealthCheckResponse.MetadataEntry
-	145, // 71: nexus.v1.HealthCheckResponse.timestamp:type_name -> google.protobuf.Timestamp
+	149, // 70: nexus.v1.HealthCheckResponse.metadata:type_name -> nexus.v1.HealthCheckResponse.MetadataEntry
+	164, // 71: nexus.v1.HealthCheckResponse.timestamp:type_name -> google.protobuf.Timestamp
 	69,  // 72: nexus.v1.EdgeMessage.register:type_name -> nexus.v1.EdgeRegister
 	73,  // 73: nexus.v1.EdgeMessage.heartbeat:type_name -> nexus.v1.EdgeHeartbeat
 	76,  // 74: nexus.v1.EdgeMessage.tool_result:type_name -> nexus.v1.ToolExecutionResult
@@ -9592,59 +10621,59 @@ var file_pkg_proto_nexus_proto_depIdxs = []int32{
 	82,  // 82: nexus.v1.CoreMessage.channel_outbound:type_name -> nexus.v1.CoreChannelOutbound
 	70,  // 83: nexus.v1.EdgeRegister.tools:type_name -> nexus.v1.EdgeToolDefinition
 	71,  // 84: nexus.v1.EdgeRegister.capabilities:type_name -> nexus.v1.EdgeCapabilities
-	133, // 85: nexus.v1.EdgeRegister.metadata:type_name -> nexus.v1.EdgeRegister.MetadataEntry
-	145, // 86: nexus.v1.EdgeHeartbeat.timestamp:type_name -> google.protobuf.Timestamp
+	150, // 85: nexus.v1.EdgeRegister.metadata:type_name -> nexus.v1.EdgeRegister.MetadataEntry
+	164, // 86: nexus.v1.EdgeHeartbeat.timestamp:type_name -> google.protobuf.Timestamp
 	74,  // 87: nexus.v1.EdgeHeartbeat.metrics:type_name -> nexus.v1.EdgeMetrics
-	134, // 88: nexus.v1.ToolExecutionRequest.metadata:type_name -> nexus.v1.ToolExecutionRequest.MetadataEntry
+	151, // 88: nexus.v1.ToolExecutionRequest.metadata:type_name -> nexus.v1.ToolExecutionRequest.MetadataEntry
 	77,  // 89: nexus.v1.ToolExecutionResult.artifacts:type_name -> nexus.v1.Artifact
 	7,   // 90: nexus.v1.EdgeEvent.type:type_name -> nexus.v1.EdgeEventType
-	145, // 91: nexus.v1.EdgeEvent.timestamp:type_name -> google.protobuf.Timestamp
-	144, // 92: nexus.v1.EdgeEvent.data:type_name -> google.protobuf.Struct
+	164, // 91: nexus.v1.EdgeEvent.timestamp:type_name -> google.protobuf.Timestamp
+	163, // 92: nexus.v1.EdgeEvent.data:type_name -> google.protobuf.Struct
 	8,   // 93: nexus.v1.CoreEvent.type:type_name -> nexus.v1.CoreEventType
-	145, // 94: nexus.v1.CoreEvent.timestamp:type_name -> google.protobuf.Timestamp
-	144, // 95: nexus.v1.CoreEvent.data:type_name -> google.protobuf.Struct
+	164, // 94: nexus.v1.CoreEvent.timestamp:type_name -> google.protobuf.Timestamp
+	163, // 95: nexus.v1.CoreEvent.data:type_name -> google.protobuf.Struct
 	2,   // 96: nexus.v1.EdgeChannelInbound.channel_type:type_name -> nexus.v1.ChannelType
 	29,  // 97: nexus.v1.EdgeChannelInbound.attachments:type_name -> nexus.v1.Attachment
-	135, // 98: nexus.v1.EdgeChannelInbound.metadata:type_name -> nexus.v1.EdgeChannelInbound.MetadataEntry
-	145, // 99: nexus.v1.EdgeChannelInbound.received_at:type_name -> google.protobuf.Timestamp
+	152, // 98: nexus.v1.EdgeChannelInbound.metadata:type_name -> nexus.v1.EdgeChannelInbound.MetadataEntry
+	164, // 99: nexus.v1.EdgeChannelInbound.received_at:type_name -> google.protobuf.Timestamp
 	2,   // 100: nexus.v1.CoreChannelOutbound.channel_type:type_name -> nexus.v1.ChannelType
 	29,  // 101: nexus.v1.CoreChannelOutbound.attachments:type_name -> nexus.v1.Attachment
-	136, // 102: nexus.v1.CoreChannelOutbound.options:type_name -> nexus.v1.CoreChannelOutbound.OptionsEntry
+	153, // 102: nexus.v1.CoreChannelOutbound.options:type_name -> nexus.v1.CoreChannelOutbound.OptionsEntry
 	9,   // 103: nexus.v1.EdgeChannelAck.status:type_name -> nexus.v1.ChannelDeliveryStatus
-	145, // 104: nexus.v1.EdgeChannelAck.delivered_at:type_name -> google.protobuf.Timestamp
+	164, // 104: nexus.v1.EdgeChannelAck.delivered_at:type_name -> google.protobuf.Timestamp
 	88,  // 105: nexus.v1.GetEdgeStatusResponse.status:type_name -> nexus.v1.EdgeStatus
 	88,  // 106: nexus.v1.ListEdgesResponse.edges:type_name -> nexus.v1.EdgeStatus
 	10,  // 107: nexus.v1.EdgeStatus.connection_status:type_name -> nexus.v1.EdgeConnectionStatus
-	145, // 108: nexus.v1.EdgeStatus.connected_at:type_name -> google.protobuf.Timestamp
-	145, // 109: nexus.v1.EdgeStatus.last_heartbeat:type_name -> google.protobuf.Timestamp
+	164, // 108: nexus.v1.EdgeStatus.connected_at:type_name -> google.protobuf.Timestamp
+	164, // 109: nexus.v1.EdgeStatus.last_heartbeat:type_name -> google.protobuf.Timestamp
 	74,  // 110: nexus.v1.EdgeStatus.metrics:type_name -> nexus.v1.EdgeMetrics
-	137, // 111: nexus.v1.EdgeStatus.metadata:type_name -> nexus.v1.EdgeStatus.MetadataEntry
+	154, // 111: nexus.v1.EdgeStatus.metadata:type_name -> nexus.v1.EdgeStatus.MetadataEntry
 	93,  // 112: nexus.v1.GetEventsResponse.events:type_name -> nexus.v1.TimelineEvent
-	145, // 113: nexus.v1.GetTimelineResponse.start_time:type_name -> google.protobuf.Timestamp
-	145, // 114: nexus.v1.GetTimelineResponse.end_time:type_name -> google.protobuf.Timestamp
+	164, // 113: nexus.v1.GetTimelineResponse.start_time:type_name -> google.protobuf.Timestamp
+	164, // 114: nexus.v1.GetTimelineResponse.end_time:type_name -> google.protobuf.Timestamp
 	93,  // 115: nexus.v1.GetTimelineResponse.events:type_name -> nexus.v1.TimelineEvent
 	94,  // 116: nexus.v1.GetTimelineResponse.summary:type_name -> nexus.v1.TimelineSummary
-	145, // 117: nexus.v1.TimelineEvent.timestamp:type_name -> google.protobuf.Timestamp
-	138, // 118: nexus.v1.TimelineEvent.data:type_name -> nexus.v1.TimelineEvent.DataEntry
+	164, // 117: nexus.v1.TimelineEvent.timestamp:type_name -> google.protobuf.Timestamp
+	155, // 118: nexus.v1.TimelineEvent.data:type_name -> nexus.v1.TimelineEvent.DataEntry
 	96,  // 119: nexus.v1.ScheduledTask.config:type_name -> nexus.v1.TaskConfig
 	13,  // 120: nexus.v1.ScheduledTask.status:type_name -> nexus.v1.TaskStatus
-	145, // 121: nexus.v1.ScheduledTask.next_run_at:type_name -> google.protobuf.Timestamp
-	145, // 122: nexus.v1.ScheduledTask.last_run_at:type_name -> google.protobuf.Timestamp
-	145, // 123: nexus.v1.ScheduledTask.created_at:type_name -> google.protobuf.Timestamp
-	145, // 124: nexus.v1.ScheduledTask.updated_at:type_name -> google.protobuf.Timestamp
-	139, // 125: nexus.v1.ScheduledTask.metadata:type_name -> nexus.v1.ScheduledTask.MetadataEntry
+	164, // 121: nexus.v1.ScheduledTask.next_run_at:type_name -> google.protobuf.Timestamp
+	164, // 122: nexus.v1.ScheduledTask.last_run_at:type_name -> google.protobuf.Timestamp
+	164, // 123: nexus.v1.ScheduledTask.created_at:type_name -> google.protobuf.Timestamp
+	164, // 124: nexus.v1.ScheduledTask.updated_at:type_name -> google.protobuf.Timestamp
+	156, // 125: nexus.v1.ScheduledTask.metadata:type_name -> nexus.v1.ScheduledTask.MetadataEntry
 	14,  // 126: nexus.v1.TaskExecution.status:type_name -> nexus.v1.ExecutionStatus
-	145, // 127: nexus.v1.TaskExecution.scheduled_at:type_name -> google.protobuf.Timestamp
-	145, // 128: nexus.v1.TaskExecution.started_at:type_name -> google.protobuf.Timestamp
-	145, // 129: nexus.v1.TaskExecution.finished_at:type_name -> google.protobuf.Timestamp
+	164, // 127: nexus.v1.TaskExecution.scheduled_at:type_name -> google.protobuf.Timestamp
+	164, // 128: nexus.v1.TaskExecution.started_at:type_name -> google.protobuf.Timestamp
+	164, // 129: nexus.v1.TaskExecution.finished_at:type_name -> google.protobuf.Timestamp
 	96,  // 130: nexus.v1.CreateTaskRequest.config:type_name -> nexus.v1.TaskConfig
-	140, // 131: nexus.v1.CreateTaskRequest.metadata:type_name -> nexus.v1.CreateTaskRequest.MetadataEntry
+	157, // 131: nexus.v1.CreateTaskRequest.metadata:type_name -> nexus.v1.CreateTaskRequest.MetadataEntry
 	95,  // 132: nexus.v1.CreateTaskResponse.task:type_name -> nexus.v1.ScheduledTask
 	95,  // 133: nexus.v1.GetTaskResponse.task:type_name -> nexus.v1.ScheduledTask
 	13,  // 134: nexus.v1.ListTasksRequest.status:type_name -> nexus.v1.TaskStatus
 	95,  // 135: nexus.v1.ListTasksResponse.tasks:type_name -> nexus.v1.ScheduledTask
 	96,  // 136: nexus.v1.UpdateTaskRequest.config:type_name -> nexus.v1.TaskConfig
-	141, // 137: nexus.v1.UpdateTaskRequest.metadata:type_name -> nexus.v1.UpdateTaskRequest.MetadataEntry
+	158, // 137: nexus.v1.UpdateTaskRequest.metadata:type_name -> nexus.v1.UpdateTaskRequest.MetadataEntry
 	95,  // 138: nexus.v1.UpdateTaskResponse.task:type_name -> nexus.v1.ScheduledTask
 	95,  // 139: nexus.v1.PauseTaskResponse.task:type_name -> nexus.v1.ScheduledTask
 	95,  // 140: nexus.v1.ResumeTaskResponse.task:type_name -> nexus.v1.ScheduledTask
@@ -9652,81 +10681,107 @@ var file_pkg_proto_nexus_proto_depIdxs = []int32{
 	14,  // 142: nexus.v1.ListExecutionsRequest.status:type_name -> nexus.v1.ExecutionStatus
 	97,  // 143: nexus.v1.ListExecutionsResponse.executions:type_name -> nexus.v1.TaskExecution
 	29,  // 144: nexus.v1.ProactiveSendRequest.attachments:type_name -> nexus.v1.Attachment
-	142, // 145: nexus.v1.ProactiveSendRequest.metadata:type_name -> nexus.v1.ProactiveSendRequest.MetadataEntry
+	159, // 145: nexus.v1.ProactiveSendRequest.metadata:type_name -> nexus.v1.ProactiveSendRequest.MetadataEntry
 	29,  // 146: nexus.v1.BroadcastMessageRequest.attachments:type_name -> nexus.v1.Attachment
-	143, // 147: nexus.v1.BroadcastMessageRequest.metadata:type_name -> nexus.v1.BroadcastMessageRequest.MetadataEntry
+	160, // 147: nexus.v1.BroadcastMessageRequest.metadata:type_name -> nexus.v1.BroadcastMessageRequest.MetadataEntry
 	120, // 148: nexus.v1.BroadcastMessageResponse.results:type_name -> nexus.v1.BroadcastResult
-	15,  // 149: nexus.v1.NexusGateway.Stream:input_type -> nexus.v1.ClientMessage
-	36,  // 150: nexus.v1.SessionService.CreateSession:input_type -> nexus.v1.CreateSessionRequest
-	38,  // 151: nexus.v1.SessionService.GetSession:input_type -> nexus.v1.GetSessionRequest
-	40,  // 152: nexus.v1.SessionService.ListSessions:input_type -> nexus.v1.ListSessionsRequest
-	42,  // 153: nexus.v1.SessionService.DeleteSession:input_type -> nexus.v1.DeleteSessionRequest
-	44,  // 154: nexus.v1.SessionService.UpdateSession:input_type -> nexus.v1.UpdateSessionRequest
-	46,  // 155: nexus.v1.AgentService.CreateAgent:input_type -> nexus.v1.CreateAgentRequest
-	48,  // 156: nexus.v1.AgentService.GetAgent:input_type -> nexus.v1.GetAgentRequest
-	50,  // 157: nexus.v1.AgentService.ListAgents:input_type -> nexus.v1.ListAgentsRequest
-	52,  // 158: nexus.v1.AgentService.UpdateAgent:input_type -> nexus.v1.UpdateAgentRequest
-	54,  // 159: nexus.v1.AgentService.DeleteAgent:input_type -> nexus.v1.DeleteAgentRequest
-	56,  // 160: nexus.v1.ChannelService.ConnectChannel:input_type -> nexus.v1.ConnectChannelRequest
-	58,  // 161: nexus.v1.ChannelService.DisconnectChannel:input_type -> nexus.v1.DisconnectChannelRequest
-	60,  // 162: nexus.v1.ChannelService.GetChannelStatus:input_type -> nexus.v1.GetChannelStatusRequest
-	62,  // 163: nexus.v1.ChannelService.ListChannels:input_type -> nexus.v1.ListChannelsRequest
-	65,  // 164: nexus.v1.HealthService.Check:input_type -> nexus.v1.HealthCheckRequest
-	65,  // 165: nexus.v1.HealthService.Watch:input_type -> nexus.v1.HealthCheckRequest
-	67,  // 166: nexus.v1.EdgeService.Connect:input_type -> nexus.v1.EdgeMessage
-	84,  // 167: nexus.v1.EdgeService.GetEdgeStatus:input_type -> nexus.v1.GetEdgeStatusRequest
-	86,  // 168: nexus.v1.EdgeService.ListEdges:input_type -> nexus.v1.ListEdgesRequest
-	89,  // 169: nexus.v1.EventService.GetEvents:input_type -> nexus.v1.GetEventsRequest
-	91,  // 170: nexus.v1.EventService.GetTimeline:input_type -> nexus.v1.GetTimelineRequest
-	98,  // 171: nexus.v1.TaskService.CreateTask:input_type -> nexus.v1.CreateTaskRequest
-	100, // 172: nexus.v1.TaskService.GetTask:input_type -> nexus.v1.GetTaskRequest
-	102, // 173: nexus.v1.TaskService.ListTasks:input_type -> nexus.v1.ListTasksRequest
-	104, // 174: nexus.v1.TaskService.UpdateTask:input_type -> nexus.v1.UpdateTaskRequest
-	106, // 175: nexus.v1.TaskService.DeleteTask:input_type -> nexus.v1.DeleteTaskRequest
-	108, // 176: nexus.v1.TaskService.PauseTask:input_type -> nexus.v1.PauseTaskRequest
-	110, // 177: nexus.v1.TaskService.ResumeTask:input_type -> nexus.v1.ResumeTaskRequest
-	112, // 178: nexus.v1.TaskService.TriggerTask:input_type -> nexus.v1.TriggerTaskRequest
-	114, // 179: nexus.v1.TaskService.ListExecutions:input_type -> nexus.v1.ListExecutionsRequest
-	116, // 180: nexus.v1.MessageService.SendMessage:input_type -> nexus.v1.ProactiveSendRequest
-	118, // 181: nexus.v1.MessageService.BroadcastMessage:input_type -> nexus.v1.BroadcastMessageRequest
-	16,  // 182: nexus.v1.NexusGateway.Stream:output_type -> nexus.v1.ServerMessage
-	37,  // 183: nexus.v1.SessionService.CreateSession:output_type -> nexus.v1.CreateSessionResponse
-	39,  // 184: nexus.v1.SessionService.GetSession:output_type -> nexus.v1.GetSessionResponse
-	41,  // 185: nexus.v1.SessionService.ListSessions:output_type -> nexus.v1.ListSessionsResponse
-	43,  // 186: nexus.v1.SessionService.DeleteSession:output_type -> nexus.v1.DeleteSessionResponse
-	45,  // 187: nexus.v1.SessionService.UpdateSession:output_type -> nexus.v1.UpdateSessionResponse
-	47,  // 188: nexus.v1.AgentService.CreateAgent:output_type -> nexus.v1.CreateAgentResponse
-	49,  // 189: nexus.v1.AgentService.GetAgent:output_type -> nexus.v1.GetAgentResponse
-	51,  // 190: nexus.v1.AgentService.ListAgents:output_type -> nexus.v1.ListAgentsResponse
-	53,  // 191: nexus.v1.AgentService.UpdateAgent:output_type -> nexus.v1.UpdateAgentResponse
-	55,  // 192: nexus.v1.AgentService.DeleteAgent:output_type -> nexus.v1.DeleteAgentResponse
-	57,  // 193: nexus.v1.ChannelService.ConnectChannel:output_type -> nexus.v1.ConnectChannelResponse
-	59,  // 194: nexus.v1.ChannelService.DisconnectChannel:output_type -> nexus.v1.DisconnectChannelResponse
-	61,  // 195: nexus.v1.ChannelService.GetChannelStatus:output_type -> nexus.v1.GetChannelStatusResponse
-	63,  // 196: nexus.v1.ChannelService.ListChannels:output_type -> nexus.v1.ListChannelsResponse
-	66,  // 197: nexus.v1.HealthService.Check:output_type -> nexus.v1.HealthCheckResponse
-	66,  // 198: nexus.v1.HealthService.Watch:output_type -> nexus.v1.HealthCheckResponse
-	68,  // 199: nexus.v1.EdgeService.Connect:output_type -> nexus.v1.CoreMessage
-	85,  // 200: nexus.v1.EdgeService.GetEdgeStatus:output_type -> nexus.v1.GetEdgeStatusResponse
-	87,  // 201: nexus.v1.EdgeService.ListEdges:output_type -> nexus.v1.ListEdgesResponse
-	90,  // 202: nexus.v1.EventService.GetEvents:output_type -> nexus.v1.GetEventsResponse
-	92,  // 203: nexus.v1.EventService.GetTimeline:output_type -> nexus.v1.GetTimelineResponse
-	99,  // 204: nexus.v1.TaskService.CreateTask:output_type -> nexus.v1.CreateTaskResponse
-	101, // 205: nexus.v1.TaskService.GetTask:output_type -> nexus.v1.GetTaskResponse
-	103, // 206: nexus.v1.TaskService.ListTasks:output_type -> nexus.v1.ListTasksResponse
-	105, // 207: nexus.v1.TaskService.UpdateTask:output_type -> nexus.v1.UpdateTaskResponse
-	107, // 208: nexus.v1.TaskService.DeleteTask:output_type -> nexus.v1.DeleteTaskResponse
-	109, // 209: nexus.v1.TaskService.PauseTask:output_type -> nexus.v1.PauseTaskResponse
-	111, // 210: nexus.v1.TaskService.ResumeTask:output_type -> nexus.v1.ResumeTaskResponse
-	113, // 211: nexus.v1.TaskService.TriggerTask:output_type -> nexus.v1.TriggerTaskResponse
-	115, // 212: nexus.v1.TaskService.ListExecutions:output_type -> nexus.v1.ListExecutionsResponse
-	117, // 213: nexus.v1.MessageService.SendMessage:output_type -> nexus.v1.ProactiveSendResponse
-	119, // 214: nexus.v1.MessageService.BroadcastMessage:output_type -> nexus.v1.BroadcastMessageResponse
-	182, // [182:215] is the sub-list for method output_type
-	149, // [149:182] is the sub-list for method input_type
-	149, // [149:149] is the sub-list for extension type_name
-	149, // [149:149] is the sub-list for extension extendee
-	0,   // [0:149] is the sub-list for field type_name
+	161, // 149: nexus.v1.Identity.metadata:type_name -> nexus.v1.Identity.MetadataEntry
+	164, // 150: nexus.v1.Identity.created_at:type_name -> google.protobuf.Timestamp
+	164, // 151: nexus.v1.Identity.updated_at:type_name -> google.protobuf.Timestamp
+	162, // 152: nexus.v1.CreateIdentityRequest.metadata:type_name -> nexus.v1.CreateIdentityRequest.MetadataEntry
+	121, // 153: nexus.v1.CreateIdentityResponse.identity:type_name -> nexus.v1.Identity
+	121, // 154: nexus.v1.GetIdentityResponse.identity:type_name -> nexus.v1.Identity
+	121, // 155: nexus.v1.ListIdentitiesResponse.identities:type_name -> nexus.v1.Identity
+	121, // 156: nexus.v1.LinkPeerResponse.identity:type_name -> nexus.v1.Identity
+	121, // 157: nexus.v1.UnlinkPeerResponse.identity:type_name -> nexus.v1.Identity
+	121, // 158: nexus.v1.ResolveIdentityResponse.identity:type_name -> nexus.v1.Identity
+	15,  // 159: nexus.v1.NexusGateway.Stream:input_type -> nexus.v1.ClientMessage
+	36,  // 160: nexus.v1.SessionService.CreateSession:input_type -> nexus.v1.CreateSessionRequest
+	38,  // 161: nexus.v1.SessionService.GetSession:input_type -> nexus.v1.GetSessionRequest
+	40,  // 162: nexus.v1.SessionService.ListSessions:input_type -> nexus.v1.ListSessionsRequest
+	42,  // 163: nexus.v1.SessionService.DeleteSession:input_type -> nexus.v1.DeleteSessionRequest
+	44,  // 164: nexus.v1.SessionService.UpdateSession:input_type -> nexus.v1.UpdateSessionRequest
+	46,  // 165: nexus.v1.AgentService.CreateAgent:input_type -> nexus.v1.CreateAgentRequest
+	48,  // 166: nexus.v1.AgentService.GetAgent:input_type -> nexus.v1.GetAgentRequest
+	50,  // 167: nexus.v1.AgentService.ListAgents:input_type -> nexus.v1.ListAgentsRequest
+	52,  // 168: nexus.v1.AgentService.UpdateAgent:input_type -> nexus.v1.UpdateAgentRequest
+	54,  // 169: nexus.v1.AgentService.DeleteAgent:input_type -> nexus.v1.DeleteAgentRequest
+	56,  // 170: nexus.v1.ChannelService.ConnectChannel:input_type -> nexus.v1.ConnectChannelRequest
+	58,  // 171: nexus.v1.ChannelService.DisconnectChannel:input_type -> nexus.v1.DisconnectChannelRequest
+	60,  // 172: nexus.v1.ChannelService.GetChannelStatus:input_type -> nexus.v1.GetChannelStatusRequest
+	62,  // 173: nexus.v1.ChannelService.ListChannels:input_type -> nexus.v1.ListChannelsRequest
+	65,  // 174: nexus.v1.HealthService.Check:input_type -> nexus.v1.HealthCheckRequest
+	65,  // 175: nexus.v1.HealthService.Watch:input_type -> nexus.v1.HealthCheckRequest
+	67,  // 176: nexus.v1.EdgeService.Connect:input_type -> nexus.v1.EdgeMessage
+	84,  // 177: nexus.v1.EdgeService.GetEdgeStatus:input_type -> nexus.v1.GetEdgeStatusRequest
+	86,  // 178: nexus.v1.EdgeService.ListEdges:input_type -> nexus.v1.ListEdgesRequest
+	89,  // 179: nexus.v1.EventService.GetEvents:input_type -> nexus.v1.GetEventsRequest
+	91,  // 180: nexus.v1.EventService.GetTimeline:input_type -> nexus.v1.GetTimelineRequest
+	98,  // 181: nexus.v1.TaskService.CreateTask:input_type -> nexus.v1.CreateTaskRequest
+	100, // 182: nexus.v1.TaskService.GetTask:input_type -> nexus.v1.GetTaskRequest
+	102, // 183: nexus.v1.TaskService.ListTasks:input_type -> nexus.v1.ListTasksRequest
+	104, // 184: nexus.v1.TaskService.UpdateTask:input_type -> nexus.v1.UpdateTaskRequest
+	106, // 185: nexus.v1.TaskService.DeleteTask:input_type -> nexus.v1.DeleteTaskRequest
+	108, // 186: nexus.v1.TaskService.PauseTask:input_type -> nexus.v1.PauseTaskRequest
+	110, // 187: nexus.v1.TaskService.ResumeTask:input_type -> nexus.v1.ResumeTaskRequest
+	112, // 188: nexus.v1.TaskService.TriggerTask:input_type -> nexus.v1.TriggerTaskRequest
+	114, // 189: nexus.v1.TaskService.ListExecutions:input_type -> nexus.v1.ListExecutionsRequest
+	116, // 190: nexus.v1.MessageService.SendMessage:input_type -> nexus.v1.ProactiveSendRequest
+	118, // 191: nexus.v1.MessageService.BroadcastMessage:input_type -> nexus.v1.BroadcastMessageRequest
+	122, // 192: nexus.v1.IdentityService.CreateIdentity:input_type -> nexus.v1.CreateIdentityRequest
+	124, // 193: nexus.v1.IdentityService.GetIdentity:input_type -> nexus.v1.GetIdentityRequest
+	126, // 194: nexus.v1.IdentityService.ListIdentities:input_type -> nexus.v1.ListIdentitiesRequest
+	128, // 195: nexus.v1.IdentityService.DeleteIdentity:input_type -> nexus.v1.DeleteIdentityRequest
+	130, // 196: nexus.v1.IdentityService.LinkPeer:input_type -> nexus.v1.LinkPeerRequest
+	132, // 197: nexus.v1.IdentityService.UnlinkPeer:input_type -> nexus.v1.UnlinkPeerRequest
+	134, // 198: nexus.v1.IdentityService.ResolveIdentity:input_type -> nexus.v1.ResolveIdentityRequest
+	136, // 199: nexus.v1.IdentityService.GetLinkedPeers:input_type -> nexus.v1.GetLinkedPeersRequest
+	16,  // 200: nexus.v1.NexusGateway.Stream:output_type -> nexus.v1.ServerMessage
+	37,  // 201: nexus.v1.SessionService.CreateSession:output_type -> nexus.v1.CreateSessionResponse
+	39,  // 202: nexus.v1.SessionService.GetSession:output_type -> nexus.v1.GetSessionResponse
+	41,  // 203: nexus.v1.SessionService.ListSessions:output_type -> nexus.v1.ListSessionsResponse
+	43,  // 204: nexus.v1.SessionService.DeleteSession:output_type -> nexus.v1.DeleteSessionResponse
+	45,  // 205: nexus.v1.SessionService.UpdateSession:output_type -> nexus.v1.UpdateSessionResponse
+	47,  // 206: nexus.v1.AgentService.CreateAgent:output_type -> nexus.v1.CreateAgentResponse
+	49,  // 207: nexus.v1.AgentService.GetAgent:output_type -> nexus.v1.GetAgentResponse
+	51,  // 208: nexus.v1.AgentService.ListAgents:output_type -> nexus.v1.ListAgentsResponse
+	53,  // 209: nexus.v1.AgentService.UpdateAgent:output_type -> nexus.v1.UpdateAgentResponse
+	55,  // 210: nexus.v1.AgentService.DeleteAgent:output_type -> nexus.v1.DeleteAgentResponse
+	57,  // 211: nexus.v1.ChannelService.ConnectChannel:output_type -> nexus.v1.ConnectChannelResponse
+	59,  // 212: nexus.v1.ChannelService.DisconnectChannel:output_type -> nexus.v1.DisconnectChannelResponse
+	61,  // 213: nexus.v1.ChannelService.GetChannelStatus:output_type -> nexus.v1.GetChannelStatusResponse
+	63,  // 214: nexus.v1.ChannelService.ListChannels:output_type -> nexus.v1.ListChannelsResponse
+	66,  // 215: nexus.v1.HealthService.Check:output_type -> nexus.v1.HealthCheckResponse
+	66,  // 216: nexus.v1.HealthService.Watch:output_type -> nexus.v1.HealthCheckResponse
+	68,  // 217: nexus.v1.EdgeService.Connect:output_type -> nexus.v1.CoreMessage
+	85,  // 218: nexus.v1.EdgeService.GetEdgeStatus:output_type -> nexus.v1.GetEdgeStatusResponse
+	87,  // 219: nexus.v1.EdgeService.ListEdges:output_type -> nexus.v1.ListEdgesResponse
+	90,  // 220: nexus.v1.EventService.GetEvents:output_type -> nexus.v1.GetEventsResponse
+	92,  // 221: nexus.v1.EventService.GetTimeline:output_type -> nexus.v1.GetTimelineResponse
+	99,  // 222: nexus.v1.TaskService.CreateTask:output_type -> nexus.v1.CreateTaskResponse
+	101, // 223: nexus.v1.TaskService.GetTask:output_type -> nexus.v1.GetTaskResponse
+	103, // 224: nexus.v1.TaskService.ListTasks:output_type -> nexus.v1.ListTasksResponse
+	105, // 225: nexus.v1.TaskService.UpdateTask:output_type -> nexus.v1.UpdateTaskResponse
+	107, // 226: nexus.v1.TaskService.DeleteTask:output_type -> nexus.v1.DeleteTaskResponse
+	109, // 227: nexus.v1.TaskService.PauseTask:output_type -> nexus.v1.PauseTaskResponse
+	111, // 228: nexus.v1.TaskService.ResumeTask:output_type -> nexus.v1.ResumeTaskResponse
+	113, // 229: nexus.v1.TaskService.TriggerTask:output_type -> nexus.v1.TriggerTaskResponse
+	115, // 230: nexus.v1.TaskService.ListExecutions:output_type -> nexus.v1.ListExecutionsResponse
+	117, // 231: nexus.v1.MessageService.SendMessage:output_type -> nexus.v1.ProactiveSendResponse
+	119, // 232: nexus.v1.MessageService.BroadcastMessage:output_type -> nexus.v1.BroadcastMessageResponse
+	123, // 233: nexus.v1.IdentityService.CreateIdentity:output_type -> nexus.v1.CreateIdentityResponse
+	125, // 234: nexus.v1.IdentityService.GetIdentity:output_type -> nexus.v1.GetIdentityResponse
+	127, // 235: nexus.v1.IdentityService.ListIdentities:output_type -> nexus.v1.ListIdentitiesResponse
+	129, // 236: nexus.v1.IdentityService.DeleteIdentity:output_type -> nexus.v1.DeleteIdentityResponse
+	131, // 237: nexus.v1.IdentityService.LinkPeer:output_type -> nexus.v1.LinkPeerResponse
+	133, // 238: nexus.v1.IdentityService.UnlinkPeer:output_type -> nexus.v1.UnlinkPeerResponse
+	135, // 239: nexus.v1.IdentityService.ResolveIdentity:output_type -> nexus.v1.ResolveIdentityResponse
+	137, // 240: nexus.v1.IdentityService.GetLinkedPeers:output_type -> nexus.v1.GetLinkedPeersResponse
+	200, // [200:241] is the sub-list for method output_type
+	159, // [159:200] is the sub-list for method input_type
+	159, // [159:159] is the sub-list for extension type_name
+	159, // [159:159] is the sub-list for extension extendee
+	0,   // [0:159] is the sub-list for field type_name
 }
 
 func init() { file_pkg_proto_nexus_proto_init() }
@@ -9770,9 +10825,9 @@ func file_pkg_proto_nexus_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pkg_proto_nexus_proto_rawDesc), len(file_pkg_proto_nexus_proto_rawDesc)),
 			NumEnums:      15,
-			NumMessages:   129,
+			NumMessages:   148,
 			NumExtensions: 0,
-			NumServices:   9,
+			NumServices:   10,
 		},
 		GoTypes:           file_pkg_proto_nexus_proto_goTypes,
 		DependencyIndexes: file_pkg_proto_nexus_proto_depIdxs,

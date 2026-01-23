@@ -1375,3 +1375,166 @@ message BroadcastResult {
   string message_id = 3;
   string error = 4;
 }
+
+// =============================================================================
+// Identity Service - Cross-channel User Identity Linking
+// =============================================================================
+
+// IdentityService manages cross-channel identity linking.
+// This allows mapping platform-specific user IDs (e.g., telegram:123456) to
+// canonical identities for unified session management.
+service IdentityService {
+  // CreateIdentity creates a new canonical identity.
+  rpc CreateIdentity(CreateIdentityRequest) returns (CreateIdentityResponse);
+
+  // GetIdentity retrieves an identity by canonical ID.
+  rpc GetIdentity(GetIdentityRequest) returns (GetIdentityResponse);
+
+  // ListIdentities lists all identities.
+  rpc ListIdentities(ListIdentitiesRequest) returns (ListIdentitiesResponse);
+
+  // DeleteIdentity deletes an identity and all its links.
+  rpc DeleteIdentity(DeleteIdentityRequest) returns (DeleteIdentityResponse);
+
+  // LinkPeer links a platform-specific peer ID to a canonical identity.
+  rpc LinkPeer(LinkPeerRequest) returns (LinkPeerResponse);
+
+  // UnlinkPeer removes a peer link from an identity.
+  rpc UnlinkPeer(UnlinkPeerRequest) returns (UnlinkPeerResponse);
+
+  // ResolveIdentity resolves a platform peer ID to its canonical identity.
+  rpc ResolveIdentity(ResolveIdentityRequest) returns (ResolveIdentityResponse);
+
+  // GetLinkedPeers returns all peer IDs linked to an identity.
+  rpc GetLinkedPeers(GetLinkedPeersRequest) returns (GetLinkedPeersResponse);
+}
+
+// Identity represents a canonical user identity that can span multiple channels.
+message Identity {
+  // Canonical identifier (e.g., "user_alice", "user_12345").
+  string canonical_id = 1;
+
+  // Display name for the identity.
+  string display_name = 2;
+
+  // Email (optional, for matching).
+  string email = 3;
+
+  // Linked platform peer IDs (format: "channel:peer_id").
+  repeated string linked_peers = 4;
+
+  // Arbitrary metadata.
+  map<string, string> metadata = 5;
+
+  // Creation timestamp.
+  google.protobuf.Timestamp created_at = 6;
+
+  // Last update timestamp.
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+message CreateIdentityRequest {
+  // Canonical ID (required, must be unique).
+  string canonical_id = 1;
+
+  // Display name.
+  string display_name = 2;
+
+  // Email (optional).
+  string email = 3;
+
+  // Initial linked peers (format: "channel:peer_id").
+  repeated string linked_peers = 4;
+
+  // Metadata.
+  map<string, string> metadata = 5;
+}
+
+message CreateIdentityResponse {
+  Identity identity = 1;
+}
+
+message GetIdentityRequest {
+  string canonical_id = 1;
+}
+
+message GetIdentityResponse {
+  Identity identity = 1;
+}
+
+message ListIdentitiesRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+}
+
+message ListIdentitiesResponse {
+  repeated Identity identities = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+message DeleteIdentityRequest {
+  string canonical_id = 1;
+}
+
+message DeleteIdentityResponse {
+  bool success = 1;
+}
+
+message LinkPeerRequest {
+  // Canonical identity to link to.
+  string canonical_id = 1;
+
+  // Channel type (e.g., "telegram", "discord", "slack").
+  string channel = 2;
+
+  // Peer ID on the channel.
+  string peer_id = 3;
+}
+
+message LinkPeerResponse {
+  Identity identity = 1;
+}
+
+message UnlinkPeerRequest {
+  // Canonical identity to unlink from.
+  string canonical_id = 1;
+
+  // Channel type.
+  string channel = 2;
+
+  // Peer ID.
+  string peer_id = 3;
+}
+
+message UnlinkPeerResponse {
+  Identity identity = 1;
+}
+
+message ResolveIdentityRequest {
+  // Channel type.
+  string channel = 1;
+
+  // Peer ID.
+  string peer_id = 2;
+}
+
+message ResolveIdentityResponse {
+  // True if a linked identity was found.
+  bool found = 1;
+
+  // The canonical identity, if found.
+  Identity identity = 2;
+
+  // The resolved ID (canonical_id if linked, channel:peer_id if not).
+  string resolved_id = 3;
+}
+
+message GetLinkedPeersRequest {
+  string canonical_id = 1;
+}
+
+message GetLinkedPeersResponse {
+  // List of linked peer IDs (format: "channel:peer_id").
+  repeated string linked_peers = 1;
+}

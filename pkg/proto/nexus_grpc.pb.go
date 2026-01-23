@@ -1954,3 +1954,395 @@ var MessageService_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "pkg/proto/nexus.proto",
 }
+
+const (
+	IdentityService_CreateIdentity_FullMethodName  = "/nexus.v1.IdentityService/CreateIdentity"
+	IdentityService_GetIdentity_FullMethodName     = "/nexus.v1.IdentityService/GetIdentity"
+	IdentityService_ListIdentities_FullMethodName  = "/nexus.v1.IdentityService/ListIdentities"
+	IdentityService_DeleteIdentity_FullMethodName  = "/nexus.v1.IdentityService/DeleteIdentity"
+	IdentityService_LinkPeer_FullMethodName        = "/nexus.v1.IdentityService/LinkPeer"
+	IdentityService_UnlinkPeer_FullMethodName      = "/nexus.v1.IdentityService/UnlinkPeer"
+	IdentityService_ResolveIdentity_FullMethodName = "/nexus.v1.IdentityService/ResolveIdentity"
+	IdentityService_GetLinkedPeers_FullMethodName  = "/nexus.v1.IdentityService/GetLinkedPeers"
+)
+
+// IdentityServiceClient is the client API for IdentityService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// IdentityService manages cross-channel identity linking.
+// This allows mapping platform-specific user IDs (e.g., telegram:123456) to
+// canonical identities for unified session management.
+type IdentityServiceClient interface {
+	// CreateIdentity creates a new canonical identity.
+	CreateIdentity(ctx context.Context, in *CreateIdentityRequest, opts ...grpc.CallOption) (*CreateIdentityResponse, error)
+	// GetIdentity retrieves an identity by canonical ID.
+	GetIdentity(ctx context.Context, in *GetIdentityRequest, opts ...grpc.CallOption) (*GetIdentityResponse, error)
+	// ListIdentities lists all identities.
+	ListIdentities(ctx context.Context, in *ListIdentitiesRequest, opts ...grpc.CallOption) (*ListIdentitiesResponse, error)
+	// DeleteIdentity deletes an identity and all its links.
+	DeleteIdentity(ctx context.Context, in *DeleteIdentityRequest, opts ...grpc.CallOption) (*DeleteIdentityResponse, error)
+	// LinkPeer links a platform-specific peer ID to a canonical identity.
+	LinkPeer(ctx context.Context, in *LinkPeerRequest, opts ...grpc.CallOption) (*LinkPeerResponse, error)
+	// UnlinkPeer removes a peer link from an identity.
+	UnlinkPeer(ctx context.Context, in *UnlinkPeerRequest, opts ...grpc.CallOption) (*UnlinkPeerResponse, error)
+	// ResolveIdentity resolves a platform peer ID to its canonical identity.
+	ResolveIdentity(ctx context.Context, in *ResolveIdentityRequest, opts ...grpc.CallOption) (*ResolveIdentityResponse, error)
+	// GetLinkedPeers returns all peer IDs linked to an identity.
+	GetLinkedPeers(ctx context.Context, in *GetLinkedPeersRequest, opts ...grpc.CallOption) (*GetLinkedPeersResponse, error)
+}
+
+type identityServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewIdentityServiceClient(cc grpc.ClientConnInterface) IdentityServiceClient {
+	return &identityServiceClient{cc}
+}
+
+func (c *identityServiceClient) CreateIdentity(ctx context.Context, in *CreateIdentityRequest, opts ...grpc.CallOption) (*CreateIdentityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateIdentityResponse)
+	err := c.cc.Invoke(ctx, IdentityService_CreateIdentity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) GetIdentity(ctx context.Context, in *GetIdentityRequest, opts ...grpc.CallOption) (*GetIdentityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetIdentityResponse)
+	err := c.cc.Invoke(ctx, IdentityService_GetIdentity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) ListIdentities(ctx context.Context, in *ListIdentitiesRequest, opts ...grpc.CallOption) (*ListIdentitiesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListIdentitiesResponse)
+	err := c.cc.Invoke(ctx, IdentityService_ListIdentities_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) DeleteIdentity(ctx context.Context, in *DeleteIdentityRequest, opts ...grpc.CallOption) (*DeleteIdentityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteIdentityResponse)
+	err := c.cc.Invoke(ctx, IdentityService_DeleteIdentity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) LinkPeer(ctx context.Context, in *LinkPeerRequest, opts ...grpc.CallOption) (*LinkPeerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LinkPeerResponse)
+	err := c.cc.Invoke(ctx, IdentityService_LinkPeer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) UnlinkPeer(ctx context.Context, in *UnlinkPeerRequest, opts ...grpc.CallOption) (*UnlinkPeerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UnlinkPeerResponse)
+	err := c.cc.Invoke(ctx, IdentityService_UnlinkPeer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) ResolveIdentity(ctx context.Context, in *ResolveIdentityRequest, opts ...grpc.CallOption) (*ResolveIdentityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveIdentityResponse)
+	err := c.cc.Invoke(ctx, IdentityService_ResolveIdentity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) GetLinkedPeers(ctx context.Context, in *GetLinkedPeersRequest, opts ...grpc.CallOption) (*GetLinkedPeersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetLinkedPeersResponse)
+	err := c.cc.Invoke(ctx, IdentityService_GetLinkedPeers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// IdentityServiceServer is the server API for IdentityService service.
+// All implementations must embed UnimplementedIdentityServiceServer
+// for forward compatibility.
+//
+// IdentityService manages cross-channel identity linking.
+// This allows mapping platform-specific user IDs (e.g., telegram:123456) to
+// canonical identities for unified session management.
+type IdentityServiceServer interface {
+	// CreateIdentity creates a new canonical identity.
+	CreateIdentity(context.Context, *CreateIdentityRequest) (*CreateIdentityResponse, error)
+	// GetIdentity retrieves an identity by canonical ID.
+	GetIdentity(context.Context, *GetIdentityRequest) (*GetIdentityResponse, error)
+	// ListIdentities lists all identities.
+	ListIdentities(context.Context, *ListIdentitiesRequest) (*ListIdentitiesResponse, error)
+	// DeleteIdentity deletes an identity and all its links.
+	DeleteIdentity(context.Context, *DeleteIdentityRequest) (*DeleteIdentityResponse, error)
+	// LinkPeer links a platform-specific peer ID to a canonical identity.
+	LinkPeer(context.Context, *LinkPeerRequest) (*LinkPeerResponse, error)
+	// UnlinkPeer removes a peer link from an identity.
+	UnlinkPeer(context.Context, *UnlinkPeerRequest) (*UnlinkPeerResponse, error)
+	// ResolveIdentity resolves a platform peer ID to its canonical identity.
+	ResolveIdentity(context.Context, *ResolveIdentityRequest) (*ResolveIdentityResponse, error)
+	// GetLinkedPeers returns all peer IDs linked to an identity.
+	GetLinkedPeers(context.Context, *GetLinkedPeersRequest) (*GetLinkedPeersResponse, error)
+	mustEmbedUnimplementedIdentityServiceServer()
+}
+
+// UnimplementedIdentityServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedIdentityServiceServer struct{}
+
+func (UnimplementedIdentityServiceServer) CreateIdentity(context.Context, *CreateIdentityRequest) (*CreateIdentityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateIdentity not implemented")
+}
+func (UnimplementedIdentityServiceServer) GetIdentity(context.Context, *GetIdentityRequest) (*GetIdentityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetIdentity not implemented")
+}
+func (UnimplementedIdentityServiceServer) ListIdentities(context.Context, *ListIdentitiesRequest) (*ListIdentitiesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListIdentities not implemented")
+}
+func (UnimplementedIdentityServiceServer) DeleteIdentity(context.Context, *DeleteIdentityRequest) (*DeleteIdentityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteIdentity not implemented")
+}
+func (UnimplementedIdentityServiceServer) LinkPeer(context.Context, *LinkPeerRequest) (*LinkPeerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LinkPeer not implemented")
+}
+func (UnimplementedIdentityServiceServer) UnlinkPeer(context.Context, *UnlinkPeerRequest) (*UnlinkPeerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UnlinkPeer not implemented")
+}
+func (UnimplementedIdentityServiceServer) ResolveIdentity(context.Context, *ResolveIdentityRequest) (*ResolveIdentityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveIdentity not implemented")
+}
+func (UnimplementedIdentityServiceServer) GetLinkedPeers(context.Context, *GetLinkedPeersRequest) (*GetLinkedPeersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetLinkedPeers not implemented")
+}
+func (UnimplementedIdentityServiceServer) mustEmbedUnimplementedIdentityServiceServer() {}
+func (UnimplementedIdentityServiceServer) testEmbeddedByValue()                         {}
+
+// UnsafeIdentityServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to IdentityServiceServer will
+// result in compilation errors.
+type UnsafeIdentityServiceServer interface {
+	mustEmbedUnimplementedIdentityServiceServer()
+}
+
+func RegisterIdentityServiceServer(s grpc.ServiceRegistrar, srv IdentityServiceServer) {
+	// If the following call panics, it indicates UnimplementedIdentityServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&IdentityService_ServiceDesc, srv)
+}
+
+func _IdentityService_CreateIdentity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateIdentityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).CreateIdentity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_CreateIdentity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).CreateIdentity(ctx, req.(*CreateIdentityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_GetIdentity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetIdentityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).GetIdentity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_GetIdentity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).GetIdentity(ctx, req.(*GetIdentityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_ListIdentities_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListIdentitiesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).ListIdentities(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_ListIdentities_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).ListIdentities(ctx, req.(*ListIdentitiesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_DeleteIdentity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteIdentityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).DeleteIdentity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_DeleteIdentity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).DeleteIdentity(ctx, req.(*DeleteIdentityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_LinkPeer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LinkPeerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).LinkPeer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_LinkPeer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).LinkPeer(ctx, req.(*LinkPeerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_UnlinkPeer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnlinkPeerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).UnlinkPeer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_UnlinkPeer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).UnlinkPeer(ctx, req.(*UnlinkPeerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_ResolveIdentity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveIdentityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).ResolveIdentity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_ResolveIdentity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).ResolveIdentity(ctx, req.(*ResolveIdentityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_GetLinkedPeers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetLinkedPeersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).GetLinkedPeers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_GetLinkedPeers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).GetLinkedPeers(ctx, req.(*GetLinkedPeersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// IdentityService_ServiceDesc is the grpc.ServiceDesc for IdentityService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var IdentityService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "nexus.v1.IdentityService",
+	HandlerType: (*IdentityServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "CreateIdentity",
+			Handler:    _IdentityService_CreateIdentity_Handler,
+		},
+		{
+			MethodName: "GetIdentity",
+			Handler:    _IdentityService_GetIdentity_Handler,
+		},
+		{
+			MethodName: "ListIdentities",
+			Handler:    _IdentityService_ListIdentities_Handler,
+		},
+		{
+			MethodName: "DeleteIdentity",
+			Handler:    _IdentityService_DeleteIdentity_Handler,
+		},
+		{
+			MethodName: "LinkPeer",
+			Handler:    _IdentityService_LinkPeer_Handler,
+		},
+		{
+			MethodName: "UnlinkPeer",
+			Handler:    _IdentityService_UnlinkPeer_Handler,
+		},
+		{
+			MethodName: "ResolveIdentity",
+			Handler:    _IdentityService_ResolveIdentity_Handler,
+		},
+		{
+			MethodName: "GetLinkedPeers",
+			Handler:    _IdentityService_GetLinkedPeers_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "pkg/proto/nexus.proto",
+}

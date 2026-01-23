@@ -24,7 +24,99 @@ import (
 )
 
 const (
-	defaultIndexHTML = "<!doctype html><html><head><meta charset=\"utf-8\" /><title>Nexus Canvas</title></head><body><h1>Nexus Canvas</h1><p>Drop files into this folder to render them here.</p></body></html>"
+	defaultIndexHTML = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nexus Canvas</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Space Grotesk", "Sora", "Fira Sans", sans-serif;
+      background: radial-gradient(1200px 600px at 10% 10%, #f7f3ea, #f0ede6 60%, #ebe7df 100%);
+      color: #121212;
+    }
+    main {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 32px;
+    }
+    .card {
+      width: min(760px, 100%);
+      background: rgba(255, 255, 255, 0.85);
+      border: 1px solid #e2dcd0;
+      border-radius: 20px;
+      padding: 24px 26px;
+      box-shadow: 0 24px 60px rgba(26, 22, 14, 0.15);
+      backdrop-filter: blur(6px);
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 26px;
+      letter-spacing: 0.4px;
+    }
+    .badge {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #111;
+      color: #f8f4ec;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+    }
+    p {
+      margin: 12px 0 0;
+      color: #3b3a37;
+      line-height: 1.5;
+    }
+    ul {
+      margin: 16px 0 0 18px;
+      padding: 0;
+      color: #2c2b28;
+    }
+    li { margin-bottom: 8px; }
+    code {
+      font-family: "IBM Plex Mono", "Fira Mono", "Menlo", monospace;
+      font-size: 0.95em;
+      background: #f1ede6;
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+    .footer {
+      margin-top: 18px;
+      font-size: 12px;
+      color: #6a665f;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card">
+      <div class="header">
+        <h1>Nexus Canvas</h1>
+        <span class="badge">ready</span>
+      </div>
+      <p>This folder is served by the canvas host. Add or update files and they will appear here.</p>
+      <ul>
+        <li>Put an <code>index.html</code> in the canvas root to replace this page.</li>
+        <li>Live reload is available when enabled in <code>canvas_host</code>.</li>
+        <li>If you use A2UI assets, drop them into the configured <code>a2ui_root</code>.</li>
+      </ul>
+      <div class="footer">Tip: keep your canvas assets lightweight for fast previews.</div>
+    </section>
+  </main>
+</body>
+</html>`
 )
 
 // Host serves a canvas directory on a dedicated HTTP server with optional live reload.

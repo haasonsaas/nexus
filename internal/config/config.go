@@ -254,6 +254,7 @@ type ChannelsConfig struct {
 	IMessage IMessageConfig `yaml:"imessage"`
 	Matrix   MatrixConfig   `yaml:"matrix"`
 	Teams    TeamsConfig    `yaml:"teams"`
+	Email    EmailConfig    `yaml:"email"`
 }
 
 type WhatsAppConfig struct {
@@ -329,6 +330,23 @@ type TeamsConfig struct {
 	// WebhookURL is the public URL for receiving Teams notifications
 	WebhookURL string `yaml:"webhook_url"`
 	// PollInterval for checking messages when webhooks unavailable (default: 5s)
+	PollInterval string `yaml:"poll_interval"`
+}
+
+type EmailConfig struct {
+	Enabled      bool   `yaml:"enabled"`
+	TenantID     string `yaml:"tenant_id"`
+	ClientID     string `yaml:"client_id"`
+	ClientSecret string `yaml:"client_secret"`
+	// UserEmail is the email address to monitor (for app-only auth)
+	UserEmail string `yaml:"user_email"`
+	// FolderID specifies which folder to monitor (default: inbox)
+	FolderID string `yaml:"folder_id"`
+	// IncludeRead determines whether to process already-read messages
+	IncludeRead bool `yaml:"include_read"`
+	// AutoMarkRead marks messages as read after processing
+	AutoMarkRead bool `yaml:"auto_mark_read"`
+	// PollInterval for checking new emails (default: 30s)
 	PollInterval string `yaml:"poll_interval"`
 }
 

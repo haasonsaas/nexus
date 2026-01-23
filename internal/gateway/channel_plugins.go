@@ -8,6 +8,7 @@ import (
 
 	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/channels/discord"
+	"github.com/haasonsaas/nexus/internal/channels/email"
 	"github.com/haasonsaas/nexus/internal/channels/slack"
 	"github.com/haasonsaas/nexus/internal/channels/teams"
 	"github.com/haasonsaas/nexus/internal/channels/telegram"
@@ -77,6 +78,7 @@ func registerBuiltinChannelPlugins(registry *channelPluginRegistry) {
 	registry.Register(discordPlugin{})
 	registry.Register(slackPlugin{})
 	registry.Register(teamsPlugin{})
+	registry.Register(emailPlugin{})
 }
 
 type telegramPlugin struct{}
@@ -192,6 +194,55 @@ func (teamsPlugin) Build(cfg *config.Config, logger *slog.Logger) (channels.Adap
 		ClientID:     cfg.Channels.Teams.ClientID,
 		ClientSecret: cfg.Channels.Teams.ClientSecret,
 		WebhookURL:   strings.TrimSpace(cfg.Channels.Teams.WebhookURL),
+		PollInterval: pollInterval,
+		Logger:       logger,
+	})
+}
+
+type emailPlugin struct{}
+
+func (emailPlugin) Manifest() ChannelPluginManifest {
+	return ChannelPluginManifest{
+		ID:   models.ChannelEmail,
+		Name: "Microsoft Graph Email",
+	}
+}
+
+func (emailPlugin) Enabled(cfg *config.Config) bool {
+	return cfg != nil && cfg.Channels.Email.Enabled
+}
+
+func (emailPlugin) Build(cfg *config.Config, logger *slog.Logger) (channels.Adapter, error) {
+	if cfg.Channels.Email.TenantID == "" {
+		return nil, errors.New("email tenant_id is required")
+	}
+	if cfg.Channels.Email.ClientID == "" {
+		return nil, errors.New("email client_id is required")
+	}
+	if cfg.Channels.Email.ClientSecret == "" {
+		return nil, errors.New("email client_secret is required")
+	}
+
+	pollInterval := 30 * time.Second
+	if cfg.Channels.Email.PollInterval != "" {
+		if d, err := time.ParseDuration(cfg.Channels.Email.PollInterval); err == nil {
+			pollInterval = d
+		}
+	}
+
+	folderID := "inbox"
+	if cfg.Channels.Email.FolderID != "" {
+		folderID = cfg.Channels.Email.FolderID
+	}
+
+	return email.NewAdapter(email.Config{
+		TenantID:     cfg.Channels.Email.TenantID,
+		ClientID:     cfg.Channels.Email.ClientID,
+		ClientSecret: cfg.Channels.Email.ClientSecret,
+		UserEmail:    cfg.Channels.Email.UserEmail,
+		FolderID:     folderID,
+		IncludeRead:  cfg.Channels.Email.IncludeRead,
+		AutoMarkRead: cfg.Channels.Email.AutoMarkRead,
 		PollInterval: pollInterval,
 		Logger:       logger,
 	})

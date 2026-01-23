@@ -242,3 +242,196 @@ func contains(s, substr string) bool {
 	}
 	return false
 }
+
+func TestShouldIgnorePath(t *testing.T) {
+	tests := []struct {
+		path     string
+		expected bool
+	}{
+		{"", false},
+		{"file.txt", false},
+		{"/home/user/file.txt", false},
+		{".git", true},
+		{".hidden", true},
+		{"/home/.config", true},
+		{"node_modules", true},
+		{"/project/node_modules/pkg", true},
+		{"./file.txt", false},
+		{"../parent", false},
+		{"/home/user/.gitignore", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			if got := shouldIgnorePath(tt.path); got != tt.expected {
+				t.Errorf("shouldIgnorePath(%q) = %v, want %v", tt.path, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestHost_Close_NilHost(t *testing.T) {
+	var h *Host
+	err := h.Close()
+	if err != nil {
+		t.Errorf("Close() error = %v, want nil", err)
+	}
+}
+
+func TestHost_Start_NilHost(t *testing.T) {
+	var h *Host
+	err := h.Start(nil)
+	if err != nil {
+		t.Errorf("Start() error = %v, want nil", err)
+	}
+}
+
+func TestHost_NamespacedPath(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := config.CanvasHostConfig{
+		Port:      18793,
+		Root:      tmpDir,
+		Namespace: "/myns",
+	}
+	host, err := NewHost(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewHost error: %v", err)
+	}
+
+	tests := []struct {
+		suffix   string
+		expected string
+	}{
+		{"canvas", "/myns/canvas"},
+		{"/canvas", "/myns/canvas"},
+		{"ws", "/myns/ws"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.suffix, func(t *testing.T) {
+			if got := host.namespacedPath(tt.suffix); got != tt.expected {
+				t.Errorf("namespacedPath(%q) = %q, want %q", tt.suffix, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestHost_NamespacedPath_RootNamespace(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := config.CanvasHostConfig{
+		Port:      18793,
+		Root:      tmpDir,
+		Namespace: "/",
+	}
+	host, err := NewHost(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewHost error: %v", err)
+	}
+
+	if got := host.namespacedPath("canvas"); got != "/canvas" {
+		t.Errorf("namespacedPath(\"canvas\") = %q, want %q", got, "/canvas")
+	}
+}
+
+func TestHost_Prefixes(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := config.CanvasHostConfig{
+		Port:      18793,
+		Root:      tmpDir,
+		Namespace: "/__nexus__",
+	}
+	host, err := NewHost(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewHost error: %v", err)
+	}
+
+	if got := host.canvasPrefix(); got != "/__nexus__/canvas" {
+		t.Errorf("canvasPrefix() = %q, want %q", got, "/__nexus__/canvas")
+	}
+	if got := host.a2uiPrefix(); got != "/__nexus__/a2ui" {
+		t.Errorf("a2uiPrefix() = %q, want %q", got, "/__nexus__/a2ui")
+	}
+	if got := host.liveReloadWSPath(); got != "/__nexus__/ws" {
+		t.Errorf("liveReloadWSPath() = %q, want %q", got, "/__nexus__/ws")
+	}
+	if got := host.liveReloadScriptPath(); got != "/__nexus__/live.js" {
+		t.Errorf("liveReloadScriptPath() = %q, want %q", got, "/__nexus__/live.js")
+	}
+}
+
+func TestHost_LiveReloadScript(t *testing.T) {
+	tmpDir := t.TempDir()
+	liveReload := true
+	cfg := config.CanvasHostConfig{
+		Port:       18793,
+		Root:       tmpDir,
+		Namespace:  "/__nexus__",
+		LiveReload: &liveReload,
+	}
+	host, err := NewHost(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewHost error: %v", err)
+	}
+
+	script := host.liveReloadScript()
+
+	// Check for expected content
+	if !contains(script, "WebSocket") {
+		t.Error("script should contain WebSocket")
+	}
+	if !contains(script, "reload") {
+		t.Error("script should contain reload handler")
+	}
+	if !contains(script, host.liveReloadWSPath()) {
+		t.Error("script should contain WS path")
+	}
+}
+
+func TestHost_EnsureRoot(t *testing.T) {
+	t.Run("creates missing directory", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		newRoot := tmpDir + "/newcanvas"
+		cfg := config.CanvasHostConfig{
+			Port:      18793,
+			Root:      newRoot,
+			Namespace: "/__nexus__",
+		}
+		host, err := NewHost(cfg, nil)
+		if err != nil {
+			t.Fatalf("NewHost error: %v", err)
+		}
+
+		if err := host.ensureRoot(); err != nil {
+			t.Errorf("ensureRoot() error = %v", err)
+		}
+	})
+
+	t.Run("accepts existing directory", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		cfg := config.CanvasHostConfig{
+			Port:      18793,
+			Root:      tmpDir,
+			Namespace: "/__nexus__",
+		}
+		host, err := NewHost(cfg, nil)
+		if err != nil {
+			t.Fatalf("NewHost error: %v", err)
+		}
+
+		if err := host.ensureRoot(); err != nil {
+			t.Errorf("ensureRoot() error = %v", err)
+		}
+	})
+}
+
+func TestDefaultIndexHTML(t *testing.T) {
+	if defaultIndexHTML == "" {
+		t.Error("defaultIndexHTML should not be empty")
+	}
+	if !contains(defaultIndexHTML, "<!doctype html>") {
+		t.Error("defaultIndexHTML should contain doctype")
+	}
+	if !contains(defaultIndexHTML, "Nexus Canvas") {
+		t.Error("defaultIndexHTML should contain Nexus Canvas")
+	}
+}

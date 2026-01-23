@@ -33,6 +33,7 @@ type mockBotClient struct {
 	sendPhotoFunc    func(ctx context.Context, params *bot.SendPhotoParams) (*models.Message, error)
 	sendDocumentFunc func(ctx context.Context, params *bot.SendDocumentParams) (*models.Message, error)
 	sendAudioFunc    func(ctx context.Context, params *bot.SendAudioParams) (*models.Message, error)
+	sendChatActionFn func(ctx context.Context, params *bot.SendChatActionParams) (bool, error)
 	getFileFunc      func(ctx context.Context, params *bot.GetFileParams) (*models.File, error)
 	getMeFunc        func(ctx context.Context) (*models.User, error)
 	setWebhookFunc   func(ctx context.Context, params *bot.SetWebhookParams) (bool, error)
@@ -41,13 +42,14 @@ type mockBotClient struct {
 	startWebhookFunc func(ctx context.Context)
 
 	// Call tracking
-	sendMessageCalls  int
-	sendPhotoCalls    int
-	sendDocumentCalls int
-	sendAudioCalls    int
-	getFileCalls      int
-	getMeCalls        int
-	setWebhookCalls   int
+	sendMessageCalls    int
+	sendPhotoCalls      int
+	sendDocumentCalls   int
+	sendAudioCalls      int
+	sendChatActionCalls int
+	getFileCalls        int
+	getMeCalls          int
+	setWebhookCalls     int
 }
 
 func newMockBotClient() *mockBotClient {
@@ -162,6 +164,13 @@ func (m *mockBotClient) StartWebhook(ctx context.Context) {
 }
 
 func (m *mockBotClient) SendChatAction(ctx context.Context, params *bot.SendChatActionParams) (bool, error) {
+	m.mu.Lock()
+	m.sendChatActionCalls++
+	m.mu.Unlock()
+
+	if m.sendChatActionFn != nil {
+		return m.sendChatActionFn(ctx, params)
+	}
 	return true, nil
 }
 
@@ -709,6 +718,101 @@ func TestAdapter_SendWithReplyTo(t *testing.T) {
 	}
 }
 
+func TestAdapter_SendWithThreadID(t *testing.T) {
+	cfg := Config{Token: "test-token", Mode: ModeLongPolling}
+	adapter, _ := NewAdapter(cfg)
+
+	var capturedParams *bot.SendMessageParams
+	mock := newMockBotClient()
+	mock.sendMessageFunc = func(ctx context.Context, params *bot.SendMessageParams) (*models.Message, error) {
+		capturedParams = params
+		return &models.Message{ID: 12345}, nil
+	}
+	adapter.SetBotClient(mock)
+
+	msg := &nexusmodels.Message{
+		Content: "Threaded message",
+		Metadata: map[string]any{
+			"chat_id":           int64(123456),
+			"message_thread_id": 77,
+		},
+	}
+
+	if err := adapter.Send(context.Background(), msg); err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+
+	if capturedParams == nil {
+		t.Fatal("expected SendMessageParams to be captured")
+	}
+	if capturedParams.MessageThreadID != 77 {
+		t.Errorf("MessageThreadID = %d, want 77", capturedParams.MessageThreadID)
+	}
+}
+
+func TestAdapter_SendWithGeneralTopicThreadID(t *testing.T) {
+	cfg := Config{Token: "test-token", Mode: ModeLongPolling}
+	adapter, _ := NewAdapter(cfg)
+
+	var capturedParams *bot.SendMessageParams
+	mock := newMockBotClient()
+	mock.sendMessageFunc = func(ctx context.Context, params *bot.SendMessageParams) (*models.Message, error) {
+		capturedParams = params
+		return &models.Message{ID: 12345}, nil
+	}
+	adapter.SetBotClient(mock)
+
+	msg := &nexusmodels.Message{
+		Content: "General topic message",
+		Metadata: map[string]any{
+			"chat_id":           int64(123456),
+			"message_thread_id": 1,
+		},
+	}
+
+	if err := adapter.Send(context.Background(), msg); err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+
+	if capturedParams == nil {
+		t.Fatal("expected SendMessageParams to be captured")
+	}
+	if capturedParams.MessageThreadID != 0 {
+		t.Errorf("MessageThreadID = %d, want 0", capturedParams.MessageThreadID)
+	}
+}
+
+func TestAdapter_SendTypingIndicatorWithThreadID(t *testing.T) {
+	cfg := Config{Token: "test-token", Mode: ModeLongPolling}
+	adapter, _ := NewAdapter(cfg)
+
+	var capturedParams *bot.SendChatActionParams
+	mock := newMockBotClient()
+	mock.sendChatActionFn = func(ctx context.Context, params *bot.SendChatActionParams) (bool, error) {
+		capturedParams = params
+		return true, nil
+	}
+	adapter.SetBotClient(mock)
+
+	msg := &nexusmodels.Message{
+		Metadata: map[string]any{
+			"chat_id":           int64(123456),
+			"message_thread_id": 1,
+		},
+	}
+
+	if err := adapter.SendTypingIndicator(context.Background(), msg); err != nil {
+		t.Fatalf("SendTypingIndicator() error = %v", err)
+	}
+
+	if capturedParams == nil {
+		t.Fatal("expected SendChatActionParams to be captured")
+	}
+	if capturedParams.MessageThreadID != 1 {
+		t.Errorf("MessageThreadID = %d, want 1", capturedParams.MessageThreadID)
+	}
+}
+
 // =============================================================================
 // Health Check Tests with Mock
 // =============================================================================
@@ -887,13 +991,14 @@ func TestConvertTelegramMessage_TextMessage(t *testing.T) {
 func TestConvertTelegramMessage_Metadata(t *testing.T) {
 	timestamp := time.Now().Unix()
 	teleMsg := &mockTelegramMessage{
-		messageID: 123,
-		chatID:    456789,
-		text:      "Test message",
-		fromID:    111,
-		fromFirst: "John",
-		fromLast:  "Doe",
-		date:      timestamp,
+		messageID:       123,
+		chatID:          456789,
+		text:            "Test message",
+		fromID:          111,
+		fromFirst:       "John",
+		fromLast:        "Doe",
+		date:            timestamp,
+		messageThreadID: 99,
 	}
 
 	got := convertTelegramMessage(teleMsg)
@@ -917,6 +1022,9 @@ func TestConvertTelegramMessage_Metadata(t *testing.T) {
 
 	if got.Metadata["user_last"] != "Doe" {
 		t.Errorf("Metadata[user_last] = %v, want %v", got.Metadata["user_last"], "Doe")
+	}
+	if got.Metadata["message_thread_id"] != 99 {
+		t.Errorf("Metadata[message_thread_id] = %v, want %v", got.Metadata["message_thread_id"], 99)
 	}
 
 	// Check session ID format
@@ -2053,14 +2161,15 @@ func TestAdapter_SendAudioError(t *testing.T) {
 
 // mockTelegramMessage simulates a Telegram message for testing
 type mockTelegramMessage struct {
-	messageID int64
-	chatID    int64
-	chatType  string
-	text      string
-	fromID    int64
-	fromFirst string
-	fromLast  string
-	date      int64
+	messageID       int64
+	chatID          int64
+	chatType        string
+	text            string
+	fromID          int64
+	fromFirst       string
+	fromLast        string
+	date            int64
+	messageThreadID int
 
 	// Attachments
 	hasPhoto bool
@@ -2090,6 +2199,10 @@ func (m *mockTelegramMessage) GetChatID() int64 {
 
 func (m *mockTelegramMessage) GetChatType() string {
 	return m.chatType
+}
+
+func (m *mockTelegramMessage) GetMessageThreadID() int {
+	return m.messageThreadID
 }
 
 func (m *mockTelegramMessage) GetText() string {

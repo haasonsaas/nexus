@@ -135,9 +135,9 @@ Allow installing hooks as packages with dependencies.
 
 UI clients querying gateway for session state.
 
-### 12. Telegram Forum Topic Support
+### 12. Telegram Forum Topic Support ✅
 
-Thread isolation for forum-style chats.
+**Status:** Implemented in Telegram adapter + gateway session routing.
 
 ## Implementation Status Summary
 
@@ -152,15 +152,14 @@ Thread isolation for forum-style chats.
 | Elevated Mode | ✅ Done | `internal/gateway/elevated.go` |
 | Security Audits | ✅ Done | `internal/doctor/security_audit.go` |
 | AgentDir Collision | ✅ Done | `internal/multiagent/config.go` |
+| Telegram Forums | ✅ Done | `internal/channels/telegram/adapter.go` |
 | Session Pruning | ⏳ Pending | - |
 | Hook Packs | ⏳ Future | - |
-| Telegram Forums | ⏳ Future | - |
 
 ## Remaining Work
 
 1. **Session Pruning** - In-memory tool result trimming (separate from persistent compaction)
 2. **Hook Packs** - npm-style hook package installation
-3. **Telegram Forum Support** - Thread isolation for forum-style chats
 
 ## Notes
 

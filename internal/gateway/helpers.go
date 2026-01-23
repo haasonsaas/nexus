@@ -23,25 +23,37 @@ import (
 func (s *Server) resolveConversationID(msg *models.Message) (string, error) {
 	switch msg.Channel {
 	case models.ChannelTelegram:
+		chatID := ""
 		if msg.Metadata != nil {
-			if chatID, ok := msg.Metadata["chat_id"]; ok {
-				switch v := chatID.(type) {
-				case int64:
-					return strconv.FormatInt(v, 10), nil
-				case int:
-					return strconv.Itoa(v), nil
-				case string:
-					return v, nil
-				}
+			if id, ok := msg.Metadata[MetaChatID].(string); ok && id != "" {
+				chatID = id
+			}
+			if chatID == "" {
+				chatID = stringifyID(msg.Metadata["chat_id"])
 			}
 		}
-		if msg.SessionID != "" {
+		if chatID == "" && msg.SessionID != "" {
 			var id int64
 			if _, err := fmt.Sscanf(msg.SessionID, "telegram:%d", &id); err == nil {
-				return strconv.FormatInt(id, 10), nil
+				chatID = strconv.FormatInt(id, 10)
 			}
 		}
-		return "", errors.New("telegram chat id missing")
+		if chatID == "" {
+			return "", errors.New("telegram chat id missing")
+		}
+		threadID := ""
+		if msg.Metadata != nil {
+			if id, ok := msg.Metadata[MetaThreadID].(string); ok && id != "" {
+				threadID = id
+			}
+			if threadID == "" {
+				threadID = stringifyID(msg.Metadata["message_thread_id"])
+			}
+		}
+		if threadID != "" && threadID != "0" {
+			return fmt.Sprintf("%s:topic:%s", chatID, threadID), nil
+		}
+		return chatID, nil
 	case models.ChannelSlack:
 		channelID := ""
 		if msg.Metadata != nil {
@@ -206,6 +218,13 @@ func (s *Server) buildReplyMetadata(msg *models.Message) map[string]any {
 	case models.ChannelTelegram:
 		if chatID, ok := msg.Metadata["chat_id"]; ok {
 			metadata["chat_id"] = chatID
+		}
+		if threadID, ok := msg.Metadata["message_thread_id"]; ok {
+			metadata["message_thread_id"] = threadID
+		} else if threadID, ok := msg.Metadata[MetaThreadID].(string); ok && threadID != "" {
+			if id, err := strconv.Atoi(threadID); err == nil {
+				metadata["message_thread_id"] = id
+			}
 		}
 		if msg.ChannelID != "" {
 			if id, err := strconv.Atoi(msg.ChannelID); err == nil {

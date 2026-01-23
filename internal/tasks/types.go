@@ -99,6 +99,18 @@ type ScheduledTask struct {
 	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
+// ExecutionType determines how a task is executed.
+type ExecutionType string
+
+const (
+	// ExecutionTypeAgent processes through the agent runtime (default).
+	ExecutionTypeAgent ExecutionType = "agent"
+
+	// ExecutionTypeMessage sends the prompt directly as a message.
+	// Used for reminders and direct notifications.
+	ExecutionTypeMessage ExecutionType = "message"
+)
+
 // TaskConfig holds configuration options for a scheduled task.
 type TaskConfig struct {
 	// Timeout is the maximum duration for task execution.
@@ -114,6 +126,10 @@ type TaskConfig struct {
 	// Overlap controls whether overlapping executions are allowed.
 	// If false (default), a new execution won't start if one is already running.
 	AllowOverlap bool `json:"allow_overlap,omitempty"`
+
+	// ExecutionType determines how the task is executed.
+	// "agent" (default) processes through LLM, "message" sends directly.
+	ExecutionType ExecutionType `json:"execution_type,omitempty"`
 
 	// Channel specifies the channel context for execution (optional).
 	Channel string `json:"channel,omitempty"`

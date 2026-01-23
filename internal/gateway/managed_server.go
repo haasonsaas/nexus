@@ -57,6 +57,7 @@ func NewManagedServer(cfg ManagedServerConfig) (*ManagedServer, error) {
 	schedulerManager := NewSchedulerManager(SchedulerManagerConfig{
 		Config:    cfg.Config,
 		TaskStore: server.taskStore,
+		Channels:  server.channels,
 		Logger:    logger.With("component", "scheduler-manager"),
 	})
 

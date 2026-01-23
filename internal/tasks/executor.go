@@ -213,3 +213,56 @@ func (e *CallbackExecutor) Execute(ctx context.Context, task *ScheduledTask, exe
 	}
 	return e.Fn(ctx, task, exec)
 }
+
+// RoutingExecutor routes task execution based on ExecutionType.
+// This allows reminders to send direct messages while other tasks go through the agent.
+type RoutingExecutor struct {
+	agentExecutor   Executor
+	messageExecutor Executor
+	logger          *slog.Logger
+}
+
+// NewRoutingExecutor creates an executor that routes based on task configuration.
+func NewRoutingExecutor(agentExecutor, messageExecutor Executor, logger *slog.Logger) *RoutingExecutor {
+	if logger == nil {
+		logger = slog.Default().With("component", "routing-executor")
+	}
+	return &RoutingExecutor{
+		agentExecutor:   agentExecutor,
+		messageExecutor: messageExecutor,
+		logger:          logger,
+	}
+}
+
+// Execute routes to the appropriate executor based on the task's ExecutionType.
+func (e *RoutingExecutor) Execute(ctx context.Context, task *ScheduledTask, exec *TaskExecution) (string, error) {
+	if task == nil {
+		return "", fmt.Errorf("task is required")
+	}
+
+	switch task.Config.ExecutionType {
+	case ExecutionTypeMessage:
+		if e.messageExecutor == nil {
+			return "", fmt.Errorf("message executor not configured")
+		}
+		e.logger.Info("routing task to message executor",
+			"task_id", task.ID,
+			"task_name", task.Name,
+		)
+		return e.messageExecutor.Execute(ctx, task, exec)
+
+	case ExecutionTypeAgent, "":
+		// Default to agent executor
+		if e.agentExecutor == nil {
+			return "", fmt.Errorf("agent executor not configured")
+		}
+		e.logger.Info("routing task to agent executor",
+			"task_id", task.ID,
+			"task_name", task.Name,
+		)
+		return e.agentExecutor.Execute(ctx, task, exec)
+
+	default:
+		return "", fmt.Errorf("unknown execution type: %s", task.Config.ExecutionType)
+	}
+}

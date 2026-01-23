@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/haasonsaas/nexus/internal/agent"
+	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/cron"
 	"github.com/haasonsaas/nexus/internal/infra"
@@ -27,12 +28,14 @@ type SchedulerManager struct {
 	cronScheduler *cron.Scheduler
 	taskScheduler *tasks.Scheduler
 	taskStore     tasks.Store
+	channels      *channels.Registry
 }
 
 // SchedulerManagerConfig configures the SchedulerManager.
 type SchedulerManagerConfig struct {
 	Config    *config.Config
 	TaskStore tasks.Store
+	Channels  *channels.Registry
 	Logger    *slog.Logger
 }
 
@@ -47,6 +50,7 @@ func NewSchedulerManager(cfg SchedulerManagerConfig) *SchedulerManager {
 		BaseComponent: infra.NewBaseComponent("scheduler-manager", logger),
 		config:        cfg.Config,
 		taskStore:     cfg.TaskStore,
+		channels:      cfg.Channels,
 	}
 }
 
@@ -85,10 +89,24 @@ func (m *SchedulerManager) StartTaskScheduler(ctx context.Context, runtime *agen
 		return nil
 	}
 
-	// Create the executor that uses the agent runtime
-	executor := tasks.NewAgentExecutor(runtime, sessionStore, tasks.AgentExecutorConfig{
+	// Create the agent executor for normal tasks
+	agentExecutor := tasks.NewAgentExecutor(runtime, sessionStore, tasks.AgentExecutorConfig{
 		Logger: m.Logger().With("component", "task-executor"),
 	})
+
+	// Create the message executor for direct message sending (reminders)
+	var messageExecutor tasks.Executor
+	if m.channels != nil {
+		messageExecutor = NewMessageExecutor(m.channels, MessageExecutorConfig{
+			Sessions: sessionStore,
+			Logger: func(format string, args ...any) {
+				m.Logger().Info(fmt.Sprintf(format, args...), "component", "message-executor")
+			},
+		})
+	}
+
+	// Create a routing executor that chooses based on task type
+	executor := tasks.NewRoutingExecutor(agentExecutor, messageExecutor, m.Logger().With("component", "routing-executor"))
 
 	// Build scheduler config from settings
 	schedulerCfg := tasks.DefaultSchedulerConfig()

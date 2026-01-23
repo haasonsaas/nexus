@@ -13,6 +13,7 @@ import (
 
 	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/sessions"
+	"github.com/haasonsaas/nexus/internal/tasks"
 	"github.com/haasonsaas/nexus/pkg/models"
 	proto "github.com/haasonsaas/nexus/pkg/proto"
 )
@@ -274,11 +275,104 @@ func (s *Server) SendProactiveMessage(ctx context.Context, channel models.Channe
 
 // MessageExecutor is a task executor that sends messages directly via channels.
 // Unlike AgentExecutor which processes through the LLM, this sends messages directly.
+// Used for reminders and direct notifications.
 type MessageExecutor struct {
 	registry *channels.Registry
+	sessions sessions.Store
+	logger   func(format string, args ...any)
+}
+
+// MessageExecutorConfig configures the message executor.
+type MessageExecutorConfig struct {
+	Sessions sessions.Store
+	Logger   func(format string, args ...any)
 }
 
 // NewMessageExecutor creates a new executor that sends messages directly.
-func NewMessageExecutor(registry *channels.Registry) *MessageExecutor {
-	return &MessageExecutor{registry: registry}
+func NewMessageExecutor(registry *channels.Registry, config MessageExecutorConfig) *MessageExecutor {
+	logger := config.Logger
+	if logger == nil {
+		logger = func(string, ...any) {}
+	}
+	return &MessageExecutor{
+		registry: registry,
+		sessions: config.Sessions,
+		logger:   logger,
+	}
 }
+
+// Execute sends the task prompt directly as a message to the configured channel.
+func (e *MessageExecutor) Execute(ctx context.Context, task *tasks.ScheduledTask, exec *tasks.TaskExecution) (string, error) {
+	if task == nil {
+		return "", fmt.Errorf("task is required")
+	}
+	if exec == nil {
+		return "", fmt.Errorf("execution is required")
+	}
+
+	// Get channel and peer from task config
+	channelType := models.ChannelType(task.Config.Channel)
+	if channelType == "" {
+		return "", fmt.Errorf("channel is required for message execution")
+	}
+
+	peerID := task.Config.ChannelID
+	if peerID == "" {
+		return "", fmt.Errorf("channel_id (peer) is required for message execution")
+	}
+
+	// Get the outbound adapter
+	adapter, ok := e.registry.GetOutbound(channelType)
+	if !ok {
+		return "", fmt.Errorf("channel %s not found or doesn't support outbound", channelType)
+	}
+
+	// Format the reminder message
+	content := formatReminderMessage(task, exec)
+
+	// Create the message
+	msg := &models.Message{
+		ID:        uuid.NewString(),
+		Channel:   channelType,
+		ChannelID: peerID,
+		Direction: models.DirectionOutbound,
+		Role:      models.RoleAssistant,
+		Content:   content,
+		CreatedAt: time.Now(),
+		Metadata: map[string]any{
+			"task_id":      task.ID,
+			"task_name":    task.Name,
+			"execution_id": exec.ID,
+			"type":         "reminder",
+		},
+	}
+
+	// Send the message
+	if err := adapter.Send(ctx, msg); err != nil {
+		return "", fmt.Errorf("send message: %w", err)
+	}
+
+	e.logger("reminder sent: task=%s channel=%s peer=%s", task.ID, channelType, peerID)
+
+	// Store the message in session if we have a session store
+	if e.sessions != nil {
+		key := sessions.SessionKey(task.AgentID, channelType, peerID)
+		session, err := e.sessions.GetOrCreate(ctx, key, task.AgentID, channelType, peerID)
+		if err == nil {
+			msg.SessionID = session.ID
+			if err := e.sessions.AppendMessage(ctx, session.ID, msg); err != nil {
+				e.logger("failed to store reminder message: %v", err)
+			}
+		}
+	}
+
+	return fmt.Sprintf("Reminder sent to %s:%s", channelType, peerID), nil
+}
+
+// formatReminderMessage formats the reminder for display.
+func formatReminderMessage(task *tasks.ScheduledTask, _ *tasks.TaskExecution) string {
+	// For reminders, the prompt is the message to send
+	// Add a prefix to make it clear this is a reminder
+	return fmt.Sprintf("Reminder: %s", task.Prompt)
+}
+

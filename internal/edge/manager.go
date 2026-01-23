@@ -577,13 +577,17 @@ func (m *Manager) handleToolResult(conn *EdgeConnection, result *pb.ToolExecutio
 
 // handleEdgeEvent processes an event from an edge.
 func (m *Manager) handleEdgeEvent(conn *EdgeConnection, event *pb.EdgeEvent) {
+	var payload map[string]interface{}
+	if event != nil && event.Data != nil {
+		payload = event.Data.AsMap()
+	}
 	// Forward to event channel
 	select {
 	case m.events <- EdgeEvent{
 		EdgeID:    conn.ID,
 		Type:      event.Type,
 		Timestamp: event.Timestamp.AsTime(),
-		Data:      nil, // TODO: convert struct to map
+		Data:      payload,
 	}:
 	default:
 		m.logger.Warn("event channel full, dropping event",

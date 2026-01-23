@@ -959,9 +959,9 @@ func (h *Host) resolveFilePathWithRoot(urlPath string, root string, rootReal str
 	rootReal = strings.TrimSpace(rootReal)
 	if rootReal == "" {
 		rootReal = root
-		if resolved, err := filepath.EvalSymlinks(root); err == nil {
-			rootReal = resolved
-		}
+	}
+	if resolved, err := filepath.EvalSymlinks(rootReal); err == nil {
+		rootReal = resolved
 	}
 
 	normalized := path.Clean("/" + strings.TrimPrefix(urlPath, "/"))

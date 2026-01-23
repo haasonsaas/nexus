@@ -261,7 +261,10 @@ func (c *Client) UpdateIncident(ctx context.Context, sysID string, updates map[s
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			respBody = []byte("(failed to read response body)")
+		}
 		return nil, fmt.Errorf("ServiceNow API error %d: %s", resp.StatusCode, string(respBody))
 	}
 

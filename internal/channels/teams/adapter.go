@@ -55,9 +55,6 @@ type Adapter struct {
 	lastMessageTime time.Time
 	seenMessages    map[string]bool
 	seenMu          sync.Mutex
-
-	// Subscription for webhooks
-	subscriptionID string
 }
 
 // NewAdapter creates a new Teams adapter with the given configuration.

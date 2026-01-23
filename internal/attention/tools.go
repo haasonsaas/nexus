@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -349,13 +350,15 @@ func (t *SnoozeAttentionTool) Execute(ctx context.Context, params json.RawMessag
 	}
 
 	// Parse duration (support "d" for days)
-	durationStr := strings.Replace(input.Duration, "d", "h", 1)
+	durationStr := input.Duration
 	if strings.Contains(input.Duration, "d") {
 		// Convert days to hours
 		parts := strings.Split(input.Duration, "d")
 		if len(parts) >= 1 {
-			var days int
-			fmt.Sscanf(parts[0], "%d", &days)
+			days, err := strconv.Atoi(parts[0])
+			if err != nil {
+				days = 1 // Default to 1 day if parsing fails
+			}
 			durationStr = fmt.Sprintf("%dh%s", days*24, strings.Join(parts[1:], ""))
 		}
 	}

@@ -232,7 +232,10 @@ func (a *Adapter) sendNewEmail(ctx context.Context, recipient string, msg *model
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			body = []byte("(failed to read response body)")
+		}
 		a.metrics.RecordMessageFailed()
 		return fmt.Errorf("graph API error %d: %s", resp.StatusCode, string(body))
 	}
@@ -283,7 +286,10 @@ func (a *Adapter) sendReply(ctx context.Context, messageID, content string) erro
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			body = []byte("(failed to read response body)")
+		}
 		a.metrics.RecordMessageFailed()
 		return fmt.Errorf("graph API error %d: %s", resp.StatusCode, string(body))
 	}
@@ -377,7 +383,10 @@ func (a *Adapter) authenticate(ctx context.Context) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			body = []byte("(failed to read response body)")
+		}
 		return fmt.Errorf("token request failed %d: %s", resp.StatusCode, string(body))
 	}
 

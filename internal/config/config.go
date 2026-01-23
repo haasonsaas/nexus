@@ -424,6 +424,24 @@ type SandboxConfig struct {
 	Timeout        time.Duration  `yaml:"timeout"`
 	NetworkEnabled bool           `yaml:"network_enabled"`
 	Limits         ResourceLimits `yaml:"limits"`
+
+	// Mode controls which agents use sandboxing:
+	// - "off": sandboxing disabled (default when enabled=false)
+	// - "all": all agents use sandboxing
+	// - "non-main": only non-main agents use sandboxing (main agent unsandboxed)
+	Mode string `yaml:"mode"`
+
+	// Scope controls sandbox isolation level:
+	// - "agent": one sandbox container per agent (default)
+	// - "session": one sandbox per session
+	// - "shared": all agents share one sandbox
+	Scope string `yaml:"scope"`
+
+	// WorkspaceRoot is the root directory for sandboxed workspaces.
+	WorkspaceRoot string `yaml:"workspace_root"`
+
+	// WorkspaceAccess controls workspace access mode: "readonly" or "readwrite".
+	WorkspaceAccess string `yaml:"workspace_access"`
 }
 
 type ResourceLimits struct {

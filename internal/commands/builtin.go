@@ -217,6 +217,149 @@ func RegisterBuiltins(r *Registry) {
 		},
 	})
 
+	// Context command - show system prompt contents
+	mustRegister(&Command{
+		Name:        "context",
+		Aliases:     []string{"ctx", "prompt"},
+		Description: "Show system prompt and context information",
+		Usage:       "/context [list|detail]",
+		AcceptsArgs: true,
+		Category:    "system",
+		Source:      "builtin",
+		Handler: func(ctx context.Context, inv *Invocation) (*Result, error) {
+			args := strings.TrimSpace(strings.ToLower(inv.Args))
+
+			// Gather context information
+			var parts []string
+
+			if inv.Context != nil {
+				// Agent info
+				if agentID, ok := inv.Context["agent_id"].(string); ok && agentID != "" {
+					parts = append(parts, fmt.Sprintf("Agent: %s", agentID))
+				}
+
+				// Model info
+				if model, ok := inv.Context["model"].(string); ok && model != "" {
+					parts = append(parts, fmt.Sprintf("Model: %s", model))
+				}
+
+				// System prompt info
+				if args == "detail" || args == "full" {
+					if sysPrompt, ok := inv.Context["system_prompt"].(string); ok && sysPrompt != "" {
+						// Truncate for display
+						display := sysPrompt
+						if len(display) > 2000 {
+							display = display[:2000] + "\n... (truncated)"
+						}
+						parts = append(parts, fmt.Sprintf("\n**System Prompt:**\n```\n%s\n```", display))
+					} else {
+						parts = append(parts, "\nSystem prompt: (not available)")
+					}
+				} else {
+					// List mode - just show summary
+					if sysPrompt, ok := inv.Context["system_prompt"].(string); ok && sysPrompt != "" {
+						lines := strings.Count(sysPrompt, "\n") + 1
+						parts = append(parts, fmt.Sprintf("System prompt: %d chars, %d lines", len(sysPrompt), lines))
+					}
+				}
+
+				// Skills loaded
+				if skills, ok := inv.Context["loaded_skills"].([]string); ok && len(skills) > 0 {
+					parts = append(parts, fmt.Sprintf("Skills: %s", strings.Join(skills, ", ")))
+				}
+
+				// Tools available
+				if tools, ok := inv.Context["tool_count"].(int); ok && tools > 0 {
+					parts = append(parts, fmt.Sprintf("Tools: %d available", tools))
+				}
+
+				// Memory status
+				if memEnabled, ok := inv.Context["memory_enabled"].(bool); ok {
+					if memEnabled {
+						parts = append(parts, "Memory: enabled")
+					} else {
+						parts = append(parts, "Memory: disabled")
+					}
+				}
+			}
+
+			if len(parts) == 0 {
+				return &Result{
+					Text: "Context information unavailable.\n\nUsage: /context [list|detail]",
+				}, nil
+			}
+
+			return &Result{
+				Text:     strings.Join(parts, "\n"),
+				Markdown: args == "detail" || args == "full",
+				Data: map[string]any{
+					"action": "show_context",
+					"mode":   args,
+				},
+			}, nil
+		},
+	})
+
+	// Send command - toggle message sending policy
+	mustRegister(&Command{
+		Name:        "send",
+		Description: "Control message sending policy",
+		Usage:       "/send [on|off|inherit]",
+		AcceptsArgs: true,
+		Category:    "config",
+		Source:      "builtin",
+		Handler: func(ctx context.Context, inv *Invocation) (*Result, error) {
+			args := strings.TrimSpace(strings.ToLower(inv.Args))
+
+			switch args {
+			case "on", "enable", "yes", "true":
+				return &Result{
+					Text: "Message sending enabled for this session.",
+					Data: map[string]any{
+						"action":      "set_send_policy",
+						"send_policy": "on",
+					},
+				}, nil
+
+			case "off", "disable", "no", "false":
+				return &Result{
+					Text: "Message sending disabled for this session. Messages will be queued but not sent.",
+					Data: map[string]any{
+						"action":      "set_send_policy",
+						"send_policy": "off",
+					},
+				}, nil
+
+			case "inherit", "default", "reset":
+				return &Result{
+					Text: "Message sending policy reset to inherit from agent config.",
+					Data: map[string]any{
+						"action":      "set_send_policy",
+						"send_policy": "inherit",
+					},
+				}, nil
+
+			case "", "status":
+				// Show current status
+				currentPolicy := "inherit"
+				if inv.Context != nil {
+					if policy, ok := inv.Context["send_policy"].(string); ok && policy != "" {
+						currentPolicy = policy
+					}
+				}
+				return &Result{
+					Text: fmt.Sprintf("Current send policy: %s\n\nUsage:\n  /send on      - Enable message sending\n  /send off     - Disable message sending\n  /send inherit - Use agent default", currentPolicy),
+				}, nil
+
+			default:
+				return &Result{
+					Text:  fmt.Sprintf("Unknown send policy: %s\n\nValid options: on, off, inherit", args),
+					Error: "invalid_policy",
+				}, nil
+			}
+		},
+	})
+
 	// Think/extended thinking mode command
 	mustRegister(&Command{
 		Name:        "think",

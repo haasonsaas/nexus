@@ -338,3 +338,165 @@ func TestAdapterStartStopIdempotent(t *testing.T) {
 		}
 	}
 }
+
+func TestAdapterMetrics(t *testing.T) {
+	cfg := Config{
+		Homeserver:  "https://matrix.org",
+		UserID:      "@bot:matrix.org",
+		AccessToken: "test-token",
+		Logger:      slog.Default(),
+	}
+
+	adapter, err := NewAdapter(cfg)
+	if err != nil {
+		t.Fatalf("NewAdapter() error = %v", err)
+	}
+
+	metrics := adapter.Metrics()
+	if metrics.MessagesSent != 0 {
+		t.Errorf("MessagesSent = %d, want 0", metrics.MessagesSent)
+	}
+	if metrics.MessagesReceived != 0 {
+		t.Errorf("MessagesReceived = %d, want 0", metrics.MessagesReceived)
+	}
+}
+
+func TestAdapterWithDeviceID(t *testing.T) {
+	cfg := Config{
+		Homeserver:  "https://matrix.org",
+		UserID:      "@bot:matrix.org",
+		AccessToken: "test-token",
+		DeviceID:    "TESTDEVICE",
+		Logger:      slog.Default(),
+	}
+
+	adapter, err := NewAdapter(cfg)
+	if err != nil {
+		t.Fatalf("NewAdapter() error = %v", err)
+	}
+
+	// Check device ID is set on client
+	if string(adapter.client.DeviceID) != "TESTDEVICE" {
+		t.Errorf("DeviceID = %q, want %q", adapter.client.DeviceID, "TESTDEVICE")
+	}
+}
+
+func TestConfigStruct(t *testing.T) {
+	cfg := Config{
+		Homeserver:           "https://matrix.org",
+		UserID:               "@bot:matrix.org",
+		AccessToken:          "test-token",
+		DeviceID:             "DEVICE123",
+		AllowedRooms:         []string{"!room1:matrix.org"},
+		AllowedUsers:         []string{"@user1:matrix.org"},
+		IgnoreOwnMessages:    true,
+		JoinOnInvite:         true,
+		SyncTimeout:          60 * time.Second,
+		MaxReconnectAttempts: 10,
+		ReconnectBackoff:     120 * time.Second,
+		RateLimit:            10,
+		RateBurst:            20,
+	}
+
+	if cfg.Homeserver != "https://matrix.org" {
+		t.Errorf("Homeserver = %q, want %q", cfg.Homeserver, "https://matrix.org")
+	}
+	if cfg.DeviceID != "DEVICE123" {
+		t.Errorf("DeviceID = %q, want %q", cfg.DeviceID, "DEVICE123")
+	}
+	if !cfg.JoinOnInvite {
+		t.Error("JoinOnInvite should be true")
+	}
+	if cfg.SyncTimeout != 60*time.Second {
+		t.Errorf("SyncTimeout = %v, want %v", cfg.SyncTimeout, 60*time.Second)
+	}
+	if cfg.ReconnectBackoff != 120*time.Second {
+		t.Errorf("ReconnectBackoff = %v, want %v", cfg.ReconnectBackoff, 120*time.Second)
+	}
+}
+
+func TestConfigPreservesCustomValues(t *testing.T) {
+	cfg := Config{
+		Homeserver:           "https://matrix.org",
+		UserID:               "@bot:matrix.org",
+		AccessToken:          "test-token",
+		SyncTimeout:          60 * time.Second,
+		MaxReconnectAttempts: 10,
+		ReconnectBackoff:     120 * time.Second,
+		RateLimit:            20,
+		RateBurst:            50,
+	}
+
+	err := cfg.Validate()
+	if err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+
+	// Custom values should be preserved
+	if cfg.SyncTimeout != 60*time.Second {
+		t.Errorf("SyncTimeout = %v, want %v", cfg.SyncTimeout, 60*time.Second)
+	}
+	if cfg.MaxReconnectAttempts != 10 {
+		t.Errorf("MaxReconnectAttempts = %d, want 10", cfg.MaxReconnectAttempts)
+	}
+	if cfg.ReconnectBackoff != 120*time.Second {
+		t.Errorf("ReconnectBackoff = %v, want %v", cfg.ReconnectBackoff, 120*time.Second)
+	}
+	if cfg.RateLimit != 20 {
+		t.Errorf("RateLimit = %f, want 20", cfg.RateLimit)
+	}
+	if cfg.RateBurst != 50 {
+		t.Errorf("RateBurst = %d, want 50", cfg.RateBurst)
+	}
+}
+
+func TestAdapterRoomTypesInitialized(t *testing.T) {
+	cfg := Config{
+		Homeserver:  "https://matrix.org",
+		UserID:      "@bot:matrix.org",
+		AccessToken: "test-token",
+		Logger:      slog.Default(),
+	}
+
+	adapter, err := NewAdapter(cfg)
+	if err != nil {
+		t.Fatalf("NewAdapter() error = %v", err)
+	}
+
+	if adapter.roomTypes == nil {
+		t.Error("roomTypes should be initialized")
+	}
+	if len(adapter.roomTypes) != 0 {
+		t.Error("roomTypes should be empty initially")
+	}
+}
+
+func TestAdapterInternalChannelsInitialized(t *testing.T) {
+	cfg := Config{
+		Homeserver:  "https://matrix.org",
+		UserID:      "@bot:matrix.org",
+		AccessToken: "test-token",
+		Logger:      slog.Default(),
+	}
+
+	adapter, err := NewAdapter(cfg)
+	if err != nil {
+		t.Fatalf("NewAdapter() error = %v", err)
+	}
+
+	if adapter.messages == nil {
+		t.Error("messages channel should be initialized")
+	}
+	if adapter.errors == nil {
+		t.Error("errors channel should be initialized")
+	}
+	if adapter.stopCh == nil {
+		t.Error("stopCh should be initialized")
+	}
+	if adapter.metrics == nil {
+		t.Error("metrics should be initialized")
+	}
+	if adapter.logger == nil {
+		t.Error("logger should be initialized")
+	}
+}

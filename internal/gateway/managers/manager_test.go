@@ -402,3 +402,132 @@ func TestNewSchedulerManager(t *testing.T) {
 		m.SetSessions(nil)
 	})
 }
+
+func TestChannelManager_Registry(t *testing.T) {
+	m := NewChannelManager(ChannelManagerConfig{})
+	registry := m.Registry()
+	if registry == nil {
+		t.Error("Registry() should return non-nil registry")
+	}
+}
+
+func TestChannelManager_StartStop(t *testing.T) {
+	t.Run("double start is idempotent", func(t *testing.T) {
+		m := NewChannelManager(ChannelManagerConfig{})
+		ctx := context.Background()
+
+		if err := m.Start(ctx); err != nil {
+			t.Fatalf("first Start() error: %v", err)
+		}
+		if err := m.Start(ctx); err != nil {
+			t.Errorf("second Start() should be idempotent, got: %v", err)
+		}
+	})
+
+	t.Run("double stop is idempotent", func(t *testing.T) {
+		m := NewChannelManager(ChannelManagerConfig{})
+		ctx := context.Background()
+
+		if err := m.Start(ctx); err != nil {
+			t.Fatalf("Start() error: %v", err)
+		}
+		if err := m.Stop(ctx); err != nil {
+			t.Fatalf("first Stop() error: %v", err)
+		}
+		if err := m.Stop(ctx); err != nil {
+			t.Errorf("second Stop() should be idempotent, got: %v", err)
+		}
+	})
+
+	t.Run("stop without start is safe", func(t *testing.T) {
+		m := NewChannelManager(ChannelManagerConfig{})
+		ctx := context.Background()
+
+		if err := m.Stop(ctx); err != nil {
+			t.Errorf("Stop() without Start() should be safe, got: %v", err)
+		}
+	})
+}
+
+func TestToolingManager_StartStop(t *testing.T) {
+	t.Run("double start is idempotent", func(t *testing.T) {
+		m := NewToolingManager(ToolingManagerConfig{
+			Config: &config.Config{},
+		})
+		ctx := context.Background()
+
+		if err := m.Start(ctx); err != nil {
+			t.Fatalf("first Start() error: %v", err)
+		}
+		if err := m.Start(ctx); err != nil {
+			t.Errorf("second Start() should be idempotent, got: %v", err)
+		}
+	})
+
+	t.Run("double stop is idempotent", func(t *testing.T) {
+		m := NewToolingManager(ToolingManagerConfig{
+			Config: &config.Config{},
+		})
+		ctx := context.Background()
+
+		if err := m.Start(ctx); err != nil {
+			t.Fatalf("Start() error: %v", err)
+		}
+		if err := m.Stop(ctx); err != nil {
+			t.Fatalf("first Stop() error: %v", err)
+		}
+		if err := m.Stop(ctx); err != nil {
+			t.Errorf("second Stop() should be idempotent, got: %v", err)
+		}
+	})
+
+	t.Run("stop without start is safe", func(t *testing.T) {
+		m := NewToolingManager(ToolingManagerConfig{
+			Config: &config.Config{},
+		})
+		ctx := context.Background()
+
+		if err := m.Stop(ctx); err != nil {
+			t.Errorf("Stop() without Start() should be safe, got: %v", err)
+		}
+	})
+}
+
+func TestToolingManager_TriggerHook(t *testing.T) {
+	t.Run("TriggerHook with nil registry is safe", func(t *testing.T) {
+		m := &ToolingManager{} // No hooks registry
+		ctx := context.Background()
+
+		err := m.TriggerHook(ctx, nil)
+		if err != nil {
+			t.Errorf("TriggerHook with nil registry should be safe, got: %v", err)
+		}
+	})
+
+	t.Run("TriggerHookAsync with nil registry is safe", func(t *testing.T) {
+		m := &ToolingManager{} // No hooks registry
+		ctx := context.Background()
+
+		// Should not panic
+		m.TriggerHookAsync(ctx, nil)
+	})
+}
+
+func TestManagers_Struct_Fields(t *testing.T) {
+	// Verify the struct has all expected fields
+	m := &Managers{}
+
+	// These nil checks ensure the struct fields exist and are the expected types
+	if m.Runtime != nil {
+		t.Error("Runtime should be nil for new struct")
+	}
+	if m.Channel != nil {
+		t.Error("Channel should be nil for new struct")
+	}
+	if m.Scheduler != nil {
+		t.Error("Scheduler should be nil for new struct")
+	}
+	if m.Tooling != nil {
+		t.Error("Tooling should be nil for new struct")
+	}
+}

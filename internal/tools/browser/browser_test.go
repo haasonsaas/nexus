@@ -710,3 +710,107 @@ type WaitParams struct {
 	Selector string `json:"selector"`
 	Timeout  int    `json:"timeout,omitempty"`
 }
+
+// Tests that don't require Playwright
+
+func TestBrowserTool_InvalidParams(t *testing.T) {
+	// This test doesn't require a pool since it fails at JSON parsing
+	tool := NewBrowserTool(nil)
+
+	ctx := context.Background()
+	result, err := tool.Execute(ctx, json.RawMessage(`{invalid json}`))
+	if err != nil {
+		t.Fatalf("Execute should not return error, got: %v", err)
+	}
+
+	if !result.IsError {
+		t.Error("expected error result for invalid JSON")
+	}
+	if !strings.Contains(result.Content, "invalid") {
+		t.Errorf("expected 'invalid' in error message, got: %s", result.Content)
+	}
+}
+
+
+func TestNewBrowserTool(t *testing.T) {
+	t.Run("with nil pool", func(t *testing.T) {
+		tool := NewBrowserTool(nil)
+		if tool == nil {
+			t.Error("expected non-nil tool")
+		}
+		if tool.pool != nil {
+			t.Error("expected nil pool")
+		}
+	})
+}
+
+func TestBrowserTool_SchemaValidation(t *testing.T) {
+	tool := NewBrowserTool(nil)
+	schema := tool.Schema()
+
+	var schemaMap map[string]interface{}
+	if err := json.Unmarshal(schema, &schemaMap); err != nil {
+		t.Fatalf("schema should be valid JSON: %v", err)
+	}
+
+	// Check properties
+	props, ok := schemaMap["properties"].(map[string]interface{})
+	if !ok {
+		t.Fatal("schema should have properties")
+	}
+
+	// Check action property
+	action, ok := props["action"].(map[string]interface{})
+	if !ok {
+		t.Fatal("schema should have action property")
+	}
+
+	// Check action has enum
+	enum, ok := action["enum"].([]interface{})
+	if !ok {
+		t.Fatal("action should have enum")
+	}
+
+	expectedActions := []string{"navigate", "click", "type", "screenshot", "extract_text", "extract_html", "wait_for_element", "wait_for_navigation", "execute_js"}
+	for _, expected := range expectedActions {
+		found := false
+		for _, actual := range enum {
+			if actual == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected action %q in enum", expected)
+		}
+	}
+}
+
+func TestPoolConfig_Struct(t *testing.T) {
+	config := PoolConfig{
+		MaxInstances: 5,
+		Timeout:      30 * time.Second,
+		Headless:     true,
+	}
+
+	if config.MaxInstances != 5 {
+		t.Errorf("MaxInstances = %d, want 5", config.MaxInstances)
+	}
+	if config.Timeout != 30*time.Second {
+		t.Errorf("Timeout = %v, want 30s", config.Timeout)
+	}
+	if !config.Headless {
+		t.Error("Headless should be true")
+	}
+}
+
+func TestBrowserInstance_Struct(t *testing.T) {
+	// Ensure the struct exists and can be created
+	instance := &BrowserInstance{
+		ID: "test-id",
+	}
+
+	if instance.ID != "test-id" {
+		t.Errorf("ID = %q, want %q", instance.ID, "test-id")
+	}
+}

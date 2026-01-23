@@ -78,6 +78,11 @@ type ConfigData struct {
 	ConfigYAML string
 }
 
+// WebChatData holds data for the webchat page.
+type WebChatData struct {
+	PageData
+}
+
 // handleIndex redirects to the sessions list.
 func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
@@ -340,6 +345,19 @@ func (h *Handler) handleConfig(w http.ResponseWriter, r *http.Request) {
 		ConfigYAML: configYAML,
 	}
 
+	h.render(w, "layout.html", data)
+}
+
+// handleWebChat renders the WebChat client page.
+func (h *Handler) handleWebChat(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	data := WebChatData{
+		PageData: PageData{
+			Title:       "WebChat",
+			CurrentPath: "/webchat",
+			User:        userFromContext(ctx),
+		},
+	}
 	h.render(w, "layout.html", data)
 }
 

@@ -1,0 +1,63 @@
+{{define "webchat/page.html"}}
+<div class="page-header">
+    <h1>WebChat</h1>
+    <p class="subtitle">Gateway WebSocket chat client</p>
+</div>
+
+<div class="webchat-shell" data-ws-url="/ws">
+    <div class="webchat-sidebar">
+        <div class="card">
+            <div class="card-header">
+                <h3>Connection</h3>
+            </div>
+            <div class="card-body">
+                <div id="webchat-connection" class="status-indicator">
+                    <span class="indicator indicator-warning"></span>
+                    <span class="indicator-label">Disconnected</span>
+                </div>
+                <div class="filter-group">
+                    <label for="webchat-token">Auth Token</label>
+                    <input id="webchat-token" type="password" class="filter-input" placeholder="Optional API token">
+                </div>
+                <button id="webchat-connect" class="btn btn-sm btn-secondary">Connect</button>
+                <button id="webchat-disconnect" class="btn btn-sm btn-secondary">Disconnect</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3>Session</h3>
+            </div>
+            <div class="card-body">
+                <div class="filter-group">
+                    <label for="webchat-session">Session ID</label>
+                    <input id="webchat-session" type="text" class="filter-input" placeholder="Leave blank for new">
+                </div>
+                <button id="webchat-load" class="btn btn-sm btn-secondary">Load History</button>
+                <button id="webchat-reset" class="btn btn-sm btn-secondary">New Session</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="webchat-main">
+        <div class="messages-container card">
+            <div class="card-header">
+                <h2>Conversation</h2>
+                <span id="webchat-status" class="text-muted">Idle</span>
+            </div>
+            <div id="webchat-messages" class="messages-list webchat-messages"></div>
+            <div class="card-footer">
+                <form id="webchat-form" class="webchat-form">
+                    <textarea id="webchat-input" class="filter-input" rows="2" placeholder="Send a message"></textarea>
+                    <div class="webchat-actions">
+                        <button type="submit" class="btn btn-primary">Send</button>
+                        <button type="button" id="webchat-abort" class="btn btn-secondary">Abort</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/ui/static/js/webchat.js"></script>
+{{end}}

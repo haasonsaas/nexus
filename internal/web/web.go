@@ -135,6 +135,7 @@ func (h *Handler) setupRoutes() {
 	h.mux.HandleFunc("/skills", h.handleSkills)
 	h.mux.HandleFunc("/nodes", h.handleNodes)
 	h.mux.HandleFunc("/config", h.handleConfig)
+	h.mux.HandleFunc("/webchat", h.handleWebChat)
 
 	// API routes for htmx
 	h.mux.HandleFunc("/api/sessions", h.apiSessionList)

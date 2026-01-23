@@ -81,7 +81,10 @@ func BuildArtifactRepository(ctx context.Context, cfg *config.Config, logger *sl
 		return nil, fmt.Errorf("unsupported artifact backend %q", backend)
 	}
 
-	metadataPath := filepath.Join(cfg.Artifacts.LocalPath, "metadata.json")
+	metadataPath := strings.TrimSpace(cfg.Artifacts.MetadataPath)
+	if metadataPath == "" {
+		metadataPath = filepath.Join(cfg.Artifacts.LocalPath, "metadata.json")
+	}
 	repo, err := artifacts.NewPersistentRepository(store, metadataPath, logger)
 	if err != nil {
 		return nil, err

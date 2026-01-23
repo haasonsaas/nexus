@@ -780,6 +780,9 @@ type ArtifactConfig struct {
 	// MetadataPath is the file path for artifact metadata persistence.
 	MetadataPath string `yaml:"metadata_path"`
 
+	// MetadataBackend selects where artifact metadata is stored: "file" or "database".
+	MetadataBackend string `yaml:"metadata_backend"`
+
 	// S3Bucket is the bucket name for S3/MinIO storage.
 	S3Bucket string `yaml:"s3_bucket"`
 
@@ -1186,6 +1189,9 @@ func applyArtifactDefaults(cfg *ArtifactConfig) {
 	if cfg.LocalPath == "" {
 		cfg.LocalPath = filepath.Join(os.TempDir(), "nexus-artifacts")
 	}
+	if cfg.MetadataBackend == "" {
+		cfg.MetadataBackend = "file"
+	}
 	if cfg.MetadataPath == "" {
 		cfg.MetadataPath = filepath.Join(cfg.LocalPath, "metadata.json")
 	}
@@ -1309,6 +1315,24 @@ func validateConfig(cfg *Config) error {
 	}
 	if cfg.Workspace.MaxChars < 0 {
 		issues = append(issues, "workspace.max_chars must be >= 0")
+	}
+
+	if strings.TrimSpace(cfg.Artifacts.MetadataBackend) != "" {
+		switch strings.ToLower(strings.TrimSpace(cfg.Artifacts.MetadataBackend)) {
+		case "file", "database", "db":
+		default:
+			issues = append(issues, "artifacts.metadata_backend must be \"file\" or \"database\"")
+		}
+	}
+	if strings.EqualFold(strings.TrimSpace(cfg.Artifacts.MetadataBackend), "database") || strings.EqualFold(strings.TrimSpace(cfg.Artifacts.MetadataBackend), "db") {
+		if strings.TrimSpace(cfg.Database.URL) == "" {
+			issues = append(issues, "artifacts.metadata_backend requires database.url to be set")
+		}
+	}
+	if backend := strings.ToLower(strings.TrimSpace(cfg.Artifacts.Backend)); backend == "s3" || backend == "minio" {
+		if strings.TrimSpace(cfg.Artifacts.S3Bucket) == "" {
+			issues = append(issues, "artifacts.s3_bucket is required for s3/minio backends")
+		}
 	}
 
 	defaultProvider := strings.ToLower(strings.TrimSpace(cfg.LLM.DefaultProvider))

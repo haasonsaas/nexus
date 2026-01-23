@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/haasonsaas/nexus/internal/artifacts"
 	"github.com/haasonsaas/nexus/internal/auth"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/pkg/models"
@@ -29,6 +30,8 @@ type Config struct {
 	AuthService *auth.Service
 	// SessionStore for accessing session data
 	SessionStore sessions.Store
+	// ArtifactRepo for accessing stored artifacts (optional)
+	ArtifactRepo artifacts.Repository
 	// DefaultAgentID is the agent ID used for listing sessions
 	DefaultAgentID string
 	// Logger for request logging
@@ -108,6 +111,8 @@ func (h *Handler) setupRoutes() {
 	h.mux.HandleFunc("/api/sessions", h.apiSessionList)
 	h.mux.HandleFunc("/api/sessions/", h.apiSessionMessages)
 	h.mux.HandleFunc("/api/status", h.apiStatus)
+	h.mux.HandleFunc("/api/artifacts", h.apiArtifacts)
+	h.mux.HandleFunc("/api/artifacts/", h.apiArtifact)
 }
 
 // ServeHTTP implements http.Handler.

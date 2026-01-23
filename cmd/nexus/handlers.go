@@ -3618,7 +3618,6 @@ func createArtifactRepository(cfg *config.Config) (artifacts.Repository, func(),
 	if cfg == nil {
 		return nil, nil, nil
 	}
-
 	repo, err := gateway.BuildArtifactRepository(context.Background(), cfg, slog.Default())
 	if err != nil {
 		return nil, nil, err

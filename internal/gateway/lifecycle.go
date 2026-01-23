@@ -150,6 +150,11 @@ func (s *Server) Stop(ctx context.Context) error {
 			s.logger.Error("error closing firecracker backend", "error", err)
 		}
 	}
+	if closer, ok := s.artifactRepo.(interface{ Close() error }); ok {
+		if err := closer.Close(); err != nil {
+			s.logger.Error("error closing artifact repository", "error", err)
+		}
+	}
 	if err := s.stores.Close(); err != nil {
 		s.logger.Error("error closing storage stores", "error", err)
 	}

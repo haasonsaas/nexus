@@ -6764,6 +6764,327 @@ func (x *Artifact) GetTtlSeconds() int32 {
 	return 0
 }
 
+// ListArtifactsRequest filters stored artifacts.
+type ListArtifactsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	EdgeId        string                 `protobuf:"bytes,2,opt,name=edge_id,json=edgeId,proto3" json:"edge_id,omitempty"`
+	Type          string                 `protobuf:"bytes,3,opt,name=type,proto3" json:"type,omitempty"`
+	CreatedAfter  *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=created_after,json=createdAfter,proto3" json:"created_after,omitempty"`
+	CreatedBefore *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=created_before,json=createdBefore,proto3" json:"created_before,omitempty"`
+	Limit         int32                  `protobuf:"varint,6,opt,name=limit,proto3" json:"limit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListArtifactsRequest) Reset() {
+	*x = ListArtifactsRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[82]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListArtifactsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListArtifactsRequest) ProtoMessage() {}
+
+func (x *ListArtifactsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[82]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListArtifactsRequest.ProtoReflect.Descriptor instead.
+func (*ListArtifactsRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{82}
+}
+
+func (x *ListArtifactsRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *ListArtifactsRequest) GetEdgeId() string {
+	if x != nil {
+		return x.EdgeId
+	}
+	return ""
+}
+
+func (x *ListArtifactsRequest) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *ListArtifactsRequest) GetCreatedAfter() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAfter
+	}
+	return nil
+}
+
+func (x *ListArtifactsRequest) GetCreatedBefore() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedBefore
+	}
+	return nil
+}
+
+func (x *ListArtifactsRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+type ListArtifactsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Artifacts     []*Artifact            `protobuf:"bytes,1,rep,name=artifacts,proto3" json:"artifacts,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListArtifactsResponse) Reset() {
+	*x = ListArtifactsResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[83]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListArtifactsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListArtifactsResponse) ProtoMessage() {}
+
+func (x *ListArtifactsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[83]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListArtifactsResponse.ProtoReflect.Descriptor instead.
+func (*ListArtifactsResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{83}
+}
+
+func (x *ListArtifactsResponse) GetArtifacts() []*Artifact {
+	if x != nil {
+		return x.Artifacts
+	}
+	return nil
+}
+
+type GetArtifactRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ArtifactId    string                 `protobuf:"bytes,1,opt,name=artifact_id,json=artifactId,proto3" json:"artifact_id,omitempty"`
+	IncludeData   bool                   `protobuf:"varint,2,opt,name=include_data,json=includeData,proto3" json:"include_data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetArtifactRequest) Reset() {
+	*x = GetArtifactRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[84]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetArtifactRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetArtifactRequest) ProtoMessage() {}
+
+func (x *GetArtifactRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[84]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetArtifactRequest.ProtoReflect.Descriptor instead.
+func (*GetArtifactRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{84}
+}
+
+func (x *GetArtifactRequest) GetArtifactId() string {
+	if x != nil {
+		return x.ArtifactId
+	}
+	return ""
+}
+
+func (x *GetArtifactRequest) GetIncludeData() bool {
+	if x != nil {
+		return x.IncludeData
+	}
+	return false
+}
+
+type GetArtifactResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Artifact      *Artifact              `protobuf:"bytes,1,opt,name=artifact,proto3" json:"artifact,omitempty"`
+	Data          []byte                 `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetArtifactResponse) Reset() {
+	*x = GetArtifactResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[85]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetArtifactResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetArtifactResponse) ProtoMessage() {}
+
+func (x *GetArtifactResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[85]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetArtifactResponse.ProtoReflect.Descriptor instead.
+func (*GetArtifactResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{85}
+}
+
+func (x *GetArtifactResponse) GetArtifact() *Artifact {
+	if x != nil {
+		return x.Artifact
+	}
+	return nil
+}
+
+func (x *GetArtifactResponse) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+type DeleteArtifactRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ArtifactId    string                 `protobuf:"bytes,1,opt,name=artifact_id,json=artifactId,proto3" json:"artifact_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteArtifactRequest) Reset() {
+	*x = DeleteArtifactRequest{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[86]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteArtifactRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteArtifactRequest) ProtoMessage() {}
+
+func (x *DeleteArtifactRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[86]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteArtifactRequest.ProtoReflect.Descriptor instead.
+func (*DeleteArtifactRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{86}
+}
+
+func (x *DeleteArtifactRequest) GetArtifactId() string {
+	if x != nil {
+		return x.ArtifactId
+	}
+	return ""
+}
+
+type DeleteArtifactResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Deleted       bool                   `protobuf:"varint,1,opt,name=deleted,proto3" json:"deleted,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteArtifactResponse) Reset() {
+	*x = DeleteArtifactResponse{}
+	mi := &file_pkg_proto_nexus_proto_msgTypes[87]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteArtifactResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteArtifactResponse) ProtoMessage() {}
+
+func (x *DeleteArtifactResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_proto_nexus_proto_msgTypes[87]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteArtifactResponse.ProtoReflect.Descriptor instead.
+func (*DeleteArtifactResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{87}
+}
+
+func (x *DeleteArtifactResponse) GetDeleted() bool {
+	if x != nil {
+		return x.Deleted
+	}
+	return false
+}
+
 // ToolCancellation requests cancellation of a running tool.
 type ToolCancellation struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -6777,7 +7098,7 @@ type ToolCancellation struct {
 
 func (x *ToolCancellation) Reset() {
 	*x = ToolCancellation{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[82]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6789,7 +7110,7 @@ func (x *ToolCancellation) String() string {
 func (*ToolCancellation) ProtoMessage() {}
 
 func (x *ToolCancellation) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[82]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6802,7 +7123,7 @@ func (x *ToolCancellation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolCancellation.ProtoReflect.Descriptor instead.
 func (*ToolCancellation) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{82}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *ToolCancellation) GetExecutionId() string {
@@ -6836,7 +7157,7 @@ type EdgeEvent struct {
 
 func (x *EdgeEvent) Reset() {
 	*x = EdgeEvent{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[83]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6848,7 +7169,7 @@ func (x *EdgeEvent) String() string {
 func (*EdgeEvent) ProtoMessage() {}
 
 func (x *EdgeEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[83]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6861,7 +7182,7 @@ func (x *EdgeEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EdgeEvent.ProtoReflect.Descriptor instead.
 func (*EdgeEvent) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{83}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *EdgeEvent) GetEdgeId() string {
@@ -6907,7 +7228,7 @@ type CoreEvent struct {
 
 func (x *CoreEvent) Reset() {
 	*x = CoreEvent{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[84]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6919,7 +7240,7 @@ func (x *CoreEvent) String() string {
 func (*CoreEvent) ProtoMessage() {}
 
 func (x *CoreEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[84]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6932,7 +7253,7 @@ func (x *CoreEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CoreEvent.ProtoReflect.Descriptor instead.
 func (*CoreEvent) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{84}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{90}
 }
 
 func (x *CoreEvent) GetType() CoreEventType {
@@ -6985,7 +7306,7 @@ type EdgeChannelInbound struct {
 
 func (x *EdgeChannelInbound) Reset() {
 	*x = EdgeChannelInbound{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[85]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6997,7 +7318,7 @@ func (x *EdgeChannelInbound) String() string {
 func (*EdgeChannelInbound) ProtoMessage() {}
 
 func (x *EdgeChannelInbound) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[85]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7010,7 +7331,7 @@ func (x *EdgeChannelInbound) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EdgeChannelInbound.ProtoReflect.Descriptor instead.
 func (*EdgeChannelInbound) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{85}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{91}
 }
 
 func (x *EdgeChannelInbound) GetEdgeId() string {
@@ -7108,7 +7429,7 @@ type CoreChannelOutbound struct {
 
 func (x *CoreChannelOutbound) Reset() {
 	*x = CoreChannelOutbound{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[86]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[92]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7120,7 +7441,7 @@ func (x *CoreChannelOutbound) String() string {
 func (*CoreChannelOutbound) ProtoMessage() {}
 
 func (x *CoreChannelOutbound) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[86]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[92]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7133,7 +7454,7 @@ func (x *CoreChannelOutbound) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CoreChannelOutbound.ProtoReflect.Descriptor instead.
 func (*CoreChannelOutbound) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{86}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{92}
 }
 
 func (x *CoreChannelOutbound) GetMessageId() string {
@@ -7211,7 +7532,7 @@ type EdgeChannelAck struct {
 
 func (x *EdgeChannelAck) Reset() {
 	*x = EdgeChannelAck{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[87]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[93]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7223,7 +7544,7 @@ func (x *EdgeChannelAck) String() string {
 func (*EdgeChannelAck) ProtoMessage() {}
 
 func (x *EdgeChannelAck) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[87]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[93]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7236,7 +7557,7 @@ func (x *EdgeChannelAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EdgeChannelAck.ProtoReflect.Descriptor instead.
 func (*EdgeChannelAck) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{87}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{93}
 }
 
 func (x *EdgeChannelAck) GetMessageId() string {
@@ -7283,7 +7604,7 @@ type GetEdgeStatusRequest struct {
 
 func (x *GetEdgeStatusRequest) Reset() {
 	*x = GetEdgeStatusRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[88]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[94]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7295,7 +7616,7 @@ func (x *GetEdgeStatusRequest) String() string {
 func (*GetEdgeStatusRequest) ProtoMessage() {}
 
 func (x *GetEdgeStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[88]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[94]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7308,7 +7629,7 @@ func (x *GetEdgeStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEdgeStatusRequest.ProtoReflect.Descriptor instead.
 func (*GetEdgeStatusRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{88}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{94}
 }
 
 func (x *GetEdgeStatusRequest) GetEdgeId() string {
@@ -7327,7 +7648,7 @@ type GetEdgeStatusResponse struct {
 
 func (x *GetEdgeStatusResponse) Reset() {
 	*x = GetEdgeStatusResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[89]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[95]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7339,7 +7660,7 @@ func (x *GetEdgeStatusResponse) String() string {
 func (*GetEdgeStatusResponse) ProtoMessage() {}
 
 func (x *GetEdgeStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[89]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[95]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7352,7 +7673,7 @@ func (x *GetEdgeStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEdgeStatusResponse.ProtoReflect.Descriptor instead.
 func (*GetEdgeStatusResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{89}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{95}
 }
 
 func (x *GetEdgeStatusResponse) GetStatus() *EdgeStatus {
@@ -7372,7 +7693,7 @@ type ListEdgesRequest struct {
 
 func (x *ListEdgesRequest) Reset() {
 	*x = ListEdgesRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[90]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[96]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7384,7 +7705,7 @@ func (x *ListEdgesRequest) String() string {
 func (*ListEdgesRequest) ProtoMessage() {}
 
 func (x *ListEdgesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[90]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[96]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7397,7 +7718,7 @@ func (x *ListEdgesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListEdgesRequest.ProtoReflect.Descriptor instead.
 func (*ListEdgesRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{90}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{96}
 }
 
 func (x *ListEdgesRequest) GetPageSize() int32 {
@@ -7425,7 +7746,7 @@ type ListEdgesResponse struct {
 
 func (x *ListEdgesResponse) Reset() {
 	*x = ListEdgesResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[91]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[97]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7437,7 +7758,7 @@ func (x *ListEdgesResponse) String() string {
 func (*ListEdgesResponse) ProtoMessage() {}
 
 func (x *ListEdgesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[91]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[97]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7450,7 +7771,7 @@ func (x *ListEdgesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListEdgesResponse.ProtoReflect.Descriptor instead.
 func (*ListEdgesResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{91}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{97}
 }
 
 func (x *ListEdgesResponse) GetEdges() []*EdgeStatus {
@@ -7503,7 +7824,7 @@ type EdgeStatus struct {
 
 func (x *EdgeStatus) Reset() {
 	*x = EdgeStatus{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[92]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[98]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7515,7 +7836,7 @@ func (x *EdgeStatus) String() string {
 func (*EdgeStatus) ProtoMessage() {}
 
 func (x *EdgeStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[92]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[98]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7528,7 +7849,7 @@ func (x *EdgeStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EdgeStatus.ProtoReflect.Descriptor instead.
 func (*EdgeStatus) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{92}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{98}
 }
 
 func (x *EdgeStatus) GetEdgeId() string {
@@ -7617,7 +7938,7 @@ type GetEventsRequest struct {
 
 func (x *GetEventsRequest) Reset() {
 	*x = GetEventsRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[93]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[99]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7629,7 +7950,7 @@ func (x *GetEventsRequest) String() string {
 func (*GetEventsRequest) ProtoMessage() {}
 
 func (x *GetEventsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[93]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[99]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7642,7 +7963,7 @@ func (x *GetEventsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEventsRequest.ProtoReflect.Descriptor instead.
 func (*GetEventsRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{93}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{99}
 }
 
 func (x *GetEventsRequest) GetRunId() string {
@@ -7683,7 +8004,7 @@ type GetEventsResponse struct {
 
 func (x *GetEventsResponse) Reset() {
 	*x = GetEventsResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[94]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[100]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7695,7 +8016,7 @@ func (x *GetEventsResponse) String() string {
 func (*GetEventsResponse) ProtoMessage() {}
 
 func (x *GetEventsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[94]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[100]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7708,7 +8029,7 @@ func (x *GetEventsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEventsResponse.ProtoReflect.Descriptor instead.
 func (*GetEventsResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{94}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{100}
 }
 
 func (x *GetEventsResponse) GetEvents() []*TimelineEvent {
@@ -7735,7 +8056,7 @@ type GetTimelineRequest struct {
 
 func (x *GetTimelineRequest) Reset() {
 	*x = GetTimelineRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[95]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[101]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7747,7 +8068,7 @@ func (x *GetTimelineRequest) String() string {
 func (*GetTimelineRequest) ProtoMessage() {}
 
 func (x *GetTimelineRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[95]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[101]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7760,7 +8081,7 @@ func (x *GetTimelineRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTimelineRequest.ProtoReflect.Descriptor instead.
 func (*GetTimelineRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{95}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{101}
 }
 
 func (x *GetTimelineRequest) GetRunId() string {
@@ -7793,7 +8114,7 @@ type GetTimelineResponse struct {
 
 func (x *GetTimelineResponse) Reset() {
 	*x = GetTimelineResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[96]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[102]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7805,7 +8126,7 @@ func (x *GetTimelineResponse) String() string {
 func (*GetTimelineResponse) ProtoMessage() {}
 
 func (x *GetTimelineResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[96]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[102]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7818,7 +8139,7 @@ func (x *GetTimelineResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTimelineResponse.ProtoReflect.Descriptor instead.
 func (*GetTimelineResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{96}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{102}
 }
 
 func (x *GetTimelineResponse) GetRunId() string {
@@ -7897,7 +8218,7 @@ type TimelineEvent struct {
 
 func (x *TimelineEvent) Reset() {
 	*x = TimelineEvent{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[97]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[103]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7909,7 +8230,7 @@ func (x *TimelineEvent) String() string {
 func (*TimelineEvent) ProtoMessage() {}
 
 func (x *TimelineEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[97]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[103]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7922,7 +8243,7 @@ func (x *TimelineEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TimelineEvent.ProtoReflect.Descriptor instead.
 func (*TimelineEvent) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{97}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{103}
 }
 
 func (x *TimelineEvent) GetId() string {
@@ -8023,7 +8344,7 @@ type TimelineSummary struct {
 
 func (x *TimelineSummary) Reset() {
 	*x = TimelineSummary{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[98]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[104]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8035,7 +8356,7 @@ func (x *TimelineSummary) String() string {
 func (*TimelineSummary) ProtoMessage() {}
 
 func (x *TimelineSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[98]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[104]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8048,7 +8369,7 @@ func (x *TimelineSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TimelineSummary.ProtoReflect.Descriptor instead.
 func (*TimelineSummary) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{98}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{104}
 }
 
 func (x *TimelineSummary) GetTotalEvents() int32 {
@@ -8132,7 +8453,7 @@ type ScheduledTask struct {
 
 func (x *ScheduledTask) Reset() {
 	*x = ScheduledTask{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[99]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[105]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8144,7 +8465,7 @@ func (x *ScheduledTask) String() string {
 func (*ScheduledTask) ProtoMessage() {}
 
 func (x *ScheduledTask) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[99]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[105]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8157,7 +8478,7 @@ func (x *ScheduledTask) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScheduledTask.ProtoReflect.Descriptor instead.
 func (*ScheduledTask) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{99}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{105}
 }
 
 func (x *ScheduledTask) GetId() string {
@@ -8294,7 +8615,7 @@ type TaskConfig struct {
 
 func (x *TaskConfig) Reset() {
 	*x = TaskConfig{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[100]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[106]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8306,7 +8627,7 @@ func (x *TaskConfig) String() string {
 func (*TaskConfig) ProtoMessage() {}
 
 func (x *TaskConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[100]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[106]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8319,7 +8640,7 @@ func (x *TaskConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskConfig.ProtoReflect.Descriptor instead.
 func (*TaskConfig) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{100}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{106}
 }
 
 func (x *TaskConfig) GetTimeoutSeconds() int32 {
@@ -8413,7 +8734,7 @@ type TaskExecution struct {
 
 func (x *TaskExecution) Reset() {
 	*x = TaskExecution{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[101]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[107]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8425,7 +8746,7 @@ func (x *TaskExecution) String() string {
 func (*TaskExecution) ProtoMessage() {}
 
 func (x *TaskExecution) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[101]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[107]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8438,7 +8759,7 @@ func (x *TaskExecution) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskExecution.ProtoReflect.Descriptor instead.
 func (*TaskExecution) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{101}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{107}
 }
 
 func (x *TaskExecution) GetId() string {
@@ -8542,7 +8863,7 @@ type CreateTaskRequest struct {
 
 func (x *CreateTaskRequest) Reset() {
 	*x = CreateTaskRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[102]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[108]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8554,7 +8875,7 @@ func (x *CreateTaskRequest) String() string {
 func (*CreateTaskRequest) ProtoMessage() {}
 
 func (x *CreateTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[102]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[108]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8567,7 +8888,7 @@ func (x *CreateTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateTaskRequest.ProtoReflect.Descriptor instead.
 func (*CreateTaskRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{102}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{108}
 }
 
 func (x *CreateTaskRequest) GetName() string {
@@ -8635,7 +8956,7 @@ type CreateTaskResponse struct {
 
 func (x *CreateTaskResponse) Reset() {
 	*x = CreateTaskResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[103]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[109]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8647,7 +8968,7 @@ func (x *CreateTaskResponse) String() string {
 func (*CreateTaskResponse) ProtoMessage() {}
 
 func (x *CreateTaskResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[103]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[109]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8660,7 +8981,7 @@ func (x *CreateTaskResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateTaskResponse.ProtoReflect.Descriptor instead.
 func (*CreateTaskResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{103}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{109}
 }
 
 func (x *CreateTaskResponse) GetTask() *ScheduledTask {
@@ -8679,7 +9000,7 @@ type GetTaskRequest struct {
 
 func (x *GetTaskRequest) Reset() {
 	*x = GetTaskRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[104]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[110]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8691,7 +9012,7 @@ func (x *GetTaskRequest) String() string {
 func (*GetTaskRequest) ProtoMessage() {}
 
 func (x *GetTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[104]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[110]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8704,7 +9025,7 @@ func (x *GetTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTaskRequest.ProtoReflect.Descriptor instead.
 func (*GetTaskRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{104}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{110}
 }
 
 func (x *GetTaskRequest) GetId() string {
@@ -8723,7 +9044,7 @@ type GetTaskResponse struct {
 
 func (x *GetTaskResponse) Reset() {
 	*x = GetTaskResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[105]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[111]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8735,7 +9056,7 @@ func (x *GetTaskResponse) String() string {
 func (*GetTaskResponse) ProtoMessage() {}
 
 func (x *GetTaskResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[105]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[111]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8748,7 +9069,7 @@ func (x *GetTaskResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTaskResponse.ProtoReflect.Descriptor instead.
 func (*GetTaskResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{105}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{111}
 }
 
 func (x *GetTaskResponse) GetTask() *ScheduledTask {
@@ -8770,7 +9091,7 @@ type ListTasksRequest struct {
 
 func (x *ListTasksRequest) Reset() {
 	*x = ListTasksRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[106]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[112]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8782,7 +9103,7 @@ func (x *ListTasksRequest) String() string {
 func (*ListTasksRequest) ProtoMessage() {}
 
 func (x *ListTasksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[106]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[112]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8795,7 +9116,7 @@ func (x *ListTasksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListTasksRequest.ProtoReflect.Descriptor instead.
 func (*ListTasksRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{106}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{112}
 }
 
 func (x *ListTasksRequest) GetAgentId() string {
@@ -8837,7 +9158,7 @@ type ListTasksResponse struct {
 
 func (x *ListTasksResponse) Reset() {
 	*x = ListTasksResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[107]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[113]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8849,7 +9170,7 @@ func (x *ListTasksResponse) String() string {
 func (*ListTasksResponse) ProtoMessage() {}
 
 func (x *ListTasksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[107]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[113]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8862,7 +9183,7 @@ func (x *ListTasksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListTasksResponse.ProtoReflect.Descriptor instead.
 func (*ListTasksResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{107}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{113}
 }
 
 func (x *ListTasksResponse) GetTasks() []*ScheduledTask {
@@ -8902,7 +9223,7 @@ type UpdateTaskRequest struct {
 
 func (x *UpdateTaskRequest) Reset() {
 	*x = UpdateTaskRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[108]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[114]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8914,7 +9235,7 @@ func (x *UpdateTaskRequest) String() string {
 func (*UpdateTaskRequest) ProtoMessage() {}
 
 func (x *UpdateTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[108]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[114]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8927,7 +9248,7 @@ func (x *UpdateTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateTaskRequest.ProtoReflect.Descriptor instead.
 func (*UpdateTaskRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{108}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{114}
 }
 
 func (x *UpdateTaskRequest) GetId() string {
@@ -8995,7 +9316,7 @@ type UpdateTaskResponse struct {
 
 func (x *UpdateTaskResponse) Reset() {
 	*x = UpdateTaskResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[109]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[115]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9007,7 +9328,7 @@ func (x *UpdateTaskResponse) String() string {
 func (*UpdateTaskResponse) ProtoMessage() {}
 
 func (x *UpdateTaskResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[109]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[115]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9020,7 +9341,7 @@ func (x *UpdateTaskResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateTaskResponse.ProtoReflect.Descriptor instead.
 func (*UpdateTaskResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{109}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{115}
 }
 
 func (x *UpdateTaskResponse) GetTask() *ScheduledTask {
@@ -9039,7 +9360,7 @@ type DeleteTaskRequest struct {
 
 func (x *DeleteTaskRequest) Reset() {
 	*x = DeleteTaskRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[110]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[116]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9051,7 +9372,7 @@ func (x *DeleteTaskRequest) String() string {
 func (*DeleteTaskRequest) ProtoMessage() {}
 
 func (x *DeleteTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[110]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[116]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9064,7 +9385,7 @@ func (x *DeleteTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteTaskRequest.ProtoReflect.Descriptor instead.
 func (*DeleteTaskRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{110}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{116}
 }
 
 func (x *DeleteTaskRequest) GetId() string {
@@ -9083,7 +9404,7 @@ type DeleteTaskResponse struct {
 
 func (x *DeleteTaskResponse) Reset() {
 	*x = DeleteTaskResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[111]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[117]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9095,7 +9416,7 @@ func (x *DeleteTaskResponse) String() string {
 func (*DeleteTaskResponse) ProtoMessage() {}
 
 func (x *DeleteTaskResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[111]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[117]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9108,7 +9429,7 @@ func (x *DeleteTaskResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteTaskResponse.ProtoReflect.Descriptor instead.
 func (*DeleteTaskResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{111}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{117}
 }
 
 func (x *DeleteTaskResponse) GetSuccess() bool {
@@ -9127,7 +9448,7 @@ type PauseTaskRequest struct {
 
 func (x *PauseTaskRequest) Reset() {
 	*x = PauseTaskRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[112]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[118]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9139,7 +9460,7 @@ func (x *PauseTaskRequest) String() string {
 func (*PauseTaskRequest) ProtoMessage() {}
 
 func (x *PauseTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[112]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[118]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9152,7 +9473,7 @@ func (x *PauseTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PauseTaskRequest.ProtoReflect.Descriptor instead.
 func (*PauseTaskRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{112}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{118}
 }
 
 func (x *PauseTaskRequest) GetId() string {
@@ -9171,7 +9492,7 @@ type PauseTaskResponse struct {
 
 func (x *PauseTaskResponse) Reset() {
 	*x = PauseTaskResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[113]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[119]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9183,7 +9504,7 @@ func (x *PauseTaskResponse) String() string {
 func (*PauseTaskResponse) ProtoMessage() {}
 
 func (x *PauseTaskResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[113]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[119]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9196,7 +9517,7 @@ func (x *PauseTaskResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PauseTaskResponse.ProtoReflect.Descriptor instead.
 func (*PauseTaskResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{113}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{119}
 }
 
 func (x *PauseTaskResponse) GetTask() *ScheduledTask {
@@ -9215,7 +9536,7 @@ type ResumeTaskRequest struct {
 
 func (x *ResumeTaskRequest) Reset() {
 	*x = ResumeTaskRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[114]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[120]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9227,7 +9548,7 @@ func (x *ResumeTaskRequest) String() string {
 func (*ResumeTaskRequest) ProtoMessage() {}
 
 func (x *ResumeTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[114]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[120]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9240,7 +9561,7 @@ func (x *ResumeTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResumeTaskRequest.ProtoReflect.Descriptor instead.
 func (*ResumeTaskRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{114}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{120}
 }
 
 func (x *ResumeTaskRequest) GetId() string {
@@ -9259,7 +9580,7 @@ type ResumeTaskResponse struct {
 
 func (x *ResumeTaskResponse) Reset() {
 	*x = ResumeTaskResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[115]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[121]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9271,7 +9592,7 @@ func (x *ResumeTaskResponse) String() string {
 func (*ResumeTaskResponse) ProtoMessage() {}
 
 func (x *ResumeTaskResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[115]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[121]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9284,7 +9605,7 @@ func (x *ResumeTaskResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResumeTaskResponse.ProtoReflect.Descriptor instead.
 func (*ResumeTaskResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{115}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{121}
 }
 
 func (x *ResumeTaskResponse) GetTask() *ScheduledTask {
@@ -9303,7 +9624,7 @@ type TriggerTaskRequest struct {
 
 func (x *TriggerTaskRequest) Reset() {
 	*x = TriggerTaskRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[116]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[122]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9315,7 +9636,7 @@ func (x *TriggerTaskRequest) String() string {
 func (*TriggerTaskRequest) ProtoMessage() {}
 
 func (x *TriggerTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[116]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[122]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9328,7 +9649,7 @@ func (x *TriggerTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TriggerTaskRequest.ProtoReflect.Descriptor instead.
 func (*TriggerTaskRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{116}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{122}
 }
 
 func (x *TriggerTaskRequest) GetId() string {
@@ -9347,7 +9668,7 @@ type TriggerTaskResponse struct {
 
 func (x *TriggerTaskResponse) Reset() {
 	*x = TriggerTaskResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[117]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[123]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9359,7 +9680,7 @@ func (x *TriggerTaskResponse) String() string {
 func (*TriggerTaskResponse) ProtoMessage() {}
 
 func (x *TriggerTaskResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[117]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[123]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9372,7 +9693,7 @@ func (x *TriggerTaskResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TriggerTaskResponse.ProtoReflect.Descriptor instead.
 func (*TriggerTaskResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{117}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{123}
 }
 
 func (x *TriggerTaskResponse) GetExecution() *TaskExecution {
@@ -9394,7 +9715,7 @@ type ListExecutionsRequest struct {
 
 func (x *ListExecutionsRequest) Reset() {
 	*x = ListExecutionsRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[118]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[124]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9406,7 +9727,7 @@ func (x *ListExecutionsRequest) String() string {
 func (*ListExecutionsRequest) ProtoMessage() {}
 
 func (x *ListExecutionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[118]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[124]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9419,7 +9740,7 @@ func (x *ListExecutionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListExecutionsRequest.ProtoReflect.Descriptor instead.
 func (*ListExecutionsRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{118}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{124}
 }
 
 func (x *ListExecutionsRequest) GetTaskId() string {
@@ -9461,7 +9782,7 @@ type ListExecutionsResponse struct {
 
 func (x *ListExecutionsResponse) Reset() {
 	*x = ListExecutionsResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[119]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[125]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9473,7 +9794,7 @@ func (x *ListExecutionsResponse) String() string {
 func (*ListExecutionsResponse) ProtoMessage() {}
 
 func (x *ListExecutionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[119]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[125]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9486,7 +9807,7 @@ func (x *ListExecutionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListExecutionsResponse.ProtoReflect.Descriptor instead.
 func (*ListExecutionsResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{119}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{125}
 }
 
 func (x *ListExecutionsResponse) GetExecutions() []*TaskExecution {
@@ -9533,7 +9854,7 @@ type ProactiveSendRequest struct {
 
 func (x *ProactiveSendRequest) Reset() {
 	*x = ProactiveSendRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[120]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[126]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9545,7 +9866,7 @@ func (x *ProactiveSendRequest) String() string {
 func (*ProactiveSendRequest) ProtoMessage() {}
 
 func (x *ProactiveSendRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[120]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[126]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9558,7 +9879,7 @@ func (x *ProactiveSendRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProactiveSendRequest.ProtoReflect.Descriptor instead.
 func (*ProactiveSendRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{120}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{126}
 }
 
 func (x *ProactiveSendRequest) GetChannel() string {
@@ -9626,7 +9947,7 @@ type ProactiveSendResponse struct {
 
 func (x *ProactiveSendResponse) Reset() {
 	*x = ProactiveSendResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[121]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[127]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9638,7 +9959,7 @@ func (x *ProactiveSendResponse) String() string {
 func (*ProactiveSendResponse) ProtoMessage() {}
 
 func (x *ProactiveSendResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[121]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[127]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9651,7 +9972,7 @@ func (x *ProactiveSendResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProactiveSendResponse.ProtoReflect.Descriptor instead.
 func (*ProactiveSendResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{121}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{127}
 }
 
 func (x *ProactiveSendResponse) GetSuccess() bool {
@@ -9702,7 +10023,7 @@ type BroadcastMessageRequest struct {
 
 func (x *BroadcastMessageRequest) Reset() {
 	*x = BroadcastMessageRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[122]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[128]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9714,7 +10035,7 @@ func (x *BroadcastMessageRequest) String() string {
 func (*BroadcastMessageRequest) ProtoMessage() {}
 
 func (x *BroadcastMessageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[122]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[128]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9727,7 +10048,7 @@ func (x *BroadcastMessageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BroadcastMessageRequest.ProtoReflect.Descriptor instead.
 func (*BroadcastMessageRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{122}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{128}
 }
 
 func (x *BroadcastMessageRequest) GetChannel() string {
@@ -9786,7 +10107,7 @@ type BroadcastMessageResponse struct {
 
 func (x *BroadcastMessageResponse) Reset() {
 	*x = BroadcastMessageResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[123]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[129]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9798,7 +10119,7 @@ func (x *BroadcastMessageResponse) String() string {
 func (*BroadcastMessageResponse) ProtoMessage() {}
 
 func (x *BroadcastMessageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[123]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[129]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9811,7 +10132,7 @@ func (x *BroadcastMessageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BroadcastMessageResponse.ProtoReflect.Descriptor instead.
 func (*BroadcastMessageResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{123}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{129}
 }
 
 func (x *BroadcastMessageResponse) GetSuccessCount() int32 {
@@ -9847,7 +10168,7 @@ type BroadcastResult struct {
 
 func (x *BroadcastResult) Reset() {
 	*x = BroadcastResult{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[124]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[130]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9859,7 +10180,7 @@ func (x *BroadcastResult) String() string {
 func (*BroadcastResult) ProtoMessage() {}
 
 func (x *BroadcastResult) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[124]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[130]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9872,7 +10193,7 @@ func (x *BroadcastResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BroadcastResult.ProtoReflect.Descriptor instead.
 func (*BroadcastResult) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{124}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{130}
 }
 
 func (x *BroadcastResult) GetPeerId() string {
@@ -9926,7 +10247,7 @@ type Identity struct {
 
 func (x *Identity) Reset() {
 	*x = Identity{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[125]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[131]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9938,7 +10259,7 @@ func (x *Identity) String() string {
 func (*Identity) ProtoMessage() {}
 
 func (x *Identity) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[125]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[131]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9951,7 +10272,7 @@ func (x *Identity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Identity.ProtoReflect.Descriptor instead.
 func (*Identity) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{125}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{131}
 }
 
 func (x *Identity) GetCanonicalId() string {
@@ -10021,7 +10342,7 @@ type CreateIdentityRequest struct {
 
 func (x *CreateIdentityRequest) Reset() {
 	*x = CreateIdentityRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[126]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[132]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10033,7 +10354,7 @@ func (x *CreateIdentityRequest) String() string {
 func (*CreateIdentityRequest) ProtoMessage() {}
 
 func (x *CreateIdentityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[126]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[132]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10046,7 +10367,7 @@ func (x *CreateIdentityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateIdentityRequest.ProtoReflect.Descriptor instead.
 func (*CreateIdentityRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{126}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{132}
 }
 
 func (x *CreateIdentityRequest) GetCanonicalId() string {
@@ -10093,7 +10414,7 @@ type CreateIdentityResponse struct {
 
 func (x *CreateIdentityResponse) Reset() {
 	*x = CreateIdentityResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[127]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[133]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10105,7 +10426,7 @@ func (x *CreateIdentityResponse) String() string {
 func (*CreateIdentityResponse) ProtoMessage() {}
 
 func (x *CreateIdentityResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[127]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[133]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10118,7 +10439,7 @@ func (x *CreateIdentityResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateIdentityResponse.ProtoReflect.Descriptor instead.
 func (*CreateIdentityResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{127}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{133}
 }
 
 func (x *CreateIdentityResponse) GetIdentity() *Identity {
@@ -10137,7 +10458,7 @@ type GetIdentityRequest struct {
 
 func (x *GetIdentityRequest) Reset() {
 	*x = GetIdentityRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[128]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[134]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10149,7 +10470,7 @@ func (x *GetIdentityRequest) String() string {
 func (*GetIdentityRequest) ProtoMessage() {}
 
 func (x *GetIdentityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[128]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[134]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10162,7 +10483,7 @@ func (x *GetIdentityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetIdentityRequest.ProtoReflect.Descriptor instead.
 func (*GetIdentityRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{128}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{134}
 }
 
 func (x *GetIdentityRequest) GetCanonicalId() string {
@@ -10181,7 +10502,7 @@ type GetIdentityResponse struct {
 
 func (x *GetIdentityResponse) Reset() {
 	*x = GetIdentityResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[129]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[135]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10193,7 +10514,7 @@ func (x *GetIdentityResponse) String() string {
 func (*GetIdentityResponse) ProtoMessage() {}
 
 func (x *GetIdentityResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[129]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[135]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10206,7 +10527,7 @@ func (x *GetIdentityResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetIdentityResponse.ProtoReflect.Descriptor instead.
 func (*GetIdentityResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{129}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{135}
 }
 
 func (x *GetIdentityResponse) GetIdentity() *Identity {
@@ -10226,7 +10547,7 @@ type ListIdentitiesRequest struct {
 
 func (x *ListIdentitiesRequest) Reset() {
 	*x = ListIdentitiesRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[130]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[136]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10238,7 +10559,7 @@ func (x *ListIdentitiesRequest) String() string {
 func (*ListIdentitiesRequest) ProtoMessage() {}
 
 func (x *ListIdentitiesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[130]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[136]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10251,7 +10572,7 @@ func (x *ListIdentitiesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListIdentitiesRequest.ProtoReflect.Descriptor instead.
 func (*ListIdentitiesRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{130}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{136}
 }
 
 func (x *ListIdentitiesRequest) GetPageSize() int32 {
@@ -10279,7 +10600,7 @@ type ListIdentitiesResponse struct {
 
 func (x *ListIdentitiesResponse) Reset() {
 	*x = ListIdentitiesResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[131]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[137]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10291,7 +10612,7 @@ func (x *ListIdentitiesResponse) String() string {
 func (*ListIdentitiesResponse) ProtoMessage() {}
 
 func (x *ListIdentitiesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[131]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[137]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10304,7 +10625,7 @@ func (x *ListIdentitiesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListIdentitiesResponse.ProtoReflect.Descriptor instead.
 func (*ListIdentitiesResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{131}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{137}
 }
 
 func (x *ListIdentitiesResponse) GetIdentities() []*Identity {
@@ -10337,7 +10658,7 @@ type DeleteIdentityRequest struct {
 
 func (x *DeleteIdentityRequest) Reset() {
 	*x = DeleteIdentityRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[132]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[138]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10349,7 +10670,7 @@ func (x *DeleteIdentityRequest) String() string {
 func (*DeleteIdentityRequest) ProtoMessage() {}
 
 func (x *DeleteIdentityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[132]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[138]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10362,7 +10683,7 @@ func (x *DeleteIdentityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteIdentityRequest.ProtoReflect.Descriptor instead.
 func (*DeleteIdentityRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{132}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{138}
 }
 
 func (x *DeleteIdentityRequest) GetCanonicalId() string {
@@ -10381,7 +10702,7 @@ type DeleteIdentityResponse struct {
 
 func (x *DeleteIdentityResponse) Reset() {
 	*x = DeleteIdentityResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[133]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[139]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10393,7 +10714,7 @@ func (x *DeleteIdentityResponse) String() string {
 func (*DeleteIdentityResponse) ProtoMessage() {}
 
 func (x *DeleteIdentityResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[133]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[139]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10406,7 +10727,7 @@ func (x *DeleteIdentityResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteIdentityResponse.ProtoReflect.Descriptor instead.
 func (*DeleteIdentityResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{133}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{139}
 }
 
 func (x *DeleteIdentityResponse) GetSuccess() bool {
@@ -10430,7 +10751,7 @@ type LinkPeerRequest struct {
 
 func (x *LinkPeerRequest) Reset() {
 	*x = LinkPeerRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[134]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[140]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10442,7 +10763,7 @@ func (x *LinkPeerRequest) String() string {
 func (*LinkPeerRequest) ProtoMessage() {}
 
 func (x *LinkPeerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[134]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[140]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10455,7 +10776,7 @@ func (x *LinkPeerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LinkPeerRequest.ProtoReflect.Descriptor instead.
 func (*LinkPeerRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{134}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{140}
 }
 
 func (x *LinkPeerRequest) GetCanonicalId() string {
@@ -10488,7 +10809,7 @@ type LinkPeerResponse struct {
 
 func (x *LinkPeerResponse) Reset() {
 	*x = LinkPeerResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[135]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[141]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10500,7 +10821,7 @@ func (x *LinkPeerResponse) String() string {
 func (*LinkPeerResponse) ProtoMessage() {}
 
 func (x *LinkPeerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[135]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[141]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10513,7 +10834,7 @@ func (x *LinkPeerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LinkPeerResponse.ProtoReflect.Descriptor instead.
 func (*LinkPeerResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{135}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{141}
 }
 
 func (x *LinkPeerResponse) GetIdentity() *Identity {
@@ -10537,7 +10858,7 @@ type UnlinkPeerRequest struct {
 
 func (x *UnlinkPeerRequest) Reset() {
 	*x = UnlinkPeerRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[136]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[142]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10549,7 +10870,7 @@ func (x *UnlinkPeerRequest) String() string {
 func (*UnlinkPeerRequest) ProtoMessage() {}
 
 func (x *UnlinkPeerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[136]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[142]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10562,7 +10883,7 @@ func (x *UnlinkPeerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnlinkPeerRequest.ProtoReflect.Descriptor instead.
 func (*UnlinkPeerRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{136}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{142}
 }
 
 func (x *UnlinkPeerRequest) GetCanonicalId() string {
@@ -10595,7 +10916,7 @@ type UnlinkPeerResponse struct {
 
 func (x *UnlinkPeerResponse) Reset() {
 	*x = UnlinkPeerResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[137]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[143]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10607,7 +10928,7 @@ func (x *UnlinkPeerResponse) String() string {
 func (*UnlinkPeerResponse) ProtoMessage() {}
 
 func (x *UnlinkPeerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[137]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[143]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10620,7 +10941,7 @@ func (x *UnlinkPeerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnlinkPeerResponse.ProtoReflect.Descriptor instead.
 func (*UnlinkPeerResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{137}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{143}
 }
 
 func (x *UnlinkPeerResponse) GetIdentity() *Identity {
@@ -10642,7 +10963,7 @@ type ResolveIdentityRequest struct {
 
 func (x *ResolveIdentityRequest) Reset() {
 	*x = ResolveIdentityRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[138]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[144]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10654,7 +10975,7 @@ func (x *ResolveIdentityRequest) String() string {
 func (*ResolveIdentityRequest) ProtoMessage() {}
 
 func (x *ResolveIdentityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[138]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[144]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10667,7 +10988,7 @@ func (x *ResolveIdentityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveIdentityRequest.ProtoReflect.Descriptor instead.
 func (*ResolveIdentityRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{138}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{144}
 }
 
 func (x *ResolveIdentityRequest) GetChannel() string {
@@ -10698,7 +11019,7 @@ type ResolveIdentityResponse struct {
 
 func (x *ResolveIdentityResponse) Reset() {
 	*x = ResolveIdentityResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[139]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[145]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10710,7 +11031,7 @@ func (x *ResolveIdentityResponse) String() string {
 func (*ResolveIdentityResponse) ProtoMessage() {}
 
 func (x *ResolveIdentityResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[139]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[145]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10723,7 +11044,7 @@ func (x *ResolveIdentityResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveIdentityResponse.ProtoReflect.Descriptor instead.
 func (*ResolveIdentityResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{139}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{145}
 }
 
 func (x *ResolveIdentityResponse) GetFound() bool {
@@ -10756,7 +11077,7 @@ type GetLinkedPeersRequest struct {
 
 func (x *GetLinkedPeersRequest) Reset() {
 	*x = GetLinkedPeersRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[140]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[146]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10768,7 +11089,7 @@ func (x *GetLinkedPeersRequest) String() string {
 func (*GetLinkedPeersRequest) ProtoMessage() {}
 
 func (x *GetLinkedPeersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[140]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[146]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10781,7 +11102,7 @@ func (x *GetLinkedPeersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetLinkedPeersRequest.ProtoReflect.Descriptor instead.
 func (*GetLinkedPeersRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{140}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{146}
 }
 
 func (x *GetLinkedPeersRequest) GetCanonicalId() string {
@@ -10801,7 +11122,7 @@ type GetLinkedPeersResponse struct {
 
 func (x *GetLinkedPeersResponse) Reset() {
 	*x = GetLinkedPeersResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[141]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[147]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10813,7 +11134,7 @@ func (x *GetLinkedPeersResponse) String() string {
 func (*GetLinkedPeersResponse) ProtoMessage() {}
 
 func (x *GetLinkedPeersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[141]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[147]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10826,7 +11147,7 @@ func (x *GetLinkedPeersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetLinkedPeersResponse.ProtoReflect.Descriptor instead.
 func (*GetLinkedPeersResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{141}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{147}
 }
 
 func (x *GetLinkedPeersResponse) GetLinkedPeers() []string {
@@ -10857,7 +11178,7 @@ type ProvisioningSession struct {
 
 func (x *ProvisioningSession) Reset() {
 	*x = ProvisioningSession{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[142]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[148]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10869,7 +11190,7 @@ func (x *ProvisioningSession) String() string {
 func (*ProvisioningSession) ProtoMessage() {}
 
 func (x *ProvisioningSession) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[142]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[148]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10882,7 +11203,7 @@ func (x *ProvisioningSession) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProvisioningSession.ProtoReflect.Descriptor instead.
 func (*ProvisioningSession) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{142}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{148}
 }
 
 func (x *ProvisioningSession) GetId() string {
@@ -10986,7 +11307,7 @@ type ProvisioningStep struct {
 
 func (x *ProvisioningStep) Reset() {
 	*x = ProvisioningStep{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[143]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[149]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10998,7 +11319,7 @@ func (x *ProvisioningStep) String() string {
 func (*ProvisioningStep) ProtoMessage() {}
 
 func (x *ProvisioningStep) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[143]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[149]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11011,7 +11332,7 @@ func (x *ProvisioningStep) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProvisioningStep.ProtoReflect.Descriptor instead.
 func (*ProvisioningStep) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{143}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{149}
 }
 
 func (x *ProvisioningStep) GetId() string {
@@ -11092,7 +11413,7 @@ type ProvisioningInputField struct {
 
 func (x *ProvisioningInputField) Reset() {
 	*x = ProvisioningInputField{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[144]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[150]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11104,7 +11425,7 @@ func (x *ProvisioningInputField) String() string {
 func (*ProvisioningInputField) ProtoMessage() {}
 
 func (x *ProvisioningInputField) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[144]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[150]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11117,7 +11438,7 @@ func (x *ProvisioningInputField) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProvisioningInputField.ProtoReflect.Descriptor instead.
 func (*ProvisioningInputField) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{144}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{150}
 }
 
 func (x *ProvisioningInputField) GetName() string {
@@ -11184,7 +11505,7 @@ type ProvisioningRequirements struct {
 
 func (x *ProvisioningRequirements) Reset() {
 	*x = ProvisioningRequirements{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[145]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[151]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11196,7 +11517,7 @@ func (x *ProvisioningRequirements) String() string {
 func (*ProvisioningRequirements) ProtoMessage() {}
 
 func (x *ProvisioningRequirements) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[145]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[151]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11209,7 +11530,7 @@ func (x *ProvisioningRequirements) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProvisioningRequirements.ProtoReflect.Descriptor instead.
 func (*ProvisioningRequirements) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{145}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{151}
 }
 
 func (x *ProvisioningRequirements) GetChannelType() string {
@@ -11272,7 +11593,7 @@ type StartProvisioningRequest struct {
 
 func (x *StartProvisioningRequest) Reset() {
 	*x = StartProvisioningRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[146]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[152]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11284,7 +11605,7 @@ func (x *StartProvisioningRequest) String() string {
 func (*StartProvisioningRequest) ProtoMessage() {}
 
 func (x *StartProvisioningRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[146]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[152]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11297,7 +11618,7 @@ func (x *StartProvisioningRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartProvisioningRequest.ProtoReflect.Descriptor instead.
 func (*StartProvisioningRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{146}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{152}
 }
 
 func (x *StartProvisioningRequest) GetChannelType() string {
@@ -11330,7 +11651,7 @@ type StartProvisioningResponse struct {
 
 func (x *StartProvisioningResponse) Reset() {
 	*x = StartProvisioningResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[147]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[153]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11342,7 +11663,7 @@ func (x *StartProvisioningResponse) String() string {
 func (*StartProvisioningResponse) ProtoMessage() {}
 
 func (x *StartProvisioningResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[147]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[153]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11355,7 +11676,7 @@ func (x *StartProvisioningResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartProvisioningResponse.ProtoReflect.Descriptor instead.
 func (*StartProvisioningResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{147}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{153}
 }
 
 func (x *StartProvisioningResponse) GetSession() *ProvisioningSession {
@@ -11374,7 +11695,7 @@ type GetProvisioningStatusRequest struct {
 
 func (x *GetProvisioningStatusRequest) Reset() {
 	*x = GetProvisioningStatusRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[148]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[154]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11386,7 +11707,7 @@ func (x *GetProvisioningStatusRequest) String() string {
 func (*GetProvisioningStatusRequest) ProtoMessage() {}
 
 func (x *GetProvisioningStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[148]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[154]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11399,7 +11720,7 @@ func (x *GetProvisioningStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetProvisioningStatusRequest.ProtoReflect.Descriptor instead.
 func (*GetProvisioningStatusRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{148}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{154}
 }
 
 func (x *GetProvisioningStatusRequest) GetSessionId() string {
@@ -11418,7 +11739,7 @@ type GetProvisioningStatusResponse struct {
 
 func (x *GetProvisioningStatusResponse) Reset() {
 	*x = GetProvisioningStatusResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[149]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[155]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11430,7 +11751,7 @@ func (x *GetProvisioningStatusResponse) String() string {
 func (*GetProvisioningStatusResponse) ProtoMessage() {}
 
 func (x *GetProvisioningStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[149]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[155]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11443,7 +11764,7 @@ func (x *GetProvisioningStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetProvisioningStatusResponse.ProtoReflect.Descriptor instead.
 func (*GetProvisioningStatusResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{149}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{155}
 }
 
 func (x *GetProvisioningStatusResponse) GetSession() *ProvisioningSession {
@@ -11464,7 +11785,7 @@ type SubmitProvisioningStepRequest struct {
 
 func (x *SubmitProvisioningStepRequest) Reset() {
 	*x = SubmitProvisioningStepRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[150]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[156]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11476,7 +11797,7 @@ func (x *SubmitProvisioningStepRequest) String() string {
 func (*SubmitProvisioningStepRequest) ProtoMessage() {}
 
 func (x *SubmitProvisioningStepRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[150]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[156]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11489,7 +11810,7 @@ func (x *SubmitProvisioningStepRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitProvisioningStepRequest.ProtoReflect.Descriptor instead.
 func (*SubmitProvisioningStepRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{150}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{156}
 }
 
 func (x *SubmitProvisioningStepRequest) GetSessionId() string {
@@ -11522,7 +11843,7 @@ type SubmitProvisioningStepResponse struct {
 
 func (x *SubmitProvisioningStepResponse) Reset() {
 	*x = SubmitProvisioningStepResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[151]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[157]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11534,7 +11855,7 @@ func (x *SubmitProvisioningStepResponse) String() string {
 func (*SubmitProvisioningStepResponse) ProtoMessage() {}
 
 func (x *SubmitProvisioningStepResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[151]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[157]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11547,7 +11868,7 @@ func (x *SubmitProvisioningStepResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitProvisioningStepResponse.ProtoReflect.Descriptor instead.
 func (*SubmitProvisioningStepResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{151}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{157}
 }
 
 func (x *SubmitProvisioningStepResponse) GetSession() *ProvisioningSession {
@@ -11566,7 +11887,7 @@ type CancelProvisioningRequest struct {
 
 func (x *CancelProvisioningRequest) Reset() {
 	*x = CancelProvisioningRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[152]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[158]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11578,7 +11899,7 @@ func (x *CancelProvisioningRequest) String() string {
 func (*CancelProvisioningRequest) ProtoMessage() {}
 
 func (x *CancelProvisioningRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[152]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[158]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11591,7 +11912,7 @@ func (x *CancelProvisioningRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelProvisioningRequest.ProtoReflect.Descriptor instead.
 func (*CancelProvisioningRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{152}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{158}
 }
 
 func (x *CancelProvisioningRequest) GetSessionId() string {
@@ -11610,7 +11931,7 @@ type CancelProvisioningResponse struct {
 
 func (x *CancelProvisioningResponse) Reset() {
 	*x = CancelProvisioningResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[153]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[159]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11622,7 +11943,7 @@ func (x *CancelProvisioningResponse) String() string {
 func (*CancelProvisioningResponse) ProtoMessage() {}
 
 func (x *CancelProvisioningResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[153]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[159]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11635,7 +11956,7 @@ func (x *CancelProvisioningResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelProvisioningResponse.ProtoReflect.Descriptor instead.
 func (*CancelProvisioningResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{153}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{159}
 }
 
 func (x *CancelProvisioningResponse) GetSuccess() bool {
@@ -11654,7 +11975,7 @@ type GetProvisioningRequirementsRequest struct {
 
 func (x *GetProvisioningRequirementsRequest) Reset() {
 	*x = GetProvisioningRequirementsRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[154]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[160]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11666,7 +11987,7 @@ func (x *GetProvisioningRequirementsRequest) String() string {
 func (*GetProvisioningRequirementsRequest) ProtoMessage() {}
 
 func (x *GetProvisioningRequirementsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[154]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[160]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11679,7 +12000,7 @@ func (x *GetProvisioningRequirementsRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use GetProvisioningRequirementsRequest.ProtoReflect.Descriptor instead.
 func (*GetProvisioningRequirementsRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{154}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{160}
 }
 
 func (x *GetProvisioningRequirementsRequest) GetChannelType() string {
@@ -11698,7 +12019,7 @@ type GetProvisioningRequirementsResponse struct {
 
 func (x *GetProvisioningRequirementsResponse) Reset() {
 	*x = GetProvisioningRequirementsResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[155]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[161]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11710,7 +12031,7 @@ func (x *GetProvisioningRequirementsResponse) String() string {
 func (*GetProvisioningRequirementsResponse) ProtoMessage() {}
 
 func (x *GetProvisioningRequirementsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[155]
+	mi := &file_pkg_proto_nexus_proto_msgTypes[161]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11723,428 +12044,12 @@ func (x *GetProvisioningRequirementsResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use GetProvisioningRequirementsResponse.ProtoReflect.Descriptor instead.
 func (*GetProvisioningRequirementsResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{155}
+	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{161}
 }
 
 func (x *GetProvisioningRequirementsResponse) GetRequirements() []*ProvisioningRequirements {
 	if x != nil {
 		return x.Requirements
-	}
-	return nil
-}
-
-type GetArtifactRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ArtifactId    string                 `protobuf:"bytes,1,opt,name=artifact_id,json=artifactId,proto3" json:"artifact_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetArtifactRequest) Reset() {
-	*x = GetArtifactRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[156]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetArtifactRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetArtifactRequest) ProtoMessage() {}
-
-func (x *GetArtifactRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[156]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetArtifactRequest.ProtoReflect.Descriptor instead.
-func (*GetArtifactRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{156}
-}
-
-func (x *GetArtifactRequest) GetArtifactId() string {
-	if x != nil {
-		return x.ArtifactId
-	}
-	return ""
-}
-
-type GetArtifactResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Artifact      *Artifact              `protobuf:"bytes,1,opt,name=artifact,proto3" json:"artifact,omitempty"`
-	DownloadUrl   string                 `protobuf:"bytes,2,opt,name=download_url,json=downloadUrl,proto3" json:"download_url,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetArtifactResponse) Reset() {
-	*x = GetArtifactResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[157]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetArtifactResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetArtifactResponse) ProtoMessage() {}
-
-func (x *GetArtifactResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[157]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetArtifactResponse.ProtoReflect.Descriptor instead.
-func (*GetArtifactResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{157}
-}
-
-func (x *GetArtifactResponse) GetArtifact() *Artifact {
-	if x != nil {
-		return x.Artifact
-	}
-	return nil
-}
-
-func (x *GetArtifactResponse) GetDownloadUrl() string {
-	if x != nil {
-		return x.DownloadUrl
-	}
-	return ""
-}
-
-type ListArtifactsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	EdgeId        string                 `protobuf:"bytes,2,opt,name=edge_id,json=edgeId,proto3" json:"edge_id,omitempty"`
-	Type          string                 `protobuf:"bytes,3,opt,name=type,proto3" json:"type,omitempty"`
-	CreatedAfter  *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=created_after,json=createdAfter,proto3" json:"created_after,omitempty"`
-	CreatedBefore *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=created_before,json=createdBefore,proto3" json:"created_before,omitempty"`
-	Limit         int32                  `protobuf:"varint,6,opt,name=limit,proto3" json:"limit,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListArtifactsRequest) Reset() {
-	*x = ListArtifactsRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[158]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListArtifactsRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListArtifactsRequest) ProtoMessage() {}
-
-func (x *ListArtifactsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[158]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListArtifactsRequest.ProtoReflect.Descriptor instead.
-func (*ListArtifactsRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{158}
-}
-
-func (x *ListArtifactsRequest) GetSessionId() string {
-	if x != nil {
-		return x.SessionId
-	}
-	return ""
-}
-
-func (x *ListArtifactsRequest) GetEdgeId() string {
-	if x != nil {
-		return x.EdgeId
-	}
-	return ""
-}
-
-func (x *ListArtifactsRequest) GetType() string {
-	if x != nil {
-		return x.Type
-	}
-	return ""
-}
-
-func (x *ListArtifactsRequest) GetCreatedAfter() *timestamppb.Timestamp {
-	if x != nil {
-		return x.CreatedAfter
-	}
-	return nil
-}
-
-func (x *ListArtifactsRequest) GetCreatedBefore() *timestamppb.Timestamp {
-	if x != nil {
-		return x.CreatedBefore
-	}
-	return nil
-}
-
-func (x *ListArtifactsRequest) GetLimit() int32 {
-	if x != nil {
-		return x.Limit
-	}
-	return 0
-}
-
-type ListArtifactsResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Artifacts     []*Artifact            `protobuf:"bytes,1,rep,name=artifacts,proto3" json:"artifacts,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListArtifactsResponse) Reset() {
-	*x = ListArtifactsResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[159]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListArtifactsResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListArtifactsResponse) ProtoMessage() {}
-
-func (x *ListArtifactsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[159]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListArtifactsResponse.ProtoReflect.Descriptor instead.
-func (*ListArtifactsResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{159}
-}
-
-func (x *ListArtifactsResponse) GetArtifacts() []*Artifact {
-	if x != nil {
-		return x.Artifacts
-	}
-	return nil
-}
-
-type DeleteArtifactRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ArtifactId    string                 `protobuf:"bytes,1,opt,name=artifact_id,json=artifactId,proto3" json:"artifact_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *DeleteArtifactRequest) Reset() {
-	*x = DeleteArtifactRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[160]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DeleteArtifactRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DeleteArtifactRequest) ProtoMessage() {}
-
-func (x *DeleteArtifactRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[160]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DeleteArtifactRequest.ProtoReflect.Descriptor instead.
-func (*DeleteArtifactRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{160}
-}
-
-func (x *DeleteArtifactRequest) GetArtifactId() string {
-	if x != nil {
-		return x.ArtifactId
-	}
-	return ""
-}
-
-type DeleteArtifactResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *DeleteArtifactResponse) Reset() {
-	*x = DeleteArtifactResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[161]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DeleteArtifactResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DeleteArtifactResponse) ProtoMessage() {}
-
-func (x *DeleteArtifactResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[161]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DeleteArtifactResponse.ProtoReflect.Descriptor instead.
-func (*DeleteArtifactResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{161}
-}
-
-func (x *DeleteArtifactResponse) GetSuccess() bool {
-	if x != nil {
-		return x.Success
-	}
-	return false
-}
-
-type GetArtifactDownloadURLRequest struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	ArtifactId       string                 `protobuf:"bytes,1,opt,name=artifact_id,json=artifactId,proto3" json:"artifact_id,omitempty"`
-	ExpiresInSeconds int32                  `protobuf:"varint,2,opt,name=expires_in_seconds,json=expiresInSeconds,proto3" json:"expires_in_seconds,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
-}
-
-func (x *GetArtifactDownloadURLRequest) Reset() {
-	*x = GetArtifactDownloadURLRequest{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[162]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetArtifactDownloadURLRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetArtifactDownloadURLRequest) ProtoMessage() {}
-
-func (x *GetArtifactDownloadURLRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[162]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetArtifactDownloadURLRequest.ProtoReflect.Descriptor instead.
-func (*GetArtifactDownloadURLRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{162}
-}
-
-func (x *GetArtifactDownloadURLRequest) GetArtifactId() string {
-	if x != nil {
-		return x.ArtifactId
-	}
-	return ""
-}
-
-func (x *GetArtifactDownloadURLRequest) GetExpiresInSeconds() int32 {
-	if x != nil {
-		return x.ExpiresInSeconds
-	}
-	return 0
-}
-
-type GetArtifactDownloadURLResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Url           string                 `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
-	ExpiresAt     *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetArtifactDownloadURLResponse) Reset() {
-	*x = GetArtifactDownloadURLResponse{}
-	mi := &file_pkg_proto_nexus_proto_msgTypes[163]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetArtifactDownloadURLResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetArtifactDownloadURLResponse) ProtoMessage() {}
-
-func (x *GetArtifactDownloadURLResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_proto_nexus_proto_msgTypes[163]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetArtifactDownloadURLResponse.ProtoReflect.Descriptor instead.
-func (*GetArtifactDownloadURLResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_proto_nexus_proto_rawDescGZIP(), []int{163}
-}
-
-func (x *GetArtifactDownloadURLResponse) GetUrl() string {
-	if x != nil {
-		return x.Url
-	}
-	return ""
-}
-
-func (x *GetArtifactDownloadURLResponse) GetExpiresAt() *timestamppb.Timestamp {
-	if x != nil {
-		return x.ExpiresAt
 	}
 	return nil
 }
@@ -12654,7 +12559,29 @@ const file_pkg_proto_nexus_proto_rawDesc = "" +
 	"\treference\x18\x06 \x01(\tR\treference\x12\x12\n" +
 	"\x04data\x18\a \x01(\fR\x04data\x12\x1f\n" +
 	"\vttl_seconds\x18\b \x01(\x05R\n" +
-	"ttlSeconds\"M\n" +
+	"ttlSeconds\"\xfc\x01\n" +
+	"\x14ListArtifactsRequest\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x17\n" +
+	"\aedge_id\x18\x02 \x01(\tR\x06edgeId\x12\x12\n" +
+	"\x04type\x18\x03 \x01(\tR\x04type\x12?\n" +
+	"\rcreated_after\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\fcreatedAfter\x12A\n" +
+	"\x0ecreated_before\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\rcreatedBefore\x12\x14\n" +
+	"\x05limit\x18\x06 \x01(\x05R\x05limit\"I\n" +
+	"\x15ListArtifactsResponse\x120\n" +
+	"\tartifacts\x18\x01 \x03(\v2\x12.nexus.v1.ArtifactR\tartifacts\"X\n" +
+	"\x12GetArtifactRequest\x12\x1f\n" +
+	"\vartifact_id\x18\x01 \x01(\tR\n" +
+	"artifactId\x12!\n" +
+	"\finclude_data\x18\x02 \x01(\bR\vincludeData\"Y\n" +
+	"\x13GetArtifactResponse\x12.\n" +
+	"\bartifact\x18\x01 \x01(\v2\x12.nexus.v1.ArtifactR\bartifact\x12\x12\n" +
+	"\x04data\x18\x02 \x01(\fR\x04data\"8\n" +
+	"\x15DeleteArtifactRequest\x12\x1f\n" +
+	"\vartifact_id\x18\x01 \x01(\tR\n" +
+	"artifactId\"2\n" +
+	"\x16DeleteArtifactResponse\x12\x18\n" +
+	"\adeleted\x18\x01 \x01(\bR\adeleted\"M\n" +
 	"\x10ToolCancellation\x12!\n" +
 	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\"\xb8\x01\n" +
@@ -13110,36 +13037,7 @@ const file_pkg_proto_nexus_proto_rawDesc = "" +
 	"\"GetProvisioningRequirementsRequest\x12!\n" +
 	"\fchannel_type\x18\x01 \x01(\tR\vchannelType\"m\n" +
 	"#GetProvisioningRequirementsResponse\x12F\n" +
-	"\frequirements\x18\x01 \x03(\v2\".nexus.v1.ProvisioningRequirementsR\frequirements\"5\n" +
-	"\x12GetArtifactRequest\x12\x1f\n" +
-	"\vartifact_id\x18\x01 \x01(\tR\n" +
-	"artifactId\"h\n" +
-	"\x13GetArtifactResponse\x12.\n" +
-	"\bartifact\x18\x01 \x01(\v2\x12.nexus.v1.ArtifactR\bartifact\x12!\n" +
-	"\fdownload_url\x18\x02 \x01(\tR\vdownloadUrl\"\xfc\x01\n" +
-	"\x14ListArtifactsRequest\x12\x1d\n" +
-	"\n" +
-	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x17\n" +
-	"\aedge_id\x18\x02 \x01(\tR\x06edgeId\x12\x12\n" +
-	"\x04type\x18\x03 \x01(\tR\x04type\x12?\n" +
-	"\rcreated_after\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\fcreatedAfter\x12A\n" +
-	"\x0ecreated_before\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\rcreatedBefore\x12\x14\n" +
-	"\x05limit\x18\x06 \x01(\x05R\x05limit\"I\n" +
-	"\x15ListArtifactsResponse\x120\n" +
-	"\tartifacts\x18\x01 \x03(\v2\x12.nexus.v1.ArtifactR\tartifacts\"8\n" +
-	"\x15DeleteArtifactRequest\x12\x1f\n" +
-	"\vartifact_id\x18\x01 \x01(\tR\n" +
-	"artifactId\"2\n" +
-	"\x16DeleteArtifactResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\"n\n" +
-	"\x1dGetArtifactDownloadURLRequest\x12\x1f\n" +
-	"\vartifact_id\x18\x01 \x01(\tR\n" +
-	"artifactId\x12,\n" +
-	"\x12expires_in_seconds\x18\x02 \x01(\x05R\x10expiresInSeconds\"m\n" +
-	"\x1eGetArtifactDownloadURLResponse\x12\x10\n" +
-	"\x03url\x18\x01 \x01(\tR\x03url\x129\n" +
-	"\n" +
-	"expires_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt*o\n" +
+	"\frequirements\x18\x01 \x03(\v2\".nexus.v1.ProvisioningRequirementsR\frequirements*o\n" +
 	"\tChunkType\x12\x1a\n" +
 	"\x16CHUNK_TYPE_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fCHUNK_TYPE_TEXT\x10\x01\x12\x18\n" +
@@ -13302,7 +13200,11 @@ const file_pkg_proto_nexus_proto_rawDesc = "" +
 	"\fListChannels\x12\x1d.nexus.v1.ListChannelsRequest\x1a\x1e.nexus.v1.ListChannelsResponse2\x9d\x01\n" +
 	"\rHealthService\x12D\n" +
 	"\x05Check\x12\x1c.nexus.v1.HealthCheckRequest\x1a\x1d.nexus.v1.HealthCheckResponse\x12F\n" +
-	"\x05Watch\x12\x1c.nexus.v1.HealthCheckRequest\x1a\x1d.nexus.v1.HealthCheckResponse0\x012\xfc\x04\n" +
+	"\x05Watch\x12\x1c.nexus.v1.HealthCheckRequest\x1a\x1d.nexus.v1.HealthCheckResponse0\x012\x84\x02\n" +
+	"\x0fArtifactService\x12P\n" +
+	"\rListArtifacts\x12\x1e.nexus.v1.ListArtifactsRequest\x1a\x1f.nexus.v1.ListArtifactsResponse\x12J\n" +
+	"\vGetArtifact\x12\x1c.nexus.v1.GetArtifactRequest\x1a\x1d.nexus.v1.GetArtifactResponse\x12S\n" +
+	"\x0eDeleteArtifact\x12\x1f.nexus.v1.DeleteArtifactRequest\x1a .nexus.v1.DeleteArtifactResponse2\xfc\x04\n" +
 	"\vNodeService\x12_\n" +
 	"\x12CreatePairingToken\x12#.nexus.v1.CreatePairingTokenRequest\x1a$.nexus.v1.CreatePairingTokenResponse\x12D\n" +
 	"\tListNodes\x12\x1a.nexus.v1.ListNodesRequest\x1a\x1b.nexus.v1.ListNodesResponse\x12>\n" +
@@ -13314,12 +13216,7 @@ const file_pkg_proto_nexus_proto_rawDesc = "" +
 	"\n" +
 	"DeleteNode\x12\x1b.nexus.v1.DeleteNodeRequest\x1a\x1c.nexus.v1.DeleteNodeResponse\x12P\n" +
 	"\rRequestAction\x12\x1e.nexus.v1.RequestActionRequest\x1a\x1f.nexus.v1.RequestActionResponse\x12Y\n" +
-	"\x10GetNodeAuditLogs\x12!.nexus.v1.GetNodeAuditLogsRequest\x1a\".nexus.v1.GetNodeAuditLogsResponse2\xf1\x02\n" +
-	"\x0fArtifactService\x12J\n" +
-	"\vGetArtifact\x12\x1c.nexus.v1.GetArtifactRequest\x1a\x1d.nexus.v1.GetArtifactResponse\x12P\n" +
-	"\rListArtifacts\x12\x1e.nexus.v1.ListArtifactsRequest\x1a\x1f.nexus.v1.ListArtifactsResponse\x12S\n" +
-	"\x0eDeleteArtifact\x12\x1f.nexus.v1.DeleteArtifactRequest\x1a .nexus.v1.DeleteArtifactResponse\x12k\n" +
-	"\x16GetArtifactDownloadURL\x12'.nexus.v1.GetArtifactDownloadURLRequest\x1a(.nexus.v1.GetArtifactDownloadURLResponse2\xe2\x01\n" +
+	"\x10GetNodeAuditLogs\x12!.nexus.v1.GetNodeAuditLogsRequest\x1a\".nexus.v1.GetNodeAuditLogsResponse2\xe2\x01\n" +
 	"\vEdgeService\x12;\n" +
 	"\aConnect\x12\x15.nexus.v1.EdgeMessage\x1a\x15.nexus.v1.CoreMessage(\x010\x01\x12P\n" +
 	"\rGetEdgeStatus\x12\x1e.nexus.v1.GetEdgeStatusRequest\x1a\x1f.nexus.v1.GetEdgeStatusResponse\x12D\n" +
@@ -13374,7 +13271,7 @@ func file_pkg_proto_nexus_proto_rawDescGZIP() []byte {
 }
 
 var file_pkg_proto_nexus_proto_enumTypes = make([]protoimpl.EnumInfo, 20)
-var file_pkg_proto_nexus_proto_msgTypes = make([]protoimpl.MessageInfo, 197)
+var file_pkg_proto_nexus_proto_msgTypes = make([]protoimpl.MessageInfo, 195)
 var file_pkg_proto_nexus_proto_goTypes = []any{
 	(ChunkType)(0),                              // 0: nexus.v1.ChunkType
 	(EventType)(0),                              // 1: nexus.v1.EventType
@@ -13478,123 +13375,121 @@ var file_pkg_proto_nexus_proto_goTypes = []any{
 	(*ToolExecutionRequest)(nil),                // 99: nexus.v1.ToolExecutionRequest
 	(*ToolExecutionResult)(nil),                 // 100: nexus.v1.ToolExecutionResult
 	(*Artifact)(nil),                            // 101: nexus.v1.Artifact
-	(*ToolCancellation)(nil),                    // 102: nexus.v1.ToolCancellation
-	(*EdgeEvent)(nil),                           // 103: nexus.v1.EdgeEvent
-	(*CoreEvent)(nil),                           // 104: nexus.v1.CoreEvent
-	(*EdgeChannelInbound)(nil),                  // 105: nexus.v1.EdgeChannelInbound
-	(*CoreChannelOutbound)(nil),                 // 106: nexus.v1.CoreChannelOutbound
-	(*EdgeChannelAck)(nil),                      // 107: nexus.v1.EdgeChannelAck
-	(*GetEdgeStatusRequest)(nil),                // 108: nexus.v1.GetEdgeStatusRequest
-	(*GetEdgeStatusResponse)(nil),               // 109: nexus.v1.GetEdgeStatusResponse
-	(*ListEdgesRequest)(nil),                    // 110: nexus.v1.ListEdgesRequest
-	(*ListEdgesResponse)(nil),                   // 111: nexus.v1.ListEdgesResponse
-	(*EdgeStatus)(nil),                          // 112: nexus.v1.EdgeStatus
-	(*GetEventsRequest)(nil),                    // 113: nexus.v1.GetEventsRequest
-	(*GetEventsResponse)(nil),                   // 114: nexus.v1.GetEventsResponse
-	(*GetTimelineRequest)(nil),                  // 115: nexus.v1.GetTimelineRequest
-	(*GetTimelineResponse)(nil),                 // 116: nexus.v1.GetTimelineResponse
-	(*TimelineEvent)(nil),                       // 117: nexus.v1.TimelineEvent
-	(*TimelineSummary)(nil),                     // 118: nexus.v1.TimelineSummary
-	(*ScheduledTask)(nil),                       // 119: nexus.v1.ScheduledTask
-	(*TaskConfig)(nil),                          // 120: nexus.v1.TaskConfig
-	(*TaskExecution)(nil),                       // 121: nexus.v1.TaskExecution
-	(*CreateTaskRequest)(nil),                   // 122: nexus.v1.CreateTaskRequest
-	(*CreateTaskResponse)(nil),                  // 123: nexus.v1.CreateTaskResponse
-	(*GetTaskRequest)(nil),                      // 124: nexus.v1.GetTaskRequest
-	(*GetTaskResponse)(nil),                     // 125: nexus.v1.GetTaskResponse
-	(*ListTasksRequest)(nil),                    // 126: nexus.v1.ListTasksRequest
-	(*ListTasksResponse)(nil),                   // 127: nexus.v1.ListTasksResponse
-	(*UpdateTaskRequest)(nil),                   // 128: nexus.v1.UpdateTaskRequest
-	(*UpdateTaskResponse)(nil),                  // 129: nexus.v1.UpdateTaskResponse
-	(*DeleteTaskRequest)(nil),                   // 130: nexus.v1.DeleteTaskRequest
-	(*DeleteTaskResponse)(nil),                  // 131: nexus.v1.DeleteTaskResponse
-	(*PauseTaskRequest)(nil),                    // 132: nexus.v1.PauseTaskRequest
-	(*PauseTaskResponse)(nil),                   // 133: nexus.v1.PauseTaskResponse
-	(*ResumeTaskRequest)(nil),                   // 134: nexus.v1.ResumeTaskRequest
-	(*ResumeTaskResponse)(nil),                  // 135: nexus.v1.ResumeTaskResponse
-	(*TriggerTaskRequest)(nil),                  // 136: nexus.v1.TriggerTaskRequest
-	(*TriggerTaskResponse)(nil),                 // 137: nexus.v1.TriggerTaskResponse
-	(*ListExecutionsRequest)(nil),               // 138: nexus.v1.ListExecutionsRequest
-	(*ListExecutionsResponse)(nil),              // 139: nexus.v1.ListExecutionsResponse
-	(*ProactiveSendRequest)(nil),                // 140: nexus.v1.ProactiveSendRequest
-	(*ProactiveSendResponse)(nil),               // 141: nexus.v1.ProactiveSendResponse
-	(*BroadcastMessageRequest)(nil),             // 142: nexus.v1.BroadcastMessageRequest
-	(*BroadcastMessageResponse)(nil),            // 143: nexus.v1.BroadcastMessageResponse
-	(*BroadcastResult)(nil),                     // 144: nexus.v1.BroadcastResult
-	(*Identity)(nil),                            // 145: nexus.v1.Identity
-	(*CreateIdentityRequest)(nil),               // 146: nexus.v1.CreateIdentityRequest
-	(*CreateIdentityResponse)(nil),              // 147: nexus.v1.CreateIdentityResponse
-	(*GetIdentityRequest)(nil),                  // 148: nexus.v1.GetIdentityRequest
-	(*GetIdentityResponse)(nil),                 // 149: nexus.v1.GetIdentityResponse
-	(*ListIdentitiesRequest)(nil),               // 150: nexus.v1.ListIdentitiesRequest
-	(*ListIdentitiesResponse)(nil),              // 151: nexus.v1.ListIdentitiesResponse
-	(*DeleteIdentityRequest)(nil),               // 152: nexus.v1.DeleteIdentityRequest
-	(*DeleteIdentityResponse)(nil),              // 153: nexus.v1.DeleteIdentityResponse
-	(*LinkPeerRequest)(nil),                     // 154: nexus.v1.LinkPeerRequest
-	(*LinkPeerResponse)(nil),                    // 155: nexus.v1.LinkPeerResponse
-	(*UnlinkPeerRequest)(nil),                   // 156: nexus.v1.UnlinkPeerRequest
-	(*UnlinkPeerResponse)(nil),                  // 157: nexus.v1.UnlinkPeerResponse
-	(*ResolveIdentityRequest)(nil),              // 158: nexus.v1.ResolveIdentityRequest
-	(*ResolveIdentityResponse)(nil),             // 159: nexus.v1.ResolveIdentityResponse
-	(*GetLinkedPeersRequest)(nil),               // 160: nexus.v1.GetLinkedPeersRequest
-	(*GetLinkedPeersResponse)(nil),              // 161: nexus.v1.GetLinkedPeersResponse
-	(*ProvisioningSession)(nil),                 // 162: nexus.v1.ProvisioningSession
-	(*ProvisioningStep)(nil),                    // 163: nexus.v1.ProvisioningStep
-	(*ProvisioningInputField)(nil),              // 164: nexus.v1.ProvisioningInputField
-	(*ProvisioningRequirements)(nil),            // 165: nexus.v1.ProvisioningRequirements
-	(*StartProvisioningRequest)(nil),            // 166: nexus.v1.StartProvisioningRequest
-	(*StartProvisioningResponse)(nil),           // 167: nexus.v1.StartProvisioningResponse
-	(*GetProvisioningStatusRequest)(nil),        // 168: nexus.v1.GetProvisioningStatusRequest
-	(*GetProvisioningStatusResponse)(nil),       // 169: nexus.v1.GetProvisioningStatusResponse
-	(*SubmitProvisioningStepRequest)(nil),       // 170: nexus.v1.SubmitProvisioningStepRequest
-	(*SubmitProvisioningStepResponse)(nil),      // 171: nexus.v1.SubmitProvisioningStepResponse
-	(*CancelProvisioningRequest)(nil),           // 172: nexus.v1.CancelProvisioningRequest
-	(*CancelProvisioningResponse)(nil),          // 173: nexus.v1.CancelProvisioningResponse
-	(*GetProvisioningRequirementsRequest)(nil),  // 174: nexus.v1.GetProvisioningRequirementsRequest
-	(*GetProvisioningRequirementsResponse)(nil), // 175: nexus.v1.GetProvisioningRequirementsResponse
-	(*GetArtifactRequest)(nil),                  // 176: nexus.v1.GetArtifactRequest
-	(*GetArtifactResponse)(nil),                 // 177: nexus.v1.GetArtifactResponse
-	(*ListArtifactsRequest)(nil),                // 178: nexus.v1.ListArtifactsRequest
-	(*ListArtifactsResponse)(nil),               // 179: nexus.v1.ListArtifactsResponse
-	(*DeleteArtifactRequest)(nil),               // 180: nexus.v1.DeleteArtifactRequest
-	(*DeleteArtifactResponse)(nil),              // 181: nexus.v1.DeleteArtifactResponse
-	(*GetArtifactDownloadURLRequest)(nil),       // 182: nexus.v1.GetArtifactDownloadURLRequest
-	(*GetArtifactDownloadURLResponse)(nil),      // 183: nexus.v1.GetArtifactDownloadURLResponse
-	nil,                                         // 184: nexus.v1.SendMessageRequest.MetadataEntry
-	nil,                                         // 185: nexus.v1.Message.MetadataEntry
-	nil,                                         // 186: nexus.v1.Session.MetadataEntry
-	nil,                                         // 187: nexus.v1.Agent.ConfigEntry
-	nil,                                         // 188: nexus.v1.CreateSessionRequest.MetadataEntry
-	nil,                                         // 189: nexus.v1.UpdateSessionRequest.MetadataEntry
-	nil,                                         // 190: nexus.v1.CreateAgentRequest.ConfigEntry
-	nil,                                         // 191: nexus.v1.UpdateAgentRequest.ConfigEntry
-	nil,                                         // 192: nexus.v1.ConnectChannelRequest.CredentialsEntry
-	nil,                                         // 193: nexus.v1.ConnectChannelRequest.ConfigEntry
-	nil,                                         // 194: nexus.v1.ChannelConnection.ConfigEntry
-	nil,                                         // 195: nexus.v1.HealthCheckResponse.MetadataEntry
-	nil,                                         // 196: nexus.v1.Node.MetadataEntry
-	nil,                                         // 197: nexus.v1.UpdateNodeRequest.MetadataEntry
-	nil,                                         // 198: nexus.v1.RequestActionRequest.ParametersEntry
-	nil,                                         // 199: nexus.v1.RequestActionResponse.MetadataEntry
-	nil,                                         // 200: nexus.v1.EdgeRegister.MetadataEntry
-	nil,                                         // 201: nexus.v1.ToolExecutionRequest.MetadataEntry
-	nil,                                         // 202: nexus.v1.EdgeChannelInbound.MetadataEntry
-	nil,                                         // 203: nexus.v1.CoreChannelOutbound.OptionsEntry
-	nil,                                         // 204: nexus.v1.EdgeStatus.MetadataEntry
-	nil,                                         // 205: nexus.v1.TimelineEvent.DataEntry
-	nil,                                         // 206: nexus.v1.ScheduledTask.MetadataEntry
-	nil,                                         // 207: nexus.v1.CreateTaskRequest.MetadataEntry
-	nil,                                         // 208: nexus.v1.UpdateTaskRequest.MetadataEntry
-	nil,                                         // 209: nexus.v1.ProactiveSendRequest.MetadataEntry
-	nil,                                         // 210: nexus.v1.BroadcastMessageRequest.MetadataEntry
-	nil,                                         // 211: nexus.v1.Identity.MetadataEntry
-	nil,                                         // 212: nexus.v1.CreateIdentityRequest.MetadataEntry
-	nil,                                         // 213: nexus.v1.ProvisioningSession.DataEntry
-	nil,                                         // 214: nexus.v1.ProvisioningStep.DataEntry
-	nil,                                         // 215: nexus.v1.StartProvisioningRequest.ConfigEntry
-	nil,                                         // 216: nexus.v1.SubmitProvisioningStepRequest.DataEntry
-	(*structpb.Struct)(nil),                     // 217: google.protobuf.Struct
-	(*timestamppb.Timestamp)(nil),               // 218: google.protobuf.Timestamp
+	(*ListArtifactsRequest)(nil),                // 102: nexus.v1.ListArtifactsRequest
+	(*ListArtifactsResponse)(nil),               // 103: nexus.v1.ListArtifactsResponse
+	(*GetArtifactRequest)(nil),                  // 104: nexus.v1.GetArtifactRequest
+	(*GetArtifactResponse)(nil),                 // 105: nexus.v1.GetArtifactResponse
+	(*DeleteArtifactRequest)(nil),               // 106: nexus.v1.DeleteArtifactRequest
+	(*DeleteArtifactResponse)(nil),              // 107: nexus.v1.DeleteArtifactResponse
+	(*ToolCancellation)(nil),                    // 108: nexus.v1.ToolCancellation
+	(*EdgeEvent)(nil),                           // 109: nexus.v1.EdgeEvent
+	(*CoreEvent)(nil),                           // 110: nexus.v1.CoreEvent
+	(*EdgeChannelInbound)(nil),                  // 111: nexus.v1.EdgeChannelInbound
+	(*CoreChannelOutbound)(nil),                 // 112: nexus.v1.CoreChannelOutbound
+	(*EdgeChannelAck)(nil),                      // 113: nexus.v1.EdgeChannelAck
+	(*GetEdgeStatusRequest)(nil),                // 114: nexus.v1.GetEdgeStatusRequest
+	(*GetEdgeStatusResponse)(nil),               // 115: nexus.v1.GetEdgeStatusResponse
+	(*ListEdgesRequest)(nil),                    // 116: nexus.v1.ListEdgesRequest
+	(*ListEdgesResponse)(nil),                   // 117: nexus.v1.ListEdgesResponse
+	(*EdgeStatus)(nil),                          // 118: nexus.v1.EdgeStatus
+	(*GetEventsRequest)(nil),                    // 119: nexus.v1.GetEventsRequest
+	(*GetEventsResponse)(nil),                   // 120: nexus.v1.GetEventsResponse
+	(*GetTimelineRequest)(nil),                  // 121: nexus.v1.GetTimelineRequest
+	(*GetTimelineResponse)(nil),                 // 122: nexus.v1.GetTimelineResponse
+	(*TimelineEvent)(nil),                       // 123: nexus.v1.TimelineEvent
+	(*TimelineSummary)(nil),                     // 124: nexus.v1.TimelineSummary
+	(*ScheduledTask)(nil),                       // 125: nexus.v1.ScheduledTask
+	(*TaskConfig)(nil),                          // 126: nexus.v1.TaskConfig
+	(*TaskExecution)(nil),                       // 127: nexus.v1.TaskExecution
+	(*CreateTaskRequest)(nil),                   // 128: nexus.v1.CreateTaskRequest
+	(*CreateTaskResponse)(nil),                  // 129: nexus.v1.CreateTaskResponse
+	(*GetTaskRequest)(nil),                      // 130: nexus.v1.GetTaskRequest
+	(*GetTaskResponse)(nil),                     // 131: nexus.v1.GetTaskResponse
+	(*ListTasksRequest)(nil),                    // 132: nexus.v1.ListTasksRequest
+	(*ListTasksResponse)(nil),                   // 133: nexus.v1.ListTasksResponse
+	(*UpdateTaskRequest)(nil),                   // 134: nexus.v1.UpdateTaskRequest
+	(*UpdateTaskResponse)(nil),                  // 135: nexus.v1.UpdateTaskResponse
+	(*DeleteTaskRequest)(nil),                   // 136: nexus.v1.DeleteTaskRequest
+	(*DeleteTaskResponse)(nil),                  // 137: nexus.v1.DeleteTaskResponse
+	(*PauseTaskRequest)(nil),                    // 138: nexus.v1.PauseTaskRequest
+	(*PauseTaskResponse)(nil),                   // 139: nexus.v1.PauseTaskResponse
+	(*ResumeTaskRequest)(nil),                   // 140: nexus.v1.ResumeTaskRequest
+	(*ResumeTaskResponse)(nil),                  // 141: nexus.v1.ResumeTaskResponse
+	(*TriggerTaskRequest)(nil),                  // 142: nexus.v1.TriggerTaskRequest
+	(*TriggerTaskResponse)(nil),                 // 143: nexus.v1.TriggerTaskResponse
+	(*ListExecutionsRequest)(nil),               // 144: nexus.v1.ListExecutionsRequest
+	(*ListExecutionsResponse)(nil),              // 145: nexus.v1.ListExecutionsResponse
+	(*ProactiveSendRequest)(nil),                // 146: nexus.v1.ProactiveSendRequest
+	(*ProactiveSendResponse)(nil),               // 147: nexus.v1.ProactiveSendResponse
+	(*BroadcastMessageRequest)(nil),             // 148: nexus.v1.BroadcastMessageRequest
+	(*BroadcastMessageResponse)(nil),            // 149: nexus.v1.BroadcastMessageResponse
+	(*BroadcastResult)(nil),                     // 150: nexus.v1.BroadcastResult
+	(*Identity)(nil),                            // 151: nexus.v1.Identity
+	(*CreateIdentityRequest)(nil),               // 152: nexus.v1.CreateIdentityRequest
+	(*CreateIdentityResponse)(nil),              // 153: nexus.v1.CreateIdentityResponse
+	(*GetIdentityRequest)(nil),                  // 154: nexus.v1.GetIdentityRequest
+	(*GetIdentityResponse)(nil),                 // 155: nexus.v1.GetIdentityResponse
+	(*ListIdentitiesRequest)(nil),               // 156: nexus.v1.ListIdentitiesRequest
+	(*ListIdentitiesResponse)(nil),              // 157: nexus.v1.ListIdentitiesResponse
+	(*DeleteIdentityRequest)(nil),               // 158: nexus.v1.DeleteIdentityRequest
+	(*DeleteIdentityResponse)(nil),              // 159: nexus.v1.DeleteIdentityResponse
+	(*LinkPeerRequest)(nil),                     // 160: nexus.v1.LinkPeerRequest
+	(*LinkPeerResponse)(nil),                    // 161: nexus.v1.LinkPeerResponse
+	(*UnlinkPeerRequest)(nil),                   // 162: nexus.v1.UnlinkPeerRequest
+	(*UnlinkPeerResponse)(nil),                  // 163: nexus.v1.UnlinkPeerResponse
+	(*ResolveIdentityRequest)(nil),              // 164: nexus.v1.ResolveIdentityRequest
+	(*ResolveIdentityResponse)(nil),             // 165: nexus.v1.ResolveIdentityResponse
+	(*GetLinkedPeersRequest)(nil),               // 166: nexus.v1.GetLinkedPeersRequest
+	(*GetLinkedPeersResponse)(nil),              // 167: nexus.v1.GetLinkedPeersResponse
+	(*ProvisioningSession)(nil),                 // 168: nexus.v1.ProvisioningSession
+	(*ProvisioningStep)(nil),                    // 169: nexus.v1.ProvisioningStep
+	(*ProvisioningInputField)(nil),              // 170: nexus.v1.ProvisioningInputField
+	(*ProvisioningRequirements)(nil),            // 171: nexus.v1.ProvisioningRequirements
+	(*StartProvisioningRequest)(nil),            // 172: nexus.v1.StartProvisioningRequest
+	(*StartProvisioningResponse)(nil),           // 173: nexus.v1.StartProvisioningResponse
+	(*GetProvisioningStatusRequest)(nil),        // 174: nexus.v1.GetProvisioningStatusRequest
+	(*GetProvisioningStatusResponse)(nil),       // 175: nexus.v1.GetProvisioningStatusResponse
+	(*SubmitProvisioningStepRequest)(nil),       // 176: nexus.v1.SubmitProvisioningStepRequest
+	(*SubmitProvisioningStepResponse)(nil),      // 177: nexus.v1.SubmitProvisioningStepResponse
+	(*CancelProvisioningRequest)(nil),           // 178: nexus.v1.CancelProvisioningRequest
+	(*CancelProvisioningResponse)(nil),          // 179: nexus.v1.CancelProvisioningResponse
+	(*GetProvisioningRequirementsRequest)(nil),  // 180: nexus.v1.GetProvisioningRequirementsRequest
+	(*GetProvisioningRequirementsResponse)(nil), // 181: nexus.v1.GetProvisioningRequirementsResponse
+	nil,                           // 182: nexus.v1.SendMessageRequest.MetadataEntry
+	nil,                           // 183: nexus.v1.Message.MetadataEntry
+	nil,                           // 184: nexus.v1.Session.MetadataEntry
+	nil,                           // 185: nexus.v1.Agent.ConfigEntry
+	nil,                           // 186: nexus.v1.CreateSessionRequest.MetadataEntry
+	nil,                           // 187: nexus.v1.UpdateSessionRequest.MetadataEntry
+	nil,                           // 188: nexus.v1.CreateAgentRequest.ConfigEntry
+	nil,                           // 189: nexus.v1.UpdateAgentRequest.ConfigEntry
+	nil,                           // 190: nexus.v1.ConnectChannelRequest.CredentialsEntry
+	nil,                           // 191: nexus.v1.ConnectChannelRequest.ConfigEntry
+	nil,                           // 192: nexus.v1.ChannelConnection.ConfigEntry
+	nil,                           // 193: nexus.v1.HealthCheckResponse.MetadataEntry
+	nil,                           // 194: nexus.v1.Node.MetadataEntry
+	nil,                           // 195: nexus.v1.UpdateNodeRequest.MetadataEntry
+	nil,                           // 196: nexus.v1.RequestActionRequest.ParametersEntry
+	nil,                           // 197: nexus.v1.RequestActionResponse.MetadataEntry
+	nil,                           // 198: nexus.v1.EdgeRegister.MetadataEntry
+	nil,                           // 199: nexus.v1.ToolExecutionRequest.MetadataEntry
+	nil,                           // 200: nexus.v1.EdgeChannelInbound.MetadataEntry
+	nil,                           // 201: nexus.v1.CoreChannelOutbound.OptionsEntry
+	nil,                           // 202: nexus.v1.EdgeStatus.MetadataEntry
+	nil,                           // 203: nexus.v1.TimelineEvent.DataEntry
+	nil,                           // 204: nexus.v1.ScheduledTask.MetadataEntry
+	nil,                           // 205: nexus.v1.CreateTaskRequest.MetadataEntry
+	nil,                           // 206: nexus.v1.UpdateTaskRequest.MetadataEntry
+	nil,                           // 207: nexus.v1.ProactiveSendRequest.MetadataEntry
+	nil,                           // 208: nexus.v1.BroadcastMessageRequest.MetadataEntry
+	nil,                           // 209: nexus.v1.Identity.MetadataEntry
+	nil,                           // 210: nexus.v1.CreateIdentityRequest.MetadataEntry
+	nil,                           // 211: nexus.v1.ProvisioningSession.DataEntry
+	nil,                           // 212: nexus.v1.ProvisioningStep.DataEntry
+	nil,                           // 213: nexus.v1.StartProvisioningRequest.ConfigEntry
+	nil,                           // 214: nexus.v1.SubmitProvisioningStepRequest.DataEntry
+	(*structpb.Struct)(nil),       // 215: google.protobuf.Struct
+	(*timestamppb.Timestamp)(nil), // 216: google.protobuf.Timestamp
 }
 var file_pkg_proto_nexus_proto_depIdxs = []int32{
 	22,  // 0: nexus.v1.ClientMessage.send_message:type_name -> nexus.v1.SendMessageRequest
@@ -13609,316 +13504,313 @@ var file_pkg_proto_nexus_proto_depIdxs = []int32{
 	32,  // 9: nexus.v1.ServerMessage.error_notification:type_name -> nexus.v1.ErrorNotification
 	31,  // 10: nexus.v1.ServerMessage.pong:type_name -> nexus.v1.PongResponse
 	34,  // 11: nexus.v1.SendMessageRequest.attachments:type_name -> nexus.v1.Attachment
-	184, // 12: nexus.v1.SendMessageRequest.metadata:type_name -> nexus.v1.SendMessageRequest.MetadataEntry
+	182, // 12: nexus.v1.SendMessageRequest.metadata:type_name -> nexus.v1.SendMessageRequest.MetadataEntry
 	0,   // 13: nexus.v1.MessageChunk.type:type_name -> nexus.v1.ChunkType
 	33,  // 14: nexus.v1.MessageComplete.message:type_name -> nexus.v1.Message
 	35,  // 15: nexus.v1.ToolCallRequest.tool_calls:type_name -> nexus.v1.ToolCall
 	1,   // 16: nexus.v1.SessionEvent.event_type:type_name -> nexus.v1.EventType
-	217, // 17: nexus.v1.SessionEvent.data:type_name -> google.protobuf.Struct
+	215, // 17: nexus.v1.SessionEvent.data:type_name -> google.protobuf.Struct
 	1,   // 18: nexus.v1.SessionEventNotification.event_type:type_name -> nexus.v1.EventType
-	217, // 19: nexus.v1.SessionEventNotification.data:type_name -> google.protobuf.Struct
-	218, // 20: nexus.v1.SessionEventNotification.timestamp:type_name -> google.protobuf.Timestamp
-	218, // 21: nexus.v1.PingRequest.timestamp:type_name -> google.protobuf.Timestamp
-	218, // 22: nexus.v1.PongResponse.timestamp:type_name -> google.protobuf.Timestamp
-	217, // 23: nexus.v1.ErrorNotification.details:type_name -> google.protobuf.Struct
+	215, // 19: nexus.v1.SessionEventNotification.data:type_name -> google.protobuf.Struct
+	216, // 20: nexus.v1.SessionEventNotification.timestamp:type_name -> google.protobuf.Timestamp
+	216, // 21: nexus.v1.PingRequest.timestamp:type_name -> google.protobuf.Timestamp
+	216, // 22: nexus.v1.PongResponse.timestamp:type_name -> google.protobuf.Timestamp
+	215, // 23: nexus.v1.ErrorNotification.details:type_name -> google.protobuf.Struct
 	2,   // 24: nexus.v1.Message.channel:type_name -> nexus.v1.ChannelType
 	3,   // 25: nexus.v1.Message.direction:type_name -> nexus.v1.Direction
 	4,   // 26: nexus.v1.Message.role:type_name -> nexus.v1.Role
 	34,  // 27: nexus.v1.Message.attachments:type_name -> nexus.v1.Attachment
 	35,  // 28: nexus.v1.Message.tool_calls:type_name -> nexus.v1.ToolCall
 	36,  // 29: nexus.v1.Message.tool_results:type_name -> nexus.v1.ToolResult
-	185, // 30: nexus.v1.Message.metadata:type_name -> nexus.v1.Message.MetadataEntry
-	218, // 31: nexus.v1.Message.created_at:type_name -> google.protobuf.Timestamp
+	183, // 30: nexus.v1.Message.metadata:type_name -> nexus.v1.Message.MetadataEntry
+	216, // 31: nexus.v1.Message.created_at:type_name -> google.protobuf.Timestamp
 	2,   // 32: nexus.v1.Session.channel:type_name -> nexus.v1.ChannelType
-	186, // 33: nexus.v1.Session.metadata:type_name -> nexus.v1.Session.MetadataEntry
-	218, // 34: nexus.v1.Session.created_at:type_name -> google.protobuf.Timestamp
-	218, // 35: nexus.v1.Session.updated_at:type_name -> google.protobuf.Timestamp
-	187, // 36: nexus.v1.Agent.config:type_name -> nexus.v1.Agent.ConfigEntry
-	218, // 37: nexus.v1.Agent.created_at:type_name -> google.protobuf.Timestamp
-	218, // 38: nexus.v1.Agent.updated_at:type_name -> google.protobuf.Timestamp
-	218, // 39: nexus.v1.User.created_at:type_name -> google.protobuf.Timestamp
-	218, // 40: nexus.v1.User.updated_at:type_name -> google.protobuf.Timestamp
-	218, // 41: nexus.v1.APIKey.last_used_at:type_name -> google.protobuf.Timestamp
-	218, // 42: nexus.v1.APIKey.expires_at:type_name -> google.protobuf.Timestamp
-	218, // 43: nexus.v1.APIKey.created_at:type_name -> google.protobuf.Timestamp
+	184, // 33: nexus.v1.Session.metadata:type_name -> nexus.v1.Session.MetadataEntry
+	216, // 34: nexus.v1.Session.created_at:type_name -> google.protobuf.Timestamp
+	216, // 35: nexus.v1.Session.updated_at:type_name -> google.protobuf.Timestamp
+	185, // 36: nexus.v1.Agent.config:type_name -> nexus.v1.Agent.ConfigEntry
+	216, // 37: nexus.v1.Agent.created_at:type_name -> google.protobuf.Timestamp
+	216, // 38: nexus.v1.Agent.updated_at:type_name -> google.protobuf.Timestamp
+	216, // 39: nexus.v1.User.created_at:type_name -> google.protobuf.Timestamp
+	216, // 40: nexus.v1.User.updated_at:type_name -> google.protobuf.Timestamp
+	216, // 41: nexus.v1.APIKey.last_used_at:type_name -> google.protobuf.Timestamp
+	216, // 42: nexus.v1.APIKey.expires_at:type_name -> google.protobuf.Timestamp
+	216, // 43: nexus.v1.APIKey.created_at:type_name -> google.protobuf.Timestamp
 	2,   // 44: nexus.v1.CreateSessionRequest.channel:type_name -> nexus.v1.ChannelType
-	188, // 45: nexus.v1.CreateSessionRequest.metadata:type_name -> nexus.v1.CreateSessionRequest.MetadataEntry
+	186, // 45: nexus.v1.CreateSessionRequest.metadata:type_name -> nexus.v1.CreateSessionRequest.MetadataEntry
 	37,  // 46: nexus.v1.CreateSessionResponse.session:type_name -> nexus.v1.Session
 	37,  // 47: nexus.v1.GetSessionResponse.session:type_name -> nexus.v1.Session
 	2,   // 48: nexus.v1.ListSessionsRequest.channel:type_name -> nexus.v1.ChannelType
 	37,  // 49: nexus.v1.ListSessionsResponse.sessions:type_name -> nexus.v1.Session
-	189, // 50: nexus.v1.UpdateSessionRequest.metadata:type_name -> nexus.v1.UpdateSessionRequest.MetadataEntry
+	187, // 50: nexus.v1.UpdateSessionRequest.metadata:type_name -> nexus.v1.UpdateSessionRequest.MetadataEntry
 	37,  // 51: nexus.v1.UpdateSessionResponse.session:type_name -> nexus.v1.Session
-	190, // 52: nexus.v1.CreateAgentRequest.config:type_name -> nexus.v1.CreateAgentRequest.ConfigEntry
+	188, // 52: nexus.v1.CreateAgentRequest.config:type_name -> nexus.v1.CreateAgentRequest.ConfigEntry
 	38,  // 53: nexus.v1.CreateAgentResponse.agent:type_name -> nexus.v1.Agent
 	38,  // 54: nexus.v1.GetAgentResponse.agent:type_name -> nexus.v1.Agent
 	38,  // 55: nexus.v1.ListAgentsResponse.agents:type_name -> nexus.v1.Agent
-	191, // 56: nexus.v1.UpdateAgentRequest.config:type_name -> nexus.v1.UpdateAgentRequest.ConfigEntry
+	189, // 56: nexus.v1.UpdateAgentRequest.config:type_name -> nexus.v1.UpdateAgentRequest.ConfigEntry
 	38,  // 57: nexus.v1.UpdateAgentResponse.agent:type_name -> nexus.v1.Agent
 	2,   // 58: nexus.v1.ConnectChannelRequest.channel_type:type_name -> nexus.v1.ChannelType
-	192, // 59: nexus.v1.ConnectChannelRequest.credentials:type_name -> nexus.v1.ConnectChannelRequest.CredentialsEntry
-	193, // 60: nexus.v1.ConnectChannelRequest.config:type_name -> nexus.v1.ConnectChannelRequest.ConfigEntry
+	190, // 59: nexus.v1.ConnectChannelRequest.credentials:type_name -> nexus.v1.ConnectChannelRequest.CredentialsEntry
+	191, // 60: nexus.v1.ConnectChannelRequest.config:type_name -> nexus.v1.ConnectChannelRequest.ConfigEntry
 	69,  // 61: nexus.v1.ConnectChannelResponse.connection:type_name -> nexus.v1.ChannelConnection
 	69,  // 62: nexus.v1.GetChannelStatusResponse.connection:type_name -> nexus.v1.ChannelConnection
 	69,  // 63: nexus.v1.ListChannelsResponse.connections:type_name -> nexus.v1.ChannelConnection
 	2,   // 64: nexus.v1.ChannelConnection.channel_type:type_name -> nexus.v1.ChannelType
 	5,   // 65: nexus.v1.ChannelConnection.status:type_name -> nexus.v1.ConnectionStatus
-	194, // 66: nexus.v1.ChannelConnection.config:type_name -> nexus.v1.ChannelConnection.ConfigEntry
-	218, // 67: nexus.v1.ChannelConnection.connected_at:type_name -> google.protobuf.Timestamp
-	218, // 68: nexus.v1.ChannelConnection.last_activity_at:type_name -> google.protobuf.Timestamp
+	192, // 66: nexus.v1.ChannelConnection.config:type_name -> nexus.v1.ChannelConnection.ConfigEntry
+	216, // 67: nexus.v1.ChannelConnection.connected_at:type_name -> google.protobuf.Timestamp
+	216, // 68: nexus.v1.ChannelConnection.last_activity_at:type_name -> google.protobuf.Timestamp
 	6,   // 69: nexus.v1.HealthCheckResponse.status:type_name -> nexus.v1.ServingStatus
-	195, // 70: nexus.v1.HealthCheckResponse.metadata:type_name -> nexus.v1.HealthCheckResponse.MetadataEntry
-	218, // 71: nexus.v1.HealthCheckResponse.timestamp:type_name -> google.protobuf.Timestamp
+	193, // 70: nexus.v1.HealthCheckResponse.metadata:type_name -> nexus.v1.HealthCheckResponse.MetadataEntry
+	216, // 71: nexus.v1.HealthCheckResponse.timestamp:type_name -> google.protobuf.Timestamp
 	7,   // 72: nexus.v1.Node.status:type_name -> nexus.v1.NodeStatus
 	8,   // 73: nexus.v1.Node.capabilities:type_name -> nexus.v1.NodeCapability
-	218, // 74: nexus.v1.Node.last_seen_at:type_name -> google.protobuf.Timestamp
-	196, // 75: nexus.v1.Node.metadata:type_name -> nexus.v1.Node.MetadataEntry
-	218, // 76: nexus.v1.Node.created_at:type_name -> google.protobuf.Timestamp
-	218, // 77: nexus.v1.Node.updated_at:type_name -> google.protobuf.Timestamp
-	218, // 78: nexus.v1.PairingToken.expires_at:type_name -> google.protobuf.Timestamp
-	218, // 79: nexus.v1.PairingToken.created_at:type_name -> google.protobuf.Timestamp
+	216, // 74: nexus.v1.Node.last_seen_at:type_name -> google.protobuf.Timestamp
+	194, // 75: nexus.v1.Node.metadata:type_name -> nexus.v1.Node.MetadataEntry
+	216, // 76: nexus.v1.Node.created_at:type_name -> google.protobuf.Timestamp
+	216, // 77: nexus.v1.Node.updated_at:type_name -> google.protobuf.Timestamp
+	216, // 78: nexus.v1.PairingToken.expires_at:type_name -> google.protobuf.Timestamp
+	216, // 79: nexus.v1.PairingToken.created_at:type_name -> google.protobuf.Timestamp
 	73,  // 80: nexus.v1.CreatePairingTokenResponse.token:type_name -> nexus.v1.PairingToken
 	72,  // 81: nexus.v1.ListNodesResponse.nodes:type_name -> nexus.v1.Node
 	72,  // 82: nexus.v1.GetNodeResponse.node:type_name -> nexus.v1.Node
-	197, // 83: nexus.v1.UpdateNodeRequest.metadata:type_name -> nexus.v1.UpdateNodeRequest.MetadataEntry
+	195, // 83: nexus.v1.UpdateNodeRequest.metadata:type_name -> nexus.v1.UpdateNodeRequest.MetadataEntry
 	72,  // 84: nexus.v1.UpdateNodeResponse.node:type_name -> nexus.v1.Node
 	8,   // 85: nexus.v1.RequestActionRequest.capability:type_name -> nexus.v1.NodeCapability
-	198, // 86: nexus.v1.RequestActionRequest.parameters:type_name -> nexus.v1.RequestActionRequest.ParametersEntry
-	199, // 87: nexus.v1.RequestActionResponse.metadata:type_name -> nexus.v1.RequestActionResponse.MetadataEntry
-	217, // 88: nexus.v1.NodeAuditLog.details:type_name -> google.protobuf.Struct
-	218, // 89: nexus.v1.NodeAuditLog.timestamp:type_name -> google.protobuf.Timestamp
+	196, // 86: nexus.v1.RequestActionRequest.parameters:type_name -> nexus.v1.RequestActionRequest.ParametersEntry
+	197, // 87: nexus.v1.RequestActionResponse.metadata:type_name -> nexus.v1.RequestActionResponse.MetadataEntry
+	215, // 88: nexus.v1.NodeAuditLog.details:type_name -> google.protobuf.Struct
+	216, // 89: nexus.v1.NodeAuditLog.timestamp:type_name -> google.protobuf.Timestamp
 	88,  // 90: nexus.v1.GetNodeAuditLogsResponse.logs:type_name -> nexus.v1.NodeAuditLog
 	93,  // 91: nexus.v1.EdgeMessage.register:type_name -> nexus.v1.EdgeRegister
 	97,  // 92: nexus.v1.EdgeMessage.heartbeat:type_name -> nexus.v1.EdgeHeartbeat
 	100, // 93: nexus.v1.EdgeMessage.tool_result:type_name -> nexus.v1.ToolExecutionResult
-	103, // 94: nexus.v1.EdgeMessage.event:type_name -> nexus.v1.EdgeEvent
-	105, // 95: nexus.v1.EdgeMessage.channel_inbound:type_name -> nexus.v1.EdgeChannelInbound
-	107, // 96: nexus.v1.EdgeMessage.channel_ack:type_name -> nexus.v1.EdgeChannelAck
+	109, // 94: nexus.v1.EdgeMessage.event:type_name -> nexus.v1.EdgeEvent
+	111, // 95: nexus.v1.EdgeMessage.channel_inbound:type_name -> nexus.v1.EdgeChannelInbound
+	113, // 96: nexus.v1.EdgeMessage.channel_ack:type_name -> nexus.v1.EdgeChannelAck
 	96,  // 97: nexus.v1.CoreMessage.registered:type_name -> nexus.v1.EdgeRegistered
 	99,  // 98: nexus.v1.CoreMessage.tool_request:type_name -> nexus.v1.ToolExecutionRequest
-	102, // 99: nexus.v1.CoreMessage.tool_cancel:type_name -> nexus.v1.ToolCancellation
-	104, // 100: nexus.v1.CoreMessage.event:type_name -> nexus.v1.CoreEvent
-	106, // 101: nexus.v1.CoreMessage.channel_outbound:type_name -> nexus.v1.CoreChannelOutbound
+	108, // 99: nexus.v1.CoreMessage.tool_cancel:type_name -> nexus.v1.ToolCancellation
+	110, // 100: nexus.v1.CoreMessage.event:type_name -> nexus.v1.CoreEvent
+	112, // 101: nexus.v1.CoreMessage.channel_outbound:type_name -> nexus.v1.CoreChannelOutbound
 	94,  // 102: nexus.v1.EdgeRegister.tools:type_name -> nexus.v1.EdgeToolDefinition
 	95,  // 103: nexus.v1.EdgeRegister.capabilities:type_name -> nexus.v1.EdgeCapabilities
-	200, // 104: nexus.v1.EdgeRegister.metadata:type_name -> nexus.v1.EdgeRegister.MetadataEntry
-	218, // 105: nexus.v1.EdgeHeartbeat.timestamp:type_name -> google.protobuf.Timestamp
+	198, // 104: nexus.v1.EdgeRegister.metadata:type_name -> nexus.v1.EdgeRegister.MetadataEntry
+	216, // 105: nexus.v1.EdgeHeartbeat.timestamp:type_name -> google.protobuf.Timestamp
 	98,  // 106: nexus.v1.EdgeHeartbeat.metrics:type_name -> nexus.v1.EdgeMetrics
-	201, // 107: nexus.v1.ToolExecutionRequest.metadata:type_name -> nexus.v1.ToolExecutionRequest.MetadataEntry
+	199, // 107: nexus.v1.ToolExecutionRequest.metadata:type_name -> nexus.v1.ToolExecutionRequest.MetadataEntry
 	101, // 108: nexus.v1.ToolExecutionResult.artifacts:type_name -> nexus.v1.Artifact
-	9,   // 109: nexus.v1.EdgeEvent.type:type_name -> nexus.v1.EdgeEventType
-	218, // 110: nexus.v1.EdgeEvent.timestamp:type_name -> google.protobuf.Timestamp
-	217, // 111: nexus.v1.EdgeEvent.data:type_name -> google.protobuf.Struct
-	10,  // 112: nexus.v1.CoreEvent.type:type_name -> nexus.v1.CoreEventType
-	218, // 113: nexus.v1.CoreEvent.timestamp:type_name -> google.protobuf.Timestamp
-	217, // 114: nexus.v1.CoreEvent.data:type_name -> google.protobuf.Struct
-	2,   // 115: nexus.v1.EdgeChannelInbound.channel_type:type_name -> nexus.v1.ChannelType
-	34,  // 116: nexus.v1.EdgeChannelInbound.attachments:type_name -> nexus.v1.Attachment
-	202, // 117: nexus.v1.EdgeChannelInbound.metadata:type_name -> nexus.v1.EdgeChannelInbound.MetadataEntry
-	218, // 118: nexus.v1.EdgeChannelInbound.received_at:type_name -> google.protobuf.Timestamp
-	2,   // 119: nexus.v1.CoreChannelOutbound.channel_type:type_name -> nexus.v1.ChannelType
-	34,  // 120: nexus.v1.CoreChannelOutbound.attachments:type_name -> nexus.v1.Attachment
-	203, // 121: nexus.v1.CoreChannelOutbound.options:type_name -> nexus.v1.CoreChannelOutbound.OptionsEntry
-	11,  // 122: nexus.v1.EdgeChannelAck.status:type_name -> nexus.v1.ChannelDeliveryStatus
-	218, // 123: nexus.v1.EdgeChannelAck.delivered_at:type_name -> google.protobuf.Timestamp
-	112, // 124: nexus.v1.GetEdgeStatusResponse.status:type_name -> nexus.v1.EdgeStatus
-	112, // 125: nexus.v1.ListEdgesResponse.edges:type_name -> nexus.v1.EdgeStatus
-	12,  // 126: nexus.v1.EdgeStatus.connection_status:type_name -> nexus.v1.EdgeConnectionStatus
-	218, // 127: nexus.v1.EdgeStatus.connected_at:type_name -> google.protobuf.Timestamp
-	218, // 128: nexus.v1.EdgeStatus.last_heartbeat:type_name -> google.protobuf.Timestamp
-	98,  // 129: nexus.v1.EdgeStatus.metrics:type_name -> nexus.v1.EdgeMetrics
-	204, // 130: nexus.v1.EdgeStatus.metadata:type_name -> nexus.v1.EdgeStatus.MetadataEntry
-	117, // 131: nexus.v1.GetEventsResponse.events:type_name -> nexus.v1.TimelineEvent
-	218, // 132: nexus.v1.GetTimelineResponse.start_time:type_name -> google.protobuf.Timestamp
-	218, // 133: nexus.v1.GetTimelineResponse.end_time:type_name -> google.protobuf.Timestamp
-	117, // 134: nexus.v1.GetTimelineResponse.events:type_name -> nexus.v1.TimelineEvent
-	118, // 135: nexus.v1.GetTimelineResponse.summary:type_name -> nexus.v1.TimelineSummary
-	218, // 136: nexus.v1.TimelineEvent.timestamp:type_name -> google.protobuf.Timestamp
-	205, // 137: nexus.v1.TimelineEvent.data:type_name -> nexus.v1.TimelineEvent.DataEntry
-	120, // 138: nexus.v1.ScheduledTask.config:type_name -> nexus.v1.TaskConfig
-	15,  // 139: nexus.v1.ScheduledTask.status:type_name -> nexus.v1.TaskStatus
-	218, // 140: nexus.v1.ScheduledTask.next_run_at:type_name -> google.protobuf.Timestamp
-	218, // 141: nexus.v1.ScheduledTask.last_run_at:type_name -> google.protobuf.Timestamp
-	218, // 142: nexus.v1.ScheduledTask.created_at:type_name -> google.protobuf.Timestamp
-	218, // 143: nexus.v1.ScheduledTask.updated_at:type_name -> google.protobuf.Timestamp
-	206, // 144: nexus.v1.ScheduledTask.metadata:type_name -> nexus.v1.ScheduledTask.MetadataEntry
-	16,  // 145: nexus.v1.TaskExecution.status:type_name -> nexus.v1.ExecutionStatus
-	218, // 146: nexus.v1.TaskExecution.scheduled_at:type_name -> google.protobuf.Timestamp
-	218, // 147: nexus.v1.TaskExecution.started_at:type_name -> google.protobuf.Timestamp
-	218, // 148: nexus.v1.TaskExecution.finished_at:type_name -> google.protobuf.Timestamp
-	120, // 149: nexus.v1.CreateTaskRequest.config:type_name -> nexus.v1.TaskConfig
-	207, // 150: nexus.v1.CreateTaskRequest.metadata:type_name -> nexus.v1.CreateTaskRequest.MetadataEntry
-	119, // 151: nexus.v1.CreateTaskResponse.task:type_name -> nexus.v1.ScheduledTask
-	119, // 152: nexus.v1.GetTaskResponse.task:type_name -> nexus.v1.ScheduledTask
-	15,  // 153: nexus.v1.ListTasksRequest.status:type_name -> nexus.v1.TaskStatus
-	119, // 154: nexus.v1.ListTasksResponse.tasks:type_name -> nexus.v1.ScheduledTask
-	120, // 155: nexus.v1.UpdateTaskRequest.config:type_name -> nexus.v1.TaskConfig
-	208, // 156: nexus.v1.UpdateTaskRequest.metadata:type_name -> nexus.v1.UpdateTaskRequest.MetadataEntry
-	119, // 157: nexus.v1.UpdateTaskResponse.task:type_name -> nexus.v1.ScheduledTask
-	119, // 158: nexus.v1.PauseTaskResponse.task:type_name -> nexus.v1.ScheduledTask
-	119, // 159: nexus.v1.ResumeTaskResponse.task:type_name -> nexus.v1.ScheduledTask
-	121, // 160: nexus.v1.TriggerTaskResponse.execution:type_name -> nexus.v1.TaskExecution
-	16,  // 161: nexus.v1.ListExecutionsRequest.status:type_name -> nexus.v1.ExecutionStatus
-	121, // 162: nexus.v1.ListExecutionsResponse.executions:type_name -> nexus.v1.TaskExecution
-	34,  // 163: nexus.v1.ProactiveSendRequest.attachments:type_name -> nexus.v1.Attachment
-	209, // 164: nexus.v1.ProactiveSendRequest.metadata:type_name -> nexus.v1.ProactiveSendRequest.MetadataEntry
-	34,  // 165: nexus.v1.BroadcastMessageRequest.attachments:type_name -> nexus.v1.Attachment
-	210, // 166: nexus.v1.BroadcastMessageRequest.metadata:type_name -> nexus.v1.BroadcastMessageRequest.MetadataEntry
-	144, // 167: nexus.v1.BroadcastMessageResponse.results:type_name -> nexus.v1.BroadcastResult
-	211, // 168: nexus.v1.Identity.metadata:type_name -> nexus.v1.Identity.MetadataEntry
-	218, // 169: nexus.v1.Identity.created_at:type_name -> google.protobuf.Timestamp
-	218, // 170: nexus.v1.Identity.updated_at:type_name -> google.protobuf.Timestamp
-	212, // 171: nexus.v1.CreateIdentityRequest.metadata:type_name -> nexus.v1.CreateIdentityRequest.MetadataEntry
-	145, // 172: nexus.v1.CreateIdentityResponse.identity:type_name -> nexus.v1.Identity
-	145, // 173: nexus.v1.GetIdentityResponse.identity:type_name -> nexus.v1.Identity
-	145, // 174: nexus.v1.ListIdentitiesResponse.identities:type_name -> nexus.v1.Identity
-	145, // 175: nexus.v1.LinkPeerResponse.identity:type_name -> nexus.v1.Identity
-	145, // 176: nexus.v1.UnlinkPeerResponse.identity:type_name -> nexus.v1.Identity
-	145, // 177: nexus.v1.ResolveIdentityResponse.identity:type_name -> nexus.v1.Identity
-	17,  // 178: nexus.v1.ProvisioningSession.status:type_name -> nexus.v1.ProvisioningStatus
-	163, // 179: nexus.v1.ProvisioningSession.current_step:type_name -> nexus.v1.ProvisioningStep
-	163, // 180: nexus.v1.ProvisioningSession.steps:type_name -> nexus.v1.ProvisioningStep
-	218, // 181: nexus.v1.ProvisioningSession.created_at:type_name -> google.protobuf.Timestamp
-	218, // 182: nexus.v1.ProvisioningSession.updated_at:type_name -> google.protobuf.Timestamp
-	218, // 183: nexus.v1.ProvisioningSession.expires_at:type_name -> google.protobuf.Timestamp
-	213, // 184: nexus.v1.ProvisioningSession.data:type_name -> nexus.v1.ProvisioningSession.DataEntry
-	18,  // 185: nexus.v1.ProvisioningStep.type:type_name -> nexus.v1.ProvisioningStepType
-	19,  // 186: nexus.v1.ProvisioningStep.status:type_name -> nexus.v1.ProvisioningStepStatus
-	214, // 187: nexus.v1.ProvisioningStep.data:type_name -> nexus.v1.ProvisioningStep.DataEntry
-	164, // 188: nexus.v1.ProvisioningStep.input_fields:type_name -> nexus.v1.ProvisioningInputField
-	163, // 189: nexus.v1.ProvisioningRequirements.steps:type_name -> nexus.v1.ProvisioningStep
-	215, // 190: nexus.v1.StartProvisioningRequest.config:type_name -> nexus.v1.StartProvisioningRequest.ConfigEntry
-	162, // 191: nexus.v1.StartProvisioningResponse.session:type_name -> nexus.v1.ProvisioningSession
-	162, // 192: nexus.v1.GetProvisioningStatusResponse.session:type_name -> nexus.v1.ProvisioningSession
-	216, // 193: nexus.v1.SubmitProvisioningStepRequest.data:type_name -> nexus.v1.SubmitProvisioningStepRequest.DataEntry
-	162, // 194: nexus.v1.SubmitProvisioningStepResponse.session:type_name -> nexus.v1.ProvisioningSession
-	165, // 195: nexus.v1.GetProvisioningRequirementsResponse.requirements:type_name -> nexus.v1.ProvisioningRequirements
-	101, // 196: nexus.v1.GetArtifactResponse.artifact:type_name -> nexus.v1.Artifact
-	218, // 197: nexus.v1.ListArtifactsRequest.created_after:type_name -> google.protobuf.Timestamp
-	218, // 198: nexus.v1.ListArtifactsRequest.created_before:type_name -> google.protobuf.Timestamp
-	101, // 199: nexus.v1.ListArtifactsResponse.artifacts:type_name -> nexus.v1.Artifact
-	218, // 200: nexus.v1.GetArtifactDownloadURLResponse.expires_at:type_name -> google.protobuf.Timestamp
-	20,  // 201: nexus.v1.NexusGateway.Stream:input_type -> nexus.v1.ClientMessage
-	41,  // 202: nexus.v1.SessionService.CreateSession:input_type -> nexus.v1.CreateSessionRequest
-	43,  // 203: nexus.v1.SessionService.GetSession:input_type -> nexus.v1.GetSessionRequest
-	45,  // 204: nexus.v1.SessionService.ListSessions:input_type -> nexus.v1.ListSessionsRequest
-	47,  // 205: nexus.v1.SessionService.DeleteSession:input_type -> nexus.v1.DeleteSessionRequest
-	49,  // 206: nexus.v1.SessionService.UpdateSession:input_type -> nexus.v1.UpdateSessionRequest
-	51,  // 207: nexus.v1.AgentService.CreateAgent:input_type -> nexus.v1.CreateAgentRequest
-	53,  // 208: nexus.v1.AgentService.GetAgent:input_type -> nexus.v1.GetAgentRequest
-	55,  // 209: nexus.v1.AgentService.ListAgents:input_type -> nexus.v1.ListAgentsRequest
-	57,  // 210: nexus.v1.AgentService.UpdateAgent:input_type -> nexus.v1.UpdateAgentRequest
-	59,  // 211: nexus.v1.AgentService.DeleteAgent:input_type -> nexus.v1.DeleteAgentRequest
-	61,  // 212: nexus.v1.ChannelService.ConnectChannel:input_type -> nexus.v1.ConnectChannelRequest
-	63,  // 213: nexus.v1.ChannelService.DisconnectChannel:input_type -> nexus.v1.DisconnectChannelRequest
-	65,  // 214: nexus.v1.ChannelService.GetChannelStatus:input_type -> nexus.v1.GetChannelStatusRequest
-	67,  // 215: nexus.v1.ChannelService.ListChannels:input_type -> nexus.v1.ListChannelsRequest
-	70,  // 216: nexus.v1.HealthService.Check:input_type -> nexus.v1.HealthCheckRequest
-	70,  // 217: nexus.v1.HealthService.Watch:input_type -> nexus.v1.HealthCheckRequest
-	74,  // 218: nexus.v1.NodeService.CreatePairingToken:input_type -> nexus.v1.CreatePairingTokenRequest
-	76,  // 219: nexus.v1.NodeService.ListNodes:input_type -> nexus.v1.ListNodesRequest
-	78,  // 220: nexus.v1.NodeService.GetNode:input_type -> nexus.v1.GetNodeRequest
-	80,  // 221: nexus.v1.NodeService.UpdateNode:input_type -> nexus.v1.UpdateNodeRequest
-	82,  // 222: nexus.v1.NodeService.RevokeNode:input_type -> nexus.v1.RevokeNodeRequest
-	84,  // 223: nexus.v1.NodeService.DeleteNode:input_type -> nexus.v1.DeleteNodeRequest
-	86,  // 224: nexus.v1.NodeService.RequestAction:input_type -> nexus.v1.RequestActionRequest
-	89,  // 225: nexus.v1.NodeService.GetNodeAuditLogs:input_type -> nexus.v1.GetNodeAuditLogsRequest
-	176, // 226: nexus.v1.ArtifactService.GetArtifact:input_type -> nexus.v1.GetArtifactRequest
-	178, // 227: nexus.v1.ArtifactService.ListArtifacts:input_type -> nexus.v1.ListArtifactsRequest
-	180, // 228: nexus.v1.ArtifactService.DeleteArtifact:input_type -> nexus.v1.DeleteArtifactRequest
-	182, // 229: nexus.v1.ArtifactService.GetArtifactDownloadURL:input_type -> nexus.v1.GetArtifactDownloadURLRequest
-	91,  // 230: nexus.v1.EdgeService.Connect:input_type -> nexus.v1.EdgeMessage
-	108, // 231: nexus.v1.EdgeService.GetEdgeStatus:input_type -> nexus.v1.GetEdgeStatusRequest
-	110, // 232: nexus.v1.EdgeService.ListEdges:input_type -> nexus.v1.ListEdgesRequest
-	113, // 233: nexus.v1.EventService.GetEvents:input_type -> nexus.v1.GetEventsRequest
-	115, // 234: nexus.v1.EventService.GetTimeline:input_type -> nexus.v1.GetTimelineRequest
-	122, // 235: nexus.v1.TaskService.CreateTask:input_type -> nexus.v1.CreateTaskRequest
-	124, // 236: nexus.v1.TaskService.GetTask:input_type -> nexus.v1.GetTaskRequest
-	126, // 237: nexus.v1.TaskService.ListTasks:input_type -> nexus.v1.ListTasksRequest
-	128, // 238: nexus.v1.TaskService.UpdateTask:input_type -> nexus.v1.UpdateTaskRequest
-	130, // 239: nexus.v1.TaskService.DeleteTask:input_type -> nexus.v1.DeleteTaskRequest
-	132, // 240: nexus.v1.TaskService.PauseTask:input_type -> nexus.v1.PauseTaskRequest
-	134, // 241: nexus.v1.TaskService.ResumeTask:input_type -> nexus.v1.ResumeTaskRequest
-	136, // 242: nexus.v1.TaskService.TriggerTask:input_type -> nexus.v1.TriggerTaskRequest
-	138, // 243: nexus.v1.TaskService.ListExecutions:input_type -> nexus.v1.ListExecutionsRequest
-	140, // 244: nexus.v1.MessageService.SendMessage:input_type -> nexus.v1.ProactiveSendRequest
-	142, // 245: nexus.v1.MessageService.BroadcastMessage:input_type -> nexus.v1.BroadcastMessageRequest
-	146, // 246: nexus.v1.IdentityService.CreateIdentity:input_type -> nexus.v1.CreateIdentityRequest
-	148, // 247: nexus.v1.IdentityService.GetIdentity:input_type -> nexus.v1.GetIdentityRequest
-	150, // 248: nexus.v1.IdentityService.ListIdentities:input_type -> nexus.v1.ListIdentitiesRequest
-	152, // 249: nexus.v1.IdentityService.DeleteIdentity:input_type -> nexus.v1.DeleteIdentityRequest
-	154, // 250: nexus.v1.IdentityService.LinkPeer:input_type -> nexus.v1.LinkPeerRequest
-	156, // 251: nexus.v1.IdentityService.UnlinkPeer:input_type -> nexus.v1.UnlinkPeerRequest
-	158, // 252: nexus.v1.IdentityService.ResolveIdentity:input_type -> nexus.v1.ResolveIdentityRequest
-	160, // 253: nexus.v1.IdentityService.GetLinkedPeers:input_type -> nexus.v1.GetLinkedPeersRequest
-	166, // 254: nexus.v1.ProvisioningService.StartProvisioning:input_type -> nexus.v1.StartProvisioningRequest
-	168, // 255: nexus.v1.ProvisioningService.GetProvisioningStatus:input_type -> nexus.v1.GetProvisioningStatusRequest
-	170, // 256: nexus.v1.ProvisioningService.SubmitProvisioningStep:input_type -> nexus.v1.SubmitProvisioningStepRequest
-	172, // 257: nexus.v1.ProvisioningService.CancelProvisioning:input_type -> nexus.v1.CancelProvisioningRequest
-	174, // 258: nexus.v1.ProvisioningService.GetProvisioningRequirements:input_type -> nexus.v1.GetProvisioningRequirementsRequest
-	21,  // 259: nexus.v1.NexusGateway.Stream:output_type -> nexus.v1.ServerMessage
-	42,  // 260: nexus.v1.SessionService.CreateSession:output_type -> nexus.v1.CreateSessionResponse
-	44,  // 261: nexus.v1.SessionService.GetSession:output_type -> nexus.v1.GetSessionResponse
-	46,  // 262: nexus.v1.SessionService.ListSessions:output_type -> nexus.v1.ListSessionsResponse
-	48,  // 263: nexus.v1.SessionService.DeleteSession:output_type -> nexus.v1.DeleteSessionResponse
-	50,  // 264: nexus.v1.SessionService.UpdateSession:output_type -> nexus.v1.UpdateSessionResponse
-	52,  // 265: nexus.v1.AgentService.CreateAgent:output_type -> nexus.v1.CreateAgentResponse
-	54,  // 266: nexus.v1.AgentService.GetAgent:output_type -> nexus.v1.GetAgentResponse
-	56,  // 267: nexus.v1.AgentService.ListAgents:output_type -> nexus.v1.ListAgentsResponse
-	58,  // 268: nexus.v1.AgentService.UpdateAgent:output_type -> nexus.v1.UpdateAgentResponse
-	60,  // 269: nexus.v1.AgentService.DeleteAgent:output_type -> nexus.v1.DeleteAgentResponse
-	62,  // 270: nexus.v1.ChannelService.ConnectChannel:output_type -> nexus.v1.ConnectChannelResponse
-	64,  // 271: nexus.v1.ChannelService.DisconnectChannel:output_type -> nexus.v1.DisconnectChannelResponse
-	66,  // 272: nexus.v1.ChannelService.GetChannelStatus:output_type -> nexus.v1.GetChannelStatusResponse
-	68,  // 273: nexus.v1.ChannelService.ListChannels:output_type -> nexus.v1.ListChannelsResponse
-	71,  // 274: nexus.v1.HealthService.Check:output_type -> nexus.v1.HealthCheckResponse
-	71,  // 275: nexus.v1.HealthService.Watch:output_type -> nexus.v1.HealthCheckResponse
-	75,  // 276: nexus.v1.NodeService.CreatePairingToken:output_type -> nexus.v1.CreatePairingTokenResponse
-	77,  // 277: nexus.v1.NodeService.ListNodes:output_type -> nexus.v1.ListNodesResponse
-	79,  // 278: nexus.v1.NodeService.GetNode:output_type -> nexus.v1.GetNodeResponse
-	81,  // 279: nexus.v1.NodeService.UpdateNode:output_type -> nexus.v1.UpdateNodeResponse
-	83,  // 280: nexus.v1.NodeService.RevokeNode:output_type -> nexus.v1.RevokeNodeResponse
-	85,  // 281: nexus.v1.NodeService.DeleteNode:output_type -> nexus.v1.DeleteNodeResponse
-	87,  // 282: nexus.v1.NodeService.RequestAction:output_type -> nexus.v1.RequestActionResponse
-	90,  // 283: nexus.v1.NodeService.GetNodeAuditLogs:output_type -> nexus.v1.GetNodeAuditLogsResponse
-	177, // 284: nexus.v1.ArtifactService.GetArtifact:output_type -> nexus.v1.GetArtifactResponse
-	179, // 285: nexus.v1.ArtifactService.ListArtifacts:output_type -> nexus.v1.ListArtifactsResponse
-	181, // 286: nexus.v1.ArtifactService.DeleteArtifact:output_type -> nexus.v1.DeleteArtifactResponse
-	183, // 287: nexus.v1.ArtifactService.GetArtifactDownloadURL:output_type -> nexus.v1.GetArtifactDownloadURLResponse
-	92,  // 288: nexus.v1.EdgeService.Connect:output_type -> nexus.v1.CoreMessage
-	109, // 289: nexus.v1.EdgeService.GetEdgeStatus:output_type -> nexus.v1.GetEdgeStatusResponse
-	111, // 290: nexus.v1.EdgeService.ListEdges:output_type -> nexus.v1.ListEdgesResponse
-	114, // 291: nexus.v1.EventService.GetEvents:output_type -> nexus.v1.GetEventsResponse
-	116, // 292: nexus.v1.EventService.GetTimeline:output_type -> nexus.v1.GetTimelineResponse
-	123, // 293: nexus.v1.TaskService.CreateTask:output_type -> nexus.v1.CreateTaskResponse
-	125, // 294: nexus.v1.TaskService.GetTask:output_type -> nexus.v1.GetTaskResponse
-	127, // 295: nexus.v1.TaskService.ListTasks:output_type -> nexus.v1.ListTasksResponse
-	129, // 296: nexus.v1.TaskService.UpdateTask:output_type -> nexus.v1.UpdateTaskResponse
-	131, // 297: nexus.v1.TaskService.DeleteTask:output_type -> nexus.v1.DeleteTaskResponse
-	133, // 298: nexus.v1.TaskService.PauseTask:output_type -> nexus.v1.PauseTaskResponse
-	135, // 299: nexus.v1.TaskService.ResumeTask:output_type -> nexus.v1.ResumeTaskResponse
-	137, // 300: nexus.v1.TaskService.TriggerTask:output_type -> nexus.v1.TriggerTaskResponse
-	139, // 301: nexus.v1.TaskService.ListExecutions:output_type -> nexus.v1.ListExecutionsResponse
-	141, // 302: nexus.v1.MessageService.SendMessage:output_type -> nexus.v1.ProactiveSendResponse
-	143, // 303: nexus.v1.MessageService.BroadcastMessage:output_type -> nexus.v1.BroadcastMessageResponse
-	147, // 304: nexus.v1.IdentityService.CreateIdentity:output_type -> nexus.v1.CreateIdentityResponse
-	149, // 305: nexus.v1.IdentityService.GetIdentity:output_type -> nexus.v1.GetIdentityResponse
-	151, // 306: nexus.v1.IdentityService.ListIdentities:output_type -> nexus.v1.ListIdentitiesResponse
-	153, // 307: nexus.v1.IdentityService.DeleteIdentity:output_type -> nexus.v1.DeleteIdentityResponse
-	155, // 308: nexus.v1.IdentityService.LinkPeer:output_type -> nexus.v1.LinkPeerResponse
-	157, // 309: nexus.v1.IdentityService.UnlinkPeer:output_type -> nexus.v1.UnlinkPeerResponse
-	159, // 310: nexus.v1.IdentityService.ResolveIdentity:output_type -> nexus.v1.ResolveIdentityResponse
-	161, // 311: nexus.v1.IdentityService.GetLinkedPeers:output_type -> nexus.v1.GetLinkedPeersResponse
-	167, // 312: nexus.v1.ProvisioningService.StartProvisioning:output_type -> nexus.v1.StartProvisioningResponse
-	169, // 313: nexus.v1.ProvisioningService.GetProvisioningStatus:output_type -> nexus.v1.GetProvisioningStatusResponse
-	171, // 314: nexus.v1.ProvisioningService.SubmitProvisioningStep:output_type -> nexus.v1.SubmitProvisioningStepResponse
-	173, // 315: nexus.v1.ProvisioningService.CancelProvisioning:output_type -> nexus.v1.CancelProvisioningResponse
-	175, // 316: nexus.v1.ProvisioningService.GetProvisioningRequirements:output_type -> nexus.v1.GetProvisioningRequirementsResponse
-	259, // [259:317] is the sub-list for method output_type
-	201, // [201:259] is the sub-list for method input_type
-	201, // [201:201] is the sub-list for extension type_name
-	201, // [201:201] is the sub-list for extension extendee
-	0,   // [0:201] is the sub-list for field type_name
+	216, // 109: nexus.v1.ListArtifactsRequest.created_after:type_name -> google.protobuf.Timestamp
+	216, // 110: nexus.v1.ListArtifactsRequest.created_before:type_name -> google.protobuf.Timestamp
+	101, // 111: nexus.v1.ListArtifactsResponse.artifacts:type_name -> nexus.v1.Artifact
+	101, // 112: nexus.v1.GetArtifactResponse.artifact:type_name -> nexus.v1.Artifact
+	9,   // 113: nexus.v1.EdgeEvent.type:type_name -> nexus.v1.EdgeEventType
+	216, // 114: nexus.v1.EdgeEvent.timestamp:type_name -> google.protobuf.Timestamp
+	215, // 115: nexus.v1.EdgeEvent.data:type_name -> google.protobuf.Struct
+	10,  // 116: nexus.v1.CoreEvent.type:type_name -> nexus.v1.CoreEventType
+	216, // 117: nexus.v1.CoreEvent.timestamp:type_name -> google.protobuf.Timestamp
+	215, // 118: nexus.v1.CoreEvent.data:type_name -> google.protobuf.Struct
+	2,   // 119: nexus.v1.EdgeChannelInbound.channel_type:type_name -> nexus.v1.ChannelType
+	34,  // 120: nexus.v1.EdgeChannelInbound.attachments:type_name -> nexus.v1.Attachment
+	200, // 121: nexus.v1.EdgeChannelInbound.metadata:type_name -> nexus.v1.EdgeChannelInbound.MetadataEntry
+	216, // 122: nexus.v1.EdgeChannelInbound.received_at:type_name -> google.protobuf.Timestamp
+	2,   // 123: nexus.v1.CoreChannelOutbound.channel_type:type_name -> nexus.v1.ChannelType
+	34,  // 124: nexus.v1.CoreChannelOutbound.attachments:type_name -> nexus.v1.Attachment
+	201, // 125: nexus.v1.CoreChannelOutbound.options:type_name -> nexus.v1.CoreChannelOutbound.OptionsEntry
+	11,  // 126: nexus.v1.EdgeChannelAck.status:type_name -> nexus.v1.ChannelDeliveryStatus
+	216, // 127: nexus.v1.EdgeChannelAck.delivered_at:type_name -> google.protobuf.Timestamp
+	118, // 128: nexus.v1.GetEdgeStatusResponse.status:type_name -> nexus.v1.EdgeStatus
+	118, // 129: nexus.v1.ListEdgesResponse.edges:type_name -> nexus.v1.EdgeStatus
+	12,  // 130: nexus.v1.EdgeStatus.connection_status:type_name -> nexus.v1.EdgeConnectionStatus
+	216, // 131: nexus.v1.EdgeStatus.connected_at:type_name -> google.protobuf.Timestamp
+	216, // 132: nexus.v1.EdgeStatus.last_heartbeat:type_name -> google.protobuf.Timestamp
+	98,  // 133: nexus.v1.EdgeStatus.metrics:type_name -> nexus.v1.EdgeMetrics
+	202, // 134: nexus.v1.EdgeStatus.metadata:type_name -> nexus.v1.EdgeStatus.MetadataEntry
+	123, // 135: nexus.v1.GetEventsResponse.events:type_name -> nexus.v1.TimelineEvent
+	216, // 136: nexus.v1.GetTimelineResponse.start_time:type_name -> google.protobuf.Timestamp
+	216, // 137: nexus.v1.GetTimelineResponse.end_time:type_name -> google.protobuf.Timestamp
+	123, // 138: nexus.v1.GetTimelineResponse.events:type_name -> nexus.v1.TimelineEvent
+	124, // 139: nexus.v1.GetTimelineResponse.summary:type_name -> nexus.v1.TimelineSummary
+	216, // 140: nexus.v1.TimelineEvent.timestamp:type_name -> google.protobuf.Timestamp
+	203, // 141: nexus.v1.TimelineEvent.data:type_name -> nexus.v1.TimelineEvent.DataEntry
+	126, // 142: nexus.v1.ScheduledTask.config:type_name -> nexus.v1.TaskConfig
+	15,  // 143: nexus.v1.ScheduledTask.status:type_name -> nexus.v1.TaskStatus
+	216, // 144: nexus.v1.ScheduledTask.next_run_at:type_name -> google.protobuf.Timestamp
+	216, // 145: nexus.v1.ScheduledTask.last_run_at:type_name -> google.protobuf.Timestamp
+	216, // 146: nexus.v1.ScheduledTask.created_at:type_name -> google.protobuf.Timestamp
+	216, // 147: nexus.v1.ScheduledTask.updated_at:type_name -> google.protobuf.Timestamp
+	204, // 148: nexus.v1.ScheduledTask.metadata:type_name -> nexus.v1.ScheduledTask.MetadataEntry
+	16,  // 149: nexus.v1.TaskExecution.status:type_name -> nexus.v1.ExecutionStatus
+	216, // 150: nexus.v1.TaskExecution.scheduled_at:type_name -> google.protobuf.Timestamp
+	216, // 151: nexus.v1.TaskExecution.started_at:type_name -> google.protobuf.Timestamp
+	216, // 152: nexus.v1.TaskExecution.finished_at:type_name -> google.protobuf.Timestamp
+	126, // 153: nexus.v1.CreateTaskRequest.config:type_name -> nexus.v1.TaskConfig
+	205, // 154: nexus.v1.CreateTaskRequest.metadata:type_name -> nexus.v1.CreateTaskRequest.MetadataEntry
+	125, // 155: nexus.v1.CreateTaskResponse.task:type_name -> nexus.v1.ScheduledTask
+	125, // 156: nexus.v1.GetTaskResponse.task:type_name -> nexus.v1.ScheduledTask
+	15,  // 157: nexus.v1.ListTasksRequest.status:type_name -> nexus.v1.TaskStatus
+	125, // 158: nexus.v1.ListTasksResponse.tasks:type_name -> nexus.v1.ScheduledTask
+	126, // 159: nexus.v1.UpdateTaskRequest.config:type_name -> nexus.v1.TaskConfig
+	206, // 160: nexus.v1.UpdateTaskRequest.metadata:type_name -> nexus.v1.UpdateTaskRequest.MetadataEntry
+	125, // 161: nexus.v1.UpdateTaskResponse.task:type_name -> nexus.v1.ScheduledTask
+	125, // 162: nexus.v1.PauseTaskResponse.task:type_name -> nexus.v1.ScheduledTask
+	125, // 163: nexus.v1.ResumeTaskResponse.task:type_name -> nexus.v1.ScheduledTask
+	127, // 164: nexus.v1.TriggerTaskResponse.execution:type_name -> nexus.v1.TaskExecution
+	16,  // 165: nexus.v1.ListExecutionsRequest.status:type_name -> nexus.v1.ExecutionStatus
+	127, // 166: nexus.v1.ListExecutionsResponse.executions:type_name -> nexus.v1.TaskExecution
+	34,  // 167: nexus.v1.ProactiveSendRequest.attachments:type_name -> nexus.v1.Attachment
+	207, // 168: nexus.v1.ProactiveSendRequest.metadata:type_name -> nexus.v1.ProactiveSendRequest.MetadataEntry
+	34,  // 169: nexus.v1.BroadcastMessageRequest.attachments:type_name -> nexus.v1.Attachment
+	208, // 170: nexus.v1.BroadcastMessageRequest.metadata:type_name -> nexus.v1.BroadcastMessageRequest.MetadataEntry
+	150, // 171: nexus.v1.BroadcastMessageResponse.results:type_name -> nexus.v1.BroadcastResult
+	209, // 172: nexus.v1.Identity.metadata:type_name -> nexus.v1.Identity.MetadataEntry
+	216, // 173: nexus.v1.Identity.created_at:type_name -> google.protobuf.Timestamp
+	216, // 174: nexus.v1.Identity.updated_at:type_name -> google.protobuf.Timestamp
+	210, // 175: nexus.v1.CreateIdentityRequest.metadata:type_name -> nexus.v1.CreateIdentityRequest.MetadataEntry
+	151, // 176: nexus.v1.CreateIdentityResponse.identity:type_name -> nexus.v1.Identity
+	151, // 177: nexus.v1.GetIdentityResponse.identity:type_name -> nexus.v1.Identity
+	151, // 178: nexus.v1.ListIdentitiesResponse.identities:type_name -> nexus.v1.Identity
+	151, // 179: nexus.v1.LinkPeerResponse.identity:type_name -> nexus.v1.Identity
+	151, // 180: nexus.v1.UnlinkPeerResponse.identity:type_name -> nexus.v1.Identity
+	151, // 181: nexus.v1.ResolveIdentityResponse.identity:type_name -> nexus.v1.Identity
+	17,  // 182: nexus.v1.ProvisioningSession.status:type_name -> nexus.v1.ProvisioningStatus
+	169, // 183: nexus.v1.ProvisioningSession.current_step:type_name -> nexus.v1.ProvisioningStep
+	169, // 184: nexus.v1.ProvisioningSession.steps:type_name -> nexus.v1.ProvisioningStep
+	216, // 185: nexus.v1.ProvisioningSession.created_at:type_name -> google.protobuf.Timestamp
+	216, // 186: nexus.v1.ProvisioningSession.updated_at:type_name -> google.protobuf.Timestamp
+	216, // 187: nexus.v1.ProvisioningSession.expires_at:type_name -> google.protobuf.Timestamp
+	211, // 188: nexus.v1.ProvisioningSession.data:type_name -> nexus.v1.ProvisioningSession.DataEntry
+	18,  // 189: nexus.v1.ProvisioningStep.type:type_name -> nexus.v1.ProvisioningStepType
+	19,  // 190: nexus.v1.ProvisioningStep.status:type_name -> nexus.v1.ProvisioningStepStatus
+	212, // 191: nexus.v1.ProvisioningStep.data:type_name -> nexus.v1.ProvisioningStep.DataEntry
+	170, // 192: nexus.v1.ProvisioningStep.input_fields:type_name -> nexus.v1.ProvisioningInputField
+	169, // 193: nexus.v1.ProvisioningRequirements.steps:type_name -> nexus.v1.ProvisioningStep
+	213, // 194: nexus.v1.StartProvisioningRequest.config:type_name -> nexus.v1.StartProvisioningRequest.ConfigEntry
+	168, // 195: nexus.v1.StartProvisioningResponse.session:type_name -> nexus.v1.ProvisioningSession
+	168, // 196: nexus.v1.GetProvisioningStatusResponse.session:type_name -> nexus.v1.ProvisioningSession
+	214, // 197: nexus.v1.SubmitProvisioningStepRequest.data:type_name -> nexus.v1.SubmitProvisioningStepRequest.DataEntry
+	168, // 198: nexus.v1.SubmitProvisioningStepResponse.session:type_name -> nexus.v1.ProvisioningSession
+	171, // 199: nexus.v1.GetProvisioningRequirementsResponse.requirements:type_name -> nexus.v1.ProvisioningRequirements
+	20,  // 200: nexus.v1.NexusGateway.Stream:input_type -> nexus.v1.ClientMessage
+	41,  // 201: nexus.v1.SessionService.CreateSession:input_type -> nexus.v1.CreateSessionRequest
+	43,  // 202: nexus.v1.SessionService.GetSession:input_type -> nexus.v1.GetSessionRequest
+	45,  // 203: nexus.v1.SessionService.ListSessions:input_type -> nexus.v1.ListSessionsRequest
+	47,  // 204: nexus.v1.SessionService.DeleteSession:input_type -> nexus.v1.DeleteSessionRequest
+	49,  // 205: nexus.v1.SessionService.UpdateSession:input_type -> nexus.v1.UpdateSessionRequest
+	51,  // 206: nexus.v1.AgentService.CreateAgent:input_type -> nexus.v1.CreateAgentRequest
+	53,  // 207: nexus.v1.AgentService.GetAgent:input_type -> nexus.v1.GetAgentRequest
+	55,  // 208: nexus.v1.AgentService.ListAgents:input_type -> nexus.v1.ListAgentsRequest
+	57,  // 209: nexus.v1.AgentService.UpdateAgent:input_type -> nexus.v1.UpdateAgentRequest
+	59,  // 210: nexus.v1.AgentService.DeleteAgent:input_type -> nexus.v1.DeleteAgentRequest
+	61,  // 211: nexus.v1.ChannelService.ConnectChannel:input_type -> nexus.v1.ConnectChannelRequest
+	63,  // 212: nexus.v1.ChannelService.DisconnectChannel:input_type -> nexus.v1.DisconnectChannelRequest
+	65,  // 213: nexus.v1.ChannelService.GetChannelStatus:input_type -> nexus.v1.GetChannelStatusRequest
+	67,  // 214: nexus.v1.ChannelService.ListChannels:input_type -> nexus.v1.ListChannelsRequest
+	70,  // 215: nexus.v1.HealthService.Check:input_type -> nexus.v1.HealthCheckRequest
+	70,  // 216: nexus.v1.HealthService.Watch:input_type -> nexus.v1.HealthCheckRequest
+	102, // 217: nexus.v1.ArtifactService.ListArtifacts:input_type -> nexus.v1.ListArtifactsRequest
+	104, // 218: nexus.v1.ArtifactService.GetArtifact:input_type -> nexus.v1.GetArtifactRequest
+	106, // 219: nexus.v1.ArtifactService.DeleteArtifact:input_type -> nexus.v1.DeleteArtifactRequest
+	74,  // 220: nexus.v1.NodeService.CreatePairingToken:input_type -> nexus.v1.CreatePairingTokenRequest
+	76,  // 221: nexus.v1.NodeService.ListNodes:input_type -> nexus.v1.ListNodesRequest
+	78,  // 222: nexus.v1.NodeService.GetNode:input_type -> nexus.v1.GetNodeRequest
+	80,  // 223: nexus.v1.NodeService.UpdateNode:input_type -> nexus.v1.UpdateNodeRequest
+	82,  // 224: nexus.v1.NodeService.RevokeNode:input_type -> nexus.v1.RevokeNodeRequest
+	84,  // 225: nexus.v1.NodeService.DeleteNode:input_type -> nexus.v1.DeleteNodeRequest
+	86,  // 226: nexus.v1.NodeService.RequestAction:input_type -> nexus.v1.RequestActionRequest
+	89,  // 227: nexus.v1.NodeService.GetNodeAuditLogs:input_type -> nexus.v1.GetNodeAuditLogsRequest
+	91,  // 228: nexus.v1.EdgeService.Connect:input_type -> nexus.v1.EdgeMessage
+	114, // 229: nexus.v1.EdgeService.GetEdgeStatus:input_type -> nexus.v1.GetEdgeStatusRequest
+	116, // 230: nexus.v1.EdgeService.ListEdges:input_type -> nexus.v1.ListEdgesRequest
+	119, // 231: nexus.v1.EventService.GetEvents:input_type -> nexus.v1.GetEventsRequest
+	121, // 232: nexus.v1.EventService.GetTimeline:input_type -> nexus.v1.GetTimelineRequest
+	128, // 233: nexus.v1.TaskService.CreateTask:input_type -> nexus.v1.CreateTaskRequest
+	130, // 234: nexus.v1.TaskService.GetTask:input_type -> nexus.v1.GetTaskRequest
+	132, // 235: nexus.v1.TaskService.ListTasks:input_type -> nexus.v1.ListTasksRequest
+	134, // 236: nexus.v1.TaskService.UpdateTask:input_type -> nexus.v1.UpdateTaskRequest
+	136, // 237: nexus.v1.TaskService.DeleteTask:input_type -> nexus.v1.DeleteTaskRequest
+	138, // 238: nexus.v1.TaskService.PauseTask:input_type -> nexus.v1.PauseTaskRequest
+	140, // 239: nexus.v1.TaskService.ResumeTask:input_type -> nexus.v1.ResumeTaskRequest
+	142, // 240: nexus.v1.TaskService.TriggerTask:input_type -> nexus.v1.TriggerTaskRequest
+	144, // 241: nexus.v1.TaskService.ListExecutions:input_type -> nexus.v1.ListExecutionsRequest
+	146, // 242: nexus.v1.MessageService.SendMessage:input_type -> nexus.v1.ProactiveSendRequest
+	148, // 243: nexus.v1.MessageService.BroadcastMessage:input_type -> nexus.v1.BroadcastMessageRequest
+	152, // 244: nexus.v1.IdentityService.CreateIdentity:input_type -> nexus.v1.CreateIdentityRequest
+	154, // 245: nexus.v1.IdentityService.GetIdentity:input_type -> nexus.v1.GetIdentityRequest
+	156, // 246: nexus.v1.IdentityService.ListIdentities:input_type -> nexus.v1.ListIdentitiesRequest
+	158, // 247: nexus.v1.IdentityService.DeleteIdentity:input_type -> nexus.v1.DeleteIdentityRequest
+	160, // 248: nexus.v1.IdentityService.LinkPeer:input_type -> nexus.v1.LinkPeerRequest
+	162, // 249: nexus.v1.IdentityService.UnlinkPeer:input_type -> nexus.v1.UnlinkPeerRequest
+	164, // 250: nexus.v1.IdentityService.ResolveIdentity:input_type -> nexus.v1.ResolveIdentityRequest
+	166, // 251: nexus.v1.IdentityService.GetLinkedPeers:input_type -> nexus.v1.GetLinkedPeersRequest
+	172, // 252: nexus.v1.ProvisioningService.StartProvisioning:input_type -> nexus.v1.StartProvisioningRequest
+	174, // 253: nexus.v1.ProvisioningService.GetProvisioningStatus:input_type -> nexus.v1.GetProvisioningStatusRequest
+	176, // 254: nexus.v1.ProvisioningService.SubmitProvisioningStep:input_type -> nexus.v1.SubmitProvisioningStepRequest
+	178, // 255: nexus.v1.ProvisioningService.CancelProvisioning:input_type -> nexus.v1.CancelProvisioningRequest
+	180, // 256: nexus.v1.ProvisioningService.GetProvisioningRequirements:input_type -> nexus.v1.GetProvisioningRequirementsRequest
+	21,  // 257: nexus.v1.NexusGateway.Stream:output_type -> nexus.v1.ServerMessage
+	42,  // 258: nexus.v1.SessionService.CreateSession:output_type -> nexus.v1.CreateSessionResponse
+	44,  // 259: nexus.v1.SessionService.GetSession:output_type -> nexus.v1.GetSessionResponse
+	46,  // 260: nexus.v1.SessionService.ListSessions:output_type -> nexus.v1.ListSessionsResponse
+	48,  // 261: nexus.v1.SessionService.DeleteSession:output_type -> nexus.v1.DeleteSessionResponse
+	50,  // 262: nexus.v1.SessionService.UpdateSession:output_type -> nexus.v1.UpdateSessionResponse
+	52,  // 263: nexus.v1.AgentService.CreateAgent:output_type -> nexus.v1.CreateAgentResponse
+	54,  // 264: nexus.v1.AgentService.GetAgent:output_type -> nexus.v1.GetAgentResponse
+	56,  // 265: nexus.v1.AgentService.ListAgents:output_type -> nexus.v1.ListAgentsResponse
+	58,  // 266: nexus.v1.AgentService.UpdateAgent:output_type -> nexus.v1.UpdateAgentResponse
+	60,  // 267: nexus.v1.AgentService.DeleteAgent:output_type -> nexus.v1.DeleteAgentResponse
+	62,  // 268: nexus.v1.ChannelService.ConnectChannel:output_type -> nexus.v1.ConnectChannelResponse
+	64,  // 269: nexus.v1.ChannelService.DisconnectChannel:output_type -> nexus.v1.DisconnectChannelResponse
+	66,  // 270: nexus.v1.ChannelService.GetChannelStatus:output_type -> nexus.v1.GetChannelStatusResponse
+	68,  // 271: nexus.v1.ChannelService.ListChannels:output_type -> nexus.v1.ListChannelsResponse
+	71,  // 272: nexus.v1.HealthService.Check:output_type -> nexus.v1.HealthCheckResponse
+	71,  // 273: nexus.v1.HealthService.Watch:output_type -> nexus.v1.HealthCheckResponse
+	103, // 274: nexus.v1.ArtifactService.ListArtifacts:output_type -> nexus.v1.ListArtifactsResponse
+	105, // 275: nexus.v1.ArtifactService.GetArtifact:output_type -> nexus.v1.GetArtifactResponse
+	107, // 276: nexus.v1.ArtifactService.DeleteArtifact:output_type -> nexus.v1.DeleteArtifactResponse
+	75,  // 277: nexus.v1.NodeService.CreatePairingToken:output_type -> nexus.v1.CreatePairingTokenResponse
+	77,  // 278: nexus.v1.NodeService.ListNodes:output_type -> nexus.v1.ListNodesResponse
+	79,  // 279: nexus.v1.NodeService.GetNode:output_type -> nexus.v1.GetNodeResponse
+	81,  // 280: nexus.v1.NodeService.UpdateNode:output_type -> nexus.v1.UpdateNodeResponse
+	83,  // 281: nexus.v1.NodeService.RevokeNode:output_type -> nexus.v1.RevokeNodeResponse
+	85,  // 282: nexus.v1.NodeService.DeleteNode:output_type -> nexus.v1.DeleteNodeResponse
+	87,  // 283: nexus.v1.NodeService.RequestAction:output_type -> nexus.v1.RequestActionResponse
+	90,  // 284: nexus.v1.NodeService.GetNodeAuditLogs:output_type -> nexus.v1.GetNodeAuditLogsResponse
+	92,  // 285: nexus.v1.EdgeService.Connect:output_type -> nexus.v1.CoreMessage
+	115, // 286: nexus.v1.EdgeService.GetEdgeStatus:output_type -> nexus.v1.GetEdgeStatusResponse
+	117, // 287: nexus.v1.EdgeService.ListEdges:output_type -> nexus.v1.ListEdgesResponse
+	120, // 288: nexus.v1.EventService.GetEvents:output_type -> nexus.v1.GetEventsResponse
+	122, // 289: nexus.v1.EventService.GetTimeline:output_type -> nexus.v1.GetTimelineResponse
+	129, // 290: nexus.v1.TaskService.CreateTask:output_type -> nexus.v1.CreateTaskResponse
+	131, // 291: nexus.v1.TaskService.GetTask:output_type -> nexus.v1.GetTaskResponse
+	133, // 292: nexus.v1.TaskService.ListTasks:output_type -> nexus.v1.ListTasksResponse
+	135, // 293: nexus.v1.TaskService.UpdateTask:output_type -> nexus.v1.UpdateTaskResponse
+	137, // 294: nexus.v1.TaskService.DeleteTask:output_type -> nexus.v1.DeleteTaskResponse
+	139, // 295: nexus.v1.TaskService.PauseTask:output_type -> nexus.v1.PauseTaskResponse
+	141, // 296: nexus.v1.TaskService.ResumeTask:output_type -> nexus.v1.ResumeTaskResponse
+	143, // 297: nexus.v1.TaskService.TriggerTask:output_type -> nexus.v1.TriggerTaskResponse
+	145, // 298: nexus.v1.TaskService.ListExecutions:output_type -> nexus.v1.ListExecutionsResponse
+	147, // 299: nexus.v1.MessageService.SendMessage:output_type -> nexus.v1.ProactiveSendResponse
+	149, // 300: nexus.v1.MessageService.BroadcastMessage:output_type -> nexus.v1.BroadcastMessageResponse
+	153, // 301: nexus.v1.IdentityService.CreateIdentity:output_type -> nexus.v1.CreateIdentityResponse
+	155, // 302: nexus.v1.IdentityService.GetIdentity:output_type -> nexus.v1.GetIdentityResponse
+	157, // 303: nexus.v1.IdentityService.ListIdentities:output_type -> nexus.v1.ListIdentitiesResponse
+	159, // 304: nexus.v1.IdentityService.DeleteIdentity:output_type -> nexus.v1.DeleteIdentityResponse
+	161, // 305: nexus.v1.IdentityService.LinkPeer:output_type -> nexus.v1.LinkPeerResponse
+	163, // 306: nexus.v1.IdentityService.UnlinkPeer:output_type -> nexus.v1.UnlinkPeerResponse
+	165, // 307: nexus.v1.IdentityService.ResolveIdentity:output_type -> nexus.v1.ResolveIdentityResponse
+	167, // 308: nexus.v1.IdentityService.GetLinkedPeers:output_type -> nexus.v1.GetLinkedPeersResponse
+	173, // 309: nexus.v1.ProvisioningService.StartProvisioning:output_type -> nexus.v1.StartProvisioningResponse
+	175, // 310: nexus.v1.ProvisioningService.GetProvisioningStatus:output_type -> nexus.v1.GetProvisioningStatusResponse
+	177, // 311: nexus.v1.ProvisioningService.SubmitProvisioningStep:output_type -> nexus.v1.SubmitProvisioningStepResponse
+	179, // 312: nexus.v1.ProvisioningService.CancelProvisioning:output_type -> nexus.v1.CancelProvisioningResponse
+	181, // 313: nexus.v1.ProvisioningService.GetProvisioningRequirements:output_type -> nexus.v1.GetProvisioningRequirementsResponse
+	257, // [257:314] is the sub-list for method output_type
+	200, // [200:257] is the sub-list for method input_type
+	200, // [200:200] is the sub-list for extension type_name
+	200, // [200:200] is the sub-list for extension extendee
+	0,   // [0:200] is the sub-list for field type_name
 }
 
 func init() { file_pkg_proto_nexus_proto_init() }
@@ -13962,7 +13854,7 @@ func file_pkg_proto_nexus_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pkg_proto_nexus_proto_rawDesc), len(file_pkg_proto_nexus_proto_rawDesc)),
 			NumEnums:      20,
-			NumMessages:   197,
+			NumMessages:   195,
 			NumExtensions: 0,
 			NumServices:   13,
 		},

@@ -79,6 +79,18 @@ service HealthService {
   rpc Watch(HealthCheckRequest) returns (stream HealthCheckResponse);
 }
 
+// ArtifactService provides access to stored artifacts.
+service ArtifactService {
+  // ListArtifacts returns stored artifacts matching the filter.
+  rpc ListArtifacts(ListArtifactsRequest) returns (ListArtifactsResponse);
+
+  // GetArtifact retrieves artifact metadata and optional data.
+  rpc GetArtifact(GetArtifactRequest) returns (GetArtifactResponse);
+
+  // DeleteArtifact removes an artifact and its data.
+  rpc DeleteArtifact(DeleteArtifactRequest) returns (DeleteArtifactResponse);
+}
+
 // NodeService manages device nodes (Mac, iPhone, etc.) for privileged actions.
 service NodeService {
   // CreatePairingToken generates a token for pairing a new node.
@@ -924,6 +936,38 @@ message Artifact {
 
   // TTL in seconds (0 = default retention).
   int32 ttl_seconds = 8;
+}
+
+// ListArtifactsRequest filters stored artifacts.
+message ListArtifactsRequest {
+  string session_id = 1;
+  string edge_id = 2;
+  string type = 3;
+  google.protobuf.Timestamp created_after = 4;
+  google.protobuf.Timestamp created_before = 5;
+  int32 limit = 6;
+}
+
+message ListArtifactsResponse {
+  repeated Artifact artifacts = 1;
+}
+
+message GetArtifactRequest {
+  string artifact_id = 1;
+  bool include_data = 2;
+}
+
+message GetArtifactResponse {
+  Artifact artifact = 1;
+  bytes data = 2;
+}
+
+message DeleteArtifactRequest {
+  string artifact_id = 1;
+}
+
+message DeleteArtifactResponse {
+  bool deleted = 1;
 }
 
 // ToolCancellation requests cancellation of a running tool.

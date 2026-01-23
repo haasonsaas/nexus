@@ -135,7 +135,9 @@ func (h *Host) LiveReloadHandler() http.Handler {
 func (h *Host) LiveReloadScriptHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/javascript")
-		_, _ = io.WriteString(w, liveReloadScript)
+		if _, err := io.WriteString(w, liveReloadScript); err != nil {
+			h.logger.Warn("failed to write live reload script", "error", err)
+		}
 	})
 }
 
@@ -147,7 +149,9 @@ func (h *Host) serveHTML(w http.ResponseWriter, r *http.Request, path string) {
 	}
 	html := injectLiveReload(string(data))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = io.WriteString(w, html)
+	if _, err := io.WriteString(w, html); err != nil {
+		h.logger.Warn("failed to write canvas html", "error", err)
+	}
 }
 
 func (h *Host) addClient(ch chan struct{}) {

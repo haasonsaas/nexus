@@ -8,7 +8,7 @@ import (
 
 func TestParseApprovalDecision(t *testing.T) {
 	tests := []struct {
-		value           string
+		value            string
 		expectedDecision agent.ApprovalDecision
 		expectedOK       bool
 	}{

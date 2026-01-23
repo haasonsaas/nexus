@@ -46,20 +46,20 @@ func TestRegisterBuiltins(t *testing.T) {
 
 	// Verify aliases work
 	aliases := map[string]string{
-		"h":                  "help",
-		"?":                  "help",
-		"commands":           "help",
-		"reset":              "new",
-		"clear":              "new",
-		"abort":              "stop",
-		"cancel":             "stop",
-		"id":                 "whoami",
-		"mem":                "memory",
-		"summarize":          "compact",
-		"ctx":                "context",
-		"prompt":             "context",
-		"thinking":           "think",
-		"extended-thinking":  "think",
+		"h":                 "help",
+		"?":                 "help",
+		"commands":          "help",
+		"reset":             "new",
+		"clear":             "new",
+		"abort":             "stop",
+		"cancel":            "stop",
+		"id":                "whoami",
+		"mem":               "memory",
+		"summarize":         "compact",
+		"ctx":               "context",
+		"prompt":            "context",
+		"thinking":          "think",
+		"extended-thinking": "think",
 	}
 
 	for alias, expectedName := range aliases {

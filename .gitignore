@@ -45,3 +45,6 @@ logs/
 tmp/
 temp/
 /nexus
+
+# Local edge tool artifacts
+internal/edge/nodetools/-

@@ -3,11 +3,13 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"runtime"
 	"strings"
 	"time"
 
+	"github.com/haasonsaas/nexus/internal/artifacts"
 	"github.com/haasonsaas/nexus/internal/auth"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/pkg/models"
@@ -62,6 +64,23 @@ type APIMessagesResponse struct {
 	Page     int               `json:"page"`
 	PageSize int               `json:"page_size"`
 	HasMore  bool              `json:"has_more"`
+}
+
+// APIArtifactSummary is a compact artifact representation.
+type APIArtifactSummary struct {
+	ID         string `json:"id"`
+	Type       string `json:"type"`
+	MimeType   string `json:"mime_type"`
+	Filename   string `json:"filename"`
+	Size       int64  `json:"size"`
+	Reference  string `json:"reference"`
+	TTLSeconds int32  `json:"ttl_seconds"`
+	Redacted   bool   `json:"redacted"`
+}
+
+type APIArtifactListResponse struct {
+	Artifacts []*APIArtifactSummary `json:"artifacts"`
+	Total     int                   `json:"total"`
 }
 
 // apiSessionList handles GET /api/sessions.
@@ -246,6 +265,113 @@ func (h *Handler) apiStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.jsonResponse(w, status)
+}
+
+// apiArtifacts handles GET /api/artifacts.
+func (h *Handler) apiArtifacts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h.config.ArtifactRepo == nil {
+		h.jsonError(w, "Artifacts not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	filter := artifacts.Filter{
+		SessionID: r.URL.Query().Get("session_id"),
+		EdgeID:    r.URL.Query().Get("edge_id"),
+		Type:      r.URL.Query().Get("type"),
+		Limit:     parseIntParam(r, "limit", 50),
+	}
+
+	results, err := h.config.ArtifactRepo.ListArtifacts(r.Context(), filter)
+	if err != nil {
+		h.jsonError(w, "Failed to list artifacts", http.StatusInternalServerError)
+		return
+	}
+
+	items := make([]*APIArtifactSummary, 0, len(results))
+	for _, art := range results {
+		if art == nil {
+			continue
+		}
+		items = append(items, &APIArtifactSummary{
+			ID:         art.Id,
+			Type:       art.Type,
+			MimeType:   art.MimeType,
+			Filename:   art.Filename,
+			Size:       art.Size,
+			Reference:  art.Reference,
+			TTLSeconds: art.TtlSeconds,
+			Redacted:   strings.HasPrefix(art.Reference, "redacted://"),
+		})
+	}
+
+	h.jsonResponse(w, APIArtifactListResponse{
+		Artifacts: items,
+		Total:     len(items),
+	})
+}
+
+// apiArtifact handles GET /api/artifacts/{id}.
+func (h *Handler) apiArtifact(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h.config.ArtifactRepo == nil {
+		h.jsonError(w, "Artifacts not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	path := strings.TrimPrefix(r.URL.Path, "/api/artifacts/")
+	parts := strings.Split(path, "/")
+	if len(parts) == 0 || parts[0] == "" {
+		h.jsonError(w, "Artifact ID required", http.StatusBadRequest)
+		return
+	}
+	artifactID := parts[0]
+
+	artifact, reader, err := h.config.ArtifactRepo.GetArtifact(r.Context(), artifactID)
+	if err != nil {
+		h.jsonError(w, "Artifact not found", http.StatusNotFound)
+		return
+	}
+	defer reader.Close()
+
+	raw := strings.EqualFold(r.URL.Query().Get("raw"), "1") || strings.EqualFold(r.URL.Query().Get("raw"), "true")
+	download := strings.EqualFold(r.URL.Query().Get("download"), "1") || strings.EqualFold(r.URL.Query().Get("download"), "true")
+
+	if raw {
+		if strings.HasPrefix(artifact.Reference, "redacted://") {
+			http.Error(w, "Artifact redacted", http.StatusGone)
+			return
+		}
+		contentType := artifact.MimeType
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
+		w.Header().Set("Content-Type", contentType)
+		if download && artifact.Filename != "" {
+			w.Header().Set("Content-Disposition", "attachment; filename=\""+artifact.Filename+"\"")
+		}
+		if _, err := io.Copy(w, reader); err != nil {
+			h.config.Logger.Error("artifact download failed", "error", err)
+		}
+		return
+	}
+
+	h.jsonResponse(w, APIArtifactSummary{
+		ID:         artifact.Id,
+		Type:       artifact.Type,
+		MimeType:   artifact.MimeType,
+		Filename:   artifact.Filename,
+		Size:       artifact.Size,
+		Reference:  artifact.Reference,
+		TTLSeconds: artifact.TtlSeconds,
+		Redacted:   strings.HasPrefix(artifact.Reference, "redacted://"),
+	})
 }
 
 // getSystemStatus gathers system health information.

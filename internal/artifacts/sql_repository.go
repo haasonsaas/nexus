@@ -1,10 +1,9 @@
 package artifacts
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -16,75 +15,53 @@ import (
 	pb "github.com/haasonsaas/nexus/pkg/proto"
 )
 
-// SQLRepository implements Repository using SQL database for metadata storage.
+// SQLRepository stores artifact metadata in SQL and artifact data in a Store backend.
 type SQLRepository struct {
 	db     *sql.DB
 	store  Store
 	logger *slog.Logger
-
-	// Prepared statements
-	stmtInsert       *sql.Stmt
-	stmtGet          *sql.Stmt
-	stmtDelete       *sql.Stmt
-	stmtPruneExpired *sql.Stmt
 }
 
-// NewSQLRepository creates a repository backed by SQL database and the given store.
+// NewSQLRepository creates a SQL-backed repository and ensures the schema exists.
 func NewSQLRepository(db *sql.DB, store Store, logger *slog.Logger) (*SQLRepository, error) {
+	if db == nil {
+		return nil, fmt.Errorf("db is required")
+	}
+	if store == nil {
+		return nil, fmt.Errorf("artifact store is required")
+	}
 	if logger == nil {
 		logger = slog.Default()
 	}
-
 	repo := &SQLRepository{
 		db:     db,
 		store:  store,
 		logger: logger,
 	}
-
-	if err := repo.prepareStatements(); err != nil {
-		return nil, fmt.Errorf("prepare statements: %w", err)
+	if err := repo.ensureSchema(context.Background()); err != nil {
+		return nil, err
 	}
-
 	return repo, nil
 }
 
-func (r *SQLRepository) prepareStatements() error {
-	var err error
-
-	r.stmtInsert, err = r.db.Prepare(`
-		INSERT INTO artifacts (id, session_id, edge_id, tool_call_id, type, mime_type, filename, size, reference, ttl_seconds, created_at, expires_at, metadata)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-	`)
-	if err != nil {
-		return fmt.Errorf("prepare insert: %w", err)
+// Close closes the underlying store and database connection.
+func (r *SQLRepository) Close() error {
+	if r.store != nil {
+		if err := r.store.Close(); err != nil {
+			return err
+		}
 	}
-
-	r.stmtGet, err = r.db.Prepare(`
-		SELECT id, session_id, edge_id, tool_call_id, type, mime_type, filename, size, reference, ttl_seconds, created_at, expires_at, metadata
-		FROM artifacts WHERE id = $1
-	`)
-	if err != nil {
-		return fmt.Errorf("prepare get: %w", err)
+	if r.db != nil {
+		return r.db.Close()
 	}
-
-	r.stmtDelete, err = r.db.Prepare(`DELETE FROM artifacts WHERE id = $1`)
-	if err != nil {
-		return fmt.Errorf("prepare delete: %w", err)
-	}
-
-	r.stmtPruneExpired, err = r.db.Prepare(`
-		DELETE FROM artifacts WHERE expires_at IS NOT NULL AND expires_at < $1
-		RETURNING id, reference
-	`)
-	if err != nil {
-		return fmt.Errorf("prepare prune: %w", err)
-	}
-
 	return nil
 }
 
 // StoreArtifact persists an artifact from tool execution.
 func (r *SQLRepository) StoreArtifact(ctx context.Context, artifact *pb.Artifact, data io.Reader) error {
+	if artifact == nil {
+		return fmt.Errorf("artifact is required")
+	}
 	if artifact.Id == "" {
 		artifact.Id = uuid.NewString()
 	}
@@ -99,50 +76,29 @@ func (r *SQLRepository) StoreArtifact(ctx context.Context, artifact *pb.Artifact
 		TTLSeconds: artifact.TtlSeconds,
 		CreatedAt:  now,
 	}
-
-	// Get context values
 	if sessionID := observability.GetSessionID(ctx); sessionID != "" {
 		meta.SessionID = sessionID
 	}
 	if edgeID := observability.GetEdgeID(ctx); edgeID != "" {
 		meta.EdgeID = edgeID
 	}
-	toolCallID := observability.GetToolCallID(ctx)
 
-	// Calculate expiration
 	ttl := time.Duration(artifact.TtlSeconds) * time.Second
 	if ttl == 0 {
 		ttl = GetDefaultTTL(artifact.Type)
 	}
 	meta.ExpiresAt = now.Add(ttl)
 
-	// Handle redacted artifacts
 	if strings.HasPrefix(artifact.Reference, "redacted://") {
 		meta.Reference = artifact.Reference
 		meta.Size = 0
-		return r.insertMetadata(ctx, meta, toolCallID, nil)
+		if err := r.upsertMetadata(ctx, meta); err != nil {
+			return err
+		}
+		r.logger.Info("artifact redacted", "id", artifact.Id, "type", artifact.Type)
+		return nil
 	}
 
-	// For small artifacts (<1MB), store inline
-	const maxInlineSize = 1024 * 1024
-	if artifact.Size < maxInlineSize && artifact.Size > 0 {
-		buf := make([]byte, artifact.Size)
-		n, err := io.ReadFull(data, buf)
-		if err != nil && err != io.ErrUnexpectedEOF {
-			return fmt.Errorf("read artifact data: %w", err)
-		}
-		artifact.Data = buf[:n]
-		artifact.Reference = fmt.Sprintf("inline://%s", artifact.Id)
-		meta.Reference = artifact.Reference
-
-		// Store inline data in metadata JSON
-		inlineData := map[string]interface{}{
-			"inline_data": buf[:n],
-		}
-		return r.insertMetadata(ctx, meta, toolCallID, inlineData)
-	}
-
-	// Store in backend
 	opts := PutOptions{
 		MimeType: artifact.MimeType,
 		TTL:      ttl,
@@ -150,6 +106,13 @@ func (r *SQLRepository) StoreArtifact(ctx context.Context, artifact *pb.Artifact
 			"type": artifact.Type,
 		},
 	}
+	if meta.SessionID != "" {
+		opts.Metadata["session_id"] = meta.SessionID
+	}
+	if meta.EdgeID != "" {
+		opts.Metadata["edge_id"] = meta.EdgeID
+	}
+
 	ref, err := r.store.Put(ctx, artifact.Id, data, opts)
 	if err != nil {
 		return fmt.Errorf("store artifact: %w", err)
@@ -157,10 +120,9 @@ func (r *SQLRepository) StoreArtifact(ctx context.Context, artifact *pb.Artifact
 	artifact.Reference = ref
 	meta.Reference = ref
 
-	if err := r.insertMetadata(ctx, meta, toolCallID, nil); err != nil {
-		// Try to clean up stored data on metadata failure
+	if err := r.upsertMetadata(ctx, meta); err != nil {
 		if delErr := r.store.Delete(ctx, artifact.Id); delErr != nil {
-			r.logger.Warn("failed to cleanup stored artifact after metadata insert error", "id", artifact.Id, "error", delErr)
+			r.logger.Warn("failed to cleanup stored artifact after metadata upsert error", "id", artifact.Id, "error", delErr)
 		}
 		return err
 	}
@@ -174,81 +136,14 @@ func (r *SQLRepository) StoreArtifact(ctx context.Context, artifact *pb.Artifact
 	return nil
 }
 
-func (r *SQLRepository) insertMetadata(ctx context.Context, meta *Metadata, toolCallID string, extraMeta map[string]interface{}) error {
-	var metadataJSON []byte
-	var err error
-	if extraMeta != nil {
-		metadataJSON, err = json.Marshal(extraMeta)
-		if err != nil {
-			return fmt.Errorf("marshal metadata: %w", err)
-		}
-	}
-
-	var sessionID, edgeID, toolCallPtr *string
-	if meta.SessionID != "" {
-		sessionID = &meta.SessionID
-	}
-	if meta.EdgeID != "" {
-		edgeID = &meta.EdgeID
-	}
-	if toolCallID != "" {
-		toolCallPtr = &toolCallID
-	}
-
-	var expiresAt *time.Time
-	if !meta.ExpiresAt.IsZero() {
-		expiresAt = &meta.ExpiresAt
-	}
-
-	_, err = r.stmtInsert.ExecContext(ctx,
-		meta.ID,
-		sessionID,
-		edgeID,
-		toolCallPtr,
-		meta.Type,
-		meta.MimeType,
-		meta.Filename,
-		meta.Size,
-		meta.Reference,
-		meta.TTLSeconds,
-		meta.CreatedAt,
-		expiresAt,
-		metadataJSON,
-	)
-	if err != nil {
-		return fmt.Errorf("insert artifact metadata: %w", err)
-	}
-
-	return nil
-}
-
 // GetArtifact retrieves artifact metadata and data.
 func (r *SQLRepository) GetArtifact(ctx context.Context, artifactID string) (*pb.Artifact, io.ReadCloser, error) {
-	var (
-		id, artType, mimeType, reference string
-		sessionID, edgeID, toolCallID    sql.NullString
-		filename                         sql.NullString
-		size                             int64
-		ttlSeconds                       int32
-		createdAt                        time.Time
-		expiresAt                        sql.NullTime
-		metadataJSON                     sql.NullString
-	)
-
-	err := r.stmtGet.QueryRowContext(ctx, artifactID).Scan(
-		&id, &sessionID, &edgeID, &toolCallID,
-		&artType, &mimeType, &filename, &size, &reference,
-		&ttlSeconds, &createdAt, &expiresAt, &metadataJSON,
-	)
-	if err == sql.ErrNoRows {
-		return nil, nil, fmt.Errorf("artifact not found: %s", artifactID)
-	}
+	meta, err := r.fetchMetadata(ctx, artifactID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("query artifact: %w", err)
+		return nil, nil, err
 	}
 
-	// Check expiration
-	if expiresAt.Valid && time.Now().After(expiresAt.Time) {
+	if !meta.ExpiresAt.IsZero() && time.Now().After(meta.ExpiresAt) {
 		if err := r.DeleteArtifact(ctx, artifactID); err != nil {
 			r.logger.Warn("failed to delete expired artifact", "id", artifactID, "error", err)
 		}
@@ -256,215 +151,296 @@ func (r *SQLRepository) GetArtifact(ctx context.Context, artifactID string) (*pb
 	}
 
 	artifact := &pb.Artifact{
-		Id:         id,
-		Type:       artType,
-		MimeType:   mimeType,
-		Size:       size,
-		Reference:  reference,
-		TtlSeconds: ttlSeconds,
-	}
-	if filename.Valid {
-		artifact.Filename = filename.String
+		Id:         meta.ID,
+		Type:       meta.Type,
+		MimeType:   meta.MimeType,
+		Filename:   meta.Filename,
+		Size:       meta.Size,
+		Reference:  meta.Reference,
+		TtlSeconds: meta.TTLSeconds,
 	}
 
-	// Handle redacted artifacts
-	if strings.HasPrefix(reference, "redacted://") {
-		return artifact, io.NopCloser(bytes.NewReader(nil)), nil
+	if strings.HasPrefix(meta.Reference, "redacted://") {
+		return artifact, io.NopCloser(strings.NewReader("")), nil
 	}
 
-	// Handle inline data
-	if strings.HasPrefix(reference, "inline://") && metadataJSON.Valid {
-		var meta map[string]interface{}
-		if err := json.Unmarshal([]byte(metadataJSON.String), &meta); err == nil {
-			if inlineData, ok := meta["inline_data"].([]interface{}); ok {
-				data := make([]byte, len(inlineData))
-				for i, v := range inlineData {
-					if f, ok := v.(float64); ok {
-						data[i] = byte(f)
-					}
-				}
-				artifact.Data = data
-				return artifact, io.NopCloser(bytes.NewReader(data)), nil
-			}
-		}
-	}
-
-	// Fetch from store
-	data, err := r.store.Get(ctx, artifactID)
+	reader, err := r.store.Get(ctx, artifactID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("get artifact data: %w", err)
 	}
-
-	return artifact, data, nil
+	return artifact, reader, nil
 }
 
 // ListArtifacts finds artifacts matching criteria.
 func (r *SQLRepository) ListArtifacts(ctx context.Context, filter Filter) ([]*pb.Artifact, error) {
-	query := `
-		SELECT id, session_id, edge_id, type, mime_type, filename, size, reference, ttl_seconds, created_at, expires_at
-		FROM artifacts
-		WHERE (expires_at IS NULL OR expires_at > $1)
-	`
-	args := []interface{}{time.Now()}
-	argIdx := 2
+	where := []string{"(expires_at IS NULL OR expires_at > now())"}
+	args := []any{}
+	argIdx := 1
 
 	if filter.SessionID != "" {
-		query += fmt.Sprintf(" AND session_id = $%d", argIdx)
+		where = append(where, fmt.Sprintf("session_id = $%d", argIdx))
 		args = append(args, filter.SessionID)
 		argIdx++
 	}
 	if filter.EdgeID != "" {
-		query += fmt.Sprintf(" AND edge_id = $%d", argIdx)
+		where = append(where, fmt.Sprintf("edge_id = $%d", argIdx))
 		args = append(args, filter.EdgeID)
 		argIdx++
 	}
 	if filter.Type != "" {
-		query += fmt.Sprintf(" AND type = $%d", argIdx)
+		where = append(where, fmt.Sprintf("type = $%d", argIdx))
 		args = append(args, filter.Type)
 		argIdx++
 	}
 	if !filter.CreatedAfter.IsZero() {
-		query += fmt.Sprintf(" AND created_at >= $%d", argIdx)
+		where = append(where, fmt.Sprintf("created_at >= $%d", argIdx))
 		args = append(args, filter.CreatedAfter)
 		argIdx++
 	}
 	if !filter.CreatedBefore.IsZero() {
-		query += fmt.Sprintf(" AND created_at <= $%d", argIdx)
+		where = append(where, fmt.Sprintf("created_at <= $%d", argIdx))
 		args = append(args, filter.CreatedBefore)
+		argIdx++
 	}
 
+	query := `SELECT id, session_id, edge_id, type, mime_type, filename, size, reference, ttl_seconds, created_at, expires_at
+		FROM artifacts`
+	if len(where) > 0 {
+		query += " WHERE " + strings.Join(where, " AND ")
+	}
 	query += " ORDER BY created_at DESC"
-
 	if filter.Limit > 0 {
-		query += fmt.Sprintf(" LIMIT %d", filter.Limit)
+		query += fmt.Sprintf(" LIMIT $%d", argIdx)
+		args = append(args, filter.Limit)
 	}
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("query artifacts: %w", err)
+		return nil, fmt.Errorf("list artifacts: %w", err)
 	}
 	defer rows.Close()
 
 	var results []*pb.Artifact
 	for rows.Next() {
-		var (
-			id, artType, mimeType, reference string
-			sessionID, edgeID                sql.NullString
-			filename                         sql.NullString
-			size                             int64
-			ttlSeconds                       int32
-			createdAt                        time.Time
-			expiresAt                        sql.NullTime
-		)
-
-		if err := rows.Scan(&id, &sessionID, &edgeID, &artType, &mimeType, &filename, &size, &reference, &ttlSeconds, &createdAt, &expiresAt); err != nil {
-			return nil, fmt.Errorf("scan artifact: %w", err)
+		meta, err := scanMetadata(rows)
+		if err != nil {
+			return nil, err
 		}
-
-		artifact := &pb.Artifact{
-			Id:         id,
-			Type:       artType,
-			MimeType:   mimeType,
-			Size:       size,
-			Reference:  reference,
-			TtlSeconds: ttlSeconds,
-		}
-		if filename.Valid {
-			artifact.Filename = filename.String
-		}
-
-		results = append(results, artifact)
+		results = append(results, &pb.Artifact{
+			Id:         meta.ID,
+			Type:       meta.Type,
+			MimeType:   meta.MimeType,
+			Filename:   meta.Filename,
+			Size:       meta.Size,
+			Reference:  meta.Reference,
+			TtlSeconds: meta.TTLSeconds,
+		})
 	}
-
-	return results, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list artifacts: %w", err)
+	}
+	return results, nil
 }
 
 // DeleteArtifact removes an artifact and its data.
 func (r *SQLRepository) DeleteArtifact(ctx context.Context, artifactID string) error {
-	// Get reference first to know where to delete from
-	var reference string
-	err := r.db.QueryRowContext(ctx, "SELECT reference FROM artifacts WHERE id = $1", artifactID).Scan(&reference)
-	if err == sql.ErrNoRows {
-		return nil // Already deleted
-	}
+	meta, err := r.fetchMetadata(ctx, artifactID)
 	if err != nil {
-		return fmt.Errorf("get artifact reference: %w", err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		return err
 	}
-
-	// Delete metadata first
-	_, err = r.stmtDelete.ExecContext(ctx, artifactID)
-	if err != nil {
-		return fmt.Errorf("delete artifact metadata: %w", err)
-	}
-
-	// Delete from store if not inline/redacted
-	if !strings.HasPrefix(reference, "inline://") && !strings.HasPrefix(reference, "redacted://") {
+	if meta.Reference != "" && !strings.HasPrefix(meta.Reference, "redacted://") {
 		if err := r.store.Delete(ctx, artifactID); err != nil {
-			r.logger.Warn("failed to delete artifact from store",
-				"id", artifactID,
-				"error", err)
+			return fmt.Errorf("delete artifact data: %w", err)
 		}
 	}
-
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM artifacts WHERE id = $1`, artifactID); err != nil {
+		return fmt.Errorf("delete artifact metadata: %w", err)
+	}
 	r.logger.Info("artifact deleted", "id", artifactID)
 	return nil
 }
 
 // PruneExpired removes expired artifacts.
 func (r *SQLRepository) PruneExpired(ctx context.Context) (int, error) {
-	rows, err := r.stmtPruneExpired.QueryContext(ctx, time.Now())
+	rows, err := r.db.QueryContext(ctx, `SELECT id FROM artifacts WHERE expires_at IS NOT NULL AND expires_at <= now()`)
 	if err != nil {
-		return 0, fmt.Errorf("prune expired artifacts: %w", err)
+		return 0, fmt.Errorf("list expired artifacts: %w", err)
 	}
 	defer rows.Close()
 
-	count := 0
+	var ids []string
 	for rows.Next() {
-		var id, reference string
-		if err := rows.Scan(&id, &reference); err != nil {
-			continue
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return 0, fmt.Errorf("scan expired artifact: %w", err)
 		}
-
-		// Delete from store if not inline/redacted
-		if !strings.HasPrefix(reference, "inline://") && !strings.HasPrefix(reference, "redacted://") {
-			if err := r.store.Delete(ctx, id); err != nil {
-				r.logger.Warn("failed to delete expired artifact from store",
-					"id", id,
-					"error", err)
-			}
-		}
-		count++
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("list expired artifacts: %w", err)
 	}
 
+	count := 0
+	for _, id := range ids {
+		if err := r.DeleteArtifact(ctx, id); err == nil {
+			count++
+		}
+	}
 	r.logger.Info("pruned expired artifacts", "count", count)
-	return count, rows.Err()
+	return count, nil
 }
 
-// Close releases resources.
-func (r *SQLRepository) Close() error {
-	var errs []error
-	if r.stmtInsert != nil {
-		if err := r.stmtInsert.Close(); err != nil {
-			errs = append(errs, err)
-		}
+func (r *SQLRepository) ensureSchema(ctx context.Context) error {
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS artifacts (
+			id STRING PRIMARY KEY,
+			session_id STRING,
+			edge_id STRING,
+			type STRING,
+			mime_type STRING,
+			filename STRING,
+			size INT8,
+			reference STRING,
+			ttl_seconds INT4,
+			created_at TIMESTAMPTZ NOT NULL,
+			expires_at TIMESTAMPTZ
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_artifacts_session_id ON artifacts (session_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_artifacts_edge_id ON artifacts (edge_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_artifacts_type ON artifacts (type)`,
+		`CREATE INDEX IF NOT EXISTS idx_artifacts_created_at ON artifacts (created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_artifacts_expires_at ON artifacts (expires_at)`,
 	}
-	if r.stmtGet != nil {
-		if err := r.stmtGet.Close(); err != nil {
-			errs = append(errs, err)
+	for _, stmt := range statements {
+		if _, err := r.db.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("ensure artifacts schema: %w", err)
 		}
-	}
-	if r.stmtDelete != nil {
-		if err := r.stmtDelete.Close(); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	if r.stmtPruneExpired != nil {
-		if err := r.stmtPruneExpired.Close(); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	if len(errs) > 0 {
-		return fmt.Errorf("close statements: %v", errs)
 	}
 	return nil
+}
+
+func (r *SQLRepository) upsertMetadata(ctx context.Context, meta *Metadata) error {
+	if meta == nil {
+		return fmt.Errorf("metadata is required")
+	}
+	_, err := r.db.ExecContext(ctx, `
+		INSERT INTO artifacts (
+			id, session_id, edge_id, type, mime_type, filename, size, reference,
+			ttl_seconds, created_at, expires_at
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+		ON CONFLICT (id) DO UPDATE SET
+			session_id = EXCLUDED.session_id,
+			edge_id = EXCLUDED.edge_id,
+			type = EXCLUDED.type,
+			mime_type = EXCLUDED.mime_type,
+			filename = EXCLUDED.filename,
+			size = EXCLUDED.size,
+			reference = EXCLUDED.reference,
+			ttl_seconds = EXCLUDED.ttl_seconds,
+			created_at = EXCLUDED.created_at,
+			expires_at = EXCLUDED.expires_at
+	`,
+		meta.ID,
+		nullString(meta.SessionID),
+		nullString(meta.EdgeID),
+		meta.Type,
+		meta.MimeType,
+		meta.Filename,
+		meta.Size,
+		meta.Reference,
+		meta.TTLSeconds,
+		meta.CreatedAt,
+		nullTime(meta.ExpiresAt),
+	)
+	if err != nil {
+		return fmt.Errorf("upsert artifact metadata: %w", err)
+	}
+	return nil
+}
+
+func (r *SQLRepository) fetchMetadata(ctx context.Context, artifactID string) (*Metadata, error) {
+	row := r.db.QueryRowContext(ctx, `
+		SELECT id, session_id, edge_id, type, mime_type, filename, size, reference, ttl_seconds, created_at, expires_at
+		FROM artifacts WHERE id = $1
+	`, artifactID)
+	meta, err := scanMetadata(row)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("artifact not found: %s: %w", artifactID, err)
+		}
+		return nil, err
+	}
+	return meta, nil
+}
+
+type metadataScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanMetadata(row metadataScanner) (*Metadata, error) {
+	var meta Metadata
+	var sessionID sql.NullString
+	var edgeID sql.NullString
+	var mimeType sql.NullString
+	var filename sql.NullString
+	var reference sql.NullString
+	var ttlSeconds sql.NullInt32
+	var expiresAt sql.NullTime
+	if err := row.Scan(
+		&meta.ID,
+		&sessionID,
+		&edgeID,
+		&meta.Type,
+		&mimeType,
+		&filename,
+		&meta.Size,
+		&reference,
+		&ttlSeconds,
+		&meta.CreatedAt,
+		&expiresAt,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, err
+		}
+		return nil, fmt.Errorf("scan artifact metadata: %w", err)
+	}
+	if sessionID.Valid {
+		meta.SessionID = sessionID.String
+	}
+	if edgeID.Valid {
+		meta.EdgeID = edgeID.String
+	}
+	if mimeType.Valid {
+		meta.MimeType = mimeType.String
+	}
+	if filename.Valid {
+		meta.Filename = filename.String
+	}
+	if reference.Valid {
+		meta.Reference = reference.String
+	}
+	if ttlSeconds.Valid {
+		meta.TTLSeconds = ttlSeconds.Int32
+	}
+	if expiresAt.Valid {
+		meta.ExpiresAt = expiresAt.Time
+	}
+	return &meta, nil
+}
+
+func nullString(value string) sql.NullString {
+	if strings.TrimSpace(value) == "" {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: value, Valid: true}
+}
+
+func nullTime(value time.Time) sql.NullTime {
+	if value.IsZero() {
+		return sql.NullTime{}
+	}
+	return sql.NullTime{Time: value, Valid: true}
 }

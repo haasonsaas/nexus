@@ -315,6 +315,11 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		}
 	}()
 
+	artifactSetup, err := buildArtifactSetup(cfg, logger)
+	if err != nil {
+		return nil, fmt.Errorf("artifact setup: %w", err)
+	}
+
 	// Initialize edge manager if enabled
 	var edgeManager *edge.Manager
 	var edgeService *edge.Service
@@ -333,10 +338,6 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 			EventBufferSize:    cfg.Edge.EventBufferSize,
 		}
 		edgeManager = edge.NewManager(managerConfig, edgeAuth, logger)
-		artifactSetup, err := buildArtifactSetup(cfg, logger)
-		if err != nil {
-			return nil, fmt.Errorf("artifact setup: %w", err)
-		}
 		if artifactSetup != nil {
 			if artifactSetup.repo != nil {
 				edgeManager.SetArtifactRepository(artifactSetup.repo)
@@ -345,12 +346,12 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 			if artifactSetup.redactor != nil {
 				edgeManager.SetArtifactRedactionPolicy(artifactSetup.redactor)
 			}
-			if artifactSetup.cleanup != nil {
-				go artifactSetup.cleanup.Start(startupCtx)
-			}
 		}
 		edgeService = edge.NewService(edgeManager)
 		logger.Info("edge service initialized", "auth_mode", cfg.Edge.AuthMode)
+	}
+	if artifactSetup != nil && artifactSetup.cleanup != nil {
+		go artifactSetup.cleanup.Start(startupCtx)
 	}
 
 	// Initialize event store for observability timeline
@@ -400,12 +401,16 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		normalizer:         NewMessageNormalizer(),
 		streamingRegistry:  NewStreamingRegistry(),
 	}
+	if artifactSetup != nil {
+		server.artifactRepo = artifactSetup.repo
+	}
 	grpcSvc := newGRPCService(server)
 	proto.RegisterNexusGatewayServer(grpcServer, grpcSvc)
 	proto.RegisterSessionServiceServer(grpcServer, grpcSvc)
 	proto.RegisterAgentServiceServer(grpcServer, grpcSvc)
 	proto.RegisterChannelServiceServer(grpcServer, grpcSvc)
 	proto.RegisterHealthServiceServer(grpcServer, grpcSvc)
+	proto.RegisterArtifactServiceServer(grpcServer, grpcSvc)
 	proto.RegisterEventServiceServer(grpcServer, newEventService(server))
 	proto.RegisterTaskServiceServer(grpcServer, newTaskService(server))
 	proto.RegisterMessageServiceServer(grpcServer, newMessageService(server))

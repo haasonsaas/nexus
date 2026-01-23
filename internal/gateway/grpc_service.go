@@ -28,6 +28,7 @@ type grpcService struct {
 	proto.UnimplementedAgentServiceServer
 	proto.UnimplementedChannelServiceServer
 	proto.UnimplementedHealthServiceServer
+	proto.UnimplementedArtifactServiceServer
 
 	server       *Server
 	agentStore   storage.AgentStore

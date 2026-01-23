@@ -323,6 +323,9 @@ func runArtifactsList(cmd *cobra.Command, configPath, sessionID, edgeID, artifac
 	if repo == nil {
 		return fmt.Errorf("artifact storage is disabled")
 	}
+	if closer, ok := repo.(interface{ Close() error }); ok {
+		defer closer.Close()
+	}
 
 	filter := artifacts.Filter{
 		SessionID: sessionID,
@@ -375,6 +378,9 @@ func runArtifactsGet(cmd *cobra.Command, configPath, artifactID, outPath string,
 	}
 	if repo == nil {
 		return fmt.Errorf("artifact storage is disabled")
+	}
+	if closer, ok := repo.(interface{ Close() error }); ok {
+		defer closer.Close()
 	}
 
 	artifact, reader, err := repo.GetArtifact(cmd.Context(), artifactID)

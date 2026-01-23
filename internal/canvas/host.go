@@ -449,6 +449,43 @@ func (h *Host) liveReloadScript() string {
   const scheme = window.location.protocol === "https:" ? "wss" : "ws";
   const wsUrl = scheme + "://" + window.location.host + wsPath;
   let socket = null;
+  const handlerNames = ["nexusCanvasA2UIAction", "clawdbotCanvasA2UIAction"];
+
+  const postToNode = (payload) => {
+    try {
+      const raw = typeof payload === "string" ? payload : JSON.stringify(payload);
+      for (const handlerName of handlerNames) {
+        const iosHandler = globalThis.webkit?.messageHandlers?.[handlerName];
+        if (iosHandler && typeof iosHandler.postMessage === "function") {
+          iosHandler.postMessage(raw);
+          return true;
+        }
+        const androidHandler = globalThis[handlerName];
+        if (androidHandler && typeof androidHandler.postMessage === "function") {
+          androidHandler.postMessage(raw);
+          return true;
+        }
+      }
+    } catch {}
+    return false;
+  };
+
+  const sendUserAction = (userAction) => {
+    const id =
+      (userAction && typeof userAction.id === "string" && userAction.id.trim()) ||
+      (globalThis.crypto?.randomUUID?.() ?? String(Date.now()));
+    const action = { ...userAction, id };
+    return postToNode({ userAction: action });
+  };
+
+  globalThis.Nexus = globalThis.Nexus ?? {};
+  globalThis.Nexus.sendUserAction = sendUserAction;
+  globalThis.nexusSendUserAction = sendUserAction;
+  globalThis.nexusPostMessage = postToNode;
+  globalThis.Clawdbot = globalThis.Clawdbot ?? {};
+  globalThis.Clawdbot.sendUserAction = sendUserAction;
+  globalThis.clawdbotSendUserAction = sendUserAction;
+  globalThis.clawdbotPostMessage = postToNode;
 
   const connect = () => {
     socket = new WebSocket(wsUrl);

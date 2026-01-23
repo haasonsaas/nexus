@@ -129,7 +129,14 @@ func (g *grpcService) handleSendMessage(ctx context.Context, stream proto.NexusG
 		promptCtx = agent.WithSystemPrompt(promptCtx, systemPrompt)
 	}
 
-	chunks, err := runtime.Process(promptCtx, session, msg)
+	runCtx, cancel := context.WithCancel(promptCtx)
+	runToken := g.server.registerActiveRun(session.ID, cancel)
+	defer func() {
+		cancel()
+		g.server.finishActiveRun(session.ID, runToken)
+	}()
+
+	chunks, err := runtime.Process(runCtx, session, msg)
 	if err != nil {
 		return status.Errorf(codes.Internal, "runtime error: %v", err)
 	}

@@ -55,6 +55,10 @@ func (s *Server) Start(ctx context.Context) error {
 		WithContext("grpc_port", s.config.Server.GRPCPort)
 	s.hooksRegistry.TriggerAsync(ctx, startupEvent)
 
+	if err := s.startHTTPServer(ctx); err != nil {
+		return fmt.Errorf("failed to start http server: %w", err)
+	}
+
 	// Start gRPC server
 	return s.startGRPCServer()
 }
@@ -93,6 +97,7 @@ func (s *Server) Stop(ctx context.Context) error {
 
 	// Stop accepting new connections
 	s.grpc.GracefulStop()
+	s.stopHTTPServer(ctx)
 
 	// Stop channel adapters
 	if err := s.channels.StopAll(ctx); err != nil {

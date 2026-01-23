@@ -294,10 +294,10 @@ func TestValidateVariable(t *testing.T) {
 
 func TestValidateValueType(t *testing.T) {
 	tests := []struct {
-		name     string
-		value    any
-		varType  VariableType
-		wantErr  bool
+		name    string
+		value   any
+		varType VariableType
+		wantErr bool
 	}{
 		// String tests
 		{"string valid", "hello", VariableTypeString, false},

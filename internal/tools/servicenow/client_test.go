@@ -156,8 +156,8 @@ func TestFormatIncident(t *testing.T) {
 			contains: []string{
 				"INC0012345",
 				"Server down",
-				"New",    // State 1 = New
-				"High",   // Priority 2 = High
+				"New",  // State 1 = New
+				"High", // Priority 2 = High
 				"John Doe",
 				"2024-01-15 10:30:00",
 			},

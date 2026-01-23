@@ -127,6 +127,7 @@ type Host struct {
 	rootReal     string
 	namespace    string
 	a2uiRoot     string
+	a2uiRootReal string
 	liveReload   bool
 	injectClient bool
 	autoIndex    bool
@@ -221,8 +222,13 @@ func (h *Host) Start(ctx context.Context) error {
 
 	if h.a2uiRoot != "" {
 		if info, err := os.Stat(h.a2uiRoot); err == nil && info.IsDir() {
+			if a2uiReal, err := filepath.EvalSymlinks(h.a2uiRoot); err == nil {
+				h.a2uiRootReal = a2uiReal
+			} else {
+				h.logger.Warn("canvas a2ui root resolve failed", "path", h.a2uiRoot, "error", err)
+			}
 			a2uiPrefix := h.a2uiPrefix()
-			mux.Handle(a2uiPrefix+"/", http.StripPrefix(a2uiPrefix+"/", http.FileServer(http.Dir(h.a2uiRoot))))
+			mux.Handle(a2uiPrefix+"/", http.StripPrefix(a2uiPrefix+"/", h.a2uiHandler()))
 			mux.HandleFunc(a2uiPrefix, func(w http.ResponseWriter, r *http.Request) {
 				http.Redirect(w, r, a2uiPrefix+"/", http.StatusFound)
 			})
@@ -258,6 +264,11 @@ func (h *Host) Start(ctx context.Context) error {
 				h.logger.Warn("failed to close canvas listener", "error", closeErr)
 			}
 			return err
+		}
+		if h.a2uiRoot != "" && h.a2uiRoot != h.root {
+			if err := h.watchRecursive(watcher, h.a2uiRoot); err != nil {
+				h.logger.Warn("failed to watch a2ui root", "path", h.a2uiRoot, "error", err)
+			}
 		}
 	}
 
@@ -373,6 +384,33 @@ func (h *Host) canvasHandler() http.Handler {
 				_, _ = w.Write([]byte("<!doctype html><meta charset=\"utf-8\" /><title>Nexus Canvas</title><pre>Missing file. Create index.html</pre>")) //nolint:errcheck
 				return
 			}
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		if strings.HasSuffix(strings.ToLower(fullPath), ".html") {
+			h.serveHTML(w, r, fullPath)
+			return
+		}
+		http.ServeFile(w, r, fullPath)
+	})
+}
+
+func (h *Host) a2uiHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			_, _ = w.Write([]byte("Method Not Allowed")) //nolint:errcheck
+			return
+		}
+		clean := path.Clean("/" + strings.TrimPrefix(r.URL.Path, "/"))
+		if strings.HasPrefix(clean, "/..") {
+			http.NotFound(w, r)
+			return
+		}
+		fullPath, err := h.resolveFilePathWithRoot(clean, h.a2uiRoot, h.a2uiRootReal, false)
+		if err != nil {
 			http.NotFound(w, r)
 			return
 		}
@@ -732,10 +770,14 @@ func normalizeNamespace(namespace string) string {
 }
 
 func (h *Host) resolveFilePath(urlPath string) (string, error) {
-	rootReal := strings.TrimSpace(h.rootReal)
+	return h.resolveFilePathWithRoot(urlPath, h.root, h.rootReal, h.autoIndex)
+}
+
+func (h *Host) resolveFilePathWithRoot(urlPath string, root string, rootReal string, autoIndex bool) (string, error) {
+	rootReal = strings.TrimSpace(rootReal)
 	if rootReal == "" {
-		rootReal = h.root
-		if resolved, err := filepath.EvalSymlinks(h.root); err == nil {
+		rootReal = root
+		if resolved, err := filepath.EvalSymlinks(root); err == nil {
 			rootReal = resolved
 		}
 	}
@@ -745,11 +787,11 @@ func (h *Host) resolveFilePath(urlPath string) (string, error) {
 		return "", os.ErrNotExist
 	}
 	rel := strings.TrimPrefix(normalized, "/")
-	candidate := filepath.Join(h.root, filepath.FromSlash(rel))
+	candidate := filepath.Join(root, filepath.FromSlash(rel))
 
 	info, err := os.Stat(candidate)
 	if err == nil && info.IsDir() {
-		if h.autoIndex {
+		if autoIndex {
 			h.ensureIndex(candidate)
 		}
 		candidate = filepath.Join(candidate, "index.html")

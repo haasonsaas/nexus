@@ -102,6 +102,24 @@ func TestHost_CanvasURL(t *testing.T) {
 		}
 	})
 
+	t.Run("ignores loopback override when request host is available", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		cfg := config.CanvasHostConfig{
+			Host:      "::1",
+			Port:      18793,
+			Root:      tmpDir,
+			Namespace: "/__nexus__",
+		}
+		host, err := NewHost(cfg, nil)
+		if err != nil {
+			t.Fatalf("NewHost error: %v", err)
+		}
+		url := host.CanvasURLWithParams(CanvasURLParams{RequestHost: "nexus.example.com"})
+		if url != "http://nexus.example.com:18793/__nexus__/canvas/" {
+			t.Errorf("CanvasURLWithParams() = %q, want %q", url, "http://nexus.example.com:18793/__nexus__/canvas/")
+		}
+	})
+
 	t.Run("uses localhost when host is empty and no request host", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		cfg := config.CanvasHostConfig{
@@ -117,6 +135,47 @@ func TestHost_CanvasURL(t *testing.T) {
 		url := host.CanvasURL("")
 		if url != "http://localhost:18793/__nexus__/canvas/" {
 			t.Errorf("CanvasURL() = %q, want %q", url, "http://localhost:18793/__nexus__/canvas/")
+		}
+	})
+
+	t.Run("uses forwarded proto when provided", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		cfg := config.CanvasHostConfig{
+			Host:      "0.0.0.0",
+			Port:      18793,
+			Root:      tmpDir,
+			Namespace: "/__nexus__",
+		}
+		host, err := NewHost(cfg, nil)
+		if err != nil {
+			t.Fatalf("NewHost error: %v", err)
+		}
+		url := host.CanvasURLWithParams(CanvasURLParams{
+			RequestHost:    "nexus.example.com",
+			ForwardedProto: "https",
+		})
+		if url != "https://nexus.example.com:18793/__nexus__/canvas/" {
+			t.Errorf("CanvasURLWithParams() = %q, want %q", url, "https://nexus.example.com:18793/__nexus__/canvas/")
+		}
+	})
+
+	t.Run("uses local address when request host missing", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		cfg := config.CanvasHostConfig{
+			Host:      "",
+			Port:      18793,
+			Root:      tmpDir,
+			Namespace: "/__nexus__",
+		}
+		host, err := NewHost(cfg, nil)
+		if err != nil {
+			t.Fatalf("NewHost error: %v", err)
+		}
+		url := host.CanvasURLWithParams(CanvasURLParams{
+			LocalAddress: "192.0.2.42:5555",
+		})
+		if url != "http://192.0.2.42:18793/__nexus__/canvas/" {
+			t.Errorf("CanvasURLWithParams() = %q, want %q", url, "http://192.0.2.42:18793/__nexus__/canvas/")
 		}
 	})
 
@@ -141,7 +200,7 @@ func TestHost_CanvasURL(t *testing.T) {
 	t.Run("formats IPv6 host correctly", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		cfg := config.CanvasHostConfig{
-			Host:      "::1",
+			Host:      "2001:db8::1",
 			Port:      18793,
 			Root:      tmpDir,
 			Namespace: "/__nexus__",
@@ -151,8 +210,8 @@ func TestHost_CanvasURL(t *testing.T) {
 			t.Fatalf("NewHost error: %v", err)
 		}
 		url := host.CanvasURL("")
-		if url != "http://[::1]:18793/__nexus__/canvas/" {
-			t.Errorf("CanvasURL() = %q, want %q", url, "http://[::1]:18793/__nexus__/canvas/")
+		if url != "http://[2001:db8::1]:18793/__nexus__/canvas/" {
+			t.Errorf("CanvasURL() = %q, want %q", url, "http://[2001:db8::1]:18793/__nexus__/canvas/")
 		}
 	})
 }

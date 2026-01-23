@@ -124,14 +124,30 @@ func LoadWorkspace(cfg LoaderConfig) (*WorkspaceContext, error) {
 	}
 
 	ctx := &WorkspaceContext{}
+	loadOptional := func(name string) (string, error) {
+		return readOptionalFile(filepath.Join(root, name))
+	}
 
 	// Load raw contents (ignore errors for missing files)
-	ctx.AgentsContent, _ = readFile(filepath.Join(root, agentsFile))
-	ctx.SoulContent, _ = readFile(filepath.Join(root, soulFile))
-	ctx.UserContent, _ = readFile(filepath.Join(root, userFile))
-	ctx.IdentityContent, _ = readFile(filepath.Join(root, identityFile))
-	ctx.ToolsContent, _ = readFile(filepath.Join(root, toolsFile))
-	ctx.MemoryContent, _ = readFile(filepath.Join(root, memoryFile))
+	var err error
+	if ctx.AgentsContent, err = loadOptional(agentsFile); err != nil {
+		return nil, err
+	}
+	if ctx.SoulContent, err = loadOptional(soulFile); err != nil {
+		return nil, err
+	}
+	if ctx.UserContent, err = loadOptional(userFile); err != nil {
+		return nil, err
+	}
+	if ctx.IdentityContent, err = loadOptional(identityFile); err != nil {
+		return nil, err
+	}
+	if ctx.ToolsContent, err = loadOptional(toolsFile); err != nil {
+		return nil, err
+	}
+	if ctx.MemoryContent, err = loadOptional(memoryFile); err != nil {
+		return nil, err
+	}
 
 	// Parse structured data
 	if ctx.IdentityContent != "" {
@@ -227,6 +243,17 @@ func readFile(path string) (string, error) {
 		return "", err
 	}
 	return string(data), nil
+}
+
+func readOptionalFile(path string) (string, error) {
+	content, err := readFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	return content, nil
 }
 
 // parseIdentity parses IDENTITY.md format:

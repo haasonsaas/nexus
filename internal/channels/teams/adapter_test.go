@@ -268,9 +268,9 @@ func TestAdapter_extractContent(t *testing.T) {
 	}
 
 	tests := []struct {
-		name        string
-		msg         TeamsMessage
-		expected    string
+		name     string
+		msg      TeamsMessage
+		expected string
 	}{
 		{
 			name: "plain text message",

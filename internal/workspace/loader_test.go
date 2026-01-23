@@ -23,8 +23,8 @@ func TestLoaderConfigFromConfig(t *testing.T) {
 	t.Run("overrides from config", func(t *testing.T) {
 		appCfg := &config.Config{
 			Workspace: config.WorkspaceConfig{
-				Path:       "/custom/path",
-				SoulFile:   "custom_soul.md",
+				Path:         "/custom/path",
+				SoulFile:     "custom_soul.md",
 				IdentityFile: "custom_id.md",
 			},
 		}

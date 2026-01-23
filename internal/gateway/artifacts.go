@@ -1,8 +1,10 @@
 package gateway
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"strings"
 
 	"github.com/haasonsaas/nexus/internal/artifacts"
@@ -16,29 +18,10 @@ type artifactSetup struct {
 }
 
 func buildArtifactSetup(cfg *config.Config, logger *slog.Logger) (*artifactSetup, error) {
-	if cfg == nil {
-		return nil, nil
+	repo, err := BuildArtifactRepository(context.Background(), cfg, logger)
+	if err != nil || repo == nil {
+		return nil, err
 	}
-	backend := strings.ToLower(strings.TrimSpace(cfg.Artifacts.Backend))
-	if backend == "" || backend == "none" || backend == "disabled" {
-		return nil, nil
-	}
-
-	var store artifacts.Store
-	switch backend {
-	case "local":
-		localStore, err := artifacts.NewLocalStore(cfg.Artifacts.LocalPath)
-		if err != nil {
-			return nil, err
-		}
-		store = localStore
-	case "s3", "minio":
-		return nil, fmt.Errorf("artifact backend %q not implemented", backend)
-	default:
-		return nil, fmt.Errorf("unsupported artifact backend %q", backend)
-	}
-
-	repo := artifacts.NewMemoryRepository(store, logger)
 	policy, err := artifacts.NewRedactionPolicy(artifacts.RedactionConfig{
 		Enabled:          cfg.Artifacts.Redaction.Enabled,
 		Types:            cfg.Artifacts.Redaction.Types,
@@ -56,4 +39,52 @@ func buildArtifactSetup(cfg *config.Config, logger *slog.Logger) (*artifactSetup
 		redactor: policy,
 		cleanup:  cleanup,
 	}, nil
+}
+
+// BuildArtifactRepository constructs the artifact repository based on config.
+func BuildArtifactRepository(ctx context.Context, cfg *config.Config, logger *slog.Logger) (artifacts.Repository, error) {
+	if cfg == nil {
+		return nil, nil
+	}
+	backend := strings.ToLower(strings.TrimSpace(cfg.Artifacts.Backend))
+	if backend == "" || backend == "none" || backend == "disabled" {
+		return nil, nil
+	}
+	if cfg.Artifacts.TTLs != nil {
+		artifacts.SetDefaultTTLs(cfg.Artifacts.TTLs)
+	}
+
+	var store artifacts.Store
+	switch backend {
+	case "local":
+		localStore, err := artifacts.NewLocalStore(cfg.Artifacts.LocalPath)
+		if err != nil {
+			return nil, err
+		}
+		store = localStore
+	case "s3", "minio":
+		forcePathStyle := backend == "minio"
+		if strings.TrimSpace(cfg.Artifacts.S3Endpoint) != "" {
+			forcePathStyle = true
+		}
+		s3Store, err := artifacts.NewS3Store(ctx, artifacts.S3Config{
+			Bucket:         cfg.Artifacts.S3Bucket,
+			Region:         cfg.Artifacts.S3Region,
+			Endpoint:       cfg.Artifacts.S3Endpoint,
+			ForcePathStyle: forcePathStyle,
+		})
+		if err != nil {
+			return nil, err
+		}
+		store = s3Store
+	default:
+		return nil, fmt.Errorf("unsupported artifact backend %q", backend)
+	}
+
+	metadataPath := filepath.Join(cfg.Artifacts.LocalPath, "metadata.json")
+	repo, err := artifacts.NewPersistentRepository(store, metadataPath, logger)
+	if err != nil {
+		return nil, err
+	}
+	return repo, nil
 }

@@ -356,7 +356,7 @@ func (h *Host) broadcastReload() {
 	h.mu.RUnlock()
 
 	for _, conn := range clients {
-		_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+		conn.SetWriteDeadline(time.Now().Add(2 * time.Second)) //nolint:errcheck // best-effort deadline
 		if err := conn.WriteMessage(websocket.TextMessage, []byte("reload")); err != nil {
 			h.removeClient(conn)
 		}

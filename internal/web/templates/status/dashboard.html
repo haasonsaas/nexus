@@ -56,6 +56,13 @@
                     {{else}}
                     <span class="status-badge status-disabled">Disabled</span>
                     {{end}}
+                    {{if .Connected}}
+                    <span class="status-badge status-enabled">Connected</span>
+                    {{else if eq .Status "error"}}
+                    <span class="status-badge status-disabled">Error</span>
+                    {{else}}
+                    <span class="status-badge status-disabled">Disconnected</span>
+                    {{end}}
                 </li>
                 {{end}}
             </ul>

@@ -1,0 +1,48 @@
+{{define "providers/list.html"}}
+{{if .}}
+<div class="providers-grid">
+    {{range .}}
+    <div class="provider-card">
+        <div class="provider-header">
+            <span class="provider-name">{{.Name | upper}}</span>
+            {{if .Enabled}}
+            <span class="status-badge status-enabled">Enabled</span>
+            {{else}}
+            <span class="status-badge status-disabled">Disabled</span>
+            {{end}}
+        </div>
+        <div class="provider-status">
+            <div class="status-indicator">
+                {{if .Connected}}
+                <span class="indicator indicator-success"></span>
+                <span class="indicator-label">Connected</span>
+                {{else if .Error}}
+                <span class="indicator indicator-error"></span>
+                <span class="indicator-label">Error</span>
+                {{else}}
+                <span class="indicator indicator-warning"></span>
+                <span class="indicator-label">Disconnected</span>
+                {{end}}
+            </div>
+            {{if .Error}}
+            <div class="text-muted">Error: {{.Error}}</div>
+            {{end}}
+            {{if .Healthy}}
+            <div class="text-muted">Health: OK ({{.HealthLatency}} ms)</div>
+            {{else if .HealthMessage}}
+            <div class="text-muted">Health: {{.HealthMessage}}</div>
+            {{end}}
+        </div>
+        {{if .QRAvailable}}
+        <div class="provider-qr">
+            <img src="/ui/api/providers/{{.Name}}/qr" alt="QR code for {{.Name}}">
+            <div class="text-muted">Scan to login</div>
+        </div>
+        {{end}}
+    </div>
+    {{end}}
+</div>
+{{else}}
+<p class="text-muted">No providers configured</p>
+{{end}}
+{{end}}

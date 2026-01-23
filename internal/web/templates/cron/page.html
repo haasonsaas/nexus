@@ -1,0 +1,59 @@
+{{define "cron/page.html"}}
+<div class="page-header">
+    <h1>Cron Jobs</h1>
+    <p class="subtitle">Scheduled automation jobs</p>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Jobs</h3>
+        {{if .Enabled}}
+        <span class="status-badge status-enabled">Enabled</span>
+        {{else}}
+        <span class="status-badge status-disabled">Disabled</span>
+        {{end}}
+    </div>
+    <div class="card-body">
+        {{if .Jobs}}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Schedule</th>
+                        <th>Next Run</th>
+                        <th>Last Run</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Jobs}}
+                    <tr>
+                        <td class="mono">{{.ID}}</td>
+                        <td>{{.Name}}</td>
+                        <td>{{.Type}}</td>
+                        <td>{{.Schedule}}</td>
+                        <td>{{.NextRun | formatTime}}</td>
+                        <td>{{.LastRun | formatTime}}</td>
+                        <td>
+                            {{if .LastError}}
+                            <span class="status-badge status-disabled">Error</span>
+                            {{else if .Enabled}}
+                            <span class="status-badge status-enabled">OK</span>
+                            {{else}}
+                            <span class="status-badge status-disabled">Disabled</span>
+                            {{end}}
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        {{else}}
+        <p class="text-muted">No cron jobs configured</p>
+        {{end}}
+    </div>
+</div>
+{{end}}

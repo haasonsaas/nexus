@@ -8,11 +8,17 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/artifacts"
 	"github.com/haasonsaas/nexus/internal/auth"
+	"github.com/haasonsaas/nexus/internal/channels"
+	"github.com/haasonsaas/nexus/internal/config"
+	"github.com/haasonsaas/nexus/internal/cron"
+	"github.com/haasonsaas/nexus/internal/edge"
 	"github.com/haasonsaas/nexus/internal/sessions"
+	"github.com/haasonsaas/nexus/internal/skills"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
@@ -32,6 +38,18 @@ type Config struct {
 	SessionStore sessions.Store
 	// ArtifactRepo for accessing stored artifacts (optional)
 	ArtifactRepo artifacts.Repository
+	// ChannelRegistry for provider status and QR login
+	ChannelRegistry *channels.Registry
+	// CronScheduler for listing cron jobs
+	CronScheduler *cron.Scheduler
+	// SkillsManager for listing and refreshing skills
+	SkillsManager *skills.Manager
+	// EdgeManager for listing connected nodes/tools
+	EdgeManager *edge.Manager
+	// GatewayConfig is the active runtime configuration (for summary views)
+	GatewayConfig *config.Config
+	// ConfigPath is the path to the loaded config file (optional)
+	ConfigPath string
 	// DefaultAgentID is the agent ID used for listing sessions
 	DefaultAgentID string
 	// Logger for request logging
@@ -45,6 +63,10 @@ type Handler struct {
 	config    *Config
 	templates *template.Template
 	mux       *http.ServeMux
+
+	qrMu      sync.RWMutex
+	qrCodes   map[models.ChannelType]string
+	qrUpdated map[models.ChannelType]time.Time
 }
 
 // NewHandler creates a new web UI handler.
@@ -85,6 +107,8 @@ func NewHandler(cfg *Config) (*Handler, error) {
 		config:    cfg,
 		templates: tmpl,
 		mux:       http.NewServeMux(),
+		qrCodes:   make(map[models.ChannelType]string),
+		qrUpdated: make(map[models.ChannelType]time.Time),
 	}
 
 	h.setupRoutes()
@@ -106,11 +130,24 @@ func (h *Handler) setupRoutes() {
 	h.mux.HandleFunc("/sessions", h.handleSessionList)
 	h.mux.HandleFunc("/sessions/", h.handleSessionDetail)
 	h.mux.HandleFunc("/status", h.handleStatusDashboard)
+	h.mux.HandleFunc("/providers", h.handleProviders)
+	h.mux.HandleFunc("/cron", h.handleCron)
+	h.mux.HandleFunc("/skills", h.handleSkills)
+	h.mux.HandleFunc("/nodes", h.handleNodes)
+	h.mux.HandleFunc("/config", h.handleConfig)
 
 	// API routes for htmx
 	h.mux.HandleFunc("/api/sessions", h.apiSessionList)
-	h.mux.HandleFunc("/api/sessions/", h.apiSessionMessages)
+	h.mux.HandleFunc("/api/sessions/", h.apiSession)
 	h.mux.HandleFunc("/api/status", h.apiStatus)
+	h.mux.HandleFunc("/api/providers", h.apiProviders)
+	h.mux.HandleFunc("/api/providers/", h.apiProvider)
+	h.mux.HandleFunc("/api/cron", h.apiCron)
+	h.mux.HandleFunc("/api/skills", h.apiSkills)
+	h.mux.HandleFunc("/api/skills/refresh", h.apiSkillsRefresh)
+	h.mux.HandleFunc("/api/nodes", h.apiNodes)
+	h.mux.HandleFunc("/api/nodes/", h.apiNode)
+	h.mux.HandleFunc("/api/config", h.apiConfig)
 	h.mux.HandleFunc("/api/artifacts", h.apiArtifacts)
 	h.mux.HandleFunc("/api/artifacts/", h.apiArtifact)
 }

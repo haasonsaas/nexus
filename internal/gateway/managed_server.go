@@ -26,6 +26,8 @@ type ManagedServer struct {
 type ManagedServerConfig struct {
 	Config *config.Config
 	Logger *slog.Logger
+	// ConfigPath is the path to the loaded config file.
+	ConfigPath string
 }
 
 // NewManagedServer creates a new managed server with component managers.
@@ -40,6 +42,7 @@ func NewManagedServer(cfg ManagedServerConfig) (*ManagedServer, error) {
 	if err != nil {
 		return nil, err
 	}
+	server.configPath = cfg.ConfigPath
 
 	// Create component manager
 	components := infra.NewComponentManager(logger)

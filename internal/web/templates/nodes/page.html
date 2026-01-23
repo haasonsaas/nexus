@@ -1,0 +1,48 @@
+{{define "nodes/page.html"}}
+<div class="page-header">
+    <h1>Nodes</h1>
+    <p class="subtitle">Connected edge nodes and tools</p>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Connected Nodes</h3>
+    </div>
+    <div class="card-body">
+        {{if .Nodes}}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Status</th>
+                        <th>Last Heartbeat</th>
+                        <th>Tools</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Nodes}}
+                    <tr>
+                        <td class="mono">{{.EdgeID}}</td>
+                        <td>{{.Name}}</td>
+                        <td>{{.Status}}</td>
+                        <td>{{.LastHeartbeat | formatTime}}</td>
+                        <td>
+                            <div class="pill-group">
+                                {{range .Tools}}
+                                <span class="pill">{{.}}</span>
+                                {{end}}
+                            </div>
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        {{else}}
+        <p class="text-muted">No connected nodes</p>
+        {{end}}
+    </div>
+</div>
+{{end}}

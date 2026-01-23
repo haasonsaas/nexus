@@ -1,0 +1,21 @@
+{{define "providers/page.html"}}
+<div class="page-header">
+    <h1>Providers</h1>
+    <p class="subtitle">Channel connection status and QR login</p>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Channel Providers</h3>
+        <button class="btn btn-sm btn-secondary"
+                hx-get="/ui/api/providers"
+                hx-target="#provider-list"
+                hx-swap="innerHTML">
+            Refresh
+        </button>
+    </div>
+    <div class="card-body" id="provider-list">
+        {{template "providers/list.html" .Providers}}
+    </div>
+</div>
+{{end}}

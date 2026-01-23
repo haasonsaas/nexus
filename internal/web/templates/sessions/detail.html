@@ -10,6 +10,16 @@
 {{if .Session}}
 <div class="session-header card">
     <div class="card-body">
+        <div class="session-title-row">
+            {{template "sessions/title.html" .Session}}
+            <form class="session-title-form"
+                  hx-post="/ui/api/sessions/{{.Session.ID}}"
+                  hx-target="#session-title"
+                  hx-swap="outerHTML">
+                <input type="text" name="title" value="{{.Session.Title}}" class="filter-input" placeholder="Session title">
+                <button type="submit" class="btn btn-sm">Save</button>
+            </form>
+        </div>
         <div class="session-meta">
             <div class="meta-item">
                 <label>Session ID</label>

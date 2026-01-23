@@ -147,6 +147,40 @@ func (s *Scheduler) RunOnce(ctx context.Context) int {
 	return s.runDue(ctx)
 }
 
+// Jobs returns a snapshot of configured cron jobs.
+func (s *Scheduler) Jobs() []*Job {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	out := make([]*Job, 0, len(s.jobs))
+	for _, job := range s.jobs {
+		if job == nil {
+			continue
+		}
+		copyJob := *job
+		if job.Message != nil {
+			msgCopy := *job.Message
+			copyJob.Message = &msgCopy
+		}
+		if job.Webhook != nil {
+			webhookCopy := *job.Webhook
+			if job.Webhook.Headers != nil {
+				headers := make(map[string]string, len(job.Webhook.Headers))
+				for k, v := range job.Webhook.Headers {
+					headers[k] = v
+				}
+				webhookCopy.Headers = headers
+			}
+			copyJob.Webhook = &webhookCopy
+		}
+		out = append(out, &copyJob)
+	}
+	return out
+}
+
 func (s *Scheduler) runDue(ctx context.Context) int {
 	now := s.now()
 	count := 0

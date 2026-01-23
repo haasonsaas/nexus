@@ -985,25 +985,46 @@ func buildChannelsLoginCmd() *cobra.Command {
 }
 
 func buildChannelsStatusCmd() *cobra.Command {
-	return &cobra.Command{
+	var (
+		configPath string
+		serverAddr string
+		token      string
+		apiKey     string
+	)
+
+	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show channel connection status",
 		Long:  "Display the current connection status of all enabled channels.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			printChannelsStatus(cmd.OutOrStdout())
-			return nil
+			configPath = resolveConfigPath(configPath)
+			return printChannelsStatus(cmd.Context(), cmd.OutOrStdout(), configPath, serverAddr, token, apiKey)
 		},
 	}
+
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to config file")
+	cmd.Flags().StringVar(&serverAddr, "server", "", "Nexus HTTP server address (default from config)")
+	cmd.Flags().StringVar(&token, "token", "", "JWT bearer token for server auth")
+	cmd.Flags().StringVar(&apiKey, "api-key", "", "API key for server auth")
+
+	return cmd
 }
 
 func buildChannelsTestCmd() *cobra.Command {
+	var (
+		configPath string
+		serverAddr string
+		token      string
+		apiKey     string
+	)
+
 	cmd := &cobra.Command{
 		Use:   "test [channel]",
 		Short: "Test channel connectivity",
-		Long: `Send a test message to verify channel configuration.
+		Long: `Validate channel connectivity using the running server.
 
-This command attempts to send a test message through the specified channel
-to verify that credentials are correct and the bot has necessary permissions.`,
+This command queries the live channel status from the Nexus HTTP API
+and reports connection and health details.`,
 		Example: `  # Test Telegram connection
   nexus channels test telegram
 
@@ -1011,10 +1032,15 @@ to verify that credentials are correct and the bot has necessary permissions.`,
   nexus channels test discord`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			printChannelTest(cmd.OutOrStdout(), args[0])
-			return nil
+			configPath = resolveConfigPath(configPath)
+			return printChannelTest(cmd.Context(), cmd.OutOrStdout(), configPath, serverAddr, token, apiKey, args[0])
 		},
 	}
+
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to config file")
+	cmd.Flags().StringVar(&serverAddr, "server", "", "Nexus HTTP server address (default from config)")
+	cmd.Flags().StringVar(&token, "token", "", "JWT bearer token for server auth")
+	cmd.Flags().StringVar(&apiKey, "api-key", "", "API key for server auth")
 
 	return cmd
 }
@@ -1157,22 +1183,28 @@ Each agent can have different system prompts, model configurations, and tool acc
 }
 
 func buildAgentsListCmd() *cobra.Command {
-	return &cobra.Command{
+	var configPath string
+
+	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List configured agents",
 		Long:  "Display all AI agents defined in the system.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			printAgentsList(cmd.OutOrStdout())
-			return nil
+			configPath = resolveConfigPath(configPath)
+			return printAgentsList(cmd.OutOrStdout(), configPath)
 		},
 	}
+
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to config file")
+	return cmd
 }
 
 func buildAgentsCreateCmd() *cobra.Command {
 	var (
-		name     string
-		provider string
-		model    string
+		configPath string
+		name       string
+		provider   string
+		model      string
 	)
 
 	cmd := &cobra.Command{
@@ -1180,19 +1212,19 @@ func buildAgentsCreateCmd() *cobra.Command {
 		Short: "Create a new agent",
 		Long: `Create a new AI agent with specified configuration.
 
-The agent will be stored in the database and can be assigned to channels
-or selected via API for specific conversations.`,
+The agent definition will be appended to AGENTS.md and loaded by the server.`,
 		Example: `  # Create agent with Claude
   nexus agents create --name "coder" --provider anthropic --model claude-sonnet-4-20250514
 
   # Create agent with GPT-4
   nexus agents create --name "researcher" --provider openai --model gpt-4o`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			printAgentCreate(cmd.OutOrStdout(), name, provider, model)
-			return nil
+			configPath = resolveConfigPath(configPath)
+			return printAgentCreate(cmd.OutOrStdout(), configPath, name, provider, model)
 		},
 	}
 
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to config file")
 	cmd.Flags().StringVarP(&name, "name", "n", "", "Agent name (required)")
 	cmd.Flags().StringVarP(&provider, "provider", "p", "anthropic", "LLM provider")
 	cmd.Flags().StringVarP(&model, "model", "m", "", "Model identifier")
@@ -1204,16 +1236,21 @@ or selected via API for specific conversations.`,
 }
 
 func buildAgentsShowCmd() *cobra.Command {
-	return &cobra.Command{
+	var configPath string
+
+	cmd := &cobra.Command{
 		Use:   "show [agent-id]",
 		Short: "Show agent details",
 		Long:  "Display detailed configuration for a specific agent.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			printAgentShow(cmd.OutOrStdout(), args[0])
-			return nil
+			configPath = resolveConfigPath(configPath)
+			return printAgentShow(cmd.OutOrStdout(), configPath, args[0])
 		},
 	}
+
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to config file")
+	return cmd
 }
 
 // =============================================================================
@@ -1224,7 +1261,10 @@ func buildAgentsShowCmd() *cobra.Command {
 func buildStatusCmd() *cobra.Command {
 	var (
 		configPath string
+		serverAddr string
 		jsonOutput bool
+		token      string
+		apiKey     string
 	)
 
 	cmd := &cobra.Command{
@@ -1240,13 +1280,15 @@ Shows the status of all components including:
 - Resource utilization`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			configPath = resolveConfigPath(configPath)
-			printSystemStatus(cmd.OutOrStdout(), jsonOutput)
-			return nil
+			return printSystemStatus(cmd.Context(), cmd.OutOrStdout(), jsonOutput, configPath, serverAddr, token, apiKey)
 		},
 	}
 
 	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to config file")
+	cmd.Flags().StringVar(&serverAddr, "server", "", "Nexus HTTP server address (default from config)")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
+	cmd.Flags().StringVar(&token, "token", "", "JWT bearer token for server auth")
+	cmd.Flags().StringVar(&apiKey, "api-key", "", "API key for server auth")
 
 	return cmd
 }

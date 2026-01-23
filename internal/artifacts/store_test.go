@@ -368,3 +368,271 @@ func TestGetDefaultTTL(t *testing.T) {
 		}
 	}
 }
+
+func TestGetDefaultTTL_CaseInsensitive(t *testing.T) {
+	tests := []struct {
+		artifactType string
+		wantDays     int
+	}{
+		{"SCREENSHOT", 7},
+		{"Screenshot", 7},
+		{"  screenshot  ", 7},
+		{"RECORDING", 30},
+	}
+
+	for _, tt := range tests {
+		got := GetDefaultTTL(tt.artifactType)
+		want := time.Duration(tt.wantDays) * 24 * time.Hour
+		if got != want {
+			t.Errorf("GetDefaultTTL(%q) = %v, want %v", tt.artifactType, got, want)
+		}
+	}
+}
+
+func TestSetDefaultTTLs(t *testing.T) {
+	// Store original TTLs
+	origScreenshot := GetDefaultTTL("screenshot")
+
+	t.Run("nil map is ignored", func(t *testing.T) {
+		SetDefaultTTLs(nil)
+		// Should not panic or change anything
+	})
+
+	t.Run("merges new TTLs", func(t *testing.T) {
+		SetDefaultTTLs(map[string]time.Duration{
+			"custom": 48 * time.Hour,
+		})
+		got := GetDefaultTTL("custom")
+		if got != 48*time.Hour {
+			t.Errorf("GetDefaultTTL(custom) = %v, want 48h", got)
+		}
+
+		// Original should still work
+		got = GetDefaultTTL("screenshot")
+		if got != origScreenshot {
+			t.Errorf("GetDefaultTTL(screenshot) changed to %v", got)
+		}
+	})
+
+	t.Run("overwrites existing TTLs", func(t *testing.T) {
+		SetDefaultTTLs(map[string]time.Duration{
+			"screenshot": 3 * 24 * time.Hour,
+		})
+		got := GetDefaultTTL("screenshot")
+		if got != 3*24*time.Hour {
+			t.Errorf("GetDefaultTTL(screenshot) = %v, want 72h", got)
+		}
+	})
+
+	t.Run("ignores empty keys", func(t *testing.T) {
+		SetDefaultTTLs(map[string]time.Duration{
+			"":     time.Hour,
+			"   ": 2 * time.Hour,
+		})
+		// Should not add empty keys
+	})
+
+	// Restore original
+	SetDefaultTTLs(map[string]time.Duration{
+		"screenshot": origScreenshot,
+	})
+}
+
+func TestNewCleanupService(t *testing.T) {
+	t.Run("uses provided interval", func(t *testing.T) {
+		svc := NewCleanupService(nil, 30*time.Minute, nil)
+		if svc.interval != 30*time.Minute {
+			t.Errorf("interval = %v, want 30m", svc.interval)
+		}
+	})
+
+	t.Run("defaults to 1 hour interval", func(t *testing.T) {
+		svc := NewCleanupService(nil, 0, nil)
+		if svc.interval != time.Hour {
+			t.Errorf("interval = %v, want 1h", svc.interval)
+		}
+	})
+
+	t.Run("uses default logger when nil", func(t *testing.T) {
+		svc := NewCleanupService(nil, time.Hour, nil)
+		if svc.logger == nil {
+			t.Error("logger should not be nil")
+		}
+	})
+
+	t.Run("creates stop channel", func(t *testing.T) {
+		svc := NewCleanupService(nil, time.Hour, nil)
+		if svc.stopCh == nil {
+			t.Error("stopCh should not be nil")
+		}
+	})
+}
+
+func TestCleanupService_Stop(t *testing.T) {
+	svc := NewCleanupService(nil, time.Hour, nil)
+
+	// Should not panic
+	svc.Stop()
+
+	// Verify channel is closed
+	select {
+	case _, ok := <-svc.stopCh:
+		if ok {
+			t.Error("stopCh should be closed")
+		}
+	default:
+		t.Error("stopCh should be readable after Stop()")
+	}
+}
+
+func TestPutOptions_Struct(t *testing.T) {
+	opts := PutOptions{
+		MimeType: "image/png",
+		TTL:      24 * time.Hour,
+		Metadata: map[string]string{
+			"type":   "screenshot",
+			"source": "edge-1",
+		},
+	}
+
+	if opts.MimeType != "image/png" {
+		t.Errorf("MimeType = %q", opts.MimeType)
+	}
+	if opts.TTL != 24*time.Hour {
+		t.Errorf("TTL = %v", opts.TTL)
+	}
+	if len(opts.Metadata) != 2 {
+		t.Errorf("Metadata length = %d, want 2", len(opts.Metadata))
+	}
+}
+
+func TestFilter_Struct(t *testing.T) {
+	now := time.Now()
+	filter := Filter{
+		SessionID:     "session-123",
+		EdgeID:        "edge-456",
+		Type:          "screenshot",
+		CreatedAfter:  now.Add(-24 * time.Hour),
+		CreatedBefore: now,
+		Limit:         10,
+	}
+
+	if filter.SessionID != "session-123" {
+		t.Errorf("SessionID = %q", filter.SessionID)
+	}
+	if filter.EdgeID != "edge-456" {
+		t.Errorf("EdgeID = %q", filter.EdgeID)
+	}
+	if filter.Limit != 10 {
+		t.Errorf("Limit = %d", filter.Limit)
+	}
+}
+
+func TestMetadata_Struct(t *testing.T) {
+	now := time.Now()
+	meta := Metadata{
+		ID:         "artifact-123",
+		SessionID:  "session-456",
+		EdgeID:     "edge-789",
+		Type:       "screenshot",
+		MimeType:   "image/png",
+		Filename:   "screen.png",
+		Size:       1024,
+		Reference:  "s3://bucket/screen.png",
+		TTLSeconds: 86400,
+		CreatedAt:  now,
+		ExpiresAt:  now.Add(24 * time.Hour),
+	}
+
+	if meta.ID != "artifact-123" {
+		t.Errorf("ID = %q", meta.ID)
+	}
+	if meta.Size != 1024 {
+		t.Errorf("Size = %d", meta.Size)
+	}
+	if meta.TTLSeconds != 86400 {
+		t.Errorf("TTLSeconds = %d", meta.TTLSeconds)
+	}
+}
+
+func TestMemoryRepository_PruneExpired(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewLocalStore(dir)
+	if err != nil {
+		t.Fatalf("NewLocalStore: %v", err)
+	}
+	defer store.Close()
+
+	repo := NewMemoryRepository(store, nil)
+	ctx := context.Background()
+
+	// Create an artifact with very short TTL
+	artifact := &pb.Artifact{
+		Type:       "file",
+		MimeType:   "text/plain",
+		Filename:   "test.txt",
+		Size:       4,
+		TtlSeconds: 1, // 1 second TTL
+	}
+	if err := repo.StoreArtifact(ctx, artifact, bytes.NewReader([]byte("test"))); err != nil {
+		t.Fatalf("StoreArtifact: %v", err)
+	}
+
+	// Verify artifact exists
+	_, _, err = repo.GetArtifact(ctx, artifact.Id)
+	if err != nil {
+		t.Fatalf("GetArtifact before expiry: %v", err)
+	}
+
+	// Wait for expiration
+	time.Sleep(1100 * time.Millisecond)
+
+	// Prune expired artifacts
+	count, err := repo.PruneExpired(ctx)
+	if err != nil {
+		t.Fatalf("PruneExpired: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("PruneExpired count = %d, want 1", count)
+	}
+
+	// Verify artifact is gone
+	_, _, err = repo.GetArtifact(ctx, artifact.Id)
+	if err == nil {
+		t.Error("GetArtifact should fail after prune")
+	}
+}
+
+func TestMemoryRepository_ListArtifacts_Limit(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewLocalStore(dir)
+	if err != nil {
+		t.Fatalf("NewLocalStore: %v", err)
+	}
+	defer store.Close()
+
+	repo := NewMemoryRepository(store, nil)
+	ctx := context.Background()
+
+	// Create multiple artifacts
+	for i := 0; i < 5; i++ {
+		artifact := &pb.Artifact{
+			Type:     "file",
+			MimeType: "text/plain",
+			Filename: "test.txt",
+			Size:     4,
+		}
+		if err := repo.StoreArtifact(ctx, artifact, bytes.NewReader([]byte("test"))); err != nil {
+			t.Fatalf("StoreArtifact: %v", err)
+		}
+	}
+
+	// List with limit
+	results, err := repo.ListArtifacts(ctx, Filter{Limit: 3})
+	if err != nil {
+		t.Fatalf("ListArtifacts: %v", err)
+	}
+	if len(results) != 3 {
+		t.Errorf("ListArtifacts returned %d artifacts, want 3", len(results))
+	}
+}

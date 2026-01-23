@@ -375,4 +375,3 @@ func formatReminderMessage(task *tasks.ScheduledTask, _ *tasks.TaskExecution) st
 	// Add a prefix to make it clear this is a reminder
 	return fmt.Sprintf("Reminder: %s", task.Prompt)
 }
-

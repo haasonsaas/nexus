@@ -172,8 +172,8 @@ func TestPromptComposition_Combined(t *testing.T) {
 
 	// Create all workspace files
 	files := map[string]string{
-		"SOUL.md":      "Be helpful and concise.",
-		"MEMORY.md":    "User preference: dark mode enabled.",
+		"SOUL.md":       "Be helpful and concise.",
+		"MEMORY.md":     "User preference: dark mode enabled.",
 		"tool-notes.md": "exec: require confirmation for destructive commands",
 	}
 

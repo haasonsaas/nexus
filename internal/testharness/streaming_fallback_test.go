@@ -15,13 +15,13 @@ import (
 
 // MockStreamingOutput simulates streaming output handling.
 type MockStreamingOutput struct {
-	chunks           []string
-	finalOutput      string
-	streamingEnabled bool
+	chunks            []string
+	finalOutput       string
+	streamingEnabled  bool
 	fallbackTriggered atomic.Bool
-	errorOnChunk     int // -1 means no error
-	updateCalls      int
-	finalCalls       int
+	errorOnChunk      int // -1 means no error
+	updateCalls       int
+	finalCalls        int
 }
 
 func NewMockStreamingOutput() *MockStreamingOutput {

@@ -11,8 +11,8 @@ import (
 // ReminderStatus provides summary of active reminders.
 type ReminderStatus struct {
 	Active       int       `json:"active"`
-	Pending      int       `json:"pending"`      // Scheduled but not yet fired
-	Overdue      int       `json:"overdue"`      // Past due but not fired
+	Pending      int       `json:"pending"` // Scheduled but not yet fired
+	Overdue      int       `json:"overdue"` // Past due but not fired
 	NextReminder time.Time `json:"next_reminder,omitempty"`
 	Errors       []string  `json:"errors,omitempty"`
 }

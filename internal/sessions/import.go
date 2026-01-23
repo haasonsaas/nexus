@@ -31,7 +31,7 @@ type ImportRecord struct {
 	Type      ImportFormat   `json:"type"`
 	Session   *SessionRecord `json:"session,omitempty"`
 	Message   *MessageRecord `json:"message,omitempty"`
-	SourceID  string         `json:"source_id,omitempty"`  // Original ID from source system
+	SourceID  string         `json:"source_id,omitempty"` // Original ID from source system
 	Timestamp time.Time      `json:"timestamp,omitempty"` // Import timestamp
 }
 
@@ -49,18 +49,18 @@ type SessionRecord struct {
 
 // MessageRecord represents a message to import.
 type MessageRecord struct {
-	ID          string              `json:"id"`
-	SessionID   string              `json:"session_id"`
-	Channel     string              `json:"channel"`
-	ChannelID   string              `json:"channel_id,omitempty"`
-	Direction   string              `json:"direction"` // inbound or outbound
-	Role        string              `json:"role"`      // user, assistant, system, tool
-	Content     string              `json:"content"`
-	Attachments []AttachmentRecord  `json:"attachments,omitempty"`
-	ToolCalls   []ToolCallRecord    `json:"tool_calls,omitempty"`
-	ToolResults []ToolResultRecord  `json:"tool_results,omitempty"`
-	Metadata    map[string]any      `json:"metadata,omitempty"`
-	CreatedAt   time.Time           `json:"created_at"`
+	ID          string             `json:"id"`
+	SessionID   string             `json:"session_id"`
+	Channel     string             `json:"channel"`
+	ChannelID   string             `json:"channel_id,omitempty"`
+	Direction   string             `json:"direction"` // inbound or outbound
+	Role        string             `json:"role"`      // user, assistant, system, tool
+	Content     string             `json:"content"`
+	Attachments []AttachmentRecord `json:"attachments,omitempty"`
+	ToolCalls   []ToolCallRecord   `json:"tool_calls,omitempty"`
+	ToolResults []ToolResultRecord `json:"tool_results,omitempty"`
+	Metadata    map[string]any     `json:"metadata,omitempty"`
+	CreatedAt   time.Time          `json:"created_at"`
 }
 
 // AttachmentRecord represents an attachment to import.
@@ -89,13 +89,13 @@ type ToolResultRecord struct {
 
 // ImportResult tracks the outcome of an import operation.
 type ImportResult struct {
-	SessionsImported   int      `json:"sessions_imported"`
-	SessionsSkipped    int      `json:"sessions_skipped"`
-	MessagesImported   int      `json:"messages_imported"`
-	MessagesSkipped    int      `json:"messages_skipped"`
-	Errors             []string `json:"errors,omitempty"`
-	Warnings           []string `json:"warnings,omitempty"`
-	Duration           time.Duration `json:"duration"`
+	SessionsImported int           `json:"sessions_imported"`
+	SessionsSkipped  int           `json:"sessions_skipped"`
+	MessagesImported int           `json:"messages_imported"`
+	MessagesSkipped  int           `json:"messages_skipped"`
+	Errors           []string      `json:"errors,omitempty"`
+	Warnings         []string      `json:"warnings,omitempty"`
+	Duration         time.Duration `json:"duration"`
 
 	// Mapping from source IDs to new IDs
 	SessionIDMap map[string]string `json:"session_id_map,omitempty"`

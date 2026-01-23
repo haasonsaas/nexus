@@ -68,8 +68,8 @@ func TestRedactionPolicy(t *testing.T) {
 
 func TestRedactionPolicyApply(t *testing.T) {
 	policy, err := NewRedactionPolicy(RedactionConfig{
-		Enabled:         true,
-		Types:           []string{"recording"},
+		Enabled: true,
+		Types:   []string{"recording"},
 	})
 	if err != nil {
 		t.Fatalf("NewRedactionPolicy: %v", err)

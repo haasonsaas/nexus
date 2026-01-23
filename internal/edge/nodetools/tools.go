@@ -175,8 +175,8 @@ type CameraSnapTool struct {
 	platform string
 }
 
-func (t *CameraSnapTool) Name() string        { return "camera_snap" }
-func (t *CameraSnapTool) RequiresApproval() bool { return true }
+func (t *CameraSnapTool) Name() string            { return "camera_snap" }
+func (t *CameraSnapTool) RequiresApproval() bool  { return true }
 func (t *CameraSnapTool) ProducesArtifacts() bool { return true }
 
 func (t *CameraSnapTool) Description() string {
@@ -293,8 +293,8 @@ type ScreenRecordTool struct {
 	platform string
 }
 
-func (t *ScreenRecordTool) Name() string        { return "screen_record" }
-func (t *ScreenRecordTool) RequiresApproval() bool { return true }
+func (t *ScreenRecordTool) Name() string            { return "screen_record" }
+func (t *ScreenRecordTool) RequiresApproval() bool  { return true }
 func (t *ScreenRecordTool) ProducesArtifacts() bool { return true }
 
 func (t *ScreenRecordTool) Description() string {
@@ -413,8 +413,8 @@ type LocationGetTool struct {
 	platform string
 }
 
-func (t *LocationGetTool) Name() string        { return "location_get" }
-func (t *LocationGetTool) RequiresApproval() bool { return true }
+func (t *LocationGetTool) Name() string            { return "location_get" }
+func (t *LocationGetTool) RequiresApproval() bool  { return true }
 func (t *LocationGetTool) ProducesArtifacts() bool { return false }
 
 func (t *LocationGetTool) Description() string {
@@ -487,8 +487,8 @@ type RunTool struct {
 	logger *slog.Logger
 }
 
-func (t *RunTool) Name() string        { return "run" }
-func (t *RunTool) RequiresApproval() bool { return true }
+func (t *RunTool) Name() string            { return "run" }
+func (t *RunTool) RequiresApproval() bool  { return true }
 func (t *RunTool) ProducesArtifacts() bool { return false }
 
 func (t *RunTool) Description() string {

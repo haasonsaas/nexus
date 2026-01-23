@@ -271,12 +271,12 @@ func TestToolPolicy_UnifiedPolicyBuilder(t *testing.T) {
 		tool    string
 		allowed bool
 	}{
-		{"read", true},                       // from coding profile
-		{"mcp:github.create_issue", true},    // allowed MCP server
-		{"mcp:github.delete_repo", false},    // explicitly denied
-		{"send_message", true},               // explicitly allowed
-		{"exec", false},                      // explicitly denied
-		{"mcp:unknown.tool", false},          // not in allowed list
+		{"read", true},                    // from coding profile
+		{"mcp:github.create_issue", true}, // allowed MCP server
+		{"mcp:github.delete_repo", false}, // explicitly denied
+		{"send_message", true},            // explicitly allowed
+		{"exec", false},                   // explicitly denied
+		{"mcp:unknown.tool", false},       // not in allowed list
 	}
 
 	for _, tt := range tests {

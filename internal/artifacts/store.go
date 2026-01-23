@@ -102,21 +102,25 @@ func SetDefaultTTLs(ttls map[string]time.Duration) {
 	if ttls == nil {
 		return
 	}
-	next := make(map[string]time.Duration, len(ttls))
+	defaultTTLsMu.RLock()
+	merged := make(map[string]time.Duration, len(DefaultTTLs)+len(ttls))
+	for key, value := range DefaultTTLs {
+		merged[key] = value
+	}
+	defaultTTLsMu.RUnlock()
+
 	for key, value := range ttls {
 		k := strings.ToLower(strings.TrimSpace(key))
 		if k == "" {
 			continue
 		}
-		next[k] = value
+		merged[k] = value
 	}
-	if _, ok := next["default"]; !ok {
-		defaultTTLsMu.RLock()
-		next["default"] = DefaultTTLs["default"]
-		defaultTTLsMu.RUnlock()
+	if _, ok := merged["default"]; !ok {
+		merged["default"] = 24 * time.Hour
 	}
 	defaultTTLsMu.Lock()
-	DefaultTTLs = next
+	DefaultTTLs = merged
 	defaultTTLsMu.Unlock()
 }
 

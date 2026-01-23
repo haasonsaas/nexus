@@ -61,6 +61,13 @@ func (r *MemoryRepository) StoreArtifact(ctx context.Context, artifact *pb.Artif
 		meta.EdgeID = edgeID
 	}
 
+	// Calculate expiration
+	ttl := time.Duration(artifact.TtlSeconds) * time.Second
+	if ttl == 0 {
+		ttl = GetDefaultTTL(artifact.Type)
+	}
+	meta.ExpiresAt = now.Add(ttl)
+
 	if strings.HasPrefix(artifact.Reference, "redacted://") {
 		meta.Reference = artifact.Reference
 		meta.Size = 0
@@ -70,13 +77,6 @@ func (r *MemoryRepository) StoreArtifact(ctx context.Context, artifact *pb.Artif
 		r.logger.Info("artifact redacted", "id", artifact.Id, "type", artifact.Type)
 		return nil
 	}
-
-	// Calculate expiration
-	ttl := time.Duration(artifact.TtlSeconds) * time.Second
-	if ttl == 0 {
-		ttl = GetDefaultTTL(artifact.Type)
-	}
-	meta.ExpiresAt = now.Add(ttl)
 
 	// For small artifacts (<1MB), store inline
 	const maxInlineSize = 1024 * 1024

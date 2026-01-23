@@ -129,3 +129,174 @@ func formatMemoryLine(msg *models.Message, ts time.Time) string {
 	}
 	return fmt.Sprintf("- [%s] %s (%s/%s): %s\n", ts.Format("15:04:05"), role, channel, session, content)
 }
+
+// Rotate removes log files older than the given retention period.
+// Returns the number of files removed and any error encountered.
+func (l *MemoryLogger) Rotate(retentionDays int) (int, error) {
+	if retentionDays <= 0 {
+		return 0, nil
+	}
+
+	cutoff := time.Now().AddDate(0, 0, -retentionDays)
+	return l.RotateAt(cutoff)
+}
+
+// RotateAt removes log files with dates before the cutoff time.
+func (l *MemoryLogger) RotateAt(cutoff time.Time) (int, error) {
+	entries, err := os.ReadDir(l.dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("read memory dir: %w", err)
+	}
+
+	removed := 0
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".md") {
+			continue
+		}
+
+		// Parse date from filename (YYYY-MM-DD.md)
+		dateStr := strings.TrimSuffix(name, ".md")
+		fileDate, err := time.Parse("2006-01-02", dateStr)
+		if err != nil {
+			continue // Skip non-date files
+		}
+
+		if fileDate.Before(cutoff) {
+			path := filepath.Join(l.dir, name)
+			if err := os.Remove(path); err != nil {
+				return removed, fmt.Errorf("remove old log %s: %w", name, err)
+			}
+			removed++
+		}
+	}
+
+	return removed, nil
+}
+
+// ListDates returns a sorted list of available log dates (most recent first).
+func (l *MemoryLogger) ListDates() ([]time.Time, error) {
+	entries, err := os.ReadDir(l.dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read memory dir: %w", err)
+	}
+
+	var dates []time.Time
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".md") {
+			continue
+		}
+
+		dateStr := strings.TrimSuffix(name, ".md")
+		fileDate, err := time.Parse("2006-01-02", dateStr)
+		if err != nil {
+			continue
+		}
+		dates = append(dates, fileDate)
+	}
+
+	// Sort descending (most recent first)
+	for i := 0; i < len(dates)-1; i++ {
+		for j := i + 1; j < len(dates); j++ {
+			if dates[j].After(dates[i]) {
+				dates[i], dates[j] = dates[j], dates[i]
+			}
+		}
+	}
+
+	return dates, nil
+}
+
+// Stats returns statistics about the memory logs.
+type MemoryLogStats struct {
+	TotalFiles int
+	TotalLines int
+	TotalBytes int64
+	OldestDate time.Time
+	NewestDate time.Time
+}
+
+// Stats returns statistics about the memory logs.
+func (l *MemoryLogger) Stats() (*MemoryLogStats, error) {
+	entries, err := os.ReadDir(l.dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &MemoryLogStats{}, nil
+		}
+		return nil, fmt.Errorf("read memory dir: %w", err)
+	}
+
+	stats := &MemoryLogStats{}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".md") {
+			continue
+		}
+
+		dateStr := strings.TrimSuffix(name, ".md")
+		fileDate, err := time.Parse("2006-01-02", dateStr)
+		if err != nil {
+			continue
+		}
+
+		stats.TotalFiles++
+
+		if stats.OldestDate.IsZero() || fileDate.Before(stats.OldestDate) {
+			stats.OldestDate = fileDate
+		}
+		if stats.NewestDate.IsZero() || fileDate.After(stats.NewestDate) {
+			stats.NewestDate = fileDate
+		}
+
+		info, err := entry.Info()
+		if err == nil {
+			stats.TotalBytes += info.Size()
+		}
+
+		// Count lines
+		path := filepath.Join(l.dir, name)
+		if lines, err := countLines(path); err == nil {
+			stats.TotalLines += lines
+		}
+	}
+
+	return stats, nil
+}
+
+func countLines(path string) (int, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	defer file.Close()
+
+	count := 0
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		if strings.TrimSpace(scanner.Text()) != "" {
+			count++
+		}
+	}
+	return count, scanner.Err()
+}
+
+// Dir returns the directory path for the memory logs.
+func (l *MemoryLogger) Dir() string {
+	return l.dir
+}

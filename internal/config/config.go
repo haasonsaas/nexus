@@ -358,6 +358,14 @@ type ToolsConfig struct {
 	Execution    ToolExecutionConfig `yaml:"execution"`
 	Elevated     ElevatedConfig      `yaml:"elevated"`
 	Jobs         ToolJobsConfig      `yaml:"jobs"`
+	ServiceNow   ServiceNowConfig    `yaml:"servicenow"`
+}
+
+type ServiceNowConfig struct {
+	Enabled     bool   `yaml:"enabled"`
+	InstanceURL string `yaml:"instance_url"`
+	Username    string `yaml:"username"`
+	Password    string `yaml:"password"`
 }
 
 // ToolJobsConfig controls async tool job persistence.

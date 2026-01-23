@@ -21,6 +21,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/tools/memorysearch"
 	"github.com/haasonsaas/nexus/internal/tools/reminders"
 	"github.com/haasonsaas/nexus/internal/tools/sandbox"
+	"github.com/haasonsaas/nexus/internal/tools/servicenow"
 	"github.com/haasonsaas/nexus/internal/tools/sandbox/firecracker"
 	"github.com/haasonsaas/nexus/internal/tools/websearch"
 )
@@ -376,6 +377,21 @@ func (s *Server) registerTools(ctx context.Context, runtime *agent.Runtime) erro
 		runtime.RegisterTool(reminders.NewCancelTool(s.taskStore))
 		runtime.RegisterTool(reminders.NewListTool(s.taskStore))
 		s.logger.Info("registered reminder tools")
+	}
+
+	// Register ServiceNow tools if enabled
+	if s.config.Tools.ServiceNow.Enabled {
+		snowClient := servicenow.NewClient(servicenow.Config{
+			InstanceURL: s.config.Tools.ServiceNow.InstanceURL,
+			Username:    s.config.Tools.ServiceNow.Username,
+			Password:    s.config.Tools.ServiceNow.Password,
+		})
+		runtime.RegisterTool(servicenow.NewListTicketsTool(snowClient))
+		runtime.RegisterTool(servicenow.NewGetTicketTool(snowClient))
+		runtime.RegisterTool(servicenow.NewAddCommentTool(snowClient))
+		runtime.RegisterTool(servicenow.NewResolveTicketTool(snowClient))
+		runtime.RegisterTool(servicenow.NewUpdateTicketTool(snowClient))
+		s.logger.Info("registered ServiceNow tools")
 	}
 
 	if s.config.MCP.Enabled && s.mcpManager != nil {

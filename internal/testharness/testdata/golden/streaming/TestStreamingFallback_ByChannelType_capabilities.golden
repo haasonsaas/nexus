@@ -1,0 +1,32 @@
+Channel Streaming Capabilities:
+
+slack:
+  streaming: yes
+  message_edit: yes
+  max_chunks: 10
+  chunk_delay: 500ms
+
+discord:
+  streaming: yes
+  message_edit: yes
+  max_chunks: 5
+  chunk_delay: 1s
+
+telegram:
+  streaming: yes
+  message_edit: yes
+  max_chunks: 20
+  chunk_delay: 300ms
+
+whatsapp:
+  streaming: no (immediate fallback to non-streaming)
+
+signal:
+  streaming: no (immediate fallback to non-streaming)
+
+api:
+  streaming: yes
+  message_edit: yes
+  max_chunks: 100
+  chunk_delay: 50ms
+

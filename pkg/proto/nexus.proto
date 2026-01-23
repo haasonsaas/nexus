@@ -79,6 +79,33 @@ service HealthService {
   rpc Watch(HealthCheckRequest) returns (stream HealthCheckResponse);
 }
 
+// NodeService manages device nodes (Mac, iPhone, etc.) for privileged actions.
+service NodeService {
+  // CreatePairingToken generates a token for pairing a new node.
+  rpc CreatePairingToken(CreatePairingTokenRequest) returns (CreatePairingTokenResponse);
+
+  // ListNodes returns all registered nodes.
+  rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);
+
+  // GetNode retrieves a specific node.
+  rpc GetNode(GetNodeRequest) returns (GetNodeResponse);
+
+  // UpdateNode updates a node's configuration.
+  rpc UpdateNode(UpdateNodeRequest) returns (UpdateNodeResponse);
+
+  // RevokeNode revokes a node's access.
+  rpc RevokeNode(RevokeNodeRequest) returns (RevokeNodeResponse);
+
+  // DeleteNode permanently removes a node.
+  rpc DeleteNode(DeleteNodeRequest) returns (DeleteNodeResponse);
+
+  // RequestAction requests an action on a node (camera, screen, etc.).
+  rpc RequestAction(RequestActionRequest) returns (RequestActionResponse);
+
+  // GetNodeAuditLogs retrieves audit logs for a node.
+  rpc GetNodeAuditLogs(GetNodeAuditLogsRequest) returns (GetNodeAuditLogsResponse);
+}
+
 // =============================================================================
 // Streaming Messages
 // =============================================================================
@@ -529,6 +556,146 @@ service EdgeService {
 
   // ListEdges returns all connected edges.
   rpc ListEdges(ListEdgesRequest) returns (ListEdgesResponse);
+}
+
+// =============================================================================
+// Node Messages
+// =============================================================================
+
+// NodeStatus represents the current state of a node.
+enum NodeStatus {
+  NODE_STATUS_UNSPECIFIED = 0;
+  NODE_STATUS_PENDING = 1;    // Has pairing token, not yet connected
+  NODE_STATUS_ONLINE = 2;     // Currently connected
+  NODE_STATUS_OFFLINE = 3;    // Previously connected, now disconnected
+  NODE_STATUS_REVOKED = 4;    // Access revoked
+}
+
+// NodeCapability represents what a node can do.
+enum NodeCapability {
+  NODE_CAPABILITY_UNSPECIFIED = 0;
+  NODE_CAPABILITY_CAMERA = 1;
+  NODE_CAPABILITY_SCREEN = 2;
+  NODE_CAPABILITY_LOCATION = 3;
+  NODE_CAPABILITY_FILESYSTEM = 4;
+  NODE_CAPABILITY_SHELL = 5;
+  NODE_CAPABILITY_BROWSER = 6;
+  NODE_CAPABILITY_CHANNELS = 7;
+}
+
+// Node represents a registered device.
+message Node {
+  string id = 1;
+  string name = 2;
+  string device_type = 3;
+  string owner_id = 4;
+  NodeStatus status = 5;
+  repeated NodeCapability capabilities = 6;
+  repeated string channel_types = 7;
+  string edge_id = 8;
+  google.protobuf.Timestamp last_seen_at = 9;
+  map<string, string> metadata = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+}
+
+// PairingToken for registering a new node.
+message PairingToken {
+  string token = 1;
+  string node_id = 2;
+  string name = 3;
+  string device_type = 4;
+  google.protobuf.Timestamp expires_at = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message CreatePairingTokenRequest {
+  string name = 1;
+  string device_type = 2;
+}
+
+message CreatePairingTokenResponse {
+  PairingToken token = 1;
+}
+
+message ListNodesRequest {
+  string owner_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListNodesResponse {
+  repeated Node nodes = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+message GetNodeRequest {
+  string node_id = 1;
+}
+
+message GetNodeResponse {
+  Node node = 1;
+}
+
+message UpdateNodeRequest {
+  string node_id = 1;
+  string name = 2;
+  map<string, string> metadata = 3;
+}
+
+message UpdateNodeResponse {
+  Node node = 1;
+}
+
+message RevokeNodeRequest {
+  string node_id = 1;
+}
+
+message RevokeNodeResponse {
+  bool success = 1;
+}
+
+message DeleteNodeRequest {
+  string node_id = 1;
+}
+
+message DeleteNodeResponse {
+  bool success = 1;
+}
+
+// RequestActionRequest requests an action on a node.
+message RequestActionRequest {
+  string node_id = 1;
+  NodeCapability capability = 2;
+  map<string, string> parameters = 3;
+}
+
+// RequestActionResponse returns the result of a node action.
+message RequestActionResponse {
+  bool success = 1;
+  string error = 2;
+  bytes data = 3;
+  map<string, string> metadata = 4;
+}
+
+// NodeAuditLog records an action on a node.
+message NodeAuditLog {
+  string id = 1;
+  string node_id = 2;
+  string action = 3;
+  string user_id = 4;
+  google.protobuf.Struct details = 5;
+  google.protobuf.Timestamp timestamp = 6;
+}
+
+message GetNodeAuditLogsRequest {
+  string node_id = 1;
+  int32 limit = 2;
+}
+
+message GetNodeAuditLogsResponse {
+  repeated NodeAuditLog logs = 1;
 }
 
 // =============================================================================

@@ -641,20 +641,65 @@ func buildAuthSetCmd() *cobra.Command {
 // Migration Commands
 // =============================================================================
 
-// buildMigrateCmd creates the "migrate" command group for database migrations.
+// buildMigrateCmd creates the "migrate" command group for migrations.
 func buildMigrateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "migrate",
-		Short: "Database migration commands",
-		Long: `Manage database schema migrations for CockroachDB.
+		Short: "Migration commands",
+		Long: `Manage database migrations and workspace imports.
 
-Migrations ensure your database schema matches the version of Nexus you're running.
-Always run migrations after upgrading Nexus to apply any schema changes.`,
+Database migrations ensure your schema matches the version of Nexus you're running.
+Workspace migrations import data from other systems (e.g., Clawdbot).`,
 	}
 
 	cmd.AddCommand(buildMigrateUpCmd())
 	cmd.AddCommand(buildMigrateDownCmd())
 	cmd.AddCommand(buildMigrateStatusCmd())
+	cmd.AddCommand(buildMigrateClawdbotWorkspaceCmd())
+
+	return cmd
+}
+
+func buildMigrateClawdbotWorkspaceCmd() *cobra.Command {
+	var (
+		targetWorkspace string
+		targetConfig    string
+		overwrite       bool
+		dryRun          bool
+	)
+
+	cmd := &cobra.Command{
+		Use:   "clawdbot-workspace <source-path>",
+		Short: "Import Clawdbot workspace files",
+		Long: `Migrate workspace files from a Clawdbot installation to Nexus.
+
+This command copies workspace files (SOUL.md, IDENTITY.md, USER.md, MEMORY.md, AGENTS.md)
+from a Clawdbot workspace to a Nexus workspace. It also creates new files that are
+specific to Nexus (TOOLS.md, HEARTBEAT.md).
+
+The doctor command can validate the migrated workspace afterwards.`,
+		Example: `  # Migrate workspace files
+  nexus migrate clawdbot-workspace /path/to/clawdbot/workspace
+
+  # Specify target workspace
+  nexus migrate clawdbot-workspace /path/to/clawdbot --target ~/nexus-workspace
+
+  # Preview what would be migrated
+  nexus migrate clawdbot-workspace /path/to/clawdbot --dry-run
+
+  # Overwrite existing files
+  nexus migrate clawdbot-workspace /path/to/clawdbot --overwrite`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			sourcePath := args[0]
+			return runMigrateClawdbotWorkspace(cmd, sourcePath, targetWorkspace, targetConfig, overwrite, dryRun)
+		},
+	}
+
+	cmd.Flags().StringVar(&targetWorkspace, "target", "", "Target workspace directory (default: current config workspace.path)")
+	cmd.Flags().StringVar(&targetConfig, "target-config", "", "Target config file to update (optional)")
+	cmd.Flags().BoolVar(&overwrite, "overwrite", false, "Overwrite existing files")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview migration without making changes")
 
 	return cmd
 }

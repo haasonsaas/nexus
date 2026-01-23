@@ -22,6 +22,7 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	"github.com/haasonsaas/nexus/internal/agent"
+	"github.com/haasonsaas/nexus/internal/artifacts"
 	"github.com/haasonsaas/nexus/internal/auth"
 	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/commands"
@@ -102,6 +103,9 @@ type Server struct {
 
 	edgeManager *edge.Manager
 	edgeService *edge.Service
+
+	// Artifact repository for tool-produced files
+	artifactRepo artifacts.Repository
 
 	// Event timeline for observability and debugging
 	eventStore    *observability.MemoryEventStore
@@ -314,6 +318,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	// Initialize edge manager if enabled
 	var edgeManager *edge.Manager
 	var edgeService *edge.Service
+	var artifactRepo artifacts.Repository
 	if cfg.Edge.Enabled {
 		edgeAuth, err := buildEdgeAuthenticator(cfg)
 		if err != nil {
@@ -335,6 +340,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		if artifactSetup != nil {
 			if artifactSetup.repo != nil {
 				edgeManager.SetArtifactRepository(artifactSetup.repo)
+				artifactRepo = artifactSetup.repo
 			}
 			if artifactSetup.redactor != nil {
 				edgeManager.SetArtifactRedactionPolicy(artifactSetup.redactor)
@@ -383,6 +389,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		hooksRegistry:      hooksRegistry,
 		edgeManager:        edgeManager,
 		edgeService:        edgeService,
+		artifactRepo:       artifactRepo,
 		eventStore:         eventStore,
 		eventRecorder:      eventRecorder,
 		identityStore:      identityStore,
@@ -406,6 +413,9 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	proto.RegisterProvisioningServiceServer(grpcServer, newProvisioningService(server))
 	if edgeService != nil {
 		proto.RegisterEdgeServiceServer(grpcServer, edgeService)
+	}
+	if artifactRepo != nil {
+		proto.RegisterArtifactServiceServer(grpcServer, newArtifactService(artifactRepo))
 	}
 	registerBuiltinChannelPlugins(server.channelPlugins)
 

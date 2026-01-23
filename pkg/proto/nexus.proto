@@ -106,6 +106,21 @@ service NodeService {
   rpc GetNodeAuditLogs(GetNodeAuditLogsRequest) returns (GetNodeAuditLogsResponse);
 }
 
+// ArtifactService manages artifacts produced by tool execution.
+service ArtifactService {
+  // GetArtifact retrieves artifact metadata and download URL.
+  rpc GetArtifact(GetArtifactRequest) returns (GetArtifactResponse);
+
+  // ListArtifacts lists artifacts with optional filtering.
+  rpc ListArtifacts(ListArtifactsRequest) returns (ListArtifactsResponse);
+
+  // DeleteArtifact deletes an artifact.
+  rpc DeleteArtifact(DeleteArtifactRequest) returns (DeleteArtifactResponse);
+
+  // GetArtifactDownloadURL generates a presigned URL for artifact download.
+  rpc GetArtifactDownloadURL(GetArtifactDownloadURLRequest) returns (GetArtifactDownloadURLResponse);
+}
+
 // =============================================================================
 // Streaming Messages
 // =============================================================================
@@ -1851,4 +1866,48 @@ message GetProvisioningRequirementsRequest {
 
 message GetProvisioningRequirementsResponse {
   repeated ProvisioningRequirements requirements = 1;
+}
+
+// =============================================================================
+// Artifact Service Messages
+// =============================================================================
+
+message GetArtifactRequest {
+  string artifact_id = 1;
+}
+
+message GetArtifactResponse {
+  Artifact artifact = 1;
+  string download_url = 2;
+}
+
+message ListArtifactsRequest {
+  string session_id = 1;
+  string edge_id = 2;
+  string type = 3;
+  google.protobuf.Timestamp created_after = 4;
+  google.protobuf.Timestamp created_before = 5;
+  int32 limit = 6;
+}
+
+message ListArtifactsResponse {
+  repeated Artifact artifacts = 1;
+}
+
+message DeleteArtifactRequest {
+  string artifact_id = 1;
+}
+
+message DeleteArtifactResponse {
+  bool success = 1;
+}
+
+message GetArtifactDownloadURLRequest {
+  string artifact_id = 1;
+  int32 expires_in_seconds = 2;
+}
+
+message GetArtifactDownloadURLResponse {
+  string url = 1;
+  google.protobuf.Timestamp expires_at = 2;
 }

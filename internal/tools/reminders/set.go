@@ -253,40 +253,26 @@ func formatDuration(d time.Duration) string {
 	return fmt.Sprintf("%.1f days", days)
 }
 
-// Context key types for passing channel info through context
-type contextKey string
-
-const (
-	contextKeyChannel   contextKey = "reminder_channel"
-	contextKeyChannelID contextKey = "reminder_channel_id"
-	contextKeyAgentID   contextKey = "reminder_agent_id"
-)
-
-// WithReminderContext adds reminder context to the context.
-func WithReminderContext(ctx context.Context, channel models.ChannelType, channelID, agentID string) context.Context {
-	ctx = context.WithValue(ctx, contextKeyChannel, channel)
-	ctx = context.WithValue(ctx, contextKeyChannelID, channelID)
-	ctx = context.WithValue(ctx, contextKeyAgentID, agentID)
-	return ctx
-}
-
+// getChannelFromContext extracts channel type from the session in context.
 func getChannelFromContext(ctx context.Context) models.ChannelType {
-	if v, ok := ctx.Value(contextKeyChannel).(models.ChannelType); ok {
-		return v
+	if session := agent.SessionFromContext(ctx); session != nil {
+		return session.Channel
 	}
-	return models.ChannelWhatsApp // Default for reminders
+	return models.ChannelWhatsApp // Default fallback
 }
 
+// getChannelIDFromContext extracts channel ID from the session in context.
 func getChannelIDFromContext(ctx context.Context) string {
-	if v, ok := ctx.Value(contextKeyChannelID).(string); ok {
-		return v
+	if session := agent.SessionFromContext(ctx); session != nil {
+		return session.ChannelID
 	}
 	return ""
 }
 
+// getAgentIDFromContext extracts agent ID from the session in context.
 func getAgentIDFromContext(ctx context.Context) string {
-	if v, ok := ctx.Value(contextKeyAgentID).(string); ok {
-		return v
+	if session := agent.SessionFromContext(ctx); session != nil {
+		return session.AgentID
 	}
 	return "default"
 }

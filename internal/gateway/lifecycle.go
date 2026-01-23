@@ -174,10 +174,24 @@ func (s *Server) startTaskScheduler(ctx context.Context) error {
 		return fmt.Errorf("failed to initialize runtime for task scheduler: %w", err)
 	}
 
-	// Create the executor that uses the agent runtime
-	executor := tasks.NewAgentExecutor(runtime, s.sessions, tasks.AgentExecutorConfig{
+	// Create the agent executor for normal tasks
+	agentExecutor := tasks.NewAgentExecutor(runtime, s.sessions, tasks.AgentExecutorConfig{
 		Logger: s.logger.With("component", "task-executor"),
 	})
+
+	// Create the message executor for direct message sending (reminders)
+	var messageExecutor tasks.Executor
+	if s.channels != nil {
+		messageExecutor = NewMessageExecutor(s.channels, MessageExecutorConfig{
+			Sessions: s.sessions,
+			Logger: func(format string, args ...any) {
+				s.logger.Info(fmt.Sprintf(format, args...), "component", "message-executor")
+			},
+		})
+	}
+
+	// Create a routing executor that chooses based on task type
+	executor := tasks.NewRoutingExecutor(agentExecutor, messageExecutor, s.logger.With("component", "routing-executor"))
 
 	// Build scheduler config from settings
 	schedulerCfg := tasks.DefaultSchedulerConfig()

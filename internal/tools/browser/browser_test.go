@@ -731,7 +731,6 @@ func TestBrowserTool_InvalidParams(t *testing.T) {
 	}
 }
 
-
 func TestNewBrowserTool(t *testing.T) {
 	t.Run("with nil pool", func(t *testing.T) {
 		tool := NewBrowserTool(nil)

@@ -138,7 +138,9 @@ func (r *PersistentRepository) StoreArtifact(ctx context.Context, artifact *pb.A
 	}
 	r.mu.Unlock()
 	if err != nil {
-		_ = r.store.Delete(ctx, artifact.Id)
+		if delErr := r.store.Delete(ctx, artifact.Id); delErr != nil {
+			r.logger.Warn("failed to cleanup stored artifact after metadata persist error", "id", artifact.Id, "error", delErr)
+		}
 		return err
 	}
 

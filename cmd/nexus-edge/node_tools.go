@@ -234,17 +234,7 @@ func handleScreenCapture(ctx context.Context, input string) (*ToolResult, error)
 			args = append(args, "-R",
 				fmt.Sprintf("%d,%d,%d,%d", params.Region.X, params.Region.Y, params.Region.Width, params.Region.Height))
 		}
-		if params.WindowName != "" {
-			// Capture window by name using osascript + screencapture
-			script := `tell application "System Events"
-				set frontApp to first application process whose frontmost is true
-				set windowName to name of first window of frontApp
-			end tell
-			return windowName`
-			// Note: This captures window name but we still use screencapture
-			// In a real implementation, we'd use the window name to target capture
-			_ = script // Window name capture not fully implemented
-		}
+		// Window-name capture is not supported yet; fall back to full screen capture.
 		cmd = exec.CommandContext(ctx, "screencapture", args...)
 
 	case "linux":
@@ -376,7 +366,7 @@ func handleLocationGet(ctx context.Context, input string) (*ToolResult, error) {
 			jsonResult, err := json.MarshalIndent(result, "", "  ")
 			if err != nil {
 				return &ToolResult{
-					Content: fmt.Sprintf("Error formatting result: %v", err),
+					Content: fmt.Sprintf("Failed to encode location result: %v", err),
 					IsError: true,
 				}, nil
 			}
@@ -598,7 +588,7 @@ func handleShellRun(ctx context.Context, input string) (*ToolResult, error) {
 	jsonResult, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
 		return &ToolResult{
-			Content: fmt.Sprintf("Error formatting result: %v", err),
+			Content: fmt.Sprintf("Failed to encode command result: %v", err),
 			IsError: true,
 		}, nil
 	}

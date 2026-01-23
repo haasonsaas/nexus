@@ -46,6 +46,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/haasonsaas/nexus/internal/artifacts"
+	"github.com/haasonsaas/nexus/internal/observability"
 	pb "github.com/haasonsaas/nexus/pkg/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -460,6 +461,15 @@ func (m *Manager) handleToolResult(conn *EdgeConnection, result *pb.ToolExecutio
 	// Store artifacts if repository is configured
 	if len(result.Artifacts) > 0 {
 		ctx := context.Background()
+		if pending.RunID != "" {
+			ctx = observability.AddRunID(ctx, pending.RunID)
+		}
+		if pending.SessionID != "" {
+			ctx = observability.AddSessionID(ctx, pending.SessionID)
+		}
+		if pending.EdgeID != "" {
+			ctx = observability.AddEdgeID(ctx, pending.EdgeID)
+		}
 		for _, artifact := range result.Artifacts {
 			redacted := false
 			if artifactRedactor != nil && artifactRedactor.Apply(artifact) {

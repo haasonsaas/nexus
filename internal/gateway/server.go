@@ -15,6 +15,9 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,6 +29,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/haasonsaas/nexus/internal/artifacts"
 	"github.com/haasonsaas/nexus/internal/auth"
+	"github.com/haasonsaas/nexus/internal/canvas"
 	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/commands"
 	"github.com/haasonsaas/nexus/internal/config"
@@ -129,6 +133,9 @@ type Server struct {
 	// streamingRegistry manages streaming behavior per channel
 	streamingRegistry *StreamingRegistry
 
+	// canvasHost serves workspace canvas assets with live reload
+	canvasHost *canvas.Host
+
 	// httpServer serves the HTTP dashboard, API, and control plane WebSocket
 	httpServer   *http.Server
 	httpListener net.Listener
@@ -202,6 +209,21 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 			logger.Error("skill watcher failed", "error", err)
 		}
 	}()
+
+	// Initialize canvas host if workspace canvas directory exists
+	canvasRoot := "canvas"
+	if strings.TrimSpace(cfg.Workspace.Path) != "" {
+		canvasRoot = filepath.Join(cfg.Workspace.Path, "canvas")
+	}
+	var canvasHost *canvas.Host
+	if info, err := os.Stat(canvasRoot); err == nil && info.IsDir() {
+		host, err := canvas.NewHost(canvasRoot, logger)
+		if err != nil {
+			logger.Warn("canvas host init failed", "error", err)
+		} else {
+			canvasHost = host
+		}
+	}
 
 	// Initialize vector memory manager (optional, returns nil if not enabled)
 	if cfg.VectorMemory.Enabled && cfg.VectorMemory.Pgvector.UseCockroachDB && cfg.VectorMemory.Pgvector.DSN == "" {
@@ -416,6 +438,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		hooksRegistry:      hooksRegistry,
 		edgeManager:        edgeManager,
 		edgeService:        edgeService,
+		canvasHost:         canvasHost,
 		artifactRepo:       artifactRepo,
 		eventStore:         eventStore,
 		eventRecorder:      eventRecorder,

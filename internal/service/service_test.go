@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"os"
 	"runtime"
 	"strings"
 	"testing"
@@ -257,5 +258,133 @@ func TestContainsAll(t *testing.T) {
 		if result != tt.expected {
 			t.Errorf("containsAll(%q, %v) = %v, want %v", tt.content, tt.needles, result, tt.expected)
 		}
+	}
+}
+
+func TestInstallUserService_Linux(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("skipping Linux-specific test")
+	}
+
+	// Create temp directory to act as XDG_CONFIG_HOME
+	tmpDir := t.TempDir()
+	originalXDG := os.Getenv("XDG_CONFIG_HOME")
+	os.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Cleanup(func() {
+		if originalXDG == "" {
+			os.Unsetenv("XDG_CONFIG_HOME")
+		} else {
+			os.Setenv("XDG_CONFIG_HOME", originalXDG)
+		}
+	})
+
+	result, err := InstallUserService("test-config.yaml", true)
+	if err != nil {
+		t.Fatalf("InstallUserService() error = %v", err)
+	}
+
+	// Verify file was created
+	if result.Path == "" {
+		t.Error("expected Path to be set")
+	}
+	if !strings.Contains(result.Path, "systemd") {
+		t.Errorf("Path %q should contain 'systemd'", result.Path)
+	}
+
+	// Verify instructions
+	if len(result.Instructions) == 0 {
+		t.Error("expected Instructions to be set")
+	}
+
+	// Verify file exists and has correct content
+	content, err := os.ReadFile(result.Path)
+	if err != nil {
+		t.Fatalf("failed to read service file: %v", err)
+	}
+	if !strings.Contains(string(content), "ExecStart=") {
+		t.Error("service file should contain ExecStart")
+	}
+	if !strings.Contains(string(content), "test-config.yaml") {
+		t.Error("service file should contain config path")
+	}
+}
+
+func TestInstallUserService_NoOverwrite(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("skipping Linux-specific test")
+	}
+
+	tmpDir := t.TempDir()
+	originalXDG := os.Getenv("XDG_CONFIG_HOME")
+	os.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Cleanup(func() {
+		if originalXDG == "" {
+			os.Unsetenv("XDG_CONFIG_HOME")
+		} else {
+			os.Setenv("XDG_CONFIG_HOME", originalXDG)
+		}
+	})
+
+	// First install
+	result1, err := InstallUserService("first-config.yaml", false)
+	if err != nil {
+		t.Fatalf("first InstallUserService() error = %v", err)
+	}
+
+	// Second install without overwrite - should return same path without modification
+	result2, err := InstallUserService("second-config.yaml", false)
+	if err != nil {
+		t.Fatalf("second InstallUserService() error = %v", err)
+	}
+
+	if result1.Path != result2.Path {
+		t.Errorf("paths should match: %q != %q", result1.Path, result2.Path)
+	}
+
+	// Verify file still has first config
+	content, err := os.ReadFile(result2.Path)
+	if err != nil {
+		t.Fatalf("failed to read service file: %v", err)
+	}
+	if !strings.Contains(string(content), "first-config.yaml") {
+		t.Error("file should still contain first config path")
+	}
+}
+
+func TestInstallUserService_Overwrite(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("skipping Linux-specific test")
+	}
+
+	tmpDir := t.TempDir()
+	originalXDG := os.Getenv("XDG_CONFIG_HOME")
+	os.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Cleanup(func() {
+		if originalXDG == "" {
+			os.Unsetenv("XDG_CONFIG_HOME")
+		} else {
+			os.Setenv("XDG_CONFIG_HOME", originalXDG)
+		}
+	})
+
+	// First install
+	_, err := InstallUserService("first-config.yaml", false)
+	if err != nil {
+		t.Fatalf("first InstallUserService() error = %v", err)
+	}
+
+	// Second install with overwrite
+	result2, err := InstallUserService("second-config.yaml", true)
+	if err != nil {
+		t.Fatalf("second InstallUserService() error = %v", err)
+	}
+
+	// Verify file has second config
+	content, err := os.ReadFile(result2.Path)
+	if err != nil {
+		t.Fatalf("failed to read service file: %v", err)
+	}
+	if !strings.Contains(string(content), "second-config.yaml") {
+		t.Error("file should contain second config path after overwrite")
 	}
 }

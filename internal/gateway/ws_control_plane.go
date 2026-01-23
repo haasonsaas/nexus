@@ -20,6 +20,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/haasonsaas/nexus/internal/auth"
+	"github.com/haasonsaas/nexus/internal/canvas"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/pkg/models"
 	proto "github.com/haasonsaas/nexus/pkg/proto"
@@ -142,14 +143,17 @@ type wsSession struct {
 	ctx     context.Context
 	cancel  context.CancelFunc
 
-	id          string
-	requestHost string
-	connected   atomic.Bool
-	seq         int64
-	user        *models.User
-	headerUser  *models.User
-	idempotency map[string]struct{}
-	idemMu      sync.Mutex
+	id             string
+	requestHost    string
+	forwardedProto string
+	localAddress   string
+	requestScheme  string
+	connected      atomic.Bool
+	seq            int64
+	user           *models.User
+	headerUser     *models.User
+	idempotency    map[string]struct{}
+	idemMu         sync.Mutex
 }
 
 func (h *wsControlPlane) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -159,17 +163,26 @@ func (h *wsControlPlane) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx, cancel := context.WithCancel(r.Context())
-	requestHost := hostFromRequest(r)
+	requestHost := requestHostFromRequest(r)
+	forwardedProto := forwardedProtoFromRequest(r)
+	localAddress := localAddressFromRequest(r)
+	requestScheme := ""
+	if r.TLS != nil {
+		requestScheme = "https"
+	}
 	session := &wsSession{
-		control:     h,
-		conn:        conn,
-		send:        make(chan []byte, 64),
-		ctx:         ctx,
-		cancel:      cancel,
-		id:          uuid.NewString(),
-		requestHost: requestHost,
-		headerUser:  h.authenticateRequest(r),
-		idempotency: make(map[string]struct{}),
+		control:        h,
+		conn:           conn,
+		send:           make(chan []byte, 64),
+		ctx:            ctx,
+		cancel:         cancel,
+		id:             uuid.NewString(),
+		requestHost:    requestHost,
+		forwardedProto: forwardedProto,
+		localAddress:   localAddress,
+		requestScheme:  requestScheme,
+		headerUser:     h.authenticateRequest(r),
+		idempotency:    make(map[string]struct{}),
 	}
 	session.run()
 }
@@ -602,7 +615,12 @@ func (s *wsSession) buildHelloPayload() map[string]any {
 		"id": s.id,
 	}
 	if s.control != nil && s.control.server != nil && s.control.server.canvasHost != nil {
-		if canvasURL := s.control.server.canvasHost.CanvasURL(s.requestHost); canvasURL != "" {
+		if canvasURL := s.control.server.canvasHost.CanvasURLWithParams(canvas.CanvasURLParams{
+			RequestHost:    s.requestHost,
+			ForwardedProto: s.forwardedProto,
+			LocalAddress:   s.localAddress,
+			Scheme:         s.requestScheme,
+		}); canvasURL != "" {
 			serverPayload["canvasHostUrl"] = canvasURL
 		}
 	}
@@ -690,29 +708,38 @@ func (h *wsControlPlane) authenticateRequest(r *http.Request) *models.User {
 	return nil
 }
 
-func hostFromRequest(r *http.Request) string {
+func requestHostFromRequest(r *http.Request) string {
 	if r == nil {
 		return ""
 	}
-	host := strings.TrimSpace(r.Host)
-	if host == "" && r.URL != nil {
-		host = strings.TrimSpace(r.URL.Host)
+	if host := strings.TrimSpace(r.Host); host != "" {
+		return host
 	}
-	if host == "" {
+	if r.URL != nil {
+		return strings.TrimSpace(r.URL.Host)
+	}
+	return ""
+}
+
+func forwardedProtoFromRequest(r *http.Request) string {
+	if r == nil {
 		return ""
 	}
-	if strings.HasPrefix(host, "[") {
-		if parsed, _, err := net.SplitHostPort(host); err == nil {
-			return strings.Trim(parsed, "[]")
-		}
-		return strings.Trim(host, "[]")
+	return strings.TrimSpace(r.Header.Get("X-Forwarded-Proto"))
+}
+
+func localAddressFromRequest(r *http.Request) string {
+	if r == nil {
+		return ""
 	}
-	if strings.Contains(host, ":") {
-		if parsed, _, err := net.SplitHostPort(host); err == nil {
-			return parsed
-		}
+	addr, ok := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
+	if !ok || addr == nil {
+		return ""
 	}
-	return host
+	if tcpAddr, ok := addr.(*net.TCPAddr); ok && tcpAddr.IP != nil {
+		return tcpAddr.IP.String()
+	}
+	return addr.String()
 }
 
 func supportedWSMethods() []string {

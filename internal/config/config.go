@@ -1344,9 +1344,23 @@ func applyArtifactDefaults(cfg *ArtifactConfig) {
 	}
 }
 
+func isTruthyEnv(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "t", "yes", "y", "on":
+		return true
+	default:
+		return false
+	}
+}
+
 func applyEnvOverrides(cfg *Config) {
 	if cfg == nil {
 		return
+	}
+
+	if isTruthyEnv(os.Getenv("NEXUS_SKIP_CANVAS_HOST")) || isTruthyEnv(os.Getenv("CLAWDBOT_SKIP_CANVAS_HOST")) {
+		disabled := false
+		cfg.CanvasHost.Enabled = &disabled
 	}
 
 	if value := strings.TrimSpace(os.Getenv("NEXUS_HOST")); value != "" {

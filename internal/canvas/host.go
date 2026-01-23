@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -48,6 +49,13 @@ type Host struct {
 	watcher     *fsnotify.Watcher
 	watchCancel context.CancelFunc
 	upgrader    websocket.Upgrader
+}
+
+type CanvasURLParams struct {
+	RequestHost    string
+	ForwardedProto string
+	LocalAddress   string
+	Scheme         string
 }
 
 // NewHost creates a canvas host for the given configuration.
@@ -216,18 +224,40 @@ func (h *Host) Close() error {
 // CanvasURL returns the absolute URL for the canvas root.
 // requestHost should be the host name from the incoming client request (without port).
 func (h *Host) CanvasURL(requestHost string) string {
+	return h.CanvasURLWithParams(CanvasURLParams{RequestHost: requestHost})
+}
+
+// CanvasURLWithParams returns the absolute URL for the canvas root using request details.
+func (h *Host) CanvasURLWithParams(params CanvasURLParams) string {
 	if h == nil {
 		return ""
 	}
-	host := strings.TrimSpace(h.host)
-	if host == "" || host == "0.0.0.0" || host == "::" {
-		host = strings.TrimSpace(requestHost)
+	scheme := strings.ToLower(strings.TrimSpace(params.Scheme))
+	if scheme == "" {
+		if strings.EqualFold(strings.TrimSpace(firstForwardedProto(params.ForwardedProto)), "https") {
+			scheme = "https"
+		} else {
+			scheme = "http"
+		}
+	}
+
+	override := normalizeHost(h.host, true)
+	requestHost := normalizeHost(parseHostHeader(params.RequestHost), override != "")
+	localAddress := normalizeHost(parseHostHeader(params.LocalAddress), override != "" || requestHost != "")
+
+	host := override
+	if host == "" {
+		host = requestHost
+	}
+	if host == "" {
+		host = localAddress
 	}
 	if host == "" {
 		host = "localhost"
 	}
+	host = trimHostBrackets(host)
 	hostPort := net.JoinHostPort(host, strconv.Itoa(h.port))
-	return fmt.Sprintf("http://%s%s/", hostPort, h.canvasPrefix())
+	return fmt.Sprintf("%s://%s%s/", scheme, hostPort, h.canvasPrefix())
 }
 
 func (h *Host) canvasHandler() http.Handler {
@@ -505,6 +535,56 @@ func (h *Host) namespacedPath(suffix string) string {
 		return "/" + suffix
 	}
 	return h.namespace + "/" + suffix
+}
+
+func trimHostBrackets(value string) string {
+	if strings.HasPrefix(value, "[") && strings.HasSuffix(value, "]") {
+		return strings.TrimSuffix(strings.TrimPrefix(value, "["), "]")
+	}
+	return value
+}
+
+func isLoopbackHost(value string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	if normalized == "" {
+		return false
+	}
+	switch normalized {
+	case "localhost", "::1", "0.0.0.0", "::":
+		return true
+	}
+	return strings.HasPrefix(normalized, "127.")
+}
+
+func normalizeHost(value string, rejectLoopback bool) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return ""
+	}
+	if rejectLoopback && isLoopbackHost(trimmed) {
+		return ""
+	}
+	return trimmed
+}
+
+func parseHostHeader(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return ""
+	}
+	parsed, err := url.Parse("http://" + trimmed)
+	if err != nil {
+		return ""
+	}
+	return parsed.Hostname()
+}
+
+func firstForwardedProto(value string) string {
+	if value == "" {
+		return ""
+	}
+	parts := strings.Split(value, ",")
+	return strings.TrimSpace(parts[0])
 }
 
 func normalizeNamespace(namespace string) string {

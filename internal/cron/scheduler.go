@@ -184,24 +184,40 @@ func (s *Scheduler) Jobs() []*Job {
 func (s *Scheduler) runDue(ctx context.Context) int {
 	now := s.now()
 	count := 0
-	for _, job := range s.jobs {
-		if !job.Enabled || job.NextRun.IsZero() {
+	s.mu.Lock()
+	jobs := make([]*Job, len(s.jobs))
+	copy(jobs, s.jobs)
+	s.mu.Unlock()
+
+	for _, job := range jobs {
+		if job == nil {
 			continue
 		}
-		if now.Before(job.NextRun) {
+		s.mu.Lock()
+		if !job.Enabled || job.NextRun.IsZero() || now.Before(job.NextRun) {
+			s.mu.Unlock()
 			continue
 		}
 		job.LastRun = now
+		schedule := job.Schedule
+		jobID := job.ID
+		s.mu.Unlock()
+
 		err := s.executeJob(ctx, job)
 		if err != nil {
+			s.logger.Warn("cron job failed", "id", jobID, "error", err)
+		}
+
+		next, ok, nextErr := schedule.Next(now)
+
+		s.mu.Lock()
+		if err != nil {
 			job.LastError = err.Error()
-			s.logger.Warn("cron job failed", "id", job.ID, "error", err)
 		} else {
 			job.LastError = ""
 		}
-		next, ok, err := job.Schedule.Next(now)
-		if err != nil {
-			job.LastError = err.Error()
+		if nextErr != nil {
+			job.LastError = nextErr.Error()
 			job.NextRun = time.Time{}
 			job.Enabled = false
 		} else if ok {
@@ -210,6 +226,7 @@ func (s *Scheduler) runDue(ctx context.Context) int {
 			job.NextRun = time.Time{}
 			job.Enabled = false
 		}
+		s.mu.Unlock()
 		count++
 	}
 	return count

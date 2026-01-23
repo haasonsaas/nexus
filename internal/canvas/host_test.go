@@ -1,6 +1,8 @@
 package canvas
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/haasonsaas/nexus/internal/config"
@@ -483,6 +485,37 @@ func TestHost_EnsureRoot(t *testing.T) {
 	})
 }
 
+func TestHost_EnsureA2UI(t *testing.T) {
+	t.Run("creates a2ui index when missing", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		a2uiDir := tmpDir + "/a2ui"
+		cfg := config.CanvasHostConfig{
+			Port:      18793,
+			Root:      tmpDir,
+			A2UIRoot:  a2uiDir,
+			Namespace: "/__nexus__",
+		}
+		host, err := NewHost(cfg, nil)
+		if err != nil {
+			t.Fatalf("NewHost error: %v", err)
+		}
+
+		host.ensureA2UI(a2uiDir)
+
+		indexPath := filepath.Join(a2uiDir, "index.html")
+		if _, err := os.Stat(indexPath); err != nil {
+			t.Fatalf("expected a2ui index to exist, err=%v", err)
+		}
+		content, err := os.ReadFile(indexPath)
+		if err != nil {
+			t.Fatalf("read a2ui index: %v", err)
+		}
+		if !contains(string(content), "Nexus A2UI") {
+			t.Error("a2ui index should contain Nexus A2UI")
+		}
+	})
+}
+
 func TestDefaultIndexHTML(t *testing.T) {
 	if defaultIndexHTML == "" {
 		t.Error("defaultIndexHTML should not be empty")
@@ -492,5 +525,17 @@ func TestDefaultIndexHTML(t *testing.T) {
 	}
 	if !contains(defaultIndexHTML, "Nexus Canvas") {
 		t.Error("defaultIndexHTML should contain Nexus Canvas")
+	}
+}
+
+func TestDefaultA2UIIndexHTML(t *testing.T) {
+	if defaultA2UIIndexHTML == "" {
+		t.Error("defaultA2UIIndexHTML should not be empty")
+	}
+	if !contains(defaultA2UIIndexHTML, "<!doctype html>") {
+		t.Error("defaultA2UIIndexHTML should contain doctype")
+	}
+	if !contains(defaultA2UIIndexHTML, "Nexus A2UI") {
+		t.Error("defaultA2UIIndexHTML should contain Nexus A2UI")
 	}
 }

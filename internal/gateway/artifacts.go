@@ -63,15 +63,18 @@ func BuildArtifactRepository(ctx context.Context, cfg *config.Config, logger *sl
 		}
 		store = localStore
 	case "s3", "minio":
-		forcePathStyle := backend == "minio"
+		usePathStyle := backend == "minio"
 		if strings.TrimSpace(cfg.Artifacts.S3Endpoint) != "" {
-			forcePathStyle = true
+			usePathStyle = true
 		}
-		s3Store, err := artifacts.NewS3Store(ctx, artifacts.S3Config{
-			Bucket:         cfg.Artifacts.S3Bucket,
-			Region:         cfg.Artifacts.S3Region,
-			Endpoint:       cfg.Artifacts.S3Endpoint,
-			ForcePathStyle: forcePathStyle,
+		s3Store, err := artifacts.NewS3Store(ctx, &artifacts.S3StoreConfig{
+			Bucket:          cfg.Artifacts.S3Bucket,
+			Region:          cfg.Artifacts.S3Region,
+			Endpoint:        cfg.Artifacts.S3Endpoint,
+			Prefix:          cfg.Artifacts.S3Prefix,
+			AccessKeyID:     cfg.Artifacts.S3AccessKeyID,
+			SecretAccessKey: cfg.Artifacts.S3SecretAccessKey,
+			UsePathStyle:    usePathStyle,
 		})
 		if err != nil {
 			return nil, err

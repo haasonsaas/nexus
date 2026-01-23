@@ -112,7 +112,6 @@ Documentation: https://github.com/haasonsaas/nexus`,
 		buildTraceCmd(),
 		buildEdgeCmd(),
 		buildEventsCmd(),
-		buildArtifactsCmd(),
 	)
 
 	return rootCmd

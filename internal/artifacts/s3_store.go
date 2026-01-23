@@ -10,18 +10,28 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
 )
 
-// S3Config configures an S3-compatible artifact store.
-type S3Config struct {
-	Bucket         string
-	Region         string
-	Endpoint       string
-	ForcePathStyle bool
-	Prefix         string
+// S3StoreConfig configures an S3-compatible artifact store.
+type S3StoreConfig struct {
+	Bucket          string
+	Region          string
+	Endpoint        string
+	Prefix          string
+	AccessKeyID     string
+	SecretAccessKey string
+	UsePathStyle    bool
+}
+
+// DefaultS3StoreConfig returns the default configuration.
+func DefaultS3StoreConfig() *S3StoreConfig {
+	return &S3StoreConfig{
+		Region: "us-east-1",
+	}
 }
 
 // S3Store stores artifacts in an S3-compatible bucket.
@@ -32,7 +42,11 @@ type S3Store struct {
 }
 
 // NewS3Store creates a new S3-backed artifact store.
-func NewS3Store(ctx context.Context, cfg S3Config) (*S3Store, error) {
+func NewS3Store(ctx context.Context, cfg *S3StoreConfig) (*S3Store, error) {
+	if cfg == nil {
+		cfg = DefaultS3StoreConfig()
+	}
+
 	bucket := strings.TrimSpace(cfg.Bucket)
 	if bucket == "" {
 		return nil, fmt.Errorf("s3 bucket is required")
@@ -46,6 +60,12 @@ func NewS3Store(ctx context.Context, cfg S3Config) (*S3Store, error) {
 		config.WithRegion(region),
 	}
 
+	if cfg.AccessKeyID != "" && cfg.SecretAccessKey != "" {
+		loadOptions = append(loadOptions, config.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(cfg.AccessKeyID, cfg.SecretAccessKey, ""),
+		))
+	}
+
 	endpoint := strings.TrimSpace(cfg.Endpoint)
 
 	awsCfg, err := config.LoadDefaultConfig(ctx, loadOptions...)
@@ -57,7 +77,7 @@ func NewS3Store(ctx context.Context, cfg S3Config) (*S3Store, error) {
 		if endpoint != "" {
 			o.BaseEndpoint = aws.String(endpoint)
 		}
-		if cfg.ForcePathStyle {
+		if cfg.UsePathStyle {
 			o.UsePathStyle = true
 		}
 	})

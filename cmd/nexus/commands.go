@@ -129,63 +129,6 @@ func buildProfileCmd() *cobra.Command {
 	return cmd
 }
 
-// =============================================================================
-// Artifacts Commands
-// =============================================================================
-
-// buildArtifactsCmd creates the "artifacts" command group.
-func buildArtifactsCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "artifacts",
-		Short: "Inspect stored artifacts",
-	}
-	cmd.AddCommand(buildArtifactsListCmd(), buildArtifactsGetCmd())
-	return cmd
-}
-
-func buildArtifactsListCmd() *cobra.Command {
-	var (
-		configPath   string
-		sessionID    string
-		edgeID       string
-		artifactType string
-		limit        int
-	)
-	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List stored artifacts",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runArtifactsList(cmd, configPath, sessionID, edgeID, artifactType, limit)
-		},
-	}
-	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
-	cmd.Flags().StringVar(&sessionID, "session", "", "Filter by session ID")
-	cmd.Flags().StringVar(&edgeID, "edge", "", "Filter by edge ID")
-	cmd.Flags().StringVar(&artifactType, "type", "", "Filter by artifact type")
-	cmd.Flags().IntVar(&limit, "limit", 50, "Maximum number of artifacts to return (0 = unlimited)")
-	return cmd
-}
-
-func buildArtifactsGetCmd() *cobra.Command {
-	var (
-		configPath string
-		outPath    string
-		stdout     bool
-	)
-	cmd := &cobra.Command{
-		Use:   "get <artifact-id>",
-		Short: "Fetch a stored artifact",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runArtifactsGet(cmd, configPath, args[0], outPath, stdout)
-		},
-	}
-	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
-	cmd.Flags().StringVarP(&outPath, "out", "o", "", "Output file path (omit to print metadata only)")
-	cmd.Flags().BoolVar(&stdout, "stdout", false, "Write artifact data to stdout")
-	return cmd
-}
-
 func buildProfileListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",

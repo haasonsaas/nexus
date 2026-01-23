@@ -419,9 +419,6 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	if edgeService != nil {
 		proto.RegisterEdgeServiceServer(grpcServer, edgeService)
 	}
-	if artifactRepo != nil {
-		proto.RegisterArtifactServiceServer(grpcServer, newArtifactService(artifactRepo))
-	}
 	registerBuiltinChannelPlugins(server.channelPlugins)
 
 	if err := server.registerChannelsFromConfig(); err != nil {

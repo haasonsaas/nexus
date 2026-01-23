@@ -44,8 +44,8 @@ func TestScopeUsesThread(t *testing.T) {
 		{"  channel  ", false},
 		{"thread", true},
 		{"Thread", true},
-		{"", true},       // Default to thread
-		{"  ", true},     // Whitespace defaults to thread
+		{"", true},        // Default to thread
+		{"  ", true},      // Whitespace defaults to thread
 		{"message", true}, // Unknown scope defaults to thread
 		{"custom", true},
 	}

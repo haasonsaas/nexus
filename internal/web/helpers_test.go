@@ -167,4 +167,3 @@ func TestProviderData_Struct(t *testing.T) {
 		t.Errorf("Title = %q", data.Title)
 	}
 }
-

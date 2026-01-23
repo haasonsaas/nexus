@@ -595,9 +595,9 @@ func TestIsLoopbackHost(t *testing.T) {
 
 func TestNormalizeHost(t *testing.T) {
 	tests := []struct {
-		value           string
-		rejectLoopback  bool
-		expected        string
+		value          string
+		rejectLoopback bool
+		expected       string
 	}{
 		{"", false, ""},
 		{"   ", false, ""},

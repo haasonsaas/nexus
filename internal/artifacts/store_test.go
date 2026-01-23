@@ -306,6 +306,48 @@ func TestMemoryRepository_FiltersByContext(t *testing.T) {
 	}
 }
 
+func TestMemoryRepository_RedactedArtifact(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewLocalStore(dir)
+	if err != nil {
+		t.Fatalf("NewLocalStore: %v", err)
+	}
+	defer store.Close()
+
+	repo := NewMemoryRepository(store, nil)
+	ctx := context.Background()
+
+	artifact := &pb.Artifact{
+		Id:        "redacted-1",
+		Type:      "screenshot",
+		MimeType:  "image/png",
+		Filename:  "screen.png",
+		Size:      128,
+		Reference: "redacted://redacted-1",
+	}
+
+	if err := repo.StoreArtifact(ctx, artifact, bytes.NewReader([]byte("secret"))); err != nil {
+		t.Fatalf("StoreArtifact: %v", err)
+	}
+
+	stored, reader, err := repo.GetArtifact(ctx, artifact.Id)
+	if err != nil {
+		t.Fatalf("GetArtifact: %v", err)
+	}
+	defer reader.Close()
+
+	if stored.Reference != "redacted://redacted-1" {
+		t.Errorf("Reference = %q, want redacted://redacted-1", stored.Reference)
+	}
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if len(data) != 0 {
+		t.Errorf("expected no data for redacted artifact, got %d bytes", len(data))
+	}
+}
+
 func TestGetDefaultTTL(t *testing.T) {
 	tests := []struct {
 		artifactType string

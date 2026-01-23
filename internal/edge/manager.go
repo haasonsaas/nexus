@@ -46,6 +46,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/haasonsaas/nexus/internal/artifacts"
+	"github.com/haasonsaas/nexus/internal/observability"
 	pb "github.com/haasonsaas/nexus/pkg/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -96,6 +97,9 @@ type Manager struct {
 
 	// artifacts stores edge-produced artifacts (optional)
 	artifacts artifacts.Repository
+
+	// artifactRedactor applies redaction rules to artifacts
+	artifactRedactor *artifacts.RedactionPolicy
 }
 
 // ManagerConfig configures the edge manager.
@@ -302,6 +306,13 @@ func (m *Manager) SetArtifactRepository(repo artifacts.Repository) {
 	m.artifacts = repo
 }
 
+// SetArtifactRedactionPolicy configures artifact redaction behavior.
+func (m *Manager) SetArtifactRedactionPolicy(policy *artifacts.RedactionPolicy) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.artifactRedactor = policy
+}
+
 // SetChannelHandler configures the handler for inbound channel messages from edges.
 // The handler is called when an edge-hosted channel adapter receives a message.
 func (m *Manager) SetChannelHandler(handler ChannelInboundHandler) {
@@ -462,6 +473,7 @@ func (m *Manager) handleToolResult(conn *EdgeConnection, result *pb.ToolExecutio
 	m.mu.Lock()
 	pending, ok := m.pendingTools[result.ExecutionId]
 	artifactRepo := m.artifacts
+	artifactRedactor := m.artifactRedactor
 	if ok {
 		delete(m.pendingTools, result.ExecutionId)
 	}
@@ -481,9 +493,44 @@ func (m *Manager) handleToolResult(conn *EdgeConnection, result *pb.ToolExecutio
 	conn.mu.Unlock()
 
 	// Store artifacts if repository is configured
-	if artifactRepo != nil && len(result.Artifacts) > 0 {
+	if len(result.Artifacts) > 0 {
 		ctx := context.Background()
+		if pending.RunID != "" {
+			ctx = observability.AddRunID(ctx, pending.RunID)
+		}
+		if pending.SessionID != "" {
+			ctx = observability.AddSessionID(ctx, pending.SessionID)
+		}
+		if pending.EdgeID != "" {
+			ctx = observability.AddEdgeID(ctx, pending.EdgeID)
+		}
+
 		for _, artifact := range result.Artifacts {
+			redacted := false
+			if artifactRedactor != nil && artifactRedactor.Apply(artifact) {
+				redacted = true
+			}
+
+			if artifactRepo == nil {
+				continue
+			}
+
+			if redacted {
+				if err := artifactRepo.StoreArtifact(ctx, artifact, bytes.NewReader(nil)); err != nil {
+					m.logger.Warn("failed to store redacted artifact",
+						"artifact_id", artifact.Id,
+						"execution_id", result.ExecutionId,
+						"error", err,
+					)
+				} else {
+					m.logger.Debug("redacted artifact stored",
+						"artifact_id", artifact.Id,
+						"type", artifact.Type,
+					)
+				}
+				continue
+			}
+
 			// If artifact has inline data, store it
 			if len(artifact.Data) > 0 {
 				if err := artifactRepo.StoreArtifact(ctx, artifact, bytes.NewReader(artifact.Data)); err != nil {

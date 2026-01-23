@@ -328,6 +328,21 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 			EventBufferSize:    cfg.Edge.EventBufferSize,
 		}
 		edgeManager = edge.NewManager(managerConfig, edgeAuth, logger)
+		artifactSetup, err := buildArtifactSetup(cfg, logger)
+		if err != nil {
+			return nil, fmt.Errorf("artifact setup: %w", err)
+		}
+		if artifactSetup != nil {
+			if artifactSetup.repo != nil {
+				edgeManager.SetArtifactRepository(artifactSetup.repo)
+			}
+			if artifactSetup.redactor != nil {
+				edgeManager.SetArtifactRedactionPolicy(artifactSetup.redactor)
+			}
+			if artifactSetup.cleanup != nil {
+				go artifactSetup.cleanup.Start(startupCtx)
+			}
+		}
 		edgeService = edge.NewService(edgeManager)
 		logger.Info("edge service initialized", "auth_mode", cfg.Edge.AuthMode)
 	}

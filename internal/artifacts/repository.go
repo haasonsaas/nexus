@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -58,6 +59,16 @@ func (r *MemoryRepository) StoreArtifact(ctx context.Context, artifact *pb.Artif
 	}
 	if edgeID := observability.GetEdgeID(ctx); edgeID != "" {
 		meta.EdgeID = edgeID
+	}
+
+	if strings.HasPrefix(artifact.Reference, "redacted://") {
+		meta.Reference = artifact.Reference
+		meta.Size = 0
+		r.mu.Lock()
+		r.metadata[artifact.Id] = meta
+		r.mu.Unlock()
+		r.logger.Info("artifact redacted", "id", artifact.Id, "type", artifact.Type)
+		return nil
 	}
 
 	// Calculate expiration
@@ -138,6 +149,10 @@ func (r *MemoryRepository) GetArtifact(ctx context.Context, artifactID string) (
 		Size:       meta.Size,
 		Reference:  meta.Reference,
 		TtlSeconds: meta.TTLSeconds,
+	}
+
+	if strings.HasPrefix(meta.Reference, "redacted://") {
+		return artifact, io.NopCloser(bytes.NewReader(nil)), nil
 	}
 
 	// Return inline data or fetch from store

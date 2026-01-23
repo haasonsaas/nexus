@@ -738,6 +738,24 @@ type ArtifactConfig struct {
 
 	// MaxStorageSize is the total quota in bytes (0 = unlimited).
 	MaxStorageSize int64 `yaml:"max_storage_size"`
+
+	// Redaction configures rules for sensitive artifacts.
+	Redaction ArtifactRedactionConfig `yaml:"redaction"`
+}
+
+// ArtifactRedactionConfig controls artifact redaction behavior.
+type ArtifactRedactionConfig struct {
+	// Enabled toggles redaction.
+	Enabled bool `yaml:"enabled"`
+
+	// Types lists artifact types to redact (case-insensitive).
+	Types []string `yaml:"types"`
+
+	// MimeTypes lists MIME types to redact (supports wildcards like "image/*").
+	MimeTypes []string `yaml:"mime_types"`
+
+	// FilenamePatterns are regex patterns to match against filenames.
+	FilenamePatterns []string `yaml:"filename_patterns"`
 }
 
 // Load reads and parses the configuration file.

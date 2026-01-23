@@ -34,6 +34,9 @@
             <li class="nav-item{{if eq .CurrentPath "/config"}} active{{end}}">
                 <a href="/ui/config">Config</a>
             </li>
+            <li class="nav-item{{if eq .CurrentPath "/webchat"}} active{{end}}">
+                <a href="/ui/webchat">WebChat</a>
+            </li>
             <li class="nav-item{{if eq .CurrentPath "/status"}} active{{end}}">
                 <a href="/ui/status">Status</a>
             </li>
@@ -71,6 +74,8 @@
             {{template "nodes/page.html" .}}
         {{else if eq .CurrentPath "/config"}}
             {{template "config/page.html" .}}
+        {{else if eq .CurrentPath "/webchat"}}
+            {{template "webchat/page.html" .}}
         {{else if hasPrefix .CurrentPath "/sessions/"}}
             {{template "sessions/detail.html" .}}
         {{else if eq .CurrentPath "/status"}}

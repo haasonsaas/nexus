@@ -760,6 +760,35 @@ a:hover {
     gap: 12px;
 }
 
+/* WebChat */
+.webchat-shell {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 20px;
+    align-items: start;
+}
+
+.webchat-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.webchat-main {
+    min-width: 0;
+}
+
+.webchat-messages {
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.webchat-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
 .provider-header {
     display: flex;
     align-items: center;
@@ -835,6 +864,23 @@ a:hover {
     display: flex;
     flex-direction: column;
     gap: 12px;
+}
+
+.webchat-form textarea {
+    resize: vertical;
+    min-height: 64px;
+}
+
+.webchat-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+@media (max-width: 900px) {
+    .webchat-shell {
+        grid-template-columns: 1fr;
+    }
 }
 
 @keyframes spin {

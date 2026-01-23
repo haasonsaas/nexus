@@ -1538,6 +1538,17 @@ func runDoctor(cmd *cobra.Command, configPath string, repair, probe, audit bool)
 				fmt.Fprintf(out, "  - %s: %s (%s)\n", result.Channel, status, result.Status.Message)
 			}
 		}
+
+		// Check reminder status
+		if server.TaskStore() != nil {
+			reminderStatus := doctor.ProbeReminderStatus(cmd.Context(), server.TaskStore())
+			fmt.Fprintf(out, "Reminders: %s\n", doctor.FormatReminderStatus(reminderStatus))
+			if len(reminderStatus.Errors) > 0 {
+				for _, errMsg := range reminderStatus.Errors {
+					fmt.Fprintf(out, "  - error: %s\n", errMsg)
+				}
+			}
+		}
 	}
 
 	if audit {

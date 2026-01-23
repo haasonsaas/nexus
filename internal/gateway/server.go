@@ -421,6 +421,11 @@ func (s *Server) Channels() *channels.Registry {
 	return s.channels
 }
 
+// TaskStore returns the task store for scheduled task operations.
+func (s *Server) TaskStore() tasks.Store {
+	return s.taskStore
+}
+
 // Normalizer returns the message normalizer.
 func (s *Server) Normalizer() *MessageNormalizer {
 	return s.normalizer

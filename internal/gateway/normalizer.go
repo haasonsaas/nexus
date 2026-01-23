@@ -243,6 +243,14 @@ func (n *MessageNormalizer) normalizeTelegram(msg *models.Message) {
 		n.preserve(meta, "chat_id")
 		meta[MetaChatID] = fmt.Sprintf("%v", chatID)
 	}
+	// Preserve and map message_thread_id (forum topics)
+	if threadID := meta["message_thread_id"]; threadID != nil {
+		n.preserve(meta, "message_thread_id")
+		normalized := strings.TrimSpace(fmt.Sprintf("%v", threadID))
+		if normalized != "" && normalized != "0" {
+			meta[MetaThreadID] = normalized
+		}
+	}
 
 	// Map user info
 	if userID := meta["user_id"]; userID != nil {

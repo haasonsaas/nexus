@@ -18,6 +18,7 @@ The Telegram adapter implements the `channels.Adapter` interface for the Nexus p
   - Inline keyboards for interactive responses
   - Reply to messages
   - Message editing
+  - Forum topics (message_thread_id) with per-topic session isolation
   - Automatic reconnection with exponential backoff
 
 - **Error Handling:**
@@ -189,11 +190,13 @@ Inbound messages include:
 - `user_id` (int64): Sender's user ID
 - `user_first` (string): Sender's first name
 - `user_last` (string): Sender's last name
+- `message_thread_id` (int): Topic ID for forum supergroups (when applicable)
 
 Outbound messages can include:
 - `chat_id` (int64/string): Target chat ID (required)
 - `inline_keyboard` (interface{}): Inline keyboard markup
 - `reply_to_message_id` (int): Message ID to reply to
+- `message_thread_id` (int): Reply within a forum topic (omit for general topic `1`)
 
 ## Testing
 

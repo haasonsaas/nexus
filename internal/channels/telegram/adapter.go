@@ -31,6 +31,8 @@ const (
 	ModeWebhook Mode = "webhook"
 )
 
+const telegramGeneralTopicID = 1
+
 // Config holds configuration for the Telegram adapter.
 type Config struct {
 	// Token is the bot token from @BotFather (required)
@@ -397,6 +399,7 @@ func (a *Adapter) Send(ctx context.Context, msg *nexusmodels.Message) error {
 		a.metrics.RecordError(channels.ErrCodeInvalidInput)
 		return channels.ErrInvalidInput("failed to extract chat ID", err)
 	}
+	threadID, hasThread := extractMessageThreadID(msg.Metadata)
 
 	a.logger.Debug("sending message",
 		"chat_id", chatID,
@@ -406,6 +409,11 @@ func (a *Adapter) Send(ctx context.Context, msg *nexusmodels.Message) error {
 	params := &bot.SendMessageParams{
 		ChatID: chatID,
 		Text:   msg.Content,
+	}
+	if hasThread {
+		if sendThreadID, ok := threadIDForSend(threadID); ok {
+			params.MessageThreadID = sendThreadID
+		}
 	}
 
 	// Check for inline keyboard in metadata
@@ -444,7 +452,7 @@ func (a *Adapter) Send(ctx context.Context, msg *nexusmodels.Message) error {
 	msg.ChannelID = strconv.FormatInt(int64(sentMsg.ID), 10)
 
 	// Handle attachments
-	if err := a.sendAttachments(ctx, chatID, msg.Attachments); err != nil {
+	if err := a.sendAttachments(ctx, chatID, threadID, msg.Attachments); err != nil {
 		a.logger.Error("failed to send attachments",
 			"error", err,
 			"chat_id", chatID)
@@ -475,10 +483,15 @@ func (a *Adapter) SendTypingIndicator(ctx context.Context, msg *nexusmodels.Mess
 		return channels.ErrInvalidInput("failed to extract chat ID", err)
 	}
 
-	_, err = a.botClient.SendChatAction(ctx, &bot.SendChatActionParams{
+	params := &bot.SendChatActionParams{
 		ChatID: chatID,
 		Action: models.ChatActionTyping,
-	})
+	}
+	if threadID, ok := extractMessageThreadID(msg.Metadata); ok {
+		params.MessageThreadID = threadID
+	}
+
+	_, err = a.botClient.SendChatAction(ctx, params)
 	if err != nil {
 		a.logger.Debug("failed to send typing indicator", "error", err, "chat_id", chatID)
 		// Don't return error - typing indicators are best-effort
@@ -499,6 +512,7 @@ func (a *Adapter) StartStreamingResponse(ctx context.Context, msg *nexusmodels.M
 	if err != nil {
 		return "", channels.ErrInvalidInput("failed to extract chat ID", err)
 	}
+	threadID, hasThread := extractMessageThreadID(msg.Metadata)
 
 	// Apply rate limiting
 	if err := a.rateLimiter.Wait(ctx); err != nil {
@@ -506,10 +520,16 @@ func (a *Adapter) StartStreamingResponse(ctx context.Context, msg *nexusmodels.M
 	}
 
 	// Send initial message with a placeholder that indicates processing
-	sentMsg, err := a.botClient.SendMessage(ctx, &bot.SendMessageParams{
+	params := &bot.SendMessageParams{
 		ChatID: chatID,
 		Text:   "...",
-	})
+	}
+	if hasThread {
+		if sendThreadID, ok := threadIDForSend(threadID); ok {
+			params.MessageThreadID = sendThreadID
+		}
+	}
+	sentMsg, err := a.botClient.SendMessage(ctx, params)
 	if err != nil {
 		a.logger.Error("failed to start streaming response", "error", err, "chat_id", chatID)
 		a.metrics.RecordMessageFailed()
@@ -622,7 +642,7 @@ func (a *Adapter) DownloadAttachment(ctx context.Context, msg *nexusmodels.Messa
 }
 
 // sendAttachments sends message attachments.
-func (a *Adapter) sendAttachments(ctx context.Context, chatID int64, attachments []nexusmodels.Attachment) error {
+func (a *Adapter) sendAttachments(ctx context.Context, chatID int64, threadID int, attachments []nexusmodels.Attachment) error {
 	for _, attachment := range attachments {
 		// Apply rate limiting per attachment
 		if err := a.rateLimiter.Wait(ctx); err != nil {
@@ -631,15 +651,15 @@ func (a *Adapter) sendAttachments(ctx context.Context, chatID int64, attachments
 
 		switch attachment.Type {
 		case "image":
-			if err := a.sendPhoto(ctx, chatID, attachment); err != nil {
+			if err := a.sendPhoto(ctx, chatID, threadID, attachment); err != nil {
 				return err
 			}
 		case "document":
-			if err := a.sendDocument(ctx, chatID, attachment); err != nil {
+			if err := a.sendDocument(ctx, chatID, threadID, attachment); err != nil {
 				return err
 			}
 		case "audio":
-			if err := a.sendAudio(ctx, chatID, attachment); err != nil {
+			if err := a.sendAudio(ctx, chatID, threadID, attachment); err != nil {
 				return err
 			}
 		}
@@ -648,13 +668,17 @@ func (a *Adapter) sendAttachments(ctx context.Context, chatID int64, attachments
 }
 
 // sendPhoto sends a photo attachment.
-func (a *Adapter) sendPhoto(ctx context.Context, chatID int64, attachment nexusmodels.Attachment) error {
-	_, err := a.botClient.SendPhoto(ctx, &bot.SendPhotoParams{
+func (a *Adapter) sendPhoto(ctx context.Context, chatID int64, threadID int, attachment nexusmodels.Attachment) error {
+	params := &bot.SendPhotoParams{
 		ChatID: chatID,
 		Photo: &models.InputFileString{
 			Data: attachment.URL,
 		},
-	})
+	}
+	if sendThreadID, ok := threadIDForSend(threadID); ok {
+		params.MessageThreadID = sendThreadID
+	}
+	_, err := a.botClient.SendPhoto(ctx, params)
 	if err != nil {
 		a.metrics.RecordError(channels.ErrCodeInternal)
 	}
@@ -662,13 +686,17 @@ func (a *Adapter) sendPhoto(ctx context.Context, chatID int64, attachment nexusm
 }
 
 // sendDocument sends a document attachment.
-func (a *Adapter) sendDocument(ctx context.Context, chatID int64, attachment nexusmodels.Attachment) error {
-	_, err := a.botClient.SendDocument(ctx, &bot.SendDocumentParams{
+func (a *Adapter) sendDocument(ctx context.Context, chatID int64, threadID int, attachment nexusmodels.Attachment) error {
+	params := &bot.SendDocumentParams{
 		ChatID: chatID,
 		Document: &models.InputFileString{
 			Data: attachment.URL,
 		},
-	})
+	}
+	if sendThreadID, ok := threadIDForSend(threadID); ok {
+		params.MessageThreadID = sendThreadID
+	}
+	_, err := a.botClient.SendDocument(ctx, params)
 	if err != nil {
 		a.metrics.RecordError(channels.ErrCodeInternal)
 	}
@@ -676,17 +704,74 @@ func (a *Adapter) sendDocument(ctx context.Context, chatID int64, attachment nex
 }
 
 // sendAudio sends an audio attachment.
-func (a *Adapter) sendAudio(ctx context.Context, chatID int64, attachment nexusmodels.Attachment) error {
-	_, err := a.botClient.SendAudio(ctx, &bot.SendAudioParams{
+func (a *Adapter) sendAudio(ctx context.Context, chatID int64, threadID int, attachment nexusmodels.Attachment) error {
+	params := &bot.SendAudioParams{
 		ChatID: chatID,
 		Audio: &models.InputFileString{
 			Data: attachment.URL,
 		},
-	})
+	}
+	if sendThreadID, ok := threadIDForSend(threadID); ok {
+		params.MessageThreadID = sendThreadID
+	}
+	_, err := a.botClient.SendAudio(ctx, params)
 	if err != nil {
 		a.metrics.RecordError(channels.ErrCodeInternal)
 	}
 	return err
+}
+
+func extractMessageThreadID(meta map[string]any) (int, bool) {
+	if meta == nil {
+		return 0, false
+	}
+	if raw, ok := meta["message_thread_id"]; ok {
+		if id, ok := parseThreadID(raw); ok {
+			return id, true
+		}
+	}
+	if raw, ok := meta["thread_id"]; ok {
+		if id, ok := parseThreadID(raw); ok {
+			return id, true
+		}
+	}
+	return 0, false
+}
+
+func parseThreadID(raw any) (int, bool) {
+	switch v := raw.(type) {
+	case int:
+		if v > 0 {
+			return v, true
+		}
+	case int64:
+		if v > 0 {
+			return int(v), true
+		}
+	case float64:
+		if v > 0 {
+			return int(v), true
+		}
+	case string:
+		if v == "" {
+			return 0, false
+		}
+		trimmed := strings.TrimSpace(v)
+		if trimmed == "" {
+			return 0, false
+		}
+		if id, err := strconv.Atoi(trimmed); err == nil && id > 0 {
+			return id, true
+		}
+	}
+	return 0, false
+}
+
+func threadIDForSend(threadID int) (int, bool) {
+	if threadID <= 0 || threadID == telegramGeneralTopicID {
+		return 0, false
+	}
+	return threadID, true
 }
 
 // extractChatID extracts the chat ID from a message.
@@ -832,6 +917,7 @@ type telegramMessageInterface interface {
 	GetMessageID() int64
 	GetChatID() int64
 	GetChatType() string
+	GetMessageThreadID() int
 	GetText() string
 	GetFrom() userInterface
 	GetDate() int64
@@ -870,6 +956,10 @@ func (t *telegramMessageAdapter) GetChatID() int64 {
 
 func (t *telegramMessageAdapter) GetChatType() string {
 	return string(t.Chat.Type)
+}
+
+func (t *telegramMessageAdapter) GetMessageThreadID() int {
+	return t.MessageThreadID
 }
 
 func (t *telegramMessageAdapter) GetText() string {
@@ -989,6 +1079,7 @@ func (u *userAdapter) GetLastName() string {
 // This function is extracted for testing purposes.
 func convertTelegramMessage(msg telegramMessageInterface) *nexusmodels.Message {
 	user := msg.GetFrom()
+	threadID := msg.GetMessageThreadID()
 
 	m := &nexusmodels.Message{
 		ID:        fmt.Sprintf("tg_%d", msg.GetMessageID()),
@@ -1012,6 +1103,9 @@ func convertTelegramMessage(msg telegramMessageInterface) *nexusmodels.Message {
 	}
 	if strings.EqualFold(msg.GetChatType(), "private") || msg.GetChatType() == "" {
 		m.Metadata["conversation_type"] = "dm"
+	}
+	if threadID > 0 {
+		m.Metadata["message_thread_id"] = threadID
 	}
 
 	// Handle attachments

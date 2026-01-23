@@ -25,7 +25,6 @@ type SQLRepository struct {
 	// Prepared statements
 	stmtInsert       *sql.Stmt
 	stmtGet          *sql.Stmt
-	stmtList         *sql.Stmt
 	stmtDelete       *sql.Stmt
 	stmtPruneExpired *sql.Stmt
 }
@@ -160,7 +159,10 @@ func (r *SQLRepository) StoreArtifact(ctx context.Context, artifact *pb.Artifact
 
 	if err := r.insertMetadata(ctx, meta, toolCallID, nil); err != nil {
 		// Try to clean up stored data on metadata failure
-		_ = r.store.Delete(ctx, artifact.Id)
+		if deleteErr := r.store.Delete(ctx, artifact.Id); deleteErr != nil {
+			r.logger.Warn("failed to clean up artifact after metadata failure",
+				"artifact_id", artifact.Id, "error", deleteErr)
+		}
 		return err
 	}
 
@@ -248,7 +250,9 @@ func (r *SQLRepository) GetArtifact(ctx context.Context, artifactID string) (*pb
 
 	// Check expiration
 	if expiresAt.Valid && time.Now().After(expiresAt.Time) {
-		_ = r.DeleteArtifact(ctx, artifactID)
+		if deleteErr := r.DeleteArtifact(ctx, artifactID); deleteErr != nil {
+			r.logger.Warn("failed to delete expired artifact", "artifact_id", artifactID, "error", deleteErr)
+		}
 		return nil, nil, fmt.Errorf("artifact expired: %s", artifactID)
 	}
 
@@ -328,7 +332,6 @@ func (r *SQLRepository) ListArtifacts(ctx context.Context, filter Filter) ([]*pb
 	if !filter.CreatedBefore.IsZero() {
 		query += fmt.Sprintf(" AND created_at <= $%d", argIdx)
 		args = append(args, filter.CreatedBefore)
-		argIdx++
 	}
 
 	query += " ORDER BY created_at DESC"

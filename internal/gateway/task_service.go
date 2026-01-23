@@ -55,12 +55,12 @@ func (s *taskService) CreateTask(ctx context.Context, req *proto.CreateTaskReque
 	// Calculate next run time
 	loc := time.UTC
 	if req.Timezone != "" {
-		loc, _ = time.LoadLocation(req.Timezone)
-		if loc == nil {
-			loc = time.UTC
+		if parsedLoc, err := time.LoadLocation(req.Timezone); err == nil {
+			loc = parsedLoc
 		}
 	}
-	sched, _ := cronParser.Parse(req.Schedule)
+	// Schedule already validated above
+	sched, _ := cronParser.Parse(req.Schedule) //nolint:errcheck
 	nextRun := sched.Next(now.In(loc))
 
 	task := &tasks.ScheduledTask{
@@ -206,12 +206,12 @@ func (s *taskService) UpdateTask(ctx context.Context, req *proto.UpdateTaskReque
 			tz = task.Timezone
 		}
 		if tz != "" {
-			loc, _ = time.LoadLocation(tz)
-			if loc == nil {
-				loc = time.UTC
+			if parsedLoc, err := time.LoadLocation(tz); err == nil {
+				loc = parsedLoc
 			}
 		}
-		sched, _ := cronParser.Parse(req.Schedule)
+		// Schedule already validated above
+		sched, _ := cronParser.Parse(req.Schedule) //nolint:errcheck
 		task.NextRunAt = sched.Next(time.Now().In(loc))
 	}
 	if req.Timezone != "" {
@@ -310,12 +310,12 @@ func (s *taskService) ResumeTask(ctx context.Context, req *proto.ResumeTaskReque
 	// Recalculate next run time
 	loc := time.UTC
 	if task.Timezone != "" {
-		loc, _ = time.LoadLocation(task.Timezone)
-		if loc == nil {
-			loc = time.UTC
+		if parsedLoc, err := time.LoadLocation(task.Timezone); err == nil {
+			loc = parsedLoc
 		}
 	}
-	sched, _ := cronParser.Parse(task.Schedule)
+	// Schedule is from existing task, assumed valid
+	sched, _ := cronParser.Parse(task.Schedule) //nolint:errcheck
 	task.NextRunAt = sched.Next(time.Now().In(loc))
 
 	if err := s.server.taskStore.UpdateTask(ctx, task); err != nil {

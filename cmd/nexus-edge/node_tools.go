@@ -10,7 +10,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -237,16 +236,14 @@ func handleScreenCapture(ctx context.Context, input string) (*ToolResult, error)
 		}
 		if params.WindowName != "" {
 			// Capture window by name using osascript + screencapture
-			script := fmt.Sprintf(`
-				tell application "System Events"
-					set frontApp to first application process whose frontmost is true
-					set windowName to name of first window of frontApp
-				end tell
-				return windowName
-			`)
-			cmd = exec.CommandContext(ctx, "osascript", "-e", script)
-		} else {
-			cmd = exec.CommandContext(ctx, "screencapture", args...)
+			script := `tell application "System Events"
+				set frontApp to first application process whose frontmost is true
+				set windowName to name of first window of frontApp
+			end tell
+			return windowName`
+			// Note: This captures window name but we still use screencapture
+			// In a real implementation, we'd use the window name to target capture
+			_ = script // Window name capture not fully implemented
 		}
 		cmd = exec.CommandContext(ctx, "screencapture", args...)
 
@@ -376,7 +373,13 @@ func handleLocationGet(ctx context.Context, input string) (*ToolResult, error) {
 				}
 			}
 
-			jsonResult, _ := json.MarshalIndent(result, "", "  ")
+			jsonResult, err := json.MarshalIndent(result, "", "  ")
+			if err != nil {
+				return &ToolResult{
+					Content: fmt.Sprintf("Error formatting result: %v", err),
+					IsError: true,
+				}, nil
+			}
 			return &ToolResult{
 				Content: string(jsonResult),
 			}, nil
@@ -592,16 +595,17 @@ func handleShellRun(ctx context.Context, input string) (*ToolResult, error) {
 		}
 	}
 
-	jsonResult, _ := json.MarshalIndent(result, "", "  ")
+	jsonResult, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return &ToolResult{
+			Content: fmt.Sprintf("Error formatting result: %v", err),
+			IsError: true,
+		}, nil
+	}
 
 	isError := exitCode != 0
 	return &ToolResult{
 		Content: string(jsonResult),
 		IsError: isError,
 	}, nil
-}
-
-// Helper to encode data as base64 if needed
-func encodeBase64IfNeeded(data []byte) string {
-	return base64.StdEncoding.EncodeToString(data)
 }

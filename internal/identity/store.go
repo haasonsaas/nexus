@@ -367,11 +367,11 @@ func (s *MemoryStore) ImportFromConfig(ctx context.Context, config map[string][]
 		}
 		if err := s.Create(ctx, identity); err != nil {
 			// If identity exists, update it
-			existing, _ := s.Get(ctx, canonicalID)
-			if existing != nil {
+			existing, getErr := s.Get(ctx, canonicalID)
+			if getErr == nil && existing != nil {
 				existing.LinkedPeers = peers
-				if err := s.Update(ctx, existing); err != nil {
-					return err
+				if updateErr := s.Update(ctx, existing); updateErr != nil {
+					return updateErr
 				}
 			}
 		}

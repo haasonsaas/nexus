@@ -10,6 +10,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/haasonsaas/nexus/internal/config"
 )
 
 var dockerCheck struct {
@@ -759,5 +761,161 @@ func TestDockerExecutor_Run(t *testing.T) {
 
 	if result.ExitCode != 0 {
 		t.Errorf("Expected exit code 0, got: %d", result.ExitCode)
+	}
+}
+
+// Test modes.go functionality without Docker
+
+func TestSandboxModeConstants(t *testing.T) {
+	if ModeOff != "off" {
+		t.Errorf("ModeOff = %q, want %q", ModeOff, "off")
+	}
+	if ModeAll != "all" {
+		t.Errorf("ModeAll = %q, want %q", ModeAll, "all")
+	}
+	if ModeNonMain != "non-main" {
+		t.Errorf("ModeNonMain = %q, want %q", ModeNonMain, "non-main")
+	}
+}
+
+func TestSandboxScopeConstants(t *testing.T) {
+	if ScopeAgent != "agent" {
+		t.Errorf("ScopeAgent = %q, want %q", ScopeAgent, "agent")
+	}
+	if ScopeSession != "session" {
+		t.Errorf("ScopeSession = %q, want %q", ScopeSession, "session")
+	}
+	if ScopeShared != "shared" {
+		t.Errorf("ScopeShared = %q, want %q", ScopeShared, "shared")
+	}
+}
+
+func TestResolveModeConfig(t *testing.T) {
+	tests := []struct {
+		name          string
+		cfg           config.SandboxConfig
+		expectedMode  SandboxMode
+		expectedScope SandboxScope
+	}{
+		{
+			name:          "disabled config",
+			cfg:           config.SandboxConfig{Enabled: false},
+			expectedMode:  ModeOff,
+			expectedScope: ScopeAgent,
+		},
+		{
+			name:          "enabled with all mode",
+			cfg:           config.SandboxConfig{Enabled: true, Mode: "all"},
+			expectedMode:  ModeAll,
+			expectedScope: ScopeAgent,
+		},
+		{
+			name:          "enabled with non-main mode",
+			cfg:           config.SandboxConfig{Enabled: true, Mode: "non-main"},
+			expectedMode:  ModeNonMain,
+			expectedScope: ScopeAgent,
+		},
+		{
+			name:          "enabled with session scope",
+			cfg:           config.SandboxConfig{Enabled: true, Mode: "all", Scope: "session"},
+			expectedMode:  ModeAll,
+			expectedScope: ScopeSession,
+		},
+		{
+			name:          "enabled with shared scope",
+			cfg:           config.SandboxConfig{Enabled: true, Mode: "all", Scope: "shared"},
+			expectedMode:  ModeAll,
+			expectedScope: ScopeShared,
+		},
+		{
+			name:          "enabled with invalid mode defaults to all",
+			cfg:           config.SandboxConfig{Enabled: true, Mode: "invalid"},
+			expectedMode:  ModeAll,
+			expectedScope: ScopeAgent,
+		},
+		{
+			name:          "enabled with invalid scope defaults to agent",
+			cfg:           config.SandboxConfig{Enabled: true, Mode: "all", Scope: "invalid"},
+			expectedMode:  ModeAll,
+			expectedScope: ScopeAgent,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ResolveModeConfig(tt.cfg)
+			if result.Mode != tt.expectedMode {
+				t.Errorf("Mode = %q, want %q", result.Mode, tt.expectedMode)
+			}
+			if result.Scope != tt.expectedScope {
+				t.Errorf("Scope = %q, want %q", result.Scope, tt.expectedScope)
+			}
+		})
+	}
+}
+
+func TestModeConfig_ShouldSandbox(t *testing.T) {
+	tests := []struct {
+		name        string
+		mode        SandboxMode
+		isMainAgent bool
+		expected    bool
+	}{
+		{"off mode main agent", ModeOff, true, false},
+		{"off mode non-main agent", ModeOff, false, false},
+		{"all mode main agent", ModeAll, true, true},
+		{"all mode non-main agent", ModeAll, false, true},
+		{"non-main mode main agent", ModeNonMain, true, false},
+		{"non-main mode non-main agent", ModeNonMain, false, true},
+		{"invalid mode", SandboxMode("invalid"), false, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mc := ModeConfig{Mode: tt.mode, Scope: ScopeAgent}
+			result := mc.ShouldSandbox("agent-123", tt.isMainAgent)
+			if result != tt.expected {
+				t.Errorf("ShouldSandbox() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestModeConfig_SandboxKey(t *testing.T) {
+	tests := []struct {
+		name      string
+		scope     SandboxScope
+		agentID   string
+		sessionID string
+		expected  string
+	}{
+		{"agent scope", ScopeAgent, "agent-123", "session-456", "agent:agent-123"},
+		{"session scope", ScopeSession, "agent-123", "session-456", "session:session-456"},
+		{"shared scope", ScopeShared, "agent-123", "session-456", "shared"},
+		{"default scope", SandboxScope("invalid"), "agent-123", "session-456", "agent:agent-123"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mc := ModeConfig{Mode: ModeAll, Scope: tt.scope}
+			result := mc.SandboxKey(tt.agentID, tt.sessionID)
+			if result != tt.expected {
+				t.Errorf("SandboxKey() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestModeConfig_Struct(t *testing.T) {
+	mc := ModeConfig{
+		Mode:  ModeAll,
+		Scope: ScopeSession,
+	}
+
+	if mc.Mode != ModeAll {
+		t.Errorf("Mode = %q, want %q", mc.Mode, ModeAll)
+	}
+	if mc.Scope != ScopeSession {
+		t.Errorf("Scope = %q, want %q", mc.Scope, ScopeSession)
 	}
 }

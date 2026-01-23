@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -100,6 +101,46 @@ func (c *apiClient) getJSON(ctx context.Context, path string, out any) error {
 		return fmt.Errorf("request %s failed: %s", path, resp.Status)
 	}
 
+	decoder := json.NewDecoder(resp.Body)
+	if err := decoder.Decode(out); err != nil {
+		return fmt.Errorf("decode %s: %w", path, err)
+	}
+	return nil
+}
+
+func (c *apiClient) postJSON(ctx context.Context, path string, payload any, out any) error {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+	if c.apiKey != "" {
+		req.Header.Set("X-API-Key", c.apiKey)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		if len(bodyBytes) > 0 {
+			return fmt.Errorf("request %s failed: %s (%s)", path, resp.Status, strings.TrimSpace(string(bodyBytes)))
+		}
+		return fmt.Errorf("request %s failed: %s", path, resp.Status)
+	}
+
+	if out == nil {
+		return nil
+	}
 	decoder := json.NewDecoder(resp.Body)
 	if err := decoder.Decode(out); err != nil {
 		return fmt.Errorf("decode %s: %w", path, err)

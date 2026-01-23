@@ -72,6 +72,17 @@ type ProviderStatus struct {
 	QRUpdatedAt    string `json:"qr_updated_at,omitempty"`
 }
 
+type providerTestRequest struct {
+	ChannelID string `json:"channel_id"`
+	Message   string `json:"message"`
+}
+
+type providerTestResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message,omitempty"`
+	Error   string `json:"error,omitempty"`
+}
+
 // CronJobSummary is a safe representation of a cron job for UI/API.
 type CronJobSummary struct {
 	ID        string    `json:"id"`
@@ -487,6 +498,8 @@ func (h *Handler) apiProvider(w http.ResponseWriter, r *http.Request) {
 	switch parts[1] {
 	case "qr":
 		h.apiProviderQR(w, r, provider)
+	case "test":
+		h.apiProviderTest(w, r, provider)
 	default:
 		h.jsonError(w, "Not found", http.StatusNotFound)
 	}
@@ -525,6 +538,69 @@ func (h *Handler) apiProviderQR(w http.ResponseWriter, r *http.Request, provider
 	w.Header().Set("Content-Type", "image/png")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(png) //nolint:errcheck
+}
+
+func (h *Handler) apiProviderTest(w http.ResponseWriter, r *http.Request, provider string) {
+	if r.Method != http.MethodPost {
+		h.jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h == nil || h.config == nil || h.config.ChannelRegistry == nil {
+		h.jsonError(w, "Channel registry not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req providerTestRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.jsonError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	channelID := strings.TrimSpace(req.ChannelID)
+	if channelID == "" {
+		h.jsonError(w, "channel_id is required", http.StatusBadRequest)
+		return
+	}
+
+	channelType := models.ChannelType(strings.ToLower(provider))
+	adapter, ok := h.config.ChannelRegistry.GetOutbound(channelType)
+	if !ok {
+		h.jsonError(w, "Provider not available", http.StatusNotFound)
+		return
+	}
+
+	message := strings.TrimSpace(req.Message)
+	if message == "" {
+		message = "Nexus test message"
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	err := adapter.Send(ctx, &models.Message{
+		Channel:   channelType,
+		ChannelID: channelID,
+		Direction: models.DirectionOutbound,
+		Role:      models.RoleAssistant,
+		Content:   message,
+		Metadata: map[string]any{
+			"channel_test": true,
+		},
+		CreatedAt: time.Now(),
+	})
+	if err != nil {
+		h.jsonResponse(w, providerTestResponse{
+			Success: false,
+			Message: message,
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	h.jsonResponse(w, providerTestResponse{
+		Success: true,
+		Message: message,
+	})
 }
 
 // apiCron handles GET /api/cron.

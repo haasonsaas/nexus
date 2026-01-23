@@ -2623,7 +2623,7 @@ func printChannelsStatus(ctx context.Context, out io.Writer, configPath, serverA
 }
 
 // printChannelTest prints the channel test results.
-func printChannelTest(ctx context.Context, out io.Writer, configPath, serverAddr, token, apiKey, channel string) error {
+func printChannelTest(ctx context.Context, out io.Writer, configPath, serverAddr, token, apiKey, channel, channelID, message string) error {
 	slog.Info("testing channel connectivity", "channel", channel)
 
 	baseURL, err := resolveHTTPBaseURL(configPath, serverAddr)
@@ -2632,31 +2632,52 @@ func printChannelTest(ctx context.Context, out io.Writer, configPath, serverAddr
 	}
 	client := newAPIClient(baseURL, token, apiKey)
 
-	var status providerStatus
-	if err := client.getJSON(ctx, fmt.Sprintf("/api/providers/%s", strings.ToLower(channel)), &status); err != nil {
+	if strings.TrimSpace(channelID) == "" {
+		var status providerStatus
+		if err := client.getJSON(ctx, fmt.Sprintf("/api/providers/%s", strings.ToLower(channel)), &status); err != nil {
+			return err
+		}
+
+		fmt.Fprintf(out, "Channel %s status\n", channel)
+		fmt.Fprintln(out, "======================")
+		fmt.Fprintf(out, "Enabled: %t\n", status.Enabled)
+		fmt.Fprintf(out, "Connected: %t\n", status.Connected)
+		if status.Error != "" {
+			fmt.Fprintf(out, "Error: %s\n", status.Error)
+		}
+		if status.HealthMessage != "" {
+			fmt.Fprintf(out, "Health: %s\n", status.HealthMessage)
+		}
+		if status.HealthLatency > 0 {
+			fmt.Fprintf(out, "Health Latency: %dms\n", status.HealthLatency)
+		}
+		if status.HealthDegraded {
+			fmt.Fprintln(out, "Health Degraded: true")
+		}
+		if status.QRAvailable {
+			fmt.Fprintf(out, "QR Updated At: %s\n", status.QRUpdatedAt)
+		}
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, "Provide --channel-id to send a live test message.")
+		return nil
+	}
+
+	payload := map[string]string{
+		"channel_id": channelID,
+	}
+	if strings.TrimSpace(message) != "" {
+		payload["message"] = message
+	}
+	var response map[string]any
+	if err := client.postJSON(ctx, fmt.Sprintf("/api/providers/%s/test", strings.ToLower(channel)), payload, &response); err != nil {
 		return err
 	}
 
-	fmt.Fprintf(out, "Channel %s status\n", channel)
-	fmt.Fprintln(out, "======================")
-	fmt.Fprintf(out, "Enabled: %t\n", status.Enabled)
-	fmt.Fprintf(out, "Connected: %t\n", status.Connected)
-	if status.Error != "" {
-		fmt.Fprintf(out, "Error: %s\n", status.Error)
+	fmt.Fprintf(out, "Sent test message to %s\n", channel)
+	fmt.Fprintf(out, "Channel ID: %s\n", channelID)
+	if msg, ok := response["message"].(string); ok && msg != "" {
+		fmt.Fprintf(out, "Message: %s\n", msg)
 	}
-	if status.HealthMessage != "" {
-		fmt.Fprintf(out, "Health: %s\n", status.HealthMessage)
-	}
-	if status.HealthLatency > 0 {
-		fmt.Fprintf(out, "Health Latency: %dms\n", status.HealthLatency)
-	}
-	if status.HealthDegraded {
-		fmt.Fprintln(out, "Health Degraded: true")
-	}
-	if status.QRAvailable {
-		fmt.Fprintf(out, "QR Updated At: %s\n", status.QRUpdatedAt)
-	}
-
 	return nil
 }
 

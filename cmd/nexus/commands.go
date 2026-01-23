@@ -1016,6 +1016,8 @@ func buildChannelsTestCmd() *cobra.Command {
 		serverAddr string
 		token      string
 		apiKey     string
+		channelID  string
+		message    string
 	)
 
 	cmd := &cobra.Command{
@@ -1033,7 +1035,7 @@ and reports connection and health details.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			configPath = resolveConfigPath(configPath)
-			return printChannelTest(cmd.Context(), cmd.OutOrStdout(), configPath, serverAddr, token, apiKey, args[0])
+			return printChannelTest(cmd.Context(), cmd.OutOrStdout(), configPath, serverAddr, token, apiKey, args[0], channelID, message)
 		},
 	}
 
@@ -1041,6 +1043,8 @@ and reports connection and health details.`,
 	cmd.Flags().StringVar(&serverAddr, "server", "", "Nexus HTTP server address (default from config)")
 	cmd.Flags().StringVar(&token, "token", "", "JWT bearer token for server auth")
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "API key for server auth")
+	cmd.Flags().StringVar(&channelID, "channel-id", "", "Channel identifier to send test message to")
+	cmd.Flags().StringVar(&message, "message", "Nexus test message", "Test message content")
 
 	return cmd
 }

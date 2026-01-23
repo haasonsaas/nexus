@@ -164,7 +164,10 @@ func (c *Client) ListIncidents(ctx context.Context, opts ListIncidentsOptions) (
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			body = []byte("(failed to read response body)")
+		}
 		return nil, fmt.Errorf("ServiceNow API error %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -211,7 +214,10 @@ func (c *Client) GetIncident(ctx context.Context, idOrNumber string) (*Incident,
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			body = []byte("(failed to read response body)")
+		}
 		return nil, fmt.Errorf("ServiceNow API error %d: %s", resp.StatusCode, string(body))
 	}
 

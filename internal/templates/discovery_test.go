@@ -310,7 +310,7 @@ High priority content.
 		os.WriteFile(filepath.Join(dir2, "test-template", "TEMPLATE.md"), []byte(templateContent2), 0644)
 
 		sources := []DiscoverySource{
-			NewLocalSource(dir1, SourceExtra, 10),    // Lower priority
+			NewLocalSource(dir1, SourceExtra, 10),     // Lower priority
 			NewLocalSource(dir2, SourceWorkspace, 40), // Higher priority
 		}
 

@@ -19,6 +19,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/tools/browser"
 	jobtools "github.com/haasonsaas/nexus/internal/tools/jobs"
 	"github.com/haasonsaas/nexus/internal/tools/memorysearch"
+	"github.com/haasonsaas/nexus/internal/tools/reminders"
 	"github.com/haasonsaas/nexus/internal/tools/sandbox"
 	"github.com/haasonsaas/nexus/internal/tools/sandbox/firecracker"
 	"github.com/haasonsaas/nexus/internal/tools/websearch"
@@ -367,6 +368,14 @@ func (s *Server) registerTools(ctx context.Context, runtime *agent.Runtime) erro
 
 	if s.jobStore != nil {
 		runtime.RegisterTool(jobtools.NewStatusTool(s.jobStore))
+	}
+
+	// Register reminder tools if task store is available
+	if s.taskStore != nil && s.config.Tasks.Enabled {
+		runtime.RegisterTool(reminders.NewSetTool(s.taskStore))
+		runtime.RegisterTool(reminders.NewCancelTool(s.taskStore))
+		runtime.RegisterTool(reminders.NewListTool(s.taskStore))
+		s.logger.Info("registered reminder tools")
 	}
 
 	if s.config.MCP.Enabled && s.mcpManager != nil {

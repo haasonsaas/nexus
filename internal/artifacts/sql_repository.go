@@ -251,13 +251,15 @@ func (r *SQLRepository) DeleteArtifact(ctx context.Context, artifactID string) e
 		}
 		return err
 	}
-	if meta.Reference != "" && !strings.HasPrefix(meta.Reference, "redacted://") {
-		if err := r.store.Delete(ctx, artifactID); err != nil {
-			return fmt.Errorf("delete artifact data: %w", err)
-		}
-	}
 	if _, err := r.db.ExecContext(ctx, `DELETE FROM artifacts WHERE id = $1`, artifactID); err != nil {
 		return fmt.Errorf("delete artifact metadata: %w", err)
+	}
+	if meta.Reference != "" && !strings.HasPrefix(meta.Reference, "redacted://") {
+		if err := r.store.Delete(ctx, artifactID); err != nil {
+			r.logger.Warn("failed to delete artifact from store",
+				"id", artifactID,
+				"error", err)
+		}
 	}
 	r.logger.Info("artifact deleted", "id", artifactID)
 	return nil

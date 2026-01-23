@@ -105,24 +105,45 @@ func runServe(ctx context.Context, configPath string, debug bool) error {
 		"llm_provider", cfg.LLM.DefaultProvider,
 	)
 
+	server, err := gateway.NewManagedServer(gateway.ManagedServerConfig{
+		Config: cfg,
+		Logger: slog.Default(),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to initialize gateway: %w", err)
+	}
+
 	// Create a context that cancels on shutdown signals.
 	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- server.Start(ctx)
+	}()
 
 	slog.Info("Nexus gateway started",
 		"grpc_addr", fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.GRPCPort),
 		"http_addr", fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.HTTPPort),
 	)
 
-	// Wait for shutdown signal.
-	<-ctx.Done()
+	// Wait for shutdown signal or server error.
+	select {
+	case <-ctx.Done():
+	case err := <-errCh:
+		if err != nil {
+			return err
+		}
+	}
 	slog.Info("shutdown signal received, initiating graceful shutdown")
 
 	// Create a timeout context for graceful shutdown.
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
 
-	_ = shutdownCtx // Silence unused variable warning until implemented
+	if err := server.Stop(shutdownCtx); err != nil {
+		return fmt.Errorf("shutdown failed: %w", err)
+	}
 
 	slog.Info("Nexus gateway stopped gracefully")
 	return nil

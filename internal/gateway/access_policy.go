@@ -36,7 +36,8 @@ func (s *Server) enforceAccessPolicy(ctx context.Context, msg *models.Message) b
 		return true
 	case "allowlist":
 		targetID := s.policyTargetID(msg, convType)
-		if targetID != "" && s.isAllowedTarget(msg.Channel, targetID, policyCfg) {
+		useStore := strings.EqualFold(convType, "dm")
+		if targetID != "" && s.isAllowedTarget(msg.Channel, targetID, policyCfg, useStore) {
 			return false
 		}
 		s.logger.Info("message blocked by allowlist",
@@ -54,7 +55,7 @@ func (s *Server) enforceAccessPolicy(ctx context.Context, msg *models.Message) b
 			return true
 		}
 		targetID := s.policyTargetID(msg, convType)
-		if targetID != "" && s.isAllowedTarget(msg.Channel, targetID, policyCfg) {
+		if targetID != "" && s.isAllowedTarget(msg.Channel, targetID, policyCfg, true) {
 			return false
 		}
 		if err := s.handlePairingRequest(ctx, msg, targetID); err != nil {
@@ -128,12 +129,15 @@ func (s *Server) policyTargetID(msg *models.Message, convType string) string {
 	return extractSenderID(msg)
 }
 
-func (s *Server) isAllowedTarget(channel models.ChannelType, targetID string, policyCfg config.ChannelPolicyConfig) bool {
+func (s *Server) isAllowedTarget(channel models.ChannelType, targetID string, policyCfg config.ChannelPolicyConfig, includeStore bool) bool {
 	if targetID == "" {
 		return false
 	}
 	if senderMatchesAllowlist(targetID, policyCfg.AllowFrom) {
 		return true
+	}
+	if !includeStore {
+		return false
 	}
 	provider := strings.ToLower(string(channel))
 	store := pairing.NewStore(provider)

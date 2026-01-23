@@ -161,12 +161,25 @@ func auditChannelPolicyScope(channel string, scope string, policy config.Channel
 			Detail:   fmt.Sprintf("channels.%s.%s.policy is set to open.", channel, scope),
 		})
 	}
+	if policyValue == "pairing" && scope == "group" {
+		findings = append(findings, Finding{
+			CheckID:     fmt.Sprintf("channel.%s.%s.pairing_unsupported", channel, scope),
+			Severity:    SeverityWarn,
+			Title:       fmt.Sprintf("%s %s pairing policy will block all messages", strings.Title(channel), strings.ToUpper(scope)),
+			Detail:      fmt.Sprintf("channels.%s.%s.policy is pairing, but pairing is only supported for direct messages.", channel, scope),
+			Remediation: fmt.Sprintf("Set channels.%s.%s.policy to allowlist, open, or disabled.", channel, scope),
+		})
+	}
 	if (policyValue == "allowlist" || policyValue == "pairing") && len(policy.AllowFrom) == 0 {
+		detail := fmt.Sprintf("channels.%s.%s.allow_from has no entries. Add identifiers to allow incoming messages.", channel, scope)
+		if scope == "dm" {
+			detail = fmt.Sprintf("channels.%s.%s.allow_from has no entries. Pairing approvals or allowlist files can grant access.", channel, scope)
+		}
 		findings = append(findings, Finding{
 			CheckID:  fmt.Sprintf("channel.%s.%s.allowlist_empty", channel, scope),
 			Severity: SeverityInfo,
 			Title:    fmt.Sprintf("%s %s allowlist is empty", strings.Title(channel), strings.ToUpper(scope)),
-			Detail:   fmt.Sprintf("channels.%s.%s.allow_from has no entries. Pairing approvals or allowlist files must be used to grant access.", channel, scope),
+			Detail:   detail,
 		})
 	}
 	return findings

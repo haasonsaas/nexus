@@ -310,3 +310,42 @@ func TestErrAlreadyExists(t *testing.T) {
 		t.Errorf("ErrAlreadyExists = %q, want %q", ErrAlreadyExists.Error(), "already exists")
 	}
 }
+
+func TestDefaultCockroachConfig(t *testing.T) {
+	cfg := DefaultCockroachConfig()
+	if cfg == nil {
+		t.Fatal("DefaultCockroachConfig() returned nil")
+	}
+	if cfg.MaxOpenConns != 25 {
+		t.Errorf("MaxOpenConns = %d, want 25", cfg.MaxOpenConns)
+	}
+	if cfg.MaxIdleConns != 5 {
+		t.Errorf("MaxIdleConns = %d, want 5", cfg.MaxIdleConns)
+	}
+	if cfg.ConnMaxLifetime != 5*time.Minute {
+		t.Errorf("ConnMaxLifetime = %v, want 5m", cfg.ConnMaxLifetime)
+	}
+	if cfg.ConnMaxIdleTime != 2*time.Minute {
+		t.Errorf("ConnMaxIdleTime = %v, want 2m", cfg.ConnMaxIdleTime)
+	}
+	if cfg.ConnectTimeout != 10*time.Second {
+		t.Errorf("ConnectTimeout = %v, want 10s", cfg.ConnectTimeout)
+	}
+}
+
+func TestCockroachConfig_Struct(t *testing.T) {
+	cfg := CockroachConfig{
+		MaxOpenConns:    50,
+		MaxIdleConns:    10,
+		ConnMaxLifetime: 10 * time.Minute,
+		ConnMaxIdleTime: 5 * time.Minute,
+		ConnectTimeout:  30 * time.Second,
+	}
+
+	if cfg.MaxOpenConns != 50 {
+		t.Errorf("MaxOpenConns = %d, want 50", cfg.MaxOpenConns)
+	}
+	if cfg.MaxIdleConns != 10 {
+		t.Errorf("MaxIdleConns = %d, want 10", cfg.MaxIdleConns)
+	}
+}

@@ -236,29 +236,38 @@ func (r *PersistentRepository) ListArtifacts(ctx context.Context, filter Filter)
 }
 
 // DeleteArtifact removes an artifact and its data.
+// Metadata is deleted and persisted first to avoid inconsistent state where
+// metadata points to deleted data. If store deletion fails after metadata
+// is persisted, orphaned data is logged but not treated as an error.
 func (r *PersistentRepository) DeleteArtifact(ctx context.Context, artifactID string) error {
-	r.mu.RLock()
+	r.mu.Lock()
 	meta, ok := r.metadata[artifactID]
-	r.mu.RUnlock()
 	if !ok {
+		r.mu.Unlock()
 		return nil
 	}
 
-	if meta.Reference != "" && !strings.HasPrefix(meta.Reference, "redacted://") {
-		if err := r.store.Delete(ctx, artifactID); err != nil {
-			return fmt.Errorf("delete artifact data: %w", err)
-		}
-	}
-
-	r.mu.Lock()
+	// Delete metadata first and persist - this can be rolled back
 	delete(r.metadata, artifactID)
 	err := r.persistLocked()
 	if err != nil {
+		// Rollback metadata deletion
 		r.metadata[artifactID] = meta
+		r.mu.Unlock()
+		return fmt.Errorf("persist metadata deletion: %w", err)
 	}
 	r.mu.Unlock()
-	if err != nil {
-		return err
+
+	// Now delete from store - metadata is already gone so orphaned data
+	// is acceptable (can be cleaned up later) but orphaned metadata is not
+	if meta.Reference != "" && !strings.HasPrefix(meta.Reference, "redacted://") {
+		if err := r.store.Delete(ctx, artifactID); err != nil {
+			r.logger.Warn("failed to delete artifact data after metadata removal",
+				"id", artifactID,
+				"error", err)
+			// Don't return error - orphaned data is less problematic than
+			// inconsistent state where metadata points to missing data
+		}
 	}
 
 	r.logger.Info("artifact deleted", "id", artifactID)

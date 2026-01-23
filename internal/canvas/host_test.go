@@ -539,3 +539,277 @@ func TestDefaultA2UIIndexHTML(t *testing.T) {
 		t.Error("defaultA2UIIndexHTML should contain Nexus A2UI")
 	}
 }
+
+func TestTrimHostBrackets(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"localhost", "localhost"},
+		{"[::1]", "::1"},
+		{"[2001:db8::1]", "2001:db8::1"},
+		{"192.168.1.1", "192.168.1.1"},
+		{"[incomplete", "[incomplete"},
+		{"incomplete]", "incomplete]"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := trimHostBrackets(tt.input)
+			if result != tt.expected {
+				t.Errorf("trimHostBrackets(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsLoopbackHost(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected bool
+	}{
+		{"localhost", true},
+		{"LOCALHOST", true},
+		{"::1", true},
+		{"[::1]", true},
+		{"0.0.0.0", true},
+		{"::", true},
+		{"127.0.0.1", true},
+		{"127.0.1.1", true},
+		{"127.255.255.255", true},
+		{"192.168.1.1", false},
+		{"example.com", false},
+		{"", false},
+		{"   ", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := isLoopbackHost(tt.input)
+			if result != tt.expected {
+				t.Errorf("isLoopbackHost(%q) = %v, want %v", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestNormalizeHost(t *testing.T) {
+	tests := []struct {
+		value           string
+		rejectLoopback  bool
+		expected        string
+	}{
+		{"", false, ""},
+		{"   ", false, ""},
+		{"example.com", false, "example.com"},
+		{"  example.com  ", false, "example.com"},
+		{"localhost", false, "localhost"},
+		{"localhost", true, ""},
+		{"127.0.0.1", true, ""},
+		{"192.168.1.1", true, "192.168.1.1"},
+	}
+
+	for _, tt := range tests {
+		name := tt.value
+		if tt.rejectLoopback {
+			name += "_rejectLoopback"
+		}
+		t.Run(name, func(t *testing.T) {
+			result := normalizeHost(tt.value, tt.rejectLoopback)
+			if result != tt.expected {
+				t.Errorf("normalizeHost(%q, %v) = %q, want %q", tt.value, tt.rejectLoopback, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestParseHostHeader(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"", ""},
+		{"   ", ""},
+		{"example.com", "example.com"},
+		{"example.com:8080", "example.com"},
+		{"[::1]", "::1"},
+		{"[::1]:8080", "::1"},
+		{"192.168.1.1:3000", "192.168.1.1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := parseHostHeader(tt.input)
+			if result != tt.expected {
+				t.Errorf("parseHostHeader(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestFirstForwardedProto(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"", ""},
+		{"https", "https"},
+		{"http", "http"},
+		{"https, http", "https"},
+		{"http, https", "http"},
+		{"  https  ", "https"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := firstForwardedProto(tt.input)
+			if result != tt.expected {
+				t.Errorf("firstForwardedProto(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestHost_ResolveFilePath(t *testing.T) {
+	tmpDir := t.TempDir()
+	autoIndex := true
+	cfg := config.CanvasHostConfig{
+		Port:      18793,
+		Root:      tmpDir,
+		Namespace: "/__nexus__",
+		AutoIndex: &autoIndex,
+	}
+	host, err := NewHost(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewHost error: %v", err)
+	}
+	// Set rootReal for testing
+	host.rootReal = tmpDir
+
+	// Create a test file
+	testFile := filepath.Join(tmpDir, "test.html")
+	if err := os.WriteFile(testFile, []byte("<html></html>"), 0o644); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	t.Run("resolves existing file", func(t *testing.T) {
+		path, err := host.resolveFilePath("/test.html")
+		if err != nil {
+			t.Errorf("resolveFilePath() error = %v", err)
+		}
+		if path == "" {
+			t.Error("expected non-empty path")
+		}
+	})
+
+	t.Run("returns error for path traversal", func(t *testing.T) {
+		_, err := host.resolveFilePath("/../../../etc/passwd")
+		if err == nil {
+			t.Error("expected error for path traversal")
+		}
+	})
+
+	t.Run("returns error for nonexistent file", func(t *testing.T) {
+		_, err := host.resolveFilePath("/nonexistent.html")
+		if err == nil {
+			t.Error("expected error for nonexistent file")
+		}
+	})
+}
+
+func TestHost_EnsureIndex(t *testing.T) {
+	t.Run("creates index when missing", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		canvasDir := filepath.Join(tmpDir, "canvas")
+		cfg := config.CanvasHostConfig{
+			Port:      18793,
+			Root:      canvasDir,
+			Namespace: "/__nexus__",
+		}
+		host, err := NewHost(cfg, nil)
+		if err != nil {
+			t.Fatalf("NewHost error: %v", err)
+		}
+
+		host.ensureIndex(canvasDir)
+
+		indexPath := filepath.Join(canvasDir, "index.html")
+		if _, err := os.Stat(indexPath); err != nil {
+			t.Fatalf("expected index to exist, err=%v", err)
+		}
+		content, err := os.ReadFile(indexPath)
+		if err != nil {
+			t.Fatalf("read index: %v", err)
+		}
+		if !contains(string(content), "Nexus Canvas") {
+			t.Error("index should contain Nexus Canvas")
+		}
+	})
+
+	t.Run("skips when index exists", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		indexPath := filepath.Join(tmpDir, "index.html")
+		customContent := "<html>custom</html>"
+		if err := os.WriteFile(indexPath, []byte(customContent), 0o644); err != nil {
+			t.Fatalf("write custom index: %v", err)
+		}
+
+		cfg := config.CanvasHostConfig{
+			Port:      18793,
+			Root:      tmpDir,
+			Namespace: "/__nexus__",
+		}
+		host, err := NewHost(cfg, nil)
+		if err != nil {
+			t.Fatalf("NewHost error: %v", err)
+		}
+
+		host.ensureIndex(tmpDir)
+
+		// Should not overwrite
+		content, err := os.ReadFile(indexPath)
+		if err != nil {
+			t.Fatalf("read index: %v", err)
+		}
+		if string(content) != customContent {
+			t.Error("should not overwrite existing index")
+		}
+	})
+
+	t.Run("handles empty path", func(t *testing.T) {
+		cfg := config.CanvasHostConfig{
+			Port:      18793,
+			Root:      t.TempDir(),
+			Namespace: "/__nexus__",
+		}
+		host, err := NewHost(cfg, nil)
+		if err != nil {
+			t.Fatalf("NewHost error: %v", err)
+		}
+
+		// Should not panic
+		host.ensureIndex("")
+	})
+}
+
+func TestCanvasURLParams_Struct(t *testing.T) {
+	params := CanvasURLParams{
+		RequestHost:    "example.com",
+		ForwardedProto: "https",
+		LocalAddress:   "192.168.1.1:8080",
+		Scheme:         "http",
+	}
+
+	if params.RequestHost != "example.com" {
+		t.Errorf("RequestHost = %q", params.RequestHost)
+	}
+	if params.ForwardedProto != "https" {
+		t.Errorf("ForwardedProto = %q", params.ForwardedProto)
+	}
+	if params.LocalAddress != "192.168.1.1:8080" {
+		t.Errorf("LocalAddress = %q", params.LocalAddress)
+	}
+	if params.Scheme != "http" {
+		t.Errorf("Scheme = %q", params.Scheme)
+	}
+}

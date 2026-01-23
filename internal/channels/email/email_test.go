@@ -436,3 +436,165 @@ func TestAttachment_Struct(t *testing.T) {
 		t.Errorf("Size = %d, want %d", att.Size, 1024)
 	}
 }
+
+func TestGraphBaseURL(t *testing.T) {
+	if graphBaseURL != "https://graph.microsoft.com/v1.0" {
+		t.Errorf("graphBaseURL = %q, want %q", graphBaseURL, "https://graph.microsoft.com/v1.0")
+	}
+}
+
+func TestAdapter_HTTPClient(t *testing.T) {
+	cfg := Config{
+		TenantID:    "tenant-123",
+		ClientID:    "client-123",
+		AccessToken: "token-123",
+	}
+	adapter, err := NewAdapter(cfg)
+	if err != nil {
+		t.Fatalf("NewAdapter error: %v", err)
+	}
+
+	if adapter.httpClient == nil {
+		t.Error("httpClient should not be nil")
+	}
+	if adapter.httpClient.Timeout != 30*time.Second {
+		t.Errorf("httpClient.Timeout = %v, want %v", adapter.httpClient.Timeout, 30*time.Second)
+	}
+}
+
+func TestAdapter_RateLimiter(t *testing.T) {
+	cfg := Config{
+		TenantID:    "tenant-123",
+		ClientID:    "client-123",
+		AccessToken: "token-123",
+		RateLimit:   5,
+		RateBurst:   10,
+	}
+	adapter, err := NewAdapter(cfg)
+	if err != nil {
+		t.Fatalf("NewAdapter error: %v", err)
+	}
+
+	if adapter.rateLimiter == nil {
+		t.Error("rateLimiter should not be nil")
+	}
+}
+
+func TestAdapter_Logger(t *testing.T) {
+	cfg := Config{
+		TenantID:    "tenant-123",
+		ClientID:    "client-123",
+		AccessToken: "token-123",
+	}
+	adapter, err := NewAdapter(cfg)
+	if err != nil {
+		t.Fatalf("NewAdapter error: %v", err)
+	}
+
+	if adapter.logger == nil {
+		t.Error("logger should not be nil")
+	}
+}
+
+func TestAdapter_SeenMessages(t *testing.T) {
+	cfg := Config{
+		TenantID:    "tenant-123",
+		ClientID:    "client-123",
+		AccessToken: "token-123",
+	}
+	adapter, err := NewAdapter(cfg)
+	if err != nil {
+		t.Fatalf("NewAdapter error: %v", err)
+	}
+
+	if adapter.seenMessages == nil {
+		t.Error("seenMessages should be initialized")
+	}
+	if len(adapter.seenMessages) != 0 {
+		t.Error("seenMessages should start empty")
+	}
+}
+
+func TestConfig_AllFieldsPresent(t *testing.T) {
+	cfg := Config{
+		TenantID:             "tenant-123",
+		ClientID:             "client-123",
+		ClientSecret:         "secret-123",
+		AccessToken:          "token-123",
+		RefreshToken:         "refresh-123",
+		UserEmail:            "user@example.com",
+		PollInterval:         60 * time.Second,
+		MaxReconnectAttempts: 10,
+		ReconnectDelay:       10 * time.Second,
+		RateLimit:            5,
+		RateBurst:            10,
+		FolderID:             "inbox",
+		IncludeRead:          true,
+		AutoMarkRead:         true,
+	}
+
+	err := cfg.Validate()
+	if err != nil {
+		t.Errorf("Validate() error = %v", err)
+	}
+
+	if cfg.TenantID != "tenant-123" {
+		t.Error("TenantID should be preserved")
+	}
+	if cfg.IncludeRead != true {
+		t.Error("IncludeRead should be preserved")
+	}
+	if cfg.AutoMarkRead != true {
+		t.Error("AutoMarkRead should be preserved")
+	}
+}
+
+func TestEmailMessage_ToRecipients(t *testing.T) {
+	msg := EmailMessage{}
+	msg.ToRecipients = []struct {
+		EmailAddress struct {
+			Name    string `json:"name"`
+			Address string `json:"address"`
+		} `json:"emailAddress"`
+	}{
+		{EmailAddress: struct {
+			Name    string `json:"name"`
+			Address string `json:"address"`
+		}{Name: "Recipient", Address: "recipient@example.com"}},
+	}
+
+	if len(msg.ToRecipients) != 1 {
+		t.Errorf("ToRecipients length = %d, want 1", len(msg.ToRecipients))
+	}
+	if msg.ToRecipients[0].EmailAddress.Address != "recipient@example.com" {
+		t.Error("ToRecipients address not set correctly")
+	}
+}
+
+func TestEmailMessage_Body(t *testing.T) {
+	msg := EmailMessage{}
+	msg.Body.ContentType = "text"
+	msg.Body.Content = "Hello, World!"
+
+	if msg.Body.ContentType != "text" {
+		t.Errorf("Body.ContentType = %q, want %q", msg.Body.ContentType, "text")
+	}
+	if msg.Body.Content != "Hello, World!" {
+		t.Errorf("Body.Content = %q, want %q", msg.Body.Content, "Hello, World!")
+	}
+}
+
+func TestAttachment_ContentBytes(t *testing.T) {
+	att := Attachment{
+		ID:           "att-123",
+		Name:         "document.pdf",
+		ContentType:  "application/pdf",
+		Size:         1024,
+		IsInline:     false,
+		ContentBytes: "base64encodedcontent",
+	}
+
+	if att.ContentBytes != "base64encodedcontent" {
+		t.Errorf("ContentBytes = %q, want %q", att.ContentBytes, "base64encodedcontent")
+	}
+}

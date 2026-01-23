@@ -194,8 +194,8 @@ func TestJob_Struct(t *testing.T) {
 		Type:    JobTypeWebhook,
 		Enabled: true,
 		Schedule: Schedule{
-			Kind:     "every",
-			Every:    5 * time.Minute,
+			Kind:  "every",
+			Every: 5 * time.Minute,
 		},
 	}
 

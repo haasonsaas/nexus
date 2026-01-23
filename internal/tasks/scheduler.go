@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -295,6 +296,18 @@ func (s *Scheduler) updateNextRun(ctx context.Context, task *ScheduledTask, last
 		return s.store.UpdateTask(ctx, task)
 	}
 
+	// Zero time means no more runs (one-shot schedule completed)
+	if nextRun.IsZero() {
+		s.logger.Info("one-shot task completed, disabling",
+			"task_id", task.ID,
+			"task_name", task.Name,
+		)
+		task.Status = TaskStatusDisabled
+		task.LastRunAt = &lastRun
+		task.UpdatedAt = time.Now()
+		return s.store.UpdateTask(ctx, task)
+	}
+
 	task.NextRunAt = nextRun
 	task.LastRunAt = &lastRun
 	task.UpdatedAt = time.Now()
@@ -303,7 +316,14 @@ func (s *Scheduler) updateNextRun(ctx context.Context, task *ScheduledTask, last
 }
 
 // calculateNextRun computes the next execution time for a schedule.
+// Returns zero time for one-shot schedules (e.g., "@at <timestamp>").
 func (s *Scheduler) calculateNextRun(schedule string, timezone string, after time.Time) (time.Time, error) {
+	// Handle one-shot schedules - these should only run once
+	if strings.HasPrefix(schedule, "@at ") || strings.HasPrefix(schedule, "@once") {
+		// Return zero time to indicate no more runs
+		return time.Time{}, nil
+	}
+
 	sched, err := cronParser.Parse(schedule)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("parse schedule: %w", err)

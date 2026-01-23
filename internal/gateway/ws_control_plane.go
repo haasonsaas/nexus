@@ -594,12 +594,18 @@ func (s *wsSession) startTicking() {
 }
 
 func (s *wsSession) buildHelloPayload() map[string]any {
+	serverPayload := map[string]any{
+		"id": s.id,
+	}
+	if s.control != nil && s.control.server != nil && s.control.server.canvasHost != nil {
+		if canvasURL := s.control.server.canvasHost.CanvasURL(); canvasURL != "" {
+			serverPayload["canvasHostUrl"] = canvasURL
+		}
+	}
 	return map[string]any{
 		"type":     "hello-ok",
 		"protocol": wsProtocolVersion,
-		"server": map[string]any{
-			"id": s.id,
-		},
+		"server":   serverPayload,
 		"features": map[string]any{
 			"methods": supportedWSMethods(),
 			"events":  supportedWSEvents(),

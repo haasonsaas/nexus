@@ -2,97 +2,232 @@ package canvas
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/gorilla/websocket"
+
+	"github.com/haasonsaas/nexus/internal/config"
 )
 
-// Host serves a canvas directory with optional live reload.
+const (
+	defaultIndexHTML = "<!doctype html><html><head><meta charset=\"utf-8\" /><title>Nexus Canvas</title></head><body><h1>Nexus Canvas</h1><p>Drop files into this folder to render them here.</p></body></html>"
+)
+
+// Host serves a canvas directory on a dedicated HTTP server with optional live reload.
 type Host struct {
-	root   string
+	host         string
+	port         int
+	root         string
+	namespace    string
+	a2uiRoot     string
+	liveReload   bool
+	injectClient bool
+	autoIndex    bool
+
 	logger *slog.Logger
 
-	mu       sync.RWMutex
-	clients  map[chan struct{}]struct{}
-	watcher  *fsnotify.Watcher
-	watching bool
+	server   *http.Server
+	listener net.Listener
+
+	mu          sync.RWMutex
+	clients     map[*websocket.Conn]struct{}
+	watcher     *fsnotify.Watcher
+	watchCancel context.CancelFunc
+	upgrader    websocket.Upgrader
 }
 
-// NewHost creates a canvas host for the given root directory.
-func NewHost(root string, logger *slog.Logger) (*Host, error) {
-	if strings.TrimSpace(root) == "" {
+// NewHost creates a canvas host for the given configuration.
+func NewHost(cfg config.CanvasHostConfig, logger *slog.Logger) (*Host, error) {
+	if strings.TrimSpace(cfg.Root) == "" {
 		return nil, fmt.Errorf("canvas root is required")
+	}
+	if cfg.Port <= 0 {
+		return nil, fmt.Errorf("canvas port must be set")
 	}
 	if logger == nil {
 		logger = slog.Default()
 	}
+	namespace := normalizeNamespace(cfg.Namespace)
+	liveReload := cfg.LiveReload != nil && *cfg.LiveReload
+	injectClient := cfg.InjectClient != nil && *cfg.InjectClient
+	autoIndex := cfg.AutoIndex != nil && *cfg.AutoIndex
 	return &Host{
-		root:    root,
-		logger:  logger.With("component", "canvas"),
-		clients: make(map[chan struct{}]struct{}),
+		host:         cfg.Host,
+		port:         cfg.Port,
+		root:         cfg.Root,
+		namespace:    namespace,
+		a2uiRoot:     strings.TrimSpace(cfg.A2UIRoot),
+		liveReload:   liveReload,
+		injectClient: injectClient,
+		autoIndex:    autoIndex,
+		logger:       logger.With("component", "canvas"),
+		clients:      make(map[*websocket.Conn]struct{}),
+		upgrader: websocket.Upgrader{
+			ReadBufferSize:  8192,
+			WriteBufferSize: 8192,
+			CheckOrigin: func(*http.Request) bool {
+				return true
+			},
+		},
 	}, nil
 }
 
-// Start begins watching the canvas directory for changes.
+// Start begins serving the canvas host and optional live reload watcher.
 func (h *Host) Start(ctx context.Context) error {
 	if h == nil {
 		return nil
 	}
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
+	if h.server != nil {
+		return nil
+	}
+	if err := h.ensureRoot(); err != nil {
 		return err
 	}
-	if err := h.watchRecursive(watcher, h.root); err != nil {
-		_ = watcher.Close()
-		return err
+	if h.autoIndex {
+		h.ensureIndex(h.root)
 	}
-	h.mu.Lock()
-	h.watcher = watcher
-	h.watching = true
-	h.mu.Unlock()
 
-	go h.watchLoop(ctx, watcher)
+	mux := http.NewServeMux()
+
+	canvasPrefix := h.canvasPrefix()
+	mux.Handle(canvasPrefix+"/", http.StripPrefix(canvasPrefix+"/", h.canvasHandler()))
+	mux.HandleFunc(canvasPrefix, func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, canvasPrefix+"/", http.StatusFound)
+	})
+
+	if h.liveReload {
+		mux.Handle(h.liveReloadScriptPath(), h.liveReloadScriptHandler())
+		mux.Handle(h.liveReloadWSPath(), h.liveReloadWSHandler())
+	}
+
+	if h.a2uiRoot != "" {
+		if info, err := os.Stat(h.a2uiRoot); err == nil && info.IsDir() {
+			a2uiPrefix := h.a2uiPrefix()
+			mux.Handle(a2uiPrefix+"/", http.StripPrefix(a2uiPrefix+"/", http.FileServer(http.Dir(h.a2uiRoot))))
+			mux.HandleFunc(a2uiPrefix, func(w http.ResponseWriter, r *http.Request) {
+				http.Redirect(w, r, a2uiPrefix+"/", http.StatusFound)
+			})
+		} else if err != nil && !os.IsNotExist(err) {
+			h.logger.Warn("canvas a2ui root unavailable", "path", h.a2uiRoot, "error", err)
+		}
+	}
+
+	addr := net.JoinHostPort(h.host, strconv.Itoa(h.port))
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("canvas listen: %w", err)
+	}
+	var watcher *fsnotify.Watcher
+	if h.liveReload {
+		watcher, err = fsnotify.NewWatcher()
+		if err != nil {
+			_ = listener.Close()
+			return err
+		}
+		if err := h.watchRecursive(watcher, h.root); err != nil {
+			_ = watcher.Close()
+			_ = listener.Close()
+			return err
+		}
+	}
+
+	h.server = server
+	h.listener = listener
+
+	if watcher != nil {
+		watchCtx := ctx
+		if watchCtx == nil {
+			watchCtx = context.Background()
+		}
+		watchCtx, cancel := context.WithCancel(watchCtx)
+		h.watchCancel = cancel
+		h.watcher = watcher
+		go h.watchLoop(watchCtx, watcher)
+	}
+
+	go func() {
+		if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			h.logger.Error("canvas server error", "error", err)
+		}
+	}()
+
+	h.logger.Info("starting canvas host", "addr", addr, "root", h.root, "namespace", h.namespace)
 	return nil
 }
 
-// Close stops watching.
+// Close shuts down the canvas host and watcher.
 func (h *Host) Close() error {
 	if h == nil {
 		return nil
 	}
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.watcher != nil {
-		err := h.watcher.Close()
-		h.watcher = nil
-		h.watching = false
-		return err
+	if h.watchCancel != nil {
+		h.watchCancel()
+		h.watchCancel = nil
 	}
+	if h.watcher != nil {
+		_ = h.watcher.Close()
+		h.watcher = nil
+	}
+	if h.server != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := h.server.Shutdown(ctx); err != nil {
+			h.logger.Warn("canvas server shutdown error", "error", err)
+		}
+		h.server = nil
+		h.listener = nil
+	}
+	h.closeClients()
 	return nil
 }
 
-// Handler serves static canvas files with live-reload script injection.
-func (h *Host) Handler() http.Handler {
+// CanvasURL returns the absolute URL for the canvas root.
+func (h *Host) CanvasURL() string {
+	if h == nil {
+		return ""
+	}
+	host := strings.TrimSpace(h.host)
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "localhost"
+	}
+	return fmt.Sprintf("http://%s:%d%s/", host, h.port, h.canvasPrefix())
+}
+
+func (h *Host) canvasHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := filepath.Clean(r.URL.Path)
-		if strings.HasPrefix(path, "..") {
+		clean := path.Clean("/" + strings.TrimPrefix(r.URL.Path, "/"))
+		if strings.HasPrefix(clean, "/..") {
 			http.NotFound(w, r)
 			return
 		}
-		fullPath := filepath.Join(h.root, path)
+		rel := strings.TrimPrefix(clean, "/")
+		fullPath := filepath.Join(h.root, filepath.FromSlash(rel))
 		info, err := os.Stat(fullPath)
 		if err == nil && info.IsDir() {
+			if h.autoIndex {
+				h.ensureIndex(fullPath)
+			}
 			fullPath = filepath.Join(fullPath, "index.html")
 		}
-		if strings.HasSuffix(fullPath, ".html") {
+		if strings.HasSuffix(strings.ToLower(fullPath), ".html") {
 			h.serveHTML(w, r, fullPath)
 			return
 		}
@@ -100,79 +235,125 @@ func (h *Host) Handler() http.Handler {
 	})
 }
 
-// LiveReloadHandler streams reload events to the browser.
-func (h *Host) LiveReloadHandler() http.Handler {
+func (h *Host) liveReloadWSHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		flusher, ok := w.(http.Flusher)
-		if !ok {
-			http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
+		conn, err := h.upgrader.Upgrade(w, r, nil)
+		if err != nil {
 			return
 		}
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Connection", "keep-alive")
-
-		ch := make(chan struct{}, 1)
-		h.addClient(ch)
-		defer h.removeClient(ch)
-
-		_, _ = fmt.Fprintf(w, "event: hello\ndata: %d\n\n", time.Now().Unix())
-		flusher.Flush()
+		h.addClient(conn)
+		defer h.removeClient(conn)
 
 		for {
-			select {
-			case <-r.Context().Done():
+			if _, _, err := conn.ReadMessage(); err != nil {
 				return
-			case <-ch:
-				_, _ = fmt.Fprintf(w, "event: reload\ndata: %d\n\n", time.Now().Unix())
-				flusher.Flush()
 			}
 		}
 	})
 }
 
-// LiveReloadScriptHandler serves the client-side live reload script.
-func (h *Host) LiveReloadScriptHandler() http.Handler {
+func (h *Host) liveReloadScriptHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/javascript")
-		if _, err := io.WriteString(w, liveReloadScript); err != nil {
+		script := h.liveReloadScript()
+		if _, err := io.WriteString(w, script); err != nil {
 			h.logger.Warn("failed to write live reload script", "error", err)
 		}
 	})
 }
 
-func (h *Host) serveHTML(w http.ResponseWriter, r *http.Request, path string) {
-	data, err := os.ReadFile(path)
+func (h *Host) serveHTML(w http.ResponseWriter, r *http.Request, fullPath string) {
+	data, err := os.ReadFile(fullPath)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	html := injectLiveReload(string(data))
+	html := string(data)
+	if h.injectClient && h.liveReload {
+		html = h.injectLiveReload(html)
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if _, err := io.WriteString(w, html); err != nil {
 		h.logger.Warn("failed to write canvas html", "error", err)
 	}
 }
 
-func (h *Host) addClient(ch chan struct{}) {
+func (h *Host) injectLiveReload(html string) string {
+	snippet := fmt.Sprintf("<script src=\"%s\"></script>", h.liveReloadScriptPath())
+	if strings.Contains(html, snippet) || strings.Contains(html, h.liveReloadScriptPath()) {
+		return html
+	}
+	if strings.Contains(html, "</body>") {
+		return strings.Replace(html, "</body>", snippet+"</body>", 1)
+	}
+	if strings.Contains(html, "</head>") {
+		return strings.Replace(html, "</head>", snippet+"</head>", 1)
+	}
+	return html + snippet
+}
+
+func (h *Host) liveReloadScript() string {
+	return fmt.Sprintf(`(() => {
+  const wsPath = %q;
+  const scheme = window.location.protocol === "https:" ? "wss" : "ws";
+  const wsUrl = scheme + "://" + window.location.host + wsPath;
+  let socket = null;
+
+  const connect = () => {
+    socket = new WebSocket(wsUrl);
+    socket.addEventListener("message", (event) => {
+      if (event.data === "reload") {
+        window.location.reload();
+      }
+    });
+    socket.addEventListener("close", () => {
+      setTimeout(connect, 1000);
+    });
+  };
+
+  connect();
+})();
+`, h.liveReloadWSPath())
+}
+
+func (h *Host) addClient(conn *websocket.Conn) {
 	h.mu.Lock()
-	h.clients[ch] = struct{}{}
+	h.clients[conn] = struct{}{}
 	h.mu.Unlock()
 }
 
-func (h *Host) removeClient(ch chan struct{}) {
+func (h *Host) removeClient(conn *websocket.Conn) {
 	h.mu.Lock()
-	delete(h.clients, ch)
+	delete(h.clients, conn)
 	h.mu.Unlock()
+	_ = conn.Close()
+}
+
+func (h *Host) closeClients() {
+	h.mu.Lock()
+	clients := make([]*websocket.Conn, 0, len(h.clients))
+	for conn := range h.clients {
+		clients = append(clients, conn)
+	}
+	h.clients = make(map[*websocket.Conn]struct{})
+	h.mu.Unlock()
+	for _, conn := range clients {
+		_ = conn.Close()
+	}
 }
 
 func (h *Host) broadcastReload() {
 	h.mu.RLock()
-	defer h.mu.RUnlock()
-	for ch := range h.clients {
-		select {
-		case ch <- struct{}{}:
-		default:
+	clients := make([]*websocket.Conn, 0, len(h.clients))
+	for conn := range h.clients {
+		clients = append(clients, conn)
+	}
+	h.mu.RUnlock()
+
+	for _, conn := range clients {
+		_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+		if err := conn.WriteMessage(websocket.TextMessage, []byte("reload")); err != nil {
+			h.removeClient(conn)
 		}
 	}
 }
@@ -236,19 +417,72 @@ func (h *Host) watchRecursive(watcher *fsnotify.Watcher, root string) error {
 	})
 }
 
-func injectLiveReload(html string) string {
-	snippet := `<script src="/canvas/live.js"></script>`
-	if strings.Contains(html, "</body>") {
-		return strings.Replace(html, "</body>", snippet+"</body>", 1)
+func (h *Host) ensureRoot() error {
+	info, err := os.Stat(h.root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return os.MkdirAll(h.root, 0o755)
+		}
+		return err
 	}
-	return html + snippet
+	if !info.IsDir() {
+		return fmt.Errorf("canvas root is not a directory: %s", h.root)
+	}
+	return nil
 }
 
-const liveReloadScript = `
-(() => {
-  const source = new EventSource('/canvas/live');
-  source.addEventListener('reload', () => {
-    window.location.reload();
-  });
-})();
-`
+func (h *Host) ensureIndex(dir string) {
+	if strings.TrimSpace(dir) == "" {
+		return
+	}
+	indexPath := filepath.Join(dir, "index.html")
+	if _, err := os.Stat(indexPath); err == nil {
+		return
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		h.logger.Warn("failed to create canvas directory", "path", dir, "error", err)
+		return
+	}
+	if err := os.WriteFile(indexPath, []byte(defaultIndexHTML), 0o644); err != nil {
+		h.logger.Warn("failed to write canvas index", "path", indexPath, "error", err)
+	}
+}
+
+func (h *Host) canvasPrefix() string {
+	return h.namespacedPath("canvas")
+}
+
+func (h *Host) a2uiPrefix() string {
+	return h.namespacedPath("a2ui")
+}
+
+func (h *Host) liveReloadWSPath() string {
+	return h.namespacedPath("ws")
+}
+
+func (h *Host) liveReloadScriptPath() string {
+	return h.namespacedPath("live.js")
+}
+
+func (h *Host) namespacedPath(suffix string) string {
+	suffix = strings.TrimPrefix(suffix, "/")
+	if h.namespace == "/" {
+		return "/" + suffix
+	}
+	return h.namespace + "/" + suffix
+}
+
+func normalizeNamespace(namespace string) string {
+	clean := strings.TrimSpace(namespace)
+	if clean == "" {
+		clean = "/__nexus__"
+	}
+	if !strings.HasPrefix(clean, "/") {
+		clean = "/" + clean
+	}
+	clean = strings.TrimRight(clean, "/")
+	if clean == "" {
+		clean = "/"
+	}
+	return clean
+}

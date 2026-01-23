@@ -15,9 +15,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -133,7 +130,7 @@ type Server struct {
 	// streamingRegistry manages streaming behavior per channel
 	streamingRegistry *StreamingRegistry
 
-	// canvasHost serves workspace canvas assets with live reload
+	// canvasHost serves the dedicated canvas host
 	canvasHost *canvas.Host
 
 	// httpServer serves the HTTP dashboard, API, and control plane WebSocket
@@ -210,14 +207,10 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		}
 	}()
 
-	// Initialize canvas host if workspace canvas directory exists
-	canvasRoot := "canvas"
-	if strings.TrimSpace(cfg.Workspace.Path) != "" {
-		canvasRoot = filepath.Join(cfg.Workspace.Path, "canvas")
-	}
+	// Initialize dedicated canvas host when enabled
 	var canvasHost *canvas.Host
-	if info, err := os.Stat(canvasRoot); err == nil && info.IsDir() {
-		host, err := canvas.NewHost(canvasRoot, logger)
+	if cfg.CanvasHost.Enabled == nil || *cfg.CanvasHost.Enabled {
+		host, err := canvas.NewHost(cfg.CanvasHost, logger)
 		if err != nil {
 			logger.Warn("canvas host init failed", "error", err)
 		} else {

@@ -20,6 +20,7 @@ import (
 type Config struct {
 	Version       int                       `yaml:"version"`
 	Server        ServerConfig              `yaml:"server"`
+	CanvasHost    CanvasHostConfig          `yaml:"canvas_host"`
 	Gateway       GatewayConfig             `yaml:"gateway"`
 	Commands      CommandsConfig            `yaml:"commands"`
 	Database      DatabaseConfig            `yaml:"database"`
@@ -84,6 +85,19 @@ type ServerConfig struct {
 	GRPCPort    int    `yaml:"grpc_port"`
 	HTTPPort    int    `yaml:"http_port"`
 	MetricsPort int    `yaml:"metrics_port"`
+}
+
+// CanvasHostConfig configures the dedicated canvas host.
+type CanvasHostConfig struct {
+	Enabled      *bool  `yaml:"enabled"`
+	Host         string `yaml:"host"`
+	Port         int    `yaml:"port"`
+	Root         string `yaml:"root"`
+	Namespace    string `yaml:"namespace"`
+	LiveReload   *bool  `yaml:"live_reload"`
+	InjectClient *bool  `yaml:"inject_client"`
+	AutoIndex    *bool  `yaml:"auto_index"`
+	A2UIRoot     string `yaml:"a2ui_root"`
 }
 
 type DatabaseConfig struct {
@@ -898,6 +912,7 @@ func Load(path string) (*Config, error) {
 
 func applyDefaults(cfg *Config) {
 	applyServerDefaults(&cfg.Server)
+	applyCanvasHostDefaults(&cfg.CanvasHost, cfg)
 	applyDatabaseDefaults(&cfg.Database)
 	applyAuthDefaults(&cfg.Auth)
 	applyChannelDefaults(&cfg.Channels)
@@ -926,6 +941,64 @@ func applyServerDefaults(cfg *ServerConfig) {
 	}
 	if cfg.MetricsPort == 0 {
 		cfg.MetricsPort = 9090
+	}
+}
+
+func applyCanvasHostDefaults(cfg *CanvasHostConfig, rootCfg *Config) {
+	if cfg == nil {
+		return
+	}
+	if cfg.Enabled == nil {
+		enabled := true
+		cfg.Enabled = &enabled
+	}
+	if cfg.Host == "" {
+		if rootCfg != nil && rootCfg.Server.Host != "" {
+			cfg.Host = rootCfg.Server.Host
+		} else {
+			cfg.Host = "0.0.0.0"
+		}
+	}
+	if cfg.Port == 0 {
+		cfg.Port = 18793
+	}
+	if cfg.Namespace == "" {
+		cfg.Namespace = "/__nexus__"
+	}
+	base := strings.TrimSpace(cfg.Root)
+	if base != "" {
+		base = filepath.Dir(base)
+	}
+	if strings.TrimSpace(base) == "" {
+		if rootCfg != nil && strings.TrimSpace(rootCfg.Workspace.Path) != "" {
+			base = rootCfg.Workspace.Path
+		}
+		if strings.TrimSpace(base) == "" {
+			if home, err := os.UserHomeDir(); err == nil && strings.TrimSpace(home) != "" {
+				base = filepath.Join(home, ".nexus")
+			}
+		}
+		if strings.TrimSpace(base) == "" {
+			base = "."
+		}
+	}
+	if cfg.Root == "" {
+		cfg.Root = filepath.Join(base, "canvas")
+	}
+	if cfg.A2UIRoot == "" {
+		cfg.A2UIRoot = filepath.Join(base, "a2ui")
+	}
+	if cfg.LiveReload == nil {
+		liveReload := true
+		cfg.LiveReload = &liveReload
+	}
+	if cfg.InjectClient == nil {
+		inject := cfg.LiveReload != nil && *cfg.LiveReload
+		cfg.InjectClient = &inject
+	}
+	if cfg.AutoIndex == nil {
+		autoIndex := true
+		cfg.AutoIndex = &autoIndex
 	}
 }
 
@@ -1389,6 +1462,25 @@ func validateConfig(cfg *Config) error {
 	}
 	if cfg.Workspace.MaxChars < 0 {
 		issues = append(issues, "workspace.max_chars must be >= 0")
+	}
+	if cfg.CanvasHost.Enabled != nil && *cfg.CanvasHost.Enabled {
+		if cfg.CanvasHost.Port <= 0 || cfg.CanvasHost.Port > 65535 {
+			issues = append(issues, "canvas_host.port must be between 1 and 65535")
+		}
+		if strings.TrimSpace(cfg.CanvasHost.Root) == "" {
+			issues = append(issues, "canvas_host.root is required when canvas_host is enabled")
+		}
+		namespace := strings.TrimSpace(cfg.CanvasHost.Namespace)
+		if namespace == "" {
+			issues = append(issues, "canvas_host.namespace is required when canvas_host is enabled")
+		} else if !strings.HasPrefix(namespace, "/") {
+			issues = append(issues, "canvas_host.namespace must start with \"/\"")
+		}
+		if cfg.CanvasHost.LiveReload != nil && cfg.CanvasHost.InjectClient != nil {
+			if *cfg.CanvasHost.InjectClient && !*cfg.CanvasHost.LiveReload {
+				issues = append(issues, "canvas_host.inject_client requires canvas_host.live_reload to be true")
+			}
+		}
 	}
 
 	if strings.TrimSpace(cfg.Artifacts.MetadataBackend) != "" {

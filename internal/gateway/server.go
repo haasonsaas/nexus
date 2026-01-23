@@ -111,6 +111,9 @@ type Server struct {
 	eventStore    *observability.MemoryEventStore
 	eventRecorder *observability.EventRecorder
 
+	// Trace directory plugin for run tracing
+	tracePlugin *agent.TraceDirectoryPlugin
+
 	// Identity linking for cross-channel user mapping
 	identityStore identity.Store
 

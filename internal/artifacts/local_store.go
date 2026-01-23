@@ -87,6 +87,9 @@ func (s *LocalStore) Put(ctx context.Context, artifactID string, data io.Reader,
 	s.mu.Lock()
 	s.index[artifactID] = relPath
 	err = s.persistIndexLocked()
+	if err != nil {
+		delete(s.index, artifactID)
+	}
 	s.mu.Unlock()
 	if err != nil {
 		_ = os.Remove(filePath)

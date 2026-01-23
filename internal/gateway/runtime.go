@@ -92,6 +92,7 @@ func (s *Server) ensureRuntime(ctx context.Context) (*agent.Runtime, error) {
 			s.logger.Warn("failed to initialize trace directory", "error", err, "trace_dir", traceDir)
 		} else {
 			runtime.Use(tracePlugin)
+			s.tracePlugin = tracePlugin
 			s.logger.Info("trace capture enabled", "trace_dir", traceDir)
 		}
 	}

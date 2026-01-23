@@ -232,8 +232,8 @@ func (r *MemoryRepository) DeleteArtifact(ctx context.Context, artifactID string
 		return nil
 	}
 
-	// Delete from store if not inline
-	if meta.Reference != fmt.Sprintf("inline://%s", artifactID) {
+	// Delete from store if not inline or redacted
+	if meta.Reference != fmt.Sprintf("inline://%s", artifactID) && !strings.HasPrefix(meta.Reference, "redacted://") {
 		if err := r.store.Delete(ctx, artifactID); err != nil {
 			r.logger.Warn("failed to delete artifact from store",
 				"id", artifactID,

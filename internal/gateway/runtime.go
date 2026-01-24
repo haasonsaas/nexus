@@ -351,6 +351,13 @@ func (s *Server) registerTools(ctx context.Context, runtime *agent.Runtime) erro
 		runtime.RegisterTool(websearch.NewWebSearchTool(searchConfig))
 	}
 
+	if s.config.Tools.WebFetch.Enabled {
+		fetchConfig := &websearch.FetchConfig{
+			MaxChars: s.config.Tools.WebFetch.MaxChars,
+		}
+		runtime.RegisterTool(websearch.NewWebFetchTool(fetchConfig))
+	}
+
 	if s.config.Tools.MemorySearch.Enabled {
 		searchConfig := &memorysearch.Config{
 			Directory:     s.config.Tools.MemorySearch.Directory,

@@ -912,6 +912,9 @@ tools:
     enabled: true
     provider: searxng
     url: http://localhost:8888
+  web_fetch:
+    enabled: true
+    max_chars: 10000
   memory_search:
     enabled: false
     directory: memory

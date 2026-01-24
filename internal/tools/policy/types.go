@@ -56,7 +56,7 @@ var DefaultGroups = map[string][]string{
 	"group:fs": {"read", "write", "edit", "exec"},
 
 	// Web tools
-	"group:web": {"websearch", "webfetch"},
+	"group:web": {"web_search", "web_fetch", "websearch", "webfetch"},
 
 	// Runtime/execution tools
 	"group:runtime": {"sandbox"},
@@ -76,7 +76,7 @@ var DefaultGroups = map[string][]string{
 	// All built-in nexus tools
 	"group:nexus": {
 		"read", "write", "edit", "exec",
-		"websearch", "webfetch",
+		"web_search", "web_fetch", "websearch", "webfetch",
 		"sandbox",
 		"memory_search",
 		"browser",

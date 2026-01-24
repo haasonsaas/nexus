@@ -495,6 +495,7 @@ type ToolsConfig struct {
 	Sandbox      SandboxConfig       `yaml:"sandbox"`
 	Browser      BrowserConfig       `yaml:"browser"`
 	WebSearch    WebSearchConfig     `yaml:"websearch"`
+	WebFetch     WebFetchConfig      `yaml:"web_fetch"`
 	MemorySearch MemorySearchConfig  `yaml:"memory_search"`
 	Notes        string              `yaml:"notes"`
 	NotesFile    string              `yaml:"notes_file"`
@@ -702,6 +703,11 @@ type WebSearchConfig struct {
 	Enabled  bool   `yaml:"enabled"`
 	Provider string `yaml:"provider"`
 	URL      string `yaml:"url"`
+}
+
+type WebFetchConfig struct {
+	Enabled  bool `yaml:"enabled"`
+	MaxChars int  `yaml:"max_chars"`
 }
 
 type MemorySearchConfig struct {
@@ -1224,6 +1230,9 @@ func applyToolsDefaults(cfg *Config) {
 	if cfg.Tools.MemorySearch.MaxSnippetLen == 0 {
 		cfg.Tools.MemorySearch.MaxSnippetLen = 200
 	}
+	if cfg.Tools.WebFetch.MaxChars == 0 {
+		cfg.Tools.WebFetch.MaxChars = 10000
+	}
 	if cfg.Tools.MemorySearch.Mode == "" {
 		cfg.Tools.MemorySearch.Mode = "hybrid"
 	}
@@ -1638,6 +1647,9 @@ func validateConfig(cfg *Config) error {
 		default:
 			issues = append(issues, "tools.websearch.provider must be \"searxng\", \"brave\", or \"duckduckgo\"")
 		}
+	}
+	if cfg.Tools.WebFetch.MaxChars < 0 {
+		issues = append(issues, "tools.web_fetch.max_chars must be >= 0")
 	}
 	if cfg.Tools.MemorySearch.MaxResults < 0 {
 		issues = append(issues, "tools.memory_search.max_results must be >= 0")

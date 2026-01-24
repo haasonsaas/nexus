@@ -33,90 +33,499 @@ const (
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Nexus Canvas</title>
   <style>
-    :root { color-scheme: light; }
+    :root {
+      color-scheme: light;
+      --bg: #f6f2ea;
+      --bg-2: #ece6db;
+      --ink: #141414;
+      --muted: #5c574f;
+      --accent: #0f8b8d;
+      --accent-2: #f26b4f;
+      --panel: rgba(255, 255, 255, 0.86);
+      --panel-border: #e1d9cb;
+      --shadow: 0 24px 60px rgba(20, 16, 8, 0.12);
+      --mono: "IBM Plex Mono", "Fira Mono", "Menlo", monospace;
+      --sans: "Space Grotesk", "Sora", "Fira Sans", sans-serif;
+    }
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: "Space Grotesk", "Sora", "Fira Sans", sans-serif;
-      background: radial-gradient(1200px 600px at 10% 10%, #f7f3ea, #f0ede6 60%, #ebe7df 100%);
-      color: #121212;
+      font-family: var(--sans);
+      background:
+        radial-gradient(1200px 700px at 15% 10%, #fff9f1, transparent 60%),
+        radial-gradient(1000px 600px at 85% 20%, #f0f7ff, transparent 55%),
+        linear-gradient(120deg, var(--bg), var(--bg-2));
+      color: var(--ink);
     }
-    main {
+    .app {
       min-height: 100vh;
-      display: grid;
-      place-items: center;
       padding: 32px;
+      display: grid;
+      gap: 24px;
     }
-    .card {
-      width: min(760px, 100%);
-      background: rgba(255, 255, 255, 0.85);
-      border: 1px solid #e2dcd0;
-      border-radius: 20px;
-      padding: 24px 26px;
-      box-shadow: 0 24px 60px rgba(26, 22, 14, 0.15);
-      backdrop-filter: blur(6px);
-    }
-    .header {
+    header.top {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .brand .dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), #5fd1c3);
+      box-shadow: 0 0 0 6px rgba(15, 139, 141, 0.15);
+    }
+    .title {
+      font-size: 22px;
+      letter-spacing: 0.4px;
+      font-weight: 600;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+    .status {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .pill {
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      background: var(--accent);
+      color: white;
+    }
+    .pill.offline {
+      background: #b44b4b;
+    }
+    .pill.outline {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--panel-border);
+      text-transform: none;
+      letter-spacing: 0;
+    }
+    main.layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      gap: 24px;
+    }
+    .panel, .card {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      padding: 20px 22px;
+    }
+    .panel h2 {
+      margin: 0 0 12px;
+      font-size: 16px;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .canvas-root {
+      min-height: 420px;
+      display: grid;
+      align-content: start;
+      gap: 16px;
+    }
+    .empty {
+      border: 1px dashed #d9d2c5;
+      border-radius: 16px;
+      padding: 24px;
+      background: rgba(255, 255, 255, 0.6);
+      text-align: center;
+    }
+    .empty h3 {
+      margin: 0 0 6px;
+      font-size: 18px;
+    }
+    .empty p {
+      margin: 0 0 12px;
+      color: var(--muted);
+    }
+    button {
+      border: none;
+      background: var(--accent);
+      color: white;
+      padding: 10px 16px;
+      border-radius: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 10px 22px rgba(15, 139, 141, 0.2);
+    }
+    button.secondary {
+      background: var(--accent-2);
+    }
+    .sidebar {
+      display: grid;
+      gap: 18px;
+      align-content: start;
+    }
+    .card h3 {
+      margin: 0 0 8px;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: var(--muted);
+    }
+    .meta {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .meta span {
+      font-family: var(--mono);
+      color: var(--ink);
+    }
+    .log {
+      max-height: 320px;
+      overflow: auto;
+    }
+    .log-entry {
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: rgba(15, 139, 141, 0.08);
+      margin-bottom: 8px;
+    }
+    .a2ui-stack {
+      display: grid;
       gap: 12px;
     }
-    h1 {
+    .a2ui-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .a2ui-card {
+      padding: 14px;
+      border-radius: 14px;
+      border: 1px solid var(--panel-border);
+      background: rgba(255, 255, 255, 0.7);
+    }
+    .a2ui-text {
       margin: 0;
-      font-size: 26px;
-      letter-spacing: 0.4px;
-    }
-    .badge {
-      font-size: 12px;
-      padding: 4px 10px;
-      border-radius: 999px;
-      background: #111;
-      color: #f8f4ec;
-      letter-spacing: 0.6px;
-      text-transform: uppercase;
-    }
-    p {
-      margin: 12px 0 0;
-      color: #3b3a37;
       line-height: 1.5;
     }
-    ul {
-      margin: 16px 0 0 18px;
-      padding: 0;
-      color: #2c2b28;
+    .a2ui-button {
+      align-self: start;
     }
-    li { margin-bottom: 8px; }
-    code {
-      font-family: "IBM Plex Mono", "Fira Mono", "Menlo", monospace;
-      font-size: 0.95em;
-      background: #f1ede6;
-      padding: 2px 6px;
-      border-radius: 6px;
-    }
-    .footer {
-      margin-top: 18px;
-      font-size: 12px;
-      color: #6a665f;
+    @media (max-width: 900px) {
+      main.layout {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
 <body>
-  <main>
-    <section class="card">
-      <div class="header">
-        <h1>Nexus Canvas</h1>
-        <span class="badge">ready</span>
+  <div class="app">
+    <header class="top">
+      <div class="brand">
+        <span class="dot"></span>
+        <div>
+          <div class="title">Nexus Canvas</div>
+          <div class="subtitle" id="session-id">Session</div>
+        </div>
       </div>
-      <p>This folder is served by the canvas host. Add or update files and they will appear here.</p>
-      <ul>
-        <li>Put an <code>index.html</code> in the canvas root to replace this page.</li>
-        <li>Live reload is available when enabled in <code>canvas_host</code>.</li>
-        <li>If you use A2UI assets, drop them into the configured <code>a2ui_root</code>.</li>
-      </ul>
-      <div class="footer">Tip: keep your canvas assets lightweight for fast previews.</div>
-    </section>
-  </main>
+      <div class="status">
+        <span class="pill offline" id="stream-status">offline</span>
+        <span class="pill outline" id="update-count">0 updates</span>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel">
+        <h2>Live View</h2>
+        <div id="canvas-root" class="canvas-root">
+          <div class="empty">
+            <h3>No payload yet</h3>
+            <p>Waiting for canvas updates on this session.</p>
+            <button id="demo-action">Send demo action</button>
+          </div>
+        </div>
+      </section>
+
+      <aside class="sidebar">
+        <div class="card">
+          <h3>Connection</h3>
+          <div class="meta">Stream: <span id="stream-label">starting...</span></div>
+          <div class="meta">Session: <span id="session-label">--</span></div>
+          <div class="meta">Last update: <span id="last-update">--</span></div>
+        </div>
+        <div class="card log">
+          <h3>Event Log</h3>
+          <div id="event-log"></div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <script>
+    (() => {
+      const root = document.getElementById("canvas-root");
+      const statusEl = document.getElementById("stream-status");
+      const streamLabel = document.getElementById("stream-label");
+      const sessionLabel = document.getElementById("session-label");
+      const sessionIdEl = document.getElementById("session-id");
+      const updateCountEl = document.getElementById("update-count");
+      const lastUpdateEl = document.getElementById("last-update");
+      const logEl = document.getElementById("event-log");
+      const demoBtn = document.getElementById("demo-action");
+      let updateCount = 0;
+      let a2uiState = { rootId: null, components: new Map() };
+
+      const parseSessionInfo = () => {
+        const parts = window.location.pathname.split("/").filter(Boolean);
+        const canvasIdx = parts.indexOf("canvas");
+        const namespace = canvasIdx > 0 ? "/" + parts.slice(0, canvasIdx).join("/") : "";
+        const sessionId = canvasIdx >= 0 ? parts[canvasIdx + 1] : "";
+        const basePath = namespace + "/canvas";
+        const token = new URLSearchParams(window.location.search).get("token") || "";
+        return { basePath, sessionId, token };
+      };
+
+      const setStatus = (state) => {
+        const online = state === "online";
+        statusEl.textContent = online ? "online" : state;
+        statusEl.classList.toggle("offline", !online);
+        streamLabel.textContent = state;
+      };
+
+      const addLog = (entry) => {
+        if (!logEl) return;
+        const item = document.createElement("div");
+        item.className = "log-entry";
+        item.textContent = entry;
+        logEl.prepend(item);
+      };
+
+      const renderPayload = (payload) => {
+        if (!payload) {
+          root.innerHTML = '<div class="empty"><h3>Waiting...</h3><p>No payload available yet.</p></div>';
+          return;
+        }
+        if (payload.html) {
+          root.innerHTML = payload.html;
+          return;
+        }
+        if (payload.text || payload.markdown) {
+          const text = payload.text || payload.markdown;
+          root.innerHTML = '<div class="a2ui-card"><p class="a2ui-text"></p></div>';
+          root.querySelector("p").textContent = text;
+          return;
+        }
+        if (payload.a2ui_jsonl || payload.a2ui) {
+          renderA2UI(payload.a2ui_jsonl || payload.a2ui);
+          return;
+        }
+        if (payload.surfaceUpdate || payload.beginRendering) {
+          renderA2UI(JSON.stringify(payload));
+          return;
+        }
+        root.innerHTML = '<pre class="a2ui-card"></pre>';
+        root.querySelector("pre").textContent = JSON.stringify(payload, null, 2);
+      };
+
+      const renderA2UI = (input) => {
+        let lines = [];
+        if (Array.isArray(input)) {
+          lines = input;
+        } else if (typeof input === "string") {
+          lines = input.split(/\r?\n/).filter(Boolean);
+        } else if (input && typeof input === "object") {
+          lines = [JSON.stringify(input)];
+        }
+        lines.forEach((line) => {
+          try {
+            const msg = typeof line === "string" ? JSON.parse(line) : line;
+            if (msg.surfaceUpdate && msg.surfaceUpdate.components) {
+              msg.surfaceUpdate.components.forEach((item) => {
+                a2uiState.components.set(item.id, item);
+              });
+            }
+            if (msg.beginRendering && msg.beginRendering.root) {
+              a2uiState.rootId = msg.beginRendering.root;
+            }
+            if (msg.deleteSurface) {
+              a2uiState = { rootId: null, components: new Map() };
+            }
+          } catch (err) {
+            console.warn("Invalid A2UI line", err);
+          }
+        });
+
+        if (!a2uiState.rootId) {
+          root.innerHTML = '<div class="empty"><h3>No A2UI root</h3><p>Waiting for beginRendering.</p></div>';
+          return;
+        }
+        root.innerHTML = "";
+        root.appendChild(renderComponent(a2uiState.rootId));
+      };
+
+      const renderComponent = (id) => {
+        const node = a2uiState.components.get(id);
+        if (!node) {
+          const missing = document.createElement("div");
+          missing.className = "a2ui-card";
+          missing.textContent = "Missing component " + id;
+          return missing;
+        }
+        const component = node.component || node;
+        const entry = Object.entries(component)[0];
+        if (!entry) {
+          const empty = document.createElement("div");
+          empty.className = "a2ui-card";
+          empty.textContent = JSON.stringify(component);
+          return empty;
+        }
+        const [type, value] = entry;
+        switch (type) {
+          case "Column": {
+            const wrapper = document.createElement("div");
+            wrapper.className = "a2ui-stack";
+            const children = value?.children?.explicitList || value?.children?.implicitList || [];
+            children.forEach((childId) => wrapper.appendChild(renderComponent(childId)));
+            return wrapper;
+          }
+          case "Row": {
+            const wrapper = document.createElement("div");
+            wrapper.className = "a2ui-row";
+            const children = value?.children?.explicitList || value?.children?.implicitList || [];
+            children.forEach((childId) => wrapper.appendChild(renderComponent(childId)));
+            return wrapper;
+          }
+          case "Card": {
+            const card = document.createElement("div");
+            card.className = "a2ui-card";
+            const children = value?.children?.explicitList || value?.children?.implicitList || [];
+            if (children.length === 0) {
+              card.textContent = "Card";
+            } else {
+              children.forEach((childId) => card.appendChild(renderComponent(childId)));
+            }
+            return card;
+          }
+          case "Text": {
+            const text = value?.text?.literalString || value?.text?.markdownString || value?.text?.plainText || "";
+            const p = document.createElement(value?.usageHint === "h1" ? "h1" : "p");
+            p.className = "a2ui-text";
+            p.textContent = text;
+            return p;
+          }
+          case "Button": {
+            const label = value?.label?.literalString || value?.text?.literalString || value?.title?.literalString || "Action";
+            const btn = document.createElement("button");
+            btn.className = "a2ui-button";
+            btn.textContent = label;
+            btn.addEventListener("click", () => {
+              sendUserAction({
+                name: value?.action?.name || value?.action?.action || label,
+                source_component_id: id,
+                context: { component: id, label }
+              });
+            });
+            return btn;
+          }
+          case "Image": {
+            const img = document.createElement("img");
+            img.src = value?.url || value?.src || "";
+            img.alt = value?.alt || "";
+            img.style.maxWidth = "100%";
+            img.style.borderRadius = "12px";
+            return img;
+          }
+          default: {
+            const fallback = document.createElement("pre");
+            fallback.className = "a2ui-card";
+            fallback.textContent = JSON.stringify(component, null, 2);
+            return fallback;
+          }
+        }
+      };
+
+      const sendUserAction = (action) => {
+        const info = parseSessionInfo();
+        if (!info.sessionId) return false;
+        const url = new URL(info.basePath + "/api/action", window.location.origin);
+        const payload = {
+          session_id: info.sessionId,
+          name: action.name || "action",
+          id: action.id || (crypto?.randomUUID ? crypto.randomUUID() : String(Date.now())),
+          source_component_id: action.source_component_id,
+          context: action.context || {},
+        };
+        return fetch(url.toString() + (info.token ? "?token=" + encodeURIComponent(info.token) : ""), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }).then((res) => res.ok).catch(() => false);
+      };
+
+      window.nexusSendUserAction = sendUserAction;
+
+      if (demoBtn) {
+        demoBtn.addEventListener("click", () => {
+          sendUserAction({
+            name: "demo.click",
+            source_component_id: "demo.button",
+            context: { at: Date.now() },
+          });
+        });
+      }
+
+      const info = parseSessionInfo();
+      if (!info.sessionId) {
+        setStatus("no session");
+        sessionLabel.textContent = "--";
+        sessionIdEl.textContent = "No session";
+        return;
+      }
+      sessionIdEl.textContent = info.sessionId;
+      sessionLabel.textContent = info.sessionId;
+
+      const streamUrl = new URL(info.basePath + "/api/stream", window.location.origin);
+      streamUrl.searchParams.set("session", info.sessionId);
+      if (info.token) {
+        streamUrl.searchParams.set("token", info.token);
+      }
+      setStatus("connecting");
+      const es = new EventSource(streamUrl.toString());
+      es.onopen = () => setStatus("online");
+      es.onerror = () => setStatus("offline");
+      es.onmessage = (evt) => {
+        try {
+          const msg = JSON.parse(evt.data);
+          updateCount += 1;
+          updateCountEl.textContent = updateCount + " updates";
+          if (msg.ts) {
+            const ts = new Date(msg.ts);
+            lastUpdateEl.textContent = ts.toLocaleTimeString();
+          }
+          addLog(msg.type + " @ " + new Date().toLocaleTimeString());
+          if (msg.payload !== undefined) {
+            renderPayload(msg.payload);
+          }
+        } catch (err) {
+          console.warn("stream parse", err);
+        }
+      };
+    })();
+  </script>
 </body>
 </html>`
 	defaultA2UIIndexHTML = `<!doctype html>
@@ -255,8 +664,8 @@ const (
     const hasAndroid = () => !!(window.nexusCanvasA2UIAction || window.clawdbotCanvasA2UIAction);
     statusEl.textContent =
       "Bridge: " + (send ? "ready" : "missing") +
-      " · iOS=" + (hasIOS() ? "yes" : "no") +
-      " · Android=" + (hasAndroid() ? "yes" : "no");
+      " | iOS=" + (hasIOS() ? "yes" : "no") +
+      " | Android=" + (hasAndroid() ? "yes" : "no");
 
     const sendAction = (name, sourceComponentId) => {
       if (typeof send !== "function") {

@@ -19,6 +19,21 @@ import (
 // This method blocks until the gRPC server stops or encounters an error.
 func (s *Server) Start(ctx context.Context) error {
 	s.startTime = time.Now()
+
+	// Acquire singleton lock to prevent multiple gateway instances
+	stateDir := s.config.Workspace.Path
+	if stateDir == "" {
+		stateDir = ".nexus"
+	}
+	lock, err := AcquireGatewayLock(GatewayLockOptions{
+		StateDir:   stateDir,
+		ConfigPath: s.configPath,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to acquire gateway lock: %w", err)
+	}
+	s.singletonLock = lock
+
 	if s.mcpManager != nil {
 		if err := s.mcpManager.Start(ctx); err != nil {
 			return fmt.Errorf("failed to start MCP manager: %w", err)
@@ -181,6 +196,13 @@ func (s *Server) Stop(ctx context.Context) error {
 	if closer, ok := s.jobStore.(interface{ Close() error }); ok {
 		if err := closer.Close(); err != nil {
 			s.logger.Error("error closing job store", "error", err)
+		}
+	}
+
+	// Release the singleton lock
+	if s.singletonLock != nil {
+		if err := s.singletonLock.Release(); err != nil {
+			s.logger.Error("error releasing gateway lock", "error", err)
 		}
 	}
 

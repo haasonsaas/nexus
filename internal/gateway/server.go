@@ -136,6 +136,9 @@ type Server struct {
 	// httpServer serves the HTTP dashboard, API, and control plane WebSocket
 	httpServer   *http.Server
 	httpListener net.Listener
+
+	// singletonLock prevents multiple gateway instances from running
+	singletonLock *GatewayLockHandle
 }
 
 // NewServer creates a new gateway server with the given configuration and logger.

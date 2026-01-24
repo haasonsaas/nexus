@@ -692,6 +692,176 @@ func TestValidateConfig(t *testing.T) {
 	}
 }
 
+func TestValidateManifest(t *testing.T) {
+	tests := []struct {
+		name       string
+		manifest   *AgentManifest
+		wantErrors int
+	}{
+		{
+			name:       "nil manifest",
+			manifest:   nil,
+			wantErrors: 1,
+		},
+		{
+			name: "valid manifest",
+			manifest: &AgentManifest{
+				Agents: []AgentDefinition{
+					{ID: "agent-1", Name: "Agent 1"},
+					{ID: "agent-2", Name: "Agent 2"},
+				},
+			},
+			wantErrors: 0,
+		},
+		{
+			name: "empty agent ID",
+			manifest: &AgentManifest{
+				Agents: []AgentDefinition{
+					{ID: "", Name: "No ID"},
+				},
+			},
+			wantErrors: 1,
+		},
+		{
+			name: "duplicate agent IDs",
+			manifest: &AgentManifest{
+				Agents: []AgentDefinition{
+					{ID: "agent-1", Name: "Agent 1"},
+					{ID: "agent-1", Name: "Duplicate"},
+				},
+			},
+			wantErrors: 1,
+		},
+		{
+			name: "duplicate agent directories",
+			manifest: &AgentManifest{
+				Agents: []AgentDefinition{
+					{ID: "agent-1", Name: "Agent 1", AgentDir: "/shared/dir"},
+					{ID: "agent-2", Name: "Agent 2", AgentDir: "/shared/dir"},
+				},
+			},
+			wantErrors: 1,
+		},
+		{
+			name: "duplicate agent directories with different paths to same location",
+			manifest: &AgentManifest{
+				Agents: []AgentDefinition{
+					{ID: "agent-1", Name: "Agent 1", AgentDir: "/shared/dir"},
+					{ID: "agent-2", Name: "Agent 2", AgentDir: "/shared/./dir"},
+				},
+			},
+			wantErrors: 1,
+		},
+		{
+			name: "empty agent_dir is allowed (uses default)",
+			manifest: &AgentManifest{
+				Agents: []AgentDefinition{
+					{ID: "agent-1", Name: "Agent 1", AgentDir: ""},
+					{ID: "agent-2", Name: "Agent 2", AgentDir: ""},
+				},
+			},
+			wantErrors: 0,
+		},
+		{
+			name: "unique agent directories",
+			manifest: &AgentManifest{
+				Agents: []AgentDefinition{
+					{ID: "agent-1", Name: "Agent 1", AgentDir: "/dir1"},
+					{ID: "agent-2", Name: "Agent 2", AgentDir: "/dir2"},
+				},
+			},
+			wantErrors: 0,
+		},
+		{
+			name: "handoff target not found",
+			manifest: &AgentManifest{
+				Agents: []AgentDefinition{
+					{
+						ID:   "agent-1",
+						Name: "Agent 1",
+						HandoffRules: []HandoffRule{
+							{TargetAgentID: "nonexistent"},
+						},
+					},
+				},
+			},
+			wantErrors: 1,
+		},
+		{
+			name: "multiple errors",
+			manifest: &AgentManifest{
+				Agents: []AgentDefinition{
+					{ID: "", Name: "No ID"},
+					{ID: "agent-1", Name: "Agent 1", AgentDir: "/shared"},
+					{ID: "agent-1", Name: "Duplicate", AgentDir: "/shared"},
+				},
+			},
+			wantErrors: 3, // empty ID, duplicate ID, duplicate dir
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errors := ValidateManifest(tt.manifest)
+			if len(errors) != tt.wantErrors {
+				t.Errorf("expected %d errors, got %d: %v", tt.wantErrors, len(errors), errors)
+			}
+		})
+	}
+}
+
+func TestLoadAgentsManifest_ValidationErrors(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	t.Run("duplicate agent IDs fails", func(t *testing.T) {
+		manifestPath := filepath.Join(tmpDir, "dup_ids.md")
+		content := `# Agent: test-agent
+Name: Test Agent
+
+---
+
+# Agent: test-agent
+Name: Duplicate Agent
+`
+		if err := os.WriteFile(manifestPath, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write manifest: %v", err)
+		}
+
+		_, err := LoadAgentsManifest(manifestPath)
+		if err == nil {
+			t.Error("expected error for duplicate agent IDs")
+		}
+		if !containsSubstring(err.Error(), "duplicate agent ID") {
+			t.Errorf("expected 'duplicate agent ID' error, got: %v", err)
+		}
+	})
+
+	t.Run("duplicate agent directories fails", func(t *testing.T) {
+		manifestPath := filepath.Join(tmpDir, "dup_dirs.md")
+		content := `# Agent: agent-1
+Name: Agent 1
+AgentDir: /shared/state
+
+---
+
+# Agent: agent-2
+Name: Agent 2
+AgentDir: /shared/state
+`
+		if err := os.WriteFile(manifestPath, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write manifest: %v", err)
+		}
+
+		_, err := LoadAgentsManifest(manifestPath)
+		if err == nil {
+			t.Error("expected error for duplicate agent directories")
+		}
+		if !containsSubstring(err.Error(), "duplicate agent_dir") {
+			t.Errorf("expected 'duplicate agent_dir' error, got: %v", err)
+		}
+	})
+}
+
 func TestExampleAgentsMD(t *testing.T) {
 	example := ExampleAgentsMD()
 

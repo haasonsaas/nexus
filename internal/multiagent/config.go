@@ -94,7 +94,17 @@ func LoadAgentsManifest(path string) (*AgentManifest, error) {
 		return nil, fmt.Errorf("failed to read AGENTS.md: %w", err)
 	}
 
-	return ParseAgentsMarkdown(string(data), path)
+	manifest, err := ParseAgentsMarkdown(string(data), path)
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate the manifest for duplicate IDs and directories
+	if errs := ValidateManifest(manifest); len(errs) > 0 {
+		return nil, fmt.Errorf("manifest validation failed: %w", errs[0])
+	}
+
+	return manifest, nil
 }
 
 // ParseAgentsMarkdown parses agent definitions from markdown content.
@@ -449,6 +459,56 @@ func ValidateConfig(config *MultiAgentConfig) []error {
 		if rule.TargetAgentID != "" && !agentIDs[rule.TargetAgentID] {
 			errors = append(errors, fmt.Errorf("global rule %d: handoff target not found: %s",
 				i, rule.TargetAgentID))
+		}
+	}
+
+	return errors
+}
+
+// ValidateManifest validates an agent manifest for configuration errors.
+// It checks for duplicate agent IDs and duplicate agent directories.
+func ValidateManifest(manifest *AgentManifest) []error {
+	if manifest == nil {
+		return []error{fmt.Errorf("manifest is nil")}
+	}
+
+	var errors []error
+
+	// Check for duplicate agent IDs
+	agentIDs := make(map[string]bool)
+	for _, agent := range manifest.Agents {
+		if agent.ID == "" {
+			errors = append(errors, fmt.Errorf("agent has empty ID"))
+			continue
+		}
+		if agentIDs[agent.ID] {
+			errors = append(errors, fmt.Errorf("duplicate agent ID: %s", agent.ID))
+		}
+		agentIDs[agent.ID] = true
+	}
+
+	// Check for duplicate agent state directories
+	// This prevents auth/session state collisions and token invalidation
+	agentDirs := make(map[string]string)
+	for _, agent := range manifest.Agents {
+		dir := normalizeAgentDir(agent.AgentDir)
+		if dir == "" {
+			continue
+		}
+		if existing, ok := agentDirs[dir]; ok {
+			errors = append(errors, fmt.Errorf("duplicate agent_dir %q for agents %s and %s: each agent must have a unique agent_dir", dir, existing, agent.ID))
+			continue
+		}
+		agentDirs[dir] = agent.ID
+	}
+
+	// Validate handoff targets exist
+	for _, agent := range manifest.Agents {
+		for _, rule := range agent.HandoffRules {
+			if rule.TargetAgentID != "" && !agentIDs[rule.TargetAgentID] {
+				errors = append(errors, fmt.Errorf("agent %s: handoff target not found: %s",
+					agent.ID, rule.TargetAgentID))
+			}
 		}
 	}
 

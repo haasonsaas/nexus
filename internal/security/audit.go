@@ -1,27 +1,25 @@
-// Package security provides security auditing and hardening features.
+// Package security provides security audit capabilities for runtime configuration
+// and filesystem permission validation.
 package security
 
 import (
-	"context"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
-
-	"github.com/haasonsaas/nexus/internal/config"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 )
 
-// Severity indicates the severity of a security finding.
+// Severity represents the severity level of a security finding.
 type Severity string
 
 const (
-	SeverityInfo     Severity = "info"
-	SeverityWarn     Severity = "warn"
 	SeverityCritical Severity = "critical"
+	SeverityHigh     Severity = "high"
+	SeverityMedium   Severity = "medium"
+	SeverityWarn     Severity = "warn"
+	SeverityLow      Severity = "low"
+	SeverityInfo     Severity = "info"
 )
 
 // Finding represents a single security audit finding.
@@ -33,304 +31,364 @@ type Finding struct {
 	Remediation string   `json:"remediation,omitempty"`
 }
 
-// Summary provides counts of findings by severity.
-type Summary struct {
-	Critical int `json:"critical"`
-	Warn     int `json:"warn"`
-	Info     int `json:"info"`
+// AuditResult contains all findings from a security audit.
+type AuditResult struct {
+	Findings []Finding `json:"findings"`
 }
 
-// Report contains the complete security audit results.
-type Report struct {
-	Timestamp int64      `json:"ts"`
-	Summary   Summary    `json:"summary"`
-	Findings  []Finding  `json:"findings"`
-	Deep      *DeepAudit `json:"deep,omitempty"`
+// HasCritical returns true if any findings are critical severity.
+func (r *AuditResult) HasCritical() bool {
+	for _, f := range r.Findings {
+		if f.Severity == SeverityCritical {
+			return true
+		}
+	}
+	return false
 }
 
-// DeepAudit contains results from deep connectivity tests.
-type DeepAudit struct {
-	Gateway *GatewayProbe `json:"gateway,omitempty"`
+// HasHighOrAbove returns true if any findings are high or critical severity.
+func (r *AuditResult) HasHighOrAbove() bool {
+	for _, f := range r.Findings {
+		if f.Severity == SeverityCritical || f.Severity == SeverityHigh {
+			return true
+		}
+	}
+	return false
 }
 
-// GatewayProbe contains gateway connectivity test results.
-type GatewayProbe struct {
-	Attempted bool   `json:"attempted"`
-	URL       string `json:"url,omitempty"`
-	OK        bool   `json:"ok"`
-	Error     string `json:"error,omitempty"`
+// CountBySeverity returns the number of findings for each severity level.
+func (r *AuditResult) CountBySeverity() map[Severity]int {
+	counts := make(map[Severity]int)
+	for _, f := range r.Findings {
+		counts[f.Severity]++
+	}
+	return counts
 }
 
-// AuditOptions configures the security audit.
-type AuditOptions struct {
-	// ConfigPath is the path to the configuration file.
-	ConfigPath string
-	// StateDir is the path to the state directory.
+// AuditConfig holds configuration for the security audit.
+type AuditConfig struct {
+	// StateDir is the directory where state files are stored.
 	StateDir string
-	// IncludeFilesystem enables filesystem permission checks.
-	IncludeFilesystem bool
-	// IncludeGateway enables gateway security checks.
-	IncludeGateway bool
-	// IncludeChannels enables channel-specific security checks.
-	IncludeChannels bool
-	// Deep enables deep connectivity probes.
-	Deep bool
-	// DeepTimeout is the timeout for deep probes.
-	DeepTimeout time.Duration
+	// ConfigFile is the path to the configuration file.
+	ConfigFile string
+	// CheckSymlinks enables symlink detection.
+	CheckSymlinks bool
+	// AllowGroupReadable allows group-readable permissions on sensitive files.
+	AllowGroupReadable bool
 }
 
-// DefaultAuditOptions returns sensible defaults for security auditing.
-func DefaultAuditOptions() AuditOptions {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		homeDir = "."
-	}
-	return AuditOptions{
-		ConfigPath:        filepath.Join(homeDir, ".nexus", "nexus.yaml"),
-		StateDir:          filepath.Join(homeDir, ".nexus"),
-		IncludeFilesystem: true,
-		IncludeGateway:    true,
-		IncludeChannels:   true,
-		Deep:              false,
-		DeepTimeout:       10 * time.Second,
-	}
-}
-
-// Auditor performs security audits.
+// Auditor performs security audits on the system.
 type Auditor struct {
-	opts AuditOptions
+	config AuditConfig
 }
 
-// NewAuditor creates a new security auditor with the given options.
-func NewAuditor(opts AuditOptions) *Auditor {
-	return &Auditor{opts: opts}
+// NewAuditor creates a new security auditor.
+func NewAuditor(config AuditConfig) *Auditor {
+	return &Auditor{config: config}
 }
 
-// Audit performs a security audit and returns a report.
-func (a *Auditor) Audit(ctx context.Context) (*Report, error) {
-	var findings []Finding
+// Run performs a full security audit and returns the results.
+func (a *Auditor) Run() (*AuditResult, error) {
+	result := &AuditResult{}
 
-	if a.opts.IncludeFilesystem {
-		fsFindings := a.auditFilesystem()
-		findings = append(findings, fsFindings...)
+	// Collect filesystem findings
+	fsFindings, err := a.collectFilesystemFindings()
+	if err != nil {
+		return nil, fmt.Errorf("filesystem audit failed: %w", err)
 	}
+	result.Findings = append(result.Findings, fsFindings...)
 
-	if a.opts.IncludeGateway {
-		gwFindings := a.auditGatewayConfig()
-		findings = append(findings, gwFindings...)
-	}
-
-	report := &Report{
-		Timestamp: time.Now().Unix(),
-		Summary:   countBySeverity(findings),
-		Findings:  findings,
-	}
-
-	return report, nil
+	return result, nil
 }
 
-// auditFilesystem checks filesystem permissions for security issues.
-func (a *Auditor) auditFilesystem() []Finding {
+// collectFilesystemFindings checks filesystem permissions.
+func (a *Auditor) collectFilesystemFindings() ([]Finding, error) {
 	var findings []Finding
 
 	// Check state directory
-	if info, err := os.Lstat(a.opts.StateDir); err == nil {
-		findings = append(findings, a.checkDirPermissions(a.opts.StateDir, info, "state_dir")...)
+	if a.config.StateDir != "" {
+		dirFindings, err := a.checkDirectory(a.config.StateDir, "state directory")
+		if err != nil && !os.IsNotExist(err) {
+			return nil, err
+		}
+		findings = append(findings, dirFindings...)
 	}
 
 	// Check config file
-	if info, err := os.Lstat(a.opts.ConfigPath); err == nil {
-		findings = append(findings, a.checkFilePermissions(a.opts.ConfigPath, info, "config")...)
-	}
-
-	// Check credentials directory
-	credsDir := filepath.Join(a.opts.StateDir, "credentials")
-	if info, err := os.Lstat(credsDir); err == nil {
-		findings = append(findings, a.checkDirPermissions(credsDir, info, "credentials_dir")...)
-	}
-
-	// Check for sensitive files with loose permissions
-	sensitivePatterns := []string{"*.key", "*.pem", "*.token", "credentials.json"}
-	for _, pattern := range sensitivePatterns {
-		matches, err := filepath.Glob(filepath.Join(a.opts.StateDir, pattern))
-		if err != nil {
-			continue // Invalid pattern, skip
+	if a.config.ConfigFile != "" {
+		fileFindings, err := a.checkConfigFile(a.config.ConfigFile)
+		if err != nil && !os.IsNotExist(err) {
+			return nil, err
 		}
-		for _, match := range matches {
-			if info, err := os.Lstat(match); err == nil {
-				findings = append(findings, a.checkFilePermissions(match, info, "sensitive_file")...)
-			}
-		}
+		findings = append(findings, fileFindings...)
 	}
 
-	return findings
+	return findings, nil
 }
 
-// titleCase converts a prefix like "state_dir" to "State Dir".
-func titleCase(s string) string {
-	caser := cases.Title(language.English)
-	return caser.String(strings.ReplaceAll(s, "_", " "))
-}
-
-// checkDirPermissions checks directory permissions for security issues.
-func (a *Auditor) checkDirPermissions(path string, info fs.FileInfo, prefix string) []Finding {
-	var findings []Finding
-	mode := info.Mode()
-
-	// Check if symlink
-	if mode&os.ModeSymlink != 0 {
-		findings = append(findings, Finding{
-			CheckID:  fmt.Sprintf("fs.%s.symlink", prefix),
-			Severity: SeverityWarn,
-			Title:    fmt.Sprintf("%s is a symlink", titleCase(prefix)),
-			Detail:   fmt.Sprintf("%s is a symlink; treat this as an extra trust boundary.", path),
-		})
-	}
-
-	perm := mode.Perm()
-
-	// World-writable
-	if perm&0002 != 0 {
-		findings = append(findings, Finding{
-			CheckID:     fmt.Sprintf("fs.%s.perms_world_writable", prefix),
-			Severity:    SeverityCritical,
-			Title:       fmt.Sprintf("%s is world-writable", titleCase(prefix)),
-			Detail:      fmt.Sprintf("%s mode=%04o; other users can write to your data.", path, perm),
-			Remediation: fmt.Sprintf("chmod 700 %s", path),
-		})
-	} else if perm&0020 != 0 {
-		// Group-writable
-		findings = append(findings, Finding{
-			CheckID:     fmt.Sprintf("fs.%s.perms_group_writable", prefix),
-			Severity:    SeverityWarn,
-			Title:       fmt.Sprintf("%s is group-writable", titleCase(prefix)),
-			Detail:      fmt.Sprintf("%s mode=%04o; group users can write to your data.", path, perm),
-			Remediation: fmt.Sprintf("chmod 700 %s", path),
-		})
-	} else if perm&0044 != 0 {
-		// Readable by others
-		findings = append(findings, Finding{
-			CheckID:     fmt.Sprintf("fs.%s.perms_readable", prefix),
-			Severity:    SeverityWarn,
-			Title:       fmt.Sprintf("%s is readable by others", titleCase(prefix)),
-			Detail:      fmt.Sprintf("%s mode=%04o; consider restricting to 700.", path, perm),
-			Remediation: fmt.Sprintf("chmod 700 %s", path),
-		})
-	}
-
-	return findings
-}
-
-// checkFilePermissions checks file permissions for security issues.
-func (a *Auditor) checkFilePermissions(path string, info fs.FileInfo, prefix string) []Finding {
-	var findings []Finding
-	mode := info.Mode()
-
-	// Check if symlink
-	if mode&os.ModeSymlink != 0 {
-		findings = append(findings, Finding{
-			CheckID:  fmt.Sprintf("fs.%s.symlink", prefix),
-			Severity: SeverityWarn,
-			Title:    fmt.Sprintf("%s is a symlink", titleCase(prefix)),
-			Detail:   fmt.Sprintf("%s is a symlink; make sure you trust its target.", path),
-		})
-	}
-
-	perm := mode.Perm()
-
-	// World or group writable
-	if perm&0022 != 0 {
-		findings = append(findings, Finding{
-			CheckID:     fmt.Sprintf("fs.%s.perms_writable", prefix),
-			Severity:    SeverityCritical,
-			Title:       fmt.Sprintf("%s is writable by others", titleCase(prefix)),
-			Detail:      fmt.Sprintf("%s mode=%04o; another user could modify sensitive configuration.", path, perm),
-			Remediation: fmt.Sprintf("chmod 600 %s", path),
-		})
-	} else if perm&0004 != 0 {
-		// World-readable
-		findings = append(findings, Finding{
-			CheckID:     fmt.Sprintf("fs.%s.perms_world_readable", prefix),
-			Severity:    SeverityCritical,
-			Title:       fmt.Sprintf("%s is world-readable", titleCase(prefix)),
-			Detail:      fmt.Sprintf("%s mode=%04o; file can contain tokens and secrets.", path, perm),
-			Remediation: fmt.Sprintf("chmod 600 %s", path),
-		})
-	} else if perm&0040 != 0 {
-		// Group-readable
-		findings = append(findings, Finding{
-			CheckID:     fmt.Sprintf("fs.%s.perms_group_readable", prefix),
-			Severity:    SeverityWarn,
-			Title:       fmt.Sprintf("%s is group-readable", titleCase(prefix)),
-			Detail:      fmt.Sprintf("%s mode=%04o; file can contain tokens and secrets.", path, perm),
-			Remediation: fmt.Sprintf("chmod 600 %s", path),
-		})
-	}
-
-	return findings
-}
-
-// auditGatewayConfig checks gateway configuration for security issues.
-func (a *Auditor) auditGatewayConfig() []Finding {
+// checkDirectory audits permissions on a directory.
+func (a *Auditor) checkDirectory(path, description string) ([]Finding, error) {
 	var findings []Finding
 
-	// Try to load the config file
-	cfg, err := config.Load(a.opts.ConfigPath)
+	info, err := os.Lstat(path)
 	if err != nil {
-		// If config doesn't exist or can't be parsed, skip gateway checks
-		return findings
+		if os.IsNotExist(err) {
+			return nil, nil // Directory doesn't exist, nothing to check
+		}
+		return nil, err
 	}
 
-	// Run gateway configuration audit
-	findings = append(findings, AuditGatewayConfig(cfg)...)
+	// Check if it's a symlink
+	if a.config.CheckSymlinks && info.Mode()&os.ModeSymlink != 0 {
+		findings = append(findings, Finding{
+			CheckID:     "FS-001",
+			Severity:    SeverityMedium,
+			Title:       fmt.Sprintf("%s is a symlink", description),
+			Detail:      fmt.Sprintf("The %s at %s is a symbolic link, which could be exploited for symlink attacks.", description, path),
+			Remediation: "Use a real directory instead of a symlink for sensitive data storage.",
+		})
+	}
 
-	return findings
-}
+	// Check permissions
+	mode := info.Mode().Perm()
 
-// countBySeverity counts findings by severity level.
-func countBySeverity(findings []Finding) Summary {
-	var summary Summary
-	for _, f := range findings {
-		switch f.Severity {
-		case SeverityCritical:
-			summary.Critical++
-		case SeverityWarn:
-			summary.Warn++
-		case SeverityInfo:
-			summary.Info++
+	if isWorldWritable(mode) {
+		findings = append(findings, Finding{
+			CheckID:     "FS-002",
+			Severity:    SeverityCritical,
+			Title:       fmt.Sprintf("%s is world-writable", description),
+			Detail:      fmt.Sprintf("The %s at %s has permissions %o, allowing any user to write to it.", description, path, mode),
+			Remediation: fmt.Sprintf("Run: chmod o-w %s", path),
+		})
+	}
+
+	if isGroupWritable(mode) {
+		findings = append(findings, Finding{
+			CheckID:     "FS-003",
+			Severity:    SeverityHigh,
+			Title:       fmt.Sprintf("%s is group-writable", description),
+			Detail:      fmt.Sprintf("The %s at %s has permissions %o, allowing group members to write to it.", description, path, mode),
+			Remediation: fmt.Sprintf("Run: chmod g-w %s", path),
+		})
+	}
+
+	if isWorldReadable(mode) {
+		findings = append(findings, Finding{
+			CheckID:     "FS-004",
+			Severity:    SeverityMedium,
+			Title:       fmt.Sprintf("%s is world-readable", description),
+			Detail:      fmt.Sprintf("The %s at %s has permissions %o, allowing any user to read its contents.", description, path, mode),
+			Remediation: fmt.Sprintf("Run: chmod o-r %s", path),
+		})
+	}
+
+	// Check files within the directory
+	if info.IsDir() {
+		err = filepath.WalkDir(path, func(filePath string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return nil // Skip files we can't access
+			}
+			if filePath == path {
+				return nil // Skip the root directory itself
+			}
+
+			fileInfo, err := d.Info()
+			if err != nil {
+				return nil
+			}
+
+			fileMode := fileInfo.Mode().Perm()
+
+			// Check for sensitive files with bad permissions
+			if isSensitiveFile(filePath) {
+				if isWorldReadable(fileMode) {
+					findings = append(findings, Finding{
+						CheckID:     "FS-005",
+						Severity:    SeverityHigh,
+						Title:       "Sensitive file is world-readable",
+						Detail:      fmt.Sprintf("The file %s has permissions %o, exposing sensitive data.", filePath, fileMode),
+						Remediation: fmt.Sprintf("Run: chmod 600 %s", filePath),
+					})
+				}
+
+				if !a.config.AllowGroupReadable && isGroupReadable(fileMode) {
+					findings = append(findings, Finding{
+						CheckID:     "FS-006",
+						Severity:    SeverityMedium,
+						Title:       "Sensitive file is group-readable",
+						Detail:      fmt.Sprintf("The file %s has permissions %o, allowing group access.", filePath, fileMode),
+						Remediation: fmt.Sprintf("Run: chmod 600 %s", filePath),
+					})
+				}
+			}
+
+			return nil
+		})
+		if err != nil {
+			return findings, err
 		}
 	}
-	return summary
+
+	return findings, nil
 }
 
-// FormatReport formats a security audit report for display.
-func FormatReport(report *Report) string {
-	var sb strings.Builder
+// checkConfigFile audits permissions on the config file.
+func (a *Auditor) checkConfigFile(path string) ([]Finding, error) {
+	var findings []Finding
 
-	sb.WriteString("Security Audit Report\n")
-	sb.WriteString("=====================\n")
-	sb.WriteString(fmt.Sprintf("Time: %s\n\n", time.Unix(report.Timestamp, 0).Format(time.RFC3339)))
-
-	sb.WriteString("Summary:\n")
-	sb.WriteString(fmt.Sprintf("  Critical: %d\n", report.Summary.Critical))
-	sb.WriteString(fmt.Sprintf("  Warnings: %d\n", report.Summary.Warn))
-	sb.WriteString(fmt.Sprintf("  Info:     %d\n\n", report.Summary.Info))
-
-	if len(report.Findings) == 0 {
-		sb.WriteString("No issues found.\n")
-		return sb.String()
+	info, err := os.Lstat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
 	}
 
-	sb.WriteString("Findings:\n")
-	for i, f := range report.Findings {
-		severity := strings.ToUpper(string(f.Severity))
-		sb.WriteString(fmt.Sprintf("\n%d. [%s] %s\n", i+1, severity, f.Title))
-		sb.WriteString(fmt.Sprintf("   Check: %s\n", f.CheckID))
-		sb.WriteString(fmt.Sprintf("   Detail: %s\n", f.Detail))
-		if f.Remediation != "" {
-			sb.WriteString(fmt.Sprintf("   Fix: %s\n", f.Remediation))
+	// Check if it's a symlink
+	if a.config.CheckSymlinks && info.Mode()&os.ModeSymlink != 0 {
+		findings = append(findings, Finding{
+			CheckID:     "FS-010",
+			Severity:    SeverityMedium,
+			Title:       "Config file is a symlink",
+			Detail:      fmt.Sprintf("The configuration file at %s is a symbolic link.", path),
+			Remediation: "Use a real file instead of a symlink for the configuration.",
+		})
+	}
+
+	mode := info.Mode().Perm()
+
+	if isWorldWritable(mode) {
+		findings = append(findings, Finding{
+			CheckID:     "FS-011",
+			Severity:    SeverityCritical,
+			Title:       "Config file is world-writable",
+			Detail:      fmt.Sprintf("The configuration file at %s has permissions %o, allowing any user to modify it.", path, mode),
+			Remediation: fmt.Sprintf("Run: chmod 600 %s", path),
+		})
+	}
+
+	if isGroupWritable(mode) {
+		findings = append(findings, Finding{
+			CheckID:     "FS-012",
+			Severity:    SeverityHigh,
+			Title:       "Config file is group-writable",
+			Detail:      fmt.Sprintf("The configuration file at %s has permissions %o, allowing group members to modify it.", path, mode),
+			Remediation: fmt.Sprintf("Run: chmod 600 %s", path),
+		})
+	}
+
+	if isWorldReadable(mode) {
+		findings = append(findings, Finding{
+			CheckID:     "FS-013",
+			Severity:    SeverityHigh,
+			Title:       "Config file is world-readable",
+			Detail:      fmt.Sprintf("The configuration file at %s has permissions %o and may contain secrets.", path, mode),
+			Remediation: fmt.Sprintf("Run: chmod 600 %s", path),
+		})
+	}
+
+	if !a.config.AllowGroupReadable && isGroupReadable(mode) {
+		findings = append(findings, Finding{
+			CheckID:     "FS-014",
+			Severity:    SeverityMedium,
+			Title:       "Config file is group-readable",
+			Detail:      fmt.Sprintf("The configuration file at %s has permissions %o.", path, mode),
+			Remediation: fmt.Sprintf("Run: chmod 600 %s", path),
+		})
+	}
+
+	return findings, nil
+}
+
+// Permission check helpers
+
+func isWorldWritable(mode fs.FileMode) bool {
+	return mode&0002 != 0
+}
+
+func isGroupWritable(mode fs.FileMode) bool {
+	return mode&0020 != 0
+}
+
+func isWorldReadable(mode fs.FileMode) bool {
+	return mode&0004 != 0
+}
+
+func isGroupReadable(mode fs.FileMode) bool {
+	return mode&0040 != 0
+}
+
+// isSensitiveFile checks if a file path indicates sensitive content.
+func isSensitiveFile(path string) bool {
+	base := strings.ToLower(filepath.Base(path))
+
+	sensitivePatterns := []string{
+		"key",
+		"secret",
+		"token",
+		"credential",
+		"password",
+		"private",
+		".pem",
+		".key",
+		".p12",
+		".pfx",
+		"id_rsa",
+		"id_ed25519",
+		"id_ecdsa",
+		"id_dsa",
+	}
+
+	for _, pattern := range sensitivePatterns {
+		if strings.Contains(base, pattern) {
+			return true
 		}
 	}
 
-	return sb.String()
+	// Check for environment files
+	if base == ".env" || strings.HasPrefix(base, ".env.") {
+		return true
+	}
+
+	return false
 }
+
+// CheckPath performs a quick permission check on a single path.
+// Returns findings without running a full audit.
+func CheckPath(path string) ([]Finding, error) {
+	auditor := NewAuditor(AuditConfig{
+		CheckSymlinks: true,
+	})
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+
+	if info.IsDir() {
+		return auditor.checkDirectory(path, "directory")
+	}
+	return auditor.checkConfigFile(path)
+}
+
+// ValidatePermissions checks if a path has secure permissions.
+// Returns an error if permissions are insecure.
+func ValidatePermissions(path string, maxMode fs.FileMode) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+
+	mode := info.Mode().Perm()
+	if mode&^maxMode != 0 {
+		return fmt.Errorf("insecure permissions %o on %s (maximum allowed: %o)", mode, path, maxMode)
+	}
+
+	return nil
+}
+
+// SecureFileMode is the recommended permission mode for sensitive files.
+const SecureFileMode fs.FileMode = 0600
+
+// SecureDirMode is the recommended permission mode for sensitive directories.
+const SecureDirMode fs.FileMode = 0700

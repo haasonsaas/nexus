@@ -311,6 +311,16 @@ type ChannelPolicyConfig struct {
 	AllowFrom []string `yaml:"allow_from"`
 }
 
+// ChannelMarkdownConfig configures markdown processing for a channel.
+type ChannelMarkdownConfig struct {
+	// Tables specifies how to handle markdown tables: "off", "bullets", or "code".
+	// - "off": Leave tables unchanged (for channels that support markdown tables)
+	// - "bullets": Convert tables to bullet lists (for channels like Signal, WhatsApp)
+	// - "code": Wrap tables in code blocks (for channels like Slack, Discord)
+	// Default depends on channel type.
+	Tables string `yaml:"tables"`
+}
+
 type WhatsAppConfig struct {
 	Enabled      bool   `yaml:"enabled"`
 	SessionPath  string `yaml:"session_path"`
@@ -321,6 +331,7 @@ type WhatsAppConfig struct {
 	Group ChannelPolicyConfig `yaml:"group"`
 
 	Presence WhatsAppPresenceConfig `yaml:"presence"`
+	Markdown ChannelMarkdownConfig  `yaml:"markdown"`
 }
 
 type WhatsAppPresenceConfig struct {
@@ -339,6 +350,7 @@ type SignalConfig struct {
 	Group ChannelPolicyConfig `yaml:"group"`
 
 	Presence SignalPresenceConfig `yaml:"presence"`
+	Markdown ChannelMarkdownConfig `yaml:"markdown"`
 }
 
 type SignalPresenceConfig struct {
@@ -376,6 +388,8 @@ type TelegramConfig struct {
 
 	DM    ChannelPolicyConfig `yaml:"dm"`
 	Group ChannelPolicyConfig `yaml:"group"`
+
+	Markdown ChannelMarkdownConfig `yaml:"markdown"`
 }
 
 type DiscordConfig struct {
@@ -385,6 +399,8 @@ type DiscordConfig struct {
 
 	DM    ChannelPolicyConfig `yaml:"dm"`
 	Group ChannelPolicyConfig `yaml:"group"`
+
+	Markdown ChannelMarkdownConfig `yaml:"markdown"`
 }
 
 type SlackConfig struct {
@@ -395,6 +411,8 @@ type SlackConfig struct {
 
 	DM    ChannelPolicyConfig `yaml:"dm"`
 	Group ChannelPolicyConfig `yaml:"group"`
+
+	Markdown ChannelMarkdownConfig `yaml:"markdown"`
 }
 
 type TeamsConfig struct {
@@ -436,6 +454,35 @@ type LLMConfig struct {
 	// Providers are tried in order until one succeeds.
 	// Example: ["openai", "google"] - try OpenAI first, then Google.
 	FallbackChain []string `yaml:"fallback_chain"`
+
+	// Bedrock configures AWS Bedrock model discovery.
+	Bedrock BedrockConfig `yaml:"bedrock"`
+}
+
+// BedrockConfig configures AWS Bedrock model discovery.
+type BedrockConfig struct {
+	// Enabled enables automatic discovery of Bedrock foundation models.
+	Enabled bool `yaml:"enabled"`
+
+	// Region is the AWS region to query for models. Default: us-east-1.
+	Region string `yaml:"region"`
+
+	// RefreshInterval is how often to refresh the model list (e.g., "1h", "30m").
+	// Default: 1h. Set to "0" to disable caching.
+	RefreshInterval string `yaml:"refresh_interval"`
+
+	// ProviderFilter limits discovery to specific model providers.
+	// Example: ["anthropic", "amazon", "meta"]
+	// Empty means all providers.
+	ProviderFilter []string `yaml:"provider_filter"`
+
+	// DefaultContextWindow is used when the model doesn't report context size.
+	// Default: 32000.
+	DefaultContextWindow int `yaml:"default_context_window"`
+
+	// DefaultMaxTokens is used when the model doesn't report max output.
+	// Default: 4096.
+	DefaultMaxTokens int `yaml:"default_max_tokens"`
 }
 
 type LLMProviderConfig struct {
@@ -1772,5 +1819,39 @@ func validConversationType(convType string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+// GetMarkdownTableMode returns the configured markdown table mode for a channel.
+// Returns the configured value, or the channel's default if not configured.
+func (c *Config) GetMarkdownTableMode(channel string) string {
+	ch := strings.ToLower(strings.TrimSpace(channel))
+
+	var configured string
+	switch ch {
+	case "telegram":
+		configured = c.Channels.Telegram.Markdown.Tables
+	case "discord":
+		configured = c.Channels.Discord.Markdown.Tables
+	case "slack":
+		configured = c.Channels.Slack.Markdown.Tables
+	case "whatsapp":
+		configured = c.Channels.WhatsApp.Markdown.Tables
+	case "signal":
+		configured = c.Channels.Signal.Markdown.Tables
+	}
+
+	if configured != "" {
+		return configured
+	}
+
+	// Return channel-specific defaults
+	switch ch {
+	case "signal", "whatsapp", "sms":
+		return "bullets"
+	case "slack", "discord", "telegram", "matrix":
+		return "code"
+	default:
+		return "off"
 	}
 }

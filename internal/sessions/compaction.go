@@ -395,6 +395,366 @@ func estimateTokens(messages []*models.Message) int {
 	return totalChars / 4
 }
 
+// estimateMessageTokens provides a rough token estimate for a single message.
+func estimateMessageTokens(msg *models.Message) int {
+	return (len(msg.Content) + 20) / 4
+}
+
+// AdaptiveCompactionConfig extends CompactionConfig with adaptive chunk sizing.
+// Based on patterns from clawdbot/pi-mono for handling large context windows.
+type AdaptiveCompactionConfig struct {
+	CompactionConfig
+
+	// BaseChunkRatio is the default portion of context window for summarization chunks.
+	// Default: 0.4 (40% of context).
+	BaseChunkRatio float64
+
+	// MinChunkRatio is the minimum chunk ratio for large messages.
+	// Default: 0.15 (15% of context).
+	MinChunkRatio float64
+
+	// SafetyMargin accounts for token estimation inaccuracy.
+	// Default: 1.2 (20% buffer).
+	SafetyMargin float64
+
+	// MaxPartsForMultiStage is the maximum number of parts for multi-stage summarization.
+	// Default: 4.
+	MaxPartsForMultiStage int
+
+	// OversizedThreshold is the context percentage above which a message is "oversized".
+	// Default: 0.5 (50%).
+	OversizedThreshold float64
+
+	// ContextWindowTokens is the model's context window size.
+	// Default: 128000.
+	ContextWindowTokens int
+}
+
+// DefaultAdaptiveConfig returns sensible defaults for adaptive compaction.
+func DefaultAdaptiveConfig() AdaptiveCompactionConfig {
+	return AdaptiveCompactionConfig{
+		CompactionConfig:      DefaultCompactionConfig(),
+		BaseChunkRatio:        0.4,
+		MinChunkRatio:         0.15,
+		SafetyMargin:          1.2,
+		MaxPartsForMultiStage: 4,
+		OversizedThreshold:    0.5,
+		ContextWindowTokens:   128000,
+	}
+}
+
+// ComputeAdaptiveChunkRatio calculates an adaptive chunk ratio based on message sizes.
+// When messages are large, smaller chunks are used to avoid exceeding model limits.
+func ComputeAdaptiveChunkRatio(messages []*models.Message, contextWindow int, baseRatio, minRatio, safetyMargin float64) float64 {
+	if len(messages) == 0 || contextWindow <= 0 {
+		return baseRatio
+	}
+
+	totalTokens := estimateTokens(messages)
+	avgTokens := float64(totalTokens) / float64(len(messages))
+
+	// Apply safety margin
+	safeAvgTokens := avgTokens * safetyMargin
+	avgRatio := safeAvgTokens / float64(contextWindow)
+
+	// If average message is > 10% of context, reduce chunk ratio
+	if avgRatio > 0.1 {
+		reduction := avgRatio * 2
+		if reduction > (baseRatio - minRatio) {
+			reduction = baseRatio - minRatio
+		}
+		result := baseRatio - reduction
+		if result < minRatio {
+			return minRatio
+		}
+		return result
+	}
+
+	return baseRatio
+}
+
+// IsOversizedForSummary checks if a message is too large to summarize safely.
+// A message is considered oversized if it exceeds the threshold percentage of context.
+func IsOversizedForSummary(msg *models.Message, contextWindowTokens int, threshold, safetyMargin float64) bool {
+	if contextWindowTokens <= 0 {
+		return false
+	}
+	tokens := float64(estimateMessageTokens(msg)) * safetyMargin
+	return tokens > float64(contextWindowTokens)*threshold
+}
+
+// SplitMessagesByTokenShare splits messages into roughly equal token-sized chunks.
+// Used for multi-stage summarization of large contexts.
+func SplitMessagesByTokenShare(messages []*models.Message, parts int) [][]*models.Message {
+	if len(messages) == 0 {
+		return nil
+	}
+	if parts <= 1 {
+		return [][]*models.Message{messages}
+	}
+	// Limit parts to message count
+	if parts > len(messages) {
+		parts = len(messages)
+	}
+
+	totalTokens := estimateTokens(messages)
+	targetTokensPerPart := totalTokens / parts
+
+	var chunks [][]*models.Message
+	var current []*models.Message
+	currentTokens := 0
+
+	for _, msg := range messages {
+		msgTokens := estimateMessageTokens(msg)
+
+		// If adding this message would exceed target and we have more parts to fill
+		if len(chunks) < parts-1 && len(current) > 0 && currentTokens+msgTokens > targetTokensPerPart {
+			chunks = append(chunks, current)
+			current = nil
+			currentTokens = 0
+		}
+
+		current = append(current, msg)
+		currentTokens += msgTokens
+	}
+
+	// Add final chunk
+	if len(current) > 0 {
+		chunks = append(chunks, current)
+	}
+
+	return chunks
+}
+
+// ChunkMessagesByMaxTokens splits messages into chunks that don't exceed maxTokens.
+// Useful for ensuring chunks fit within summarization model limits.
+func ChunkMessagesByMaxTokens(messages []*models.Message, maxTokens int) [][]*models.Message {
+	if len(messages) == 0 {
+		return nil
+	}
+
+	var chunks [][]*models.Message
+	var current []*models.Message
+	currentTokens := 0
+
+	for _, msg := range messages {
+		msgTokens := estimateMessageTokens(msg)
+
+		if len(current) > 0 && currentTokens+msgTokens > maxTokens {
+			chunks = append(chunks, current)
+			current = nil
+			currentTokens = 0
+		}
+
+		current = append(current, msg)
+		currentTokens += msgTokens
+
+		// Handle oversized single messages
+		if msgTokens > maxTokens {
+			chunks = append(chunks, current)
+			current = nil
+			currentTokens = 0
+		}
+	}
+
+	if len(current) > 0 {
+		chunks = append(chunks, current)
+	}
+
+	return chunks
+}
+
+// AdaptiveCompactor extends Compactor with adaptive chunk sizing and multi-stage summarization.
+type AdaptiveCompactor struct {
+	*Compactor
+	adaptiveConfig AdaptiveCompactionConfig
+}
+
+// NewAdaptiveCompactor creates a new adaptive compactor.
+func NewAdaptiveCompactor(config AdaptiveCompactionConfig, store Store, summarizer Summarizer) *AdaptiveCompactor {
+	return &AdaptiveCompactor{
+		Compactor:      NewCompactor(config.CompactionConfig, store, summarizer),
+		adaptiveConfig: config,
+	}
+}
+
+// CompactAdaptive performs compaction with adaptive chunk sizing and multi-stage summarization.
+func (c *AdaptiveCompactor) CompactAdaptive(ctx context.Context, sessionID string) (*CompactionResult, error) {
+	history, err := c.store.GetHistory(ctx, sessionID, 0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session history: %w", err)
+	}
+
+	result := &CompactionResult{
+		SessionID:                sessionID,
+		MessagesBeforeCompaction: len(history),
+		TokensEstimateBefore:     estimateTokens(history),
+		CompactedAt:              time.Now(),
+		Strategy:                 c.config.Strategy,
+	}
+
+	// Compute adaptive chunk ratio
+	chunkRatio := ComputeAdaptiveChunkRatio(
+		history,
+		c.adaptiveConfig.ContextWindowTokens,
+		c.adaptiveConfig.BaseChunkRatio,
+		c.adaptiveConfig.MinChunkRatio,
+		c.adaptiveConfig.SafetyMargin,
+	)
+
+	// Calculate max chunk tokens based on adaptive ratio
+	maxChunkTokens := int(float64(c.adaptiveConfig.ContextWindowTokens) * chunkRatio)
+
+	var compactedMessages []*models.Message
+	var summary string
+
+	// Separate system messages and messages to process
+	var systemMessages []*models.Message
+	var toProcess []*models.Message
+	for _, msg := range history {
+		if msg.Role == models.RoleSystem && c.config.PreserveSystemMessages {
+			systemMessages = append(systemMessages, msg)
+		} else {
+			toProcess = append(toProcess, msg)
+		}
+	}
+
+	// Keep recent messages
+	keepCount := c.config.KeepLastN
+	if keepCount <= 0 {
+		keepCount = 10
+	}
+
+	var toSummarize []*models.Message
+	var toKeep []*models.Message
+	if len(toProcess) > keepCount {
+		toSummarize = toProcess[:len(toProcess)-keepCount]
+		toKeep = toProcess[len(toProcess)-keepCount:]
+	} else {
+		toKeep = toProcess
+	}
+
+	// Multi-stage summarization for large contexts
+	if len(toSummarize) > 0 && c.summarizer != nil {
+		summary, err = c.summarizeAdaptively(ctx, toSummarize, maxChunkTokens)
+		if err != nil {
+			// Fallback to simple truncation on summarization failure
+			summary = fmt.Sprintf("[%d messages were compacted due to context limits]", len(toSummarize))
+		}
+	}
+
+	// Build result
+	compactedMessages = append(compactedMessages, systemMessages...)
+	if summary != "" {
+		compactedMessages = append(compactedMessages, &models.Message{
+			Role:    models.RoleSystem,
+			Content: fmt.Sprintf("[Conversation Summary]\n%s", summary),
+			Metadata: map[string]any{
+				"compaction_summary": true,
+				"summarized_count":   len(toSummarize),
+				"summarized_at":      time.Now().Format(time.RFC3339),
+				"adaptive_ratio":     chunkRatio,
+			},
+		})
+	}
+	compactedMessages = append(compactedMessages, toKeep...)
+
+	// Calculate removed messages
+	keptIDs := make(map[string]bool)
+	for _, msg := range compactedMessages {
+		keptIDs[msg.ID] = true
+	}
+	for _, msg := range history {
+		if !keptIDs[msg.ID] {
+			result.RemovedMessageIDs = append(result.RemovedMessageIDs, msg.ID)
+		}
+	}
+
+	result.MessagesAfterCompaction = len(compactedMessages)
+	result.TokensEstimateAfter = estimateTokens(compactedMessages)
+	result.Summary = summary
+
+	return result, nil
+}
+
+// summarizeAdaptively performs multi-stage summarization for large message sets.
+func (c *AdaptiveCompactor) summarizeAdaptively(ctx context.Context, messages []*models.Message, maxChunkTokens int) (string, error) {
+	totalTokens := estimateTokens(messages)
+
+	// If within single chunk size, summarize directly
+	if totalTokens <= maxChunkTokens {
+		return c.summarizer.Summarize(ctx, messages, c.config.SummaryPrompt)
+	}
+
+	// Split into chunks and summarize each
+	chunks := ChunkMessagesByMaxTokens(messages, maxChunkTokens)
+	if len(chunks) == 1 {
+		return c.summarizer.Summarize(ctx, chunks[0], c.config.SummaryPrompt)
+	}
+
+	// Multi-stage: summarize chunks, then merge summaries
+	var partialSummaries []string
+	for _, chunk := range chunks {
+		// Skip oversized messages with a note
+		var filteredChunk []*models.Message
+		var oversizedNotes []string
+		for _, msg := range chunk {
+			if IsOversizedForSummary(msg, c.adaptiveConfig.ContextWindowTokens,
+				c.adaptiveConfig.OversizedThreshold, c.adaptiveConfig.SafetyMargin) {
+				tokens := estimateMessageTokens(msg)
+				oversizedNotes = append(oversizedNotes,
+					fmt.Sprintf("[Large %s message (~%dK tokens) omitted]", msg.Role, tokens/1000))
+			} else {
+				filteredChunk = append(filteredChunk, msg)
+			}
+		}
+
+		var chunkSummary string
+		var err error
+		if len(filteredChunk) > 0 {
+			chunkSummary, err = c.summarizer.Summarize(ctx, filteredChunk, c.config.SummaryPrompt)
+			if err != nil {
+				chunkSummary = fmt.Sprintf("[Summarization failed for %d messages]", len(filteredChunk))
+			}
+		}
+
+		// Append oversized notes
+		if len(oversizedNotes) > 0 {
+			for _, note := range oversizedNotes {
+				chunkSummary += "\n" + note
+			}
+		}
+
+		if chunkSummary != "" {
+			partialSummaries = append(partialSummaries, chunkSummary)
+		}
+	}
+
+	if len(partialSummaries) == 0 {
+		return "", nil
+	}
+
+	if len(partialSummaries) == 1 {
+		return partialSummaries[0], nil
+	}
+
+	// Merge partial summaries
+	mergePrompt := "Merge these partial summaries into a single cohesive summary. " +
+		"Preserve decisions, TODOs, open questions, and constraints.\n\n" +
+		"Partial summaries:\n"
+	for i, ps := range partialSummaries {
+		mergePrompt += fmt.Sprintf("\n--- Part %d ---\n%s\n", i+1, ps)
+	}
+
+	// Create synthetic messages for the merge
+	mergeMessages := []*models.Message{{
+		Role:    models.RoleUser,
+		Content: mergePrompt,
+	}}
+
+	return c.summarizer.Summarize(ctx, mergeMessages, c.config.SummaryPrompt)
+}
+
 // MarkMessageImportant marks a message as important for compaction preservation.
 func MarkMessageImportant(msg *models.Message) {
 	if msg.Metadata == nil {

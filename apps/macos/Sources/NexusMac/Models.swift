@@ -153,3 +153,155 @@ struct ToolInvocationResult: Codable {
 struct APIError: Codable {
     let error: String
 }
+
+struct SessionListResponse: Codable {
+    let sessions: [SessionSummary]
+    let total: Int
+    let page: Int
+    let pageSize: Int
+    let hasMore: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case sessions
+        case total
+        case page
+        case pageSize = "page_size"
+        case hasMore = "has_more"
+    }
+}
+
+struct SessionSummary: Codable, Identifiable, Hashable {
+    let id: String
+    let title: String
+    let channel: String
+    let channelId: String
+    let agentId: String
+    let createdAt: Date
+    let updatedAt: Date
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case channel
+        case channelId = "channel_id"
+        case agentId = "agent_id"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
+struct SessionMessagesResponse: Codable {
+    let messages: [SessionMessage]
+    let total: Int
+    let page: Int
+    let pageSize: Int
+    let hasMore: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case messages
+        case total
+        case page
+        case pageSize = "page_size"
+        case hasMore = "has_more"
+    }
+}
+
+struct SessionMessage: Codable, Identifiable, Hashable {
+    let id: String
+    let sessionId: String
+    let channel: String
+    let channelId: String
+    let direction: String
+    let role: String
+    let content: String
+    let createdAt: Date
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case sessionId = "session_id"
+        case channel
+        case channelId = "channel_id"
+        case direction
+        case role
+        case content
+        case createdAt = "created_at"
+    }
+}
+
+struct ProvidersResponse: Codable {
+    let providers: [ProviderStatus]
+}
+
+struct ProviderStatus: Codable, Identifiable, Hashable {
+    let name: String
+    let enabled: Bool
+    let connected: Bool
+    let error: String?
+    let lastPing: Int64?
+    let healthy: Bool?
+    let healthMessage: String?
+    let healthLatencyMs: Int64?
+    let healthDegraded: Bool?
+    let qrAvailable: Bool?
+    let qrUpdatedAt: String?
+
+    var id: String { name }
+
+    private enum CodingKeys: String, CodingKey {
+        case name
+        case enabled
+        case connected
+        case error
+        case lastPing = "last_ping"
+        case healthy
+        case healthMessage = "health_message"
+        case healthLatencyMs = "health_latency_ms"
+        case healthDegraded = "health_degraded"
+        case qrAvailable = "qr_available"
+        case qrUpdatedAt = "qr_updated_at"
+    }
+}
+
+struct SkillsResponse: Codable {
+    let skills: [SkillSummary]
+}
+
+struct SkillSummary: Codable, Identifiable, Hashable {
+    let name: String
+    let description: String
+    let source: String
+    let path: String
+    let emoji: String?
+    let execution: String?
+    let eligible: Bool
+    let reason: String?
+
+    var id: String { name }
+}
+
+struct CronResponse: Codable {
+    let enabled: Bool
+    let jobs: [CronJobSummary]
+}
+
+struct CronJobSummary: Codable, Identifiable, Hashable {
+    let id: String
+    let name: String
+    let type: String
+    let enabled: Bool
+    let schedule: String
+    let nextRun: Date
+    let lastRun: Date
+    let lastError: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case type
+        case enabled
+        case schedule
+        case nextRun = "next_run"
+        case lastRun = "last_run"
+        case lastError = "last_error"
+    }
+}

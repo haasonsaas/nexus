@@ -16,6 +16,14 @@ final class AppModel: ObservableObject {
     @Published var nodes: [NodeSummary] = []
     @Published var nodeTools: [String: [NodeToolSummary]] = [:]
     @Published var artifacts: [ArtifactSummary] = []
+    @Published var sessions: [SessionSummary] = []
+    @Published var sessionMessages: [SessionMessage] = []
+    @Published var sessionHasMore: Bool = false
+    @Published var providers: [ProviderStatus] = []
+    @Published var providerQRImages: [String: NSImage] = [:]
+    @Published var skills: [SkillSummary] = []
+    @Published var cronEnabled: Bool = false
+    @Published var cronJobs: [CronJobSummary] = []
     @Published var edgeServiceStatus: EdgeServiceStatus = .unknown
     @Published var configText: String = ""
     @Published var configPath: String
@@ -27,6 +35,7 @@ final class AppModel: ObservableObject {
 
     init() {
         baseURL = UserDefaults.standard.string(forKey: "NexusBaseURL") ?? "http://localhost:8080"
+        baseURL = normalizeBaseURL(baseURL)
         apiKey = keychain.read() ?? ""
         configPath = AppModel.defaultConfigPath()
         edgeBinary = ProcessInfo.processInfo.environment["NEXUS_EDGE_BIN"] ?? "nexus-edge"
@@ -40,6 +49,7 @@ final class AppModel: ObservableObject {
     }
 
     func saveSettings() {
+        baseURL = normalizeBaseURL(baseURL)
         UserDefaults.standard.set(baseURL, forKey: "NexusBaseURL")
         _ = keychain.write(apiKey)
     }
@@ -48,6 +58,10 @@ final class AppModel: ObservableObject {
         await refreshStatus()
         await refreshNodes()
         await refreshArtifacts()
+        await refreshSessions()
+        await refreshProviders()
+        await refreshSkills()
+        await refreshCron()
     }
 
     func refreshStatus() async {
@@ -74,6 +88,89 @@ final class AppModel: ObservableObject {
         guard let api = makeAPI() else { return }
         do {
             artifacts = try await api.fetchArtifacts()
+            lastError = nil
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func refreshSessions() async {
+        guard let api = makeAPI() else { return }
+        do {
+            let response = try await api.fetchSessions(page: 1, size: 50)
+            sessions = response.sessions
+            lastError = nil
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func loadSessionMessages(sessionID: String, page: Int = 1, size: Int = 50) async {
+        guard let api = makeAPI() else { return }
+        do {
+            let response = try await api.fetchSessionMessages(sessionID: sessionID, page: page, size: size)
+            if page == 1 {
+                sessionMessages = response.messages
+            } else {
+                sessionMessages.append(contentsOf: response.messages)
+            }
+            sessionHasMore = response.hasMore
+            lastError = nil
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func refreshProviders() async {
+        guard let api = makeAPI() else { return }
+        do {
+            providers = try await api.fetchProviders()
+            lastError = nil
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func loadProviderQR(name: String) async {
+        guard let api = makeAPI() else { return }
+        do {
+            let data = try await api.fetchProviderQR(name: name)
+            if let image = NSImage(data: data) {
+                providerQRImages[name] = image
+            }
+            lastError = nil
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func refreshSkills() async {
+        guard let api = makeAPI() else { return }
+        do {
+            skills = try await api.fetchSkills()
+            lastError = nil
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func triggerSkillsRefresh() async {
+        guard let api = makeAPI() else { return }
+        do {
+            try await api.refreshSkills()
+            skills = try await api.fetchSkills()
+            lastError = nil
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func refreshCron() async {
+        guard let api = makeAPI() else { return }
+        do {
+            let response = try await api.fetchCron()
+            cronEnabled = response.enabled
+            cronJobs = response.jobs
             lastError = nil
         } catch {
             lastError = error.localizedDescription
@@ -226,12 +323,23 @@ final class AppModel: ObservableObject {
     }
 
     private func makeAPI() -> NexusAPI? {
-        let trimmedURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedURL = normalizeBaseURL(baseURL)
         if trimmedURL.isEmpty || apiKey.isEmpty {
             lastError = "Set base URL and API key in Settings"
             return nil
         }
         return NexusAPI(baseURL: trimmedURL, apiKey: apiKey)
+    }
+
+    private func normalizeBaseURL(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            return trimmed
+        }
+        if trimmed.contains("://") {
+            return trimmed
+        }
+        return "http://\(trimmed)"
     }
 
     private func tail(_ text: String, lines: Int) -> String {

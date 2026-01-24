@@ -28,6 +28,28 @@ final class NexusAPI {
         return response.artifacts
     }
 
+    func fetchSessions(page: Int = 1, size: Int = 50, channel: String? = nil, agent: String? = nil) async throws -> SessionListResponse {
+        var items = [
+            URLQueryItem(name: "page", value: String(page)),
+            URLQueryItem(name: "size", value: String(size)),
+        ]
+        if let channel = channel, !channel.isEmpty {
+            items.append(URLQueryItem(name: "channel", value: channel))
+        }
+        if let agent = agent, !agent.isEmpty {
+            items.append(URLQueryItem(name: "agent", value: agent))
+        }
+        return try await request(path: "/api/sessions", queryItems: items)
+    }
+
+    func fetchSessionMessages(sessionID: String, page: Int = 1, size: Int = 50) async throws -> SessionMessagesResponse {
+        let items = [
+            URLQueryItem(name: "page", value: String(page)),
+            URLQueryItem(name: "size", value: String(size)),
+        ]
+        return try await request(path: "/api/sessions/\(sessionID)/messages", queryItems: items)
+    }
+
     func invokeTool(edgeID: String, toolName: String, input: String, approved: Bool) async throws -> ToolInvocationResult {
         let payload = [
             "input": input,
@@ -37,15 +59,40 @@ final class NexusAPI {
         return try await request(path: "/api/nodes/\(edgeID)/tools/\(toolName)", method: "POST", body: data)
     }
 
-    private func request<T: Decodable>(path: String, method: String = "GET", body: Data? = nil) async throws -> T {
-        let base = baseURL.hasSuffix("/") ? String(baseURL.dropLast()) : baseURL
-        guard let url = URL(string: base + path) else {
-            throw NSError(domain: "NexusAPI", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid base URL"])
-        }
+    func fetchProviders() async throws -> [ProviderStatus] {
+        let response: ProvidersResponse = try await request(path: "/api/providers")
+        return response.providers
+    }
 
+    func fetchProviderQR(name: String) async throws -> Data {
+        try await requestData(path: "/api/providers/\(name)/qr", accept: "image/png")
+    }
+
+    func fetchSkills() async throws -> [SkillSummary] {
+        let response: SkillsResponse = try await request(path: "/api/skills")
+        return response.skills
+    }
+
+    func refreshSkills() async throws {
+        _ = try await requestData(path: "/api/skills/refresh", method: "POST")
+    }
+
+    func fetchCron() async throws -> CronResponse {
+        try await request(path: "/api/cron")
+    }
+
+    private func request<T: Decodable>(path: String, method: String = "GET", body: Data? = nil, queryItems: [URLQueryItem] = []) async throws -> T {
+        let data = try await requestData(path: path, method: method, body: body, queryItems: queryItems)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(T.self, from: data)
+    }
+
+    private func requestData(path: String, method: String = "GET", body: Data? = nil, queryItems: [URLQueryItem] = [], accept: String = "application/json") async throws -> Data {
+        let url = try makeURL(path: path, queryItems: queryItems)
         var request = URLRequest(url: url)
         request.httpMethod = method
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(accept, forHTTPHeaderField: "Accept")
         request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
         if let body = body {
             request.httpBody = body
@@ -60,9 +107,20 @@ final class NexusAPI {
             let message = String(data: data, encoding: .utf8) ?? "HTTP \(http.statusCode)"
             throw NSError(domain: "NexusAPI", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: message])
         }
+        return data
+    }
 
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode(T.self, from: data)
+    private func makeURL(path: String, queryItems: [URLQueryItem]) throws -> URL {
+        let base = baseURL.hasSuffix("/") ? String(baseURL.dropLast()) : baseURL
+        guard var components = URLComponents(string: base) else {
+            throw NSError(domain: "NexusAPI", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid base URL"])
+        }
+        let basePath = components.path
+        components.path = basePath + path
+        components.queryItems = queryItems.isEmpty ? nil : queryItems
+        guard let url = components.url else {
+            throw NSError(domain: "NexusAPI", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
+        }
+        return url
     }
 }

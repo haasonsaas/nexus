@@ -10,6 +10,10 @@ interface for managing the local edge daemon and inspecting the gateway
 - LaunchAgent management for `nexus-edge` (install/update/start/stop).
 - Overview dashboard (gateway status, channels, uptime).
 - Nodes + tools explorer (view edge nodes, invoke tools).
+- Sessions viewer (browse session history and messages).
+- Providers dashboard (health + QR codes).
+- Skills dashboard (eligibility + refresh).
+- Cron dashboard (schedules + next/last runs).
 - Artifacts browser (open downloaded artifacts locally).
 - Config editor (edit `~/.nexus-edge/config.yaml`).
 - Log viewer (tail `~/Library/Logs/nexus-edge.log`).

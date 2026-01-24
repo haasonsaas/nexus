@@ -301,6 +301,7 @@ func TestStore_PrunesExpired(t *testing.T) {
 	// Manually expire it by reading and modifying
 	storeData, _ := store.readStore("telegram")
 	storeData.Requests[0].CreatedAt = time.Now().Add(-2 * time.Hour)
+	storeData.Requests[0].ExpiresAt = time.Now().Add(-1 * time.Hour)
 	store.writeStore("telegram", storeData)
 
 	// List should prune it

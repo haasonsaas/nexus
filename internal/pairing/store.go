@@ -40,11 +40,15 @@ type Request struct {
 	Code       string            `json:"code"`
 	CreatedAt  time.Time         `json:"created_at"`
 	LastSeenAt time.Time         `json:"last_seen_at"`
+	ExpiresAt  time.Time         `json:"expires_at"`
 	Meta       map[string]string `json:"meta,omitempty"`
 }
 
 // IsExpired returns true if the request has expired.
 func (r *Request) IsExpired() bool {
+	if !r.ExpiresAt.IsZero() {
+		return time.Now().After(r.ExpiresAt)
+	}
 	return time.Since(r.CreatedAt) > PendingTTL
 }
 
@@ -64,10 +68,27 @@ type allowFromData struct {
 type Store struct {
 	mu      sync.RWMutex
 	dataDir string
+	channel string // Optional: single-channel mode for gateway compatibility
 }
 
 // NewStore creates a new pairing store.
+// If dataDir looks like a channel name (no path separators), it creates a
+// single-channel store for gateway compatibility.
 func NewStore(dataDir string) *Store {
+	// Check if this looks like a channel name (gateway compatibility mode)
+	if !strings.Contains(dataDir, "/") && !strings.Contains(dataDir, "\\") {
+		// Single-channel mode: use default data dir
+		home, _ := os.UserHomeDir()
+		return &Store{
+			dataDir: filepath.Join(home, ".nexus", "pairing"),
+			channel: dataDir,
+		}
+	}
+	return &Store{dataDir: dataDir}
+}
+
+// NewStoreWithDir creates a pairing store with an explicit data directory.
+func NewStoreWithDir(dataDir string) *Store {
 	return &Store{dataDir: dataDir}
 }
 
@@ -282,6 +303,7 @@ func (s *Store) UpsertRequest(channel, id string, meta map[string]string) (strin
 		Code:       code,
 		CreatedAt:  now,
 		LastSeenAt: now,
+		ExpiresAt:  now.Add(PendingTTL),
 		Meta:       meta,
 	}
 
@@ -483,4 +505,51 @@ func (s *Store) IsAllowed(channel, id string) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// LoadAllowlist loads the allowlist for a single-channel store.
+// This is for gateway compatibility when the store was created with just a channel name.
+func (s *Store) LoadAllowlist() ([]string, error) {
+	if s.channel == "" {
+		return nil, errors.New("LoadAllowlist requires single-channel mode")
+	}
+	return s.GetAllowlist(s.channel)
+}
+
+// GetOrCreateRequest creates or retrieves a pairing request.
+// This is for gateway compatibility when the store was created with just a channel name.
+func (s *Store) GetOrCreateRequest(senderID, senderName string) (Request, bool, error) {
+	if s.channel == "" {
+		return Request{}, false, errors.New("GetOrCreateRequest requires single-channel mode")
+	}
+
+	meta := make(map[string]string)
+	if senderName != "" {
+		meta["name"] = senderName
+	}
+
+	code, created, err := s.UpsertRequest(s.channel, senderID, meta)
+	if err != nil {
+		return Request{}, false, err
+	}
+
+	// Return the request
+	requests, err := s.ListRequests(s.channel)
+	if err != nil {
+		return Request{}, false, err
+	}
+
+	for _, r := range requests {
+		if r.Code == code {
+			return *r, created, nil
+		}
+	}
+
+	// Shouldn't happen, but return a minimal request
+	return Request{
+		ID:        senderID,
+		Code:      code,
+		CreatedAt: time.Now(),
+		ExpiresAt: time.Now().Add(PendingTTL),
+	}, created, nil
 }

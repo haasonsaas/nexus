@@ -76,6 +76,49 @@ type Metrics struct {
 	// DatabaseQueryCounter counts database queries.
 	// Labels: operation, table, status (success|error)
 	DatabaseQueryCounter *prometheus.CounterVec
+
+	// WebhookReceived counts webhook requests received.
+	// Labels: channel, update_type
+	WebhookReceived *prometheus.CounterVec
+
+	// WebhookDuration measures webhook processing latency.
+	// Labels: channel, update_type
+	// Buckets: 0.01s, 0.05s, 0.1s, 0.5s, 1s, 2s, 5s, 10s
+	WebhookDuration *prometheus.HistogramVec
+
+	// WebhookErrors counts webhook processing errors.
+	// Labels: channel, update_type
+	WebhookErrors *prometheus.CounterVec
+
+	// MessageQueueDepth tracks current queue depth.
+	// Labels: channel
+	MessageQueueDepth *prometheus.GaugeVec
+
+	// MessageQueueWait measures time spent waiting in queue.
+	// Labels: channel
+	// Buckets: 0.1s, 0.5s, 1s, 2s, 5s, 10s, 30s, 60s
+	MessageQueueWait *prometheus.HistogramVec
+
+	// MessageProcessed counts messages by outcome.
+	// Labels: channel, outcome (success|error|dropped)
+	MessageProcessed *prometheus.CounterVec
+
+	// LLMCostUSD tracks estimated cost in USD.
+	// Labels: provider, model
+	LLMCostUSD *prometheus.CounterVec
+
+	// ContextWindowUsed tracks context window utilization.
+	// Labels: provider, model
+	// Buckets: 1000, 4000, 8000, 16000, 32000, 64000, 128000
+	ContextWindowUsed *prometheus.HistogramVec
+
+	// SessionStuck counts sessions stuck in processing.
+	// Labels: channel
+	SessionStuck *prometheus.CounterVec
+
+	// RunAttempts counts run attempts (for retry tracking).
+	// Labels: status (success|retry|failed)
+	RunAttempts *prometheus.CounterVec
 }
 
 // NewMetrics creates and registers all Prometheus metrics.
@@ -193,6 +236,89 @@ func NewMetrics() *Metrics {
 			},
 			[]string{"operation", "table", "status"},
 		),
+
+		WebhookReceived: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "nexus_webhook_received_total",
+				Help: "Total number of webhook requests received",
+			},
+			[]string{"channel", "update_type"},
+		),
+
+		WebhookDuration: promauto.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "nexus_webhook_duration_seconds",
+				Help:    "Duration of webhook processing in seconds",
+				Buckets: []float64{0.01, 0.05, 0.1, 0.5, 1, 2, 5, 10},
+			},
+			[]string{"channel", "update_type"},
+		),
+
+		WebhookErrors: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "nexus_webhook_errors_total",
+				Help: "Total number of webhook processing errors",
+			},
+			[]string{"channel", "update_type"},
+		),
+
+		MessageQueueDepth: promauto.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "nexus_message_queue_depth",
+				Help: "Current message queue depth by channel",
+			},
+			[]string{"channel"},
+		),
+
+		MessageQueueWait: promauto.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "nexus_message_queue_wait_seconds",
+				Help:    "Time spent waiting in message queue",
+				Buckets: []float64{0.1, 0.5, 1, 2, 5, 10, 30, 60},
+			},
+			[]string{"channel"},
+		),
+
+		MessageProcessed: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "nexus_messages_processed_total",
+				Help: "Total number of messages processed by outcome",
+			},
+			[]string{"channel", "outcome"},
+		),
+
+		LLMCostUSD: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "nexus_llm_cost_usd_total",
+				Help: "Estimated LLM API cost in USD",
+			},
+			[]string{"provider", "model"},
+		),
+
+		ContextWindowUsed: promauto.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "nexus_context_window_tokens",
+				Help:    "Context window tokens used",
+				Buckets: []float64{1000, 4000, 8000, 16000, 32000, 64000, 128000},
+			},
+			[]string{"provider", "model"},
+		),
+
+		SessionStuck: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "nexus_session_stuck_total",
+				Help: "Number of sessions stuck in processing",
+			},
+			[]string{"channel"},
+		),
+
+		RunAttempts: promauto.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "nexus_run_attempts_total",
+				Help: "Total number of run attempts by status",
+			},
+			[]string{"status"},
+		),
 	}
 }
 
@@ -297,4 +423,104 @@ func (m *Metrics) RecordHTTPRequest(method, path, statusCode string, durationSec
 func (m *Metrics) RecordDatabaseQuery(operation, table, status string, durationSeconds float64) {
 	m.DatabaseQueryCounter.WithLabelValues(operation, table, status).Inc()
 	m.DatabaseQueryDuration.WithLabelValues(operation, table).Observe(durationSeconds)
+}
+
+// RecordWebhookReceived records a webhook receipt.
+//
+// Example:
+//
+//	metrics.RecordWebhookReceived("telegram", "message")
+func (m *Metrics) RecordWebhookReceived(channel, updateType string) {
+	m.WebhookReceived.WithLabelValues(channel, updateType).Inc()
+}
+
+// RecordWebhookProcessed records webhook processing completion.
+//
+// Example:
+//
+//	start := time.Now()
+//	// ... process webhook ...
+//	metrics.RecordWebhookProcessed("discord", "message", time.Since(start).Seconds(), nil)
+func (m *Metrics) RecordWebhookProcessed(channel, updateType string, durationSeconds float64, err error) {
+	m.WebhookDuration.WithLabelValues(channel, updateType).Observe(durationSeconds)
+	if err != nil {
+		m.WebhookErrors.WithLabelValues(channel, updateType).Inc()
+	}
+}
+
+// SetMessageQueueDepth sets the current queue depth.
+//
+// Example:
+//
+//	metrics.SetMessageQueueDepth("telegram", 5)
+func (m *Metrics) SetMessageQueueDepth(channel string, depth int) {
+	m.MessageQueueDepth.WithLabelValues(channel).Set(float64(depth))
+}
+
+// RecordMessageQueued records a message being queued.
+//
+// Example:
+//
+//	metrics.RecordMessageQueued("slack")
+func (m *Metrics) RecordMessageQueued(channel string) {
+	m.MessageQueueDepth.WithLabelValues(channel).Inc()
+}
+
+// RecordMessageDequeued records a message being processed from queue.
+//
+// Example:
+//
+//	metrics.RecordMessageDequeued("slack", 2.5)
+func (m *Metrics) RecordMessageDequeued(channel string, waitSeconds float64) {
+	m.MessageQueueDepth.WithLabelValues(channel).Dec()
+	m.MessageQueueWait.WithLabelValues(channel).Observe(waitSeconds)
+}
+
+// RecordMessageProcessed records message processing completion.
+//
+// Example:
+//
+//	metrics.RecordMessageProcessed("telegram", "success")
+//	metrics.RecordMessageProcessed("telegram", "error")
+//	metrics.RecordMessageProcessed("telegram", "dropped")
+func (m *Metrics) RecordMessageProcessed(channel, outcome string) {
+	m.MessageProcessed.WithLabelValues(channel, outcome).Inc()
+}
+
+// RecordLLMCost records estimated API cost.
+//
+// Example:
+//
+//	metrics.RecordLLMCost("anthropic", "claude-3-opus", 0.015)
+func (m *Metrics) RecordLLMCost(provider, model string, costUSD float64) {
+	m.LLMCostUSD.WithLabelValues(provider, model).Add(costUSD)
+}
+
+// RecordContextWindow records context window utilization.
+//
+// Example:
+//
+//	metrics.RecordContextWindow("anthropic", "claude-3-opus", 45000)
+func (m *Metrics) RecordContextWindow(provider, model string, tokensUsed int) {
+	m.ContextWindowUsed.WithLabelValues(provider, model).Observe(float64(tokensUsed))
+}
+
+// RecordSessionStuck records a session detected as stuck.
+//
+// Example:
+//
+//	metrics.RecordSessionStuck("telegram")
+func (m *Metrics) RecordSessionStuck(channel string) {
+	m.SessionStuck.WithLabelValues(channel).Inc()
+}
+
+// RecordRunAttempt records a run attempt.
+//
+// Example:
+//
+//	metrics.RecordRunAttempt("success")
+//	metrics.RecordRunAttempt("retry")
+//	metrics.RecordRunAttempt("failed")
+func (m *Metrics) RecordRunAttempt(status string) {
+	m.RunAttempts.WithLabelValues(status).Inc()
 }

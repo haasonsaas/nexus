@@ -44,6 +44,11 @@
 - **Code Sandbox** - Container-based execution + Firecracker microVM isolation
 - **Voice Transcription** - OpenAI Whisper for audio message processing
 
+### Edge Clients
+
+- **nexus-edge daemon** - Local tool execution for devices (camera, screen, shell, browser relay)
+- **macOS companion** - LaunchAgent-based edge service with rich SwiftUI menu bar UI (see `docs/macos-client.md`)
+
 ### MCP Integration
 
 Full Model Context Protocol support:

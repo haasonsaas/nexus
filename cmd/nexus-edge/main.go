@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -42,28 +43,34 @@ var Version = "dev"
 // Config holds edge daemon configuration.
 type Config struct {
 	// CoreURL is the address of the Nexus core.
-	CoreURL string `json:"core_url"`
+	CoreURL string `json:"core_url" yaml:"core_url"`
 
 	// EdgeID is the unique identifier for this edge.
-	EdgeID string `json:"edge_id"`
+	EdgeID string `json:"edge_id" yaml:"edge_id"`
 
 	// Name is the human-readable name for this edge.
-	Name string `json:"name"`
+	Name string `json:"name" yaml:"name"`
 
 	// AuthToken is the authentication token.
-	AuthToken string `json:"auth_token"`
+	AuthToken string `json:"auth_token,omitempty" yaml:"auth_token,omitempty"`
+
+	// PairingToken is an alias for AuthToken, used during initial pairing.
+	PairingToken string `json:"pairing_token,omitempty" yaml:"pairing_token,omitempty"`
 
 	// ReconnectDelay is the delay between reconnection attempts.
-	ReconnectDelay time.Duration `json:"reconnect_delay"`
+	ReconnectDelay time.Duration `json:"reconnect_delay" yaml:"reconnect_delay"`
 
 	// HeartbeatInterval is how often to send heartbeats.
-	HeartbeatInterval time.Duration `json:"heartbeat_interval"`
+	HeartbeatInterval time.Duration `json:"heartbeat_interval" yaml:"heartbeat_interval"`
 
 	// LogLevel is the logging level.
-	LogLevel string `json:"log_level"`
+	LogLevel string `json:"log_level" yaml:"log_level"`
 
 	// ChannelTypes lists channel types this edge can host (e.g., "imessage", "signal").
-	ChannelTypes []string `json:"channel_types"`
+	ChannelTypes []string `json:"channel_types" yaml:"channel_types"`
+
+	// NodePolicy controls local tool execution policies.
+	NodePolicy NodePolicy `json:"node_policy,omitempty" yaml:"node_policy,omitempty"`
 }
 
 // DefaultConfig returns sensible defaults.
@@ -475,7 +482,9 @@ func (d *EdgeDaemon) sendEvent(eventType pb.EdgeEventType, data map[string]inter
 }
 
 func main() {
-	config := DefaultConfig()
+	flagConfig := DefaultConfig()
+	var configPath string
+	var pairToken string
 
 	rootCmd := &cobra.Command{
 		Use:   "nexus-edge",
@@ -483,6 +492,29 @@ func main() {
 		Long: `The Nexus Edge Daemon connects to a Nexus core and provides
 local capabilities like device access, browser relay, and edge-only channels.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			config := DefaultConfig()
+
+			configRequested := strings.TrimSpace(configPath) != "" || strings.TrimSpace(os.Getenv("NEXUS_EDGE_CONFIG")) != ""
+			resolvedPath, shouldLoad := resolveConfigPath(configPath)
+			if shouldLoad {
+				loaded, err := loadConfig(resolvedPath)
+				if err != nil {
+					if errors.Is(err, errConfigNotFound) && !configRequested {
+						// No config file; proceed with defaults + flags.
+					} else {
+						return fmt.Errorf("load config %s: %w", resolvedPath, err)
+					}
+				} else {
+					config = mergeConfig(config, loaded)
+				}
+			}
+
+			merged, err := applyFlagOverrides(cmd, config, flagConfig, pairToken)
+			if err != nil {
+				return err
+			}
+			config = normalizeConfig(merged)
+
 			// Set up logging
 			var level slog.Level
 			switch config.LogLevel {
@@ -522,7 +554,7 @@ local capabilities like device access, browser relay, and edge-only channels.`,
 			})
 
 			// Register node tools (camera, screen, location, shell)
-			RegisterNodeTools(daemon)
+			RegisterNodeTools(daemon, config.NodePolicy.Shell)
 
 			// Register browser relay tools (Chrome DevTools Protocol)
 			RegisterBrowserTools(daemon)
@@ -541,13 +573,17 @@ local capabilities like device access, browser relay, and edge-only channels.`,
 		},
 	}
 
-	rootCmd.Flags().StringVar(&config.CoreURL, "core-url", config.CoreURL, "Nexus core URL")
-	rootCmd.Flags().StringVar(&config.EdgeID, "edge-id", config.EdgeID, "Unique edge identifier")
-	rootCmd.Flags().StringVar(&config.Name, "name", config.Name, "Human-readable edge name")
-	rootCmd.Flags().StringVar(&config.AuthToken, "token", "", "Authentication token")
-	rootCmd.Flags().DurationVar(&config.ReconnectDelay, "reconnect-delay", config.ReconnectDelay, "Delay between reconnection attempts")
-	rootCmd.Flags().StringVar(&config.LogLevel, "log-level", config.LogLevel, "Log level (debug, info, warn, error)")
-	rootCmd.Flags().StringSliceVar(&config.ChannelTypes, "channels", config.ChannelTypes, "Channel types provided by this edge (comma-separated)")
+	flags := rootCmd.PersistentFlags()
+	flags.StringVar(&configPath, "config", "", "Path to edge config file (default: ~/.nexus-edge/config.yaml)")
+	flags.StringVar(&flagConfig.CoreURL, "core-url", flagConfig.CoreURL, "Nexus core URL")
+	flags.StringVar(&flagConfig.EdgeID, "edge-id", flagConfig.EdgeID, "Unique edge identifier")
+	flags.StringVar(&flagConfig.Name, "name", flagConfig.Name, "Human-readable edge name")
+	flags.StringVar(&flagConfig.AuthToken, "token", "", "Authentication token")
+	flags.StringVar(&pairToken, "pair-token", "", "Pairing token (alias for --token)")
+	flags.DurationVar(&flagConfig.ReconnectDelay, "reconnect-delay", flagConfig.ReconnectDelay, "Delay between reconnection attempts")
+	flags.DurationVar(&flagConfig.HeartbeatInterval, "heartbeat-interval", flagConfig.HeartbeatInterval, "Heartbeat interval")
+	flags.StringVar(&flagConfig.LogLevel, "log-level", flagConfig.LogLevel, "Log level (debug, info, warn, error)")
+	flags.StringSliceVar(&flagConfig.ChannelTypes, "channels", flagConfig.ChannelTypes, "Channel types provided by this edge (comma-separated)")
 
 	rootCmd.AddCommand(&cobra.Command{
 		Use:   "version",
@@ -556,6 +592,10 @@ local capabilities like device access, browser relay, and edge-only channels.`,
 			fmt.Printf("nexus-edge %s\n", Version)
 		},
 	})
+
+	rootCmd.AddCommand(buildInitCmd(&flagConfig, &configPath, &pairToken))
+	rootCmd.AddCommand(buildInstallCmd(&flagConfig, &configPath, &pairToken))
+	rootCmd.AddCommand(buildUninstallCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

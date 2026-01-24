@@ -24,11 +24,11 @@ import (
 )
 
 // RegisterNodeTools registers all node-specific tools with the daemon.
-func RegisterNodeTools(daemon *EdgeDaemon) {
+func RegisterNodeTools(daemon *EdgeDaemon, shellPolicy *ShellPolicy) {
 	daemon.RegisterTool(cameraSnapTool())
 	daemon.RegisterTool(screenCaptureTool())
 	daemon.RegisterTool(locationGetTool())
-	daemon.RegisterTool(shellRunTool())
+	daemon.RegisterTool(shellRunTool(shellPolicy))
 }
 
 // cameraSnapTool takes a photo using the device camera.
@@ -460,7 +460,7 @@ if let loc = delegate.location {
 }
 
 // shellRunTool executes shell commands.
-func shellRunTool() *Tool {
+func shellRunTool(shellPolicy *ShellPolicy) *Tool {
 	return &Tool{
 		Name:        "nodes.shell_run",
 		Description: "Execute a shell command on the device. Returns stdout, stderr, and exit code. Use with caution.",
@@ -500,11 +500,13 @@ func shellRunTool() *Tool {
 		}`,
 		RequiresApproval: true,
 		TimeoutSeconds:   120,
-		Handler:          handleShellRun,
+		Handler: func(ctx context.Context, input string) (*ToolResult, error) {
+			return handleShellRun(ctx, input, shellPolicy)
+		},
 	}
 }
 
-func handleShellRun(ctx context.Context, input string) (*ToolResult, error) {
+func handleShellRun(ctx context.Context, input string, shellPolicy *ShellPolicy) (*ToolResult, error) {
 	var params struct {
 		Command        string            `json:"command"`
 		Args           []string          `json:"args"`
@@ -523,6 +525,13 @@ func handleShellRun(ctx context.Context, input string) (*ToolResult, error) {
 	if params.Command == "" {
 		return &ToolResult{
 			Content: "command is required",
+			IsError: true,
+		}, nil
+	}
+
+	if allowed, reason := shellCommandAllowed(shellPolicy, params.Command); !allowed {
+		return &ToolResult{
+			Content: fmt.Sprintf("command blocked by local policy: %s", reason),
 			IsError: true,
 		}, nil
 	}
@@ -598,4 +607,59 @@ func handleShellRun(ctx context.Context, input string) (*ToolResult, error) {
 		Content: string(jsonResult),
 		IsError: isError,
 	}, nil
+}
+
+func shellCommandAllowed(policy *ShellPolicy, command string) (bool, string) {
+	if policy == nil {
+		return true, ""
+	}
+
+	allowlist := filterPatterns(policy.Allowlist)
+	denylist := filterPatterns(policy.Denylist)
+	if len(allowlist) == 0 && len(denylist) == 0 {
+		return true, ""
+	}
+
+	resolved := command
+	if !strings.Contains(command, string(os.PathSeparator)) {
+		if path, err := exec.LookPath(command); err == nil {
+			resolved = path
+		}
+	}
+
+	candidates := []string{command, resolved, filepath.Base(resolved)}
+	if matchesAnyPattern(denylist, candidates) {
+		return false, "denied by local denylist"
+	}
+	if len(allowlist) > 0 && !matchesAnyPattern(allowlist, candidates) {
+		return false, "not in local allowlist"
+	}
+	return true, ""
+}
+
+func filterPatterns(patterns []string) []string {
+	out := make([]string, 0, len(patterns))
+	for _, pattern := range patterns {
+		trimmed := strings.TrimSpace(pattern)
+		if trimmed == "" {
+			continue
+		}
+		out = append(out, trimmed)
+	}
+	return out
+}
+
+func matchesAnyPattern(patterns []string, candidates []string) bool {
+	if len(patterns) == 0 {
+		return false
+	}
+	for _, pattern := range patterns {
+		for _, candidate := range candidates {
+			match, err := filepath.Match(pattern, candidate)
+			if err == nil && match {
+				return true
+			}
+		}
+	}
+	return false
 }

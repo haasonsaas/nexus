@@ -85,6 +85,13 @@ pairing_token: abc123...
 core_url: grpc://nexus.example.com:50051
 ```
 
+On macOS, you can initialize and install the edge daemon as a LaunchAgent:
+
+```bash
+nexus-edge init --core-url grpc://nexus.example.com:50051 --pair-token abc123...
+nexus-edge install --start
+```
+
 ### Step 4: Node Created
 
 Upon successful pairing:

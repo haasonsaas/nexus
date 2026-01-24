@@ -37,6 +37,16 @@ canvas:
     # Generate with: openssl rand -base64 32
     secret: ${CANVAS_TOKEN_SECRET}
     ttl: 30m
+  actions:
+    rate_limit:
+      enabled: true
+      requests_per_second: 10
+      burst_size: 20
+  audit:
+    enabled: false
+    level: info
+    format: json
+    output: stdout
 
 commands:
   # Enable text command handling

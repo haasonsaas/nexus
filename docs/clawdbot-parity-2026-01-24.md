@@ -196,6 +196,7 @@ Legend: ✅ parity, 🟡 partial, ❌ missing
 - ✅ Session tools (`sessions_list`, `sessions_history`, `session_status`, `sessions_send`).
 - ✅ Message tool (`message`, plus `send_message` alias) + exec/process tools (`exec`, `bash`, `process`).
 - ✅ Cron tool (`cron`) with list/status/run against configured webhook jobs.
+- ✅ Canvas tool (`canvas`) returns the canvas host URL (minimal surface).
 
 ---
 

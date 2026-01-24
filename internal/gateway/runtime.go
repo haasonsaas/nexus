@@ -18,6 +18,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/mcp"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/tools/browser"
+	canvastools "github.com/haasonsaas/nexus/internal/tools/canvas"
 	crontools "github.com/haasonsaas/nexus/internal/tools/cron"
 	exectools "github.com/haasonsaas/nexus/internal/tools/exec"
 	"github.com/haasonsaas/nexus/internal/tools/files"
@@ -347,6 +348,9 @@ func (s *Server) registerTools(ctx context.Context, runtime *agent.Runtime) erro
 	}
 	if s.cronScheduler != nil {
 		runtime.RegisterTool(crontools.NewTool(s.cronScheduler))
+	}
+	if s.canvasHost != nil {
+		runtime.RegisterTool(canvastools.NewTool(s.canvasHost))
 	}
 
 	if s.config.Tools.Browser.Enabled {

@@ -256,12 +256,12 @@ This is comprehensive content.
 
 func TestSplitFrontmatter(t *testing.T) {
 	tests := []struct {
-		name             string
-		data             string
-		wantFrontmatter  string
-		wantBody         string
-		wantErr          bool
-		errContains      string
+		name            string
+		data            string
+		wantFrontmatter string
+		wantBody        string
+		wantErr         bool
+		errContains     string
 	}{
 		{
 			name: "standard frontmatter",

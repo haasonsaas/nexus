@@ -93,6 +93,8 @@ type runtimeOptsKey struct{}
 type elevatedKey struct{}
 type modelKey struct{}
 
+const contextPruningCacheTouchKey = "context_pruning_cache_ttl_at"
+
 // WithSession stores a session in the context.
 func WithSession(ctx context.Context, session *models.Session) context.Context {
 	if session == nil {
@@ -746,6 +748,47 @@ func (r *Runtime) setCacheTouchAt(sessionID string, ts time.Time) {
 	r.cacheTouch.Store(sessionID, ts)
 }
 
+func cacheTouchFromSession(session *models.Session) (time.Time, bool) {
+	if session == nil || session.Metadata == nil {
+		return time.Time{}, false
+	}
+	raw, ok := session.Metadata[contextPruningCacheTouchKey]
+	if !ok || raw == nil {
+		return time.Time{}, false
+	}
+	switch value := raw.(type) {
+	case time.Time:
+		if value.IsZero() {
+			return time.Time{}, false
+		}
+		return value, true
+	case string:
+		parsed, err := time.Parse(time.RFC3339Nano, value)
+		if err != nil {
+			parsed, err = time.Parse(time.RFC3339, value)
+		}
+		if err != nil || parsed.IsZero() {
+			return time.Time{}, false
+		}
+		return parsed, true
+	default:
+		return time.Time{}, false
+	}
+}
+
+func (r *Runtime) persistCacheTouch(ctx context.Context, session *models.Session, ts time.Time) {
+	if session == nil || r.sessions == nil {
+		return
+	}
+	if session.Metadata == nil {
+		session.Metadata = map[string]any{}
+	}
+	session.Metadata[contextPruningCacheTouchKey] = ts.Format(time.RFC3339Nano)
+	if err := r.sessions.Update(ctx, session); err != nil && r.opts.Logger != nil {
+		r.opts.Logger.Debug("failed to persist context pruning cache timestamp", "error", err, "session_id", session.ID)
+	}
+}
+
 // Use registers a plugin to receive agent events during processing.
 // Plugins are called in registration order for each event.
 //
@@ -1020,6 +1063,13 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 		if isCacheTTLEligibleProvider(r.provider.Name(), model) {
 			now := time.Now()
 			lastTouch, ok := r.cacheTouchAt(session.ID)
+			if !ok {
+				if stored, storedOK := cacheTouchFromSession(session); storedOK {
+					lastTouch = stored
+					ok = true
+					r.setCacheTouchAt(session.ID, stored)
+				}
+			}
 			if ok && settings.TTL > 0 && now.Sub(lastTouch) >= settings.TTL {
 				charWindow := contextPruningCharWindow(model, packOpts)
 				if charWindow > 0 {
@@ -1027,6 +1077,7 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 				}
 			}
 			r.setCacheTouchAt(session.ID, now)
+			r.persistCacheTouch(ctx, session, now)
 		}
 	}
 	packer := agentctx.NewPacker(packOpts)

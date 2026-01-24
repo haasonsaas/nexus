@@ -10,7 +10,7 @@ import (
 func TestPruneContextMessages_SoftTrimOnly(t *testing.T) {
 	settings := DefaultContextPruningSettings()
 	settings.KeepLastAssistants = 1
-	settings.SoftTrimRatio = 0.1
+	settings.SoftTrimRatio = 0.01
 	settings.HardClearRatio = 0.9
 	settings.MinPrunableToolChars = 1
 	settings.SoftTrim.MaxChars = 50
@@ -41,7 +41,7 @@ func TestPruneContextMessages_SoftTrimOnly(t *testing.T) {
 func TestPruneContextMessages_HardClear(t *testing.T) {
 	settings := DefaultContextPruningSettings()
 	settings.KeepLastAssistants = 1
-	settings.SoftTrimRatio = 0.1
+	settings.SoftTrimRatio = 0.01
 	settings.HardClearRatio = 0.2
 	settings.MinPrunableToolChars = 1
 	settings.SoftTrim.MaxChars = 50
@@ -66,7 +66,7 @@ func TestPruneContextMessages_HardClear(t *testing.T) {
 func TestPruneContextMessages_AllowDeny(t *testing.T) {
 	settings := DefaultContextPruningSettings()
 	settings.KeepLastAssistants = 1
-	settings.SoftTrimRatio = 0.1
+	settings.SoftTrimRatio = 0.01
 	settings.HardClear.Enabled = false
 	settings.SoftTrim.MaxChars = 10
 	settings.SoftTrim.HeadChars = 4
@@ -98,6 +98,28 @@ func TestPruneContextMessages_AllowDeny(t *testing.T) {
 	}
 	if secretResult != strings.Repeat("s", 40) {
 		t.Fatalf("expected secret tool result to remain unchanged")
+	}
+}
+
+func TestPruneContextMessages_UnknownToolNameDefaultAllowed(t *testing.T) {
+	settings := DefaultContextPruningSettings()
+	settings.KeepLastAssistants = 1
+	settings.SoftTrimRatio = 0.01
+	settings.HardClear.Enabled = false
+	settings.SoftTrim.MaxChars = 10
+	settings.SoftTrim.HeadChars = 4
+	settings.SoftTrim.TailChars = 4
+
+	history := []*models.Message{
+		newMessage(models.RoleUser, "hello"),
+		&models.Message{Role: models.RoleTool, ToolResults: []models.ToolResult{{ToolCallID: "missing", Content: strings.Repeat("x", 40)}}},
+		newMessage(models.RoleAssistant, "done"),
+	}
+
+	out := PruneContextMessages(history, settings, 1000)
+	got := out[1].ToolResults[0].Content
+	if got == strings.Repeat("x", 40) {
+		t.Fatalf("expected tool result to be trimmed even without tool name")
 	}
 }
 

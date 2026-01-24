@@ -240,7 +240,7 @@ func makeToolPrunablePredicate(match ContextPruningToolMatch) func(string) bool 
 	return func(toolName string) bool {
 		normalized := strings.ToLower(strings.TrimSpace(toolName))
 		if normalized == "" {
-			return false
+			return len(allow) == 0 && len(deny) == 0
 		}
 		if matchesAny(normalized, deny) {
 			return false

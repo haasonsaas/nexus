@@ -158,3 +158,197 @@ func TestNewMemoryHooks_Defaults(t *testing.T) {
 		t.Errorf("expected MinQueryLength=5, got %d", hooks.recallConfig.MinQueryLength)
 	}
 }
+
+func TestNewMemoryHooks_CustomValues(t *testing.T) {
+	captureConfig := AutoCaptureConfig{
+		Enabled:                    true,
+		MaxCapturesPerConversation: 5,
+		MinContentLength:           20,
+		MaxContentLength:           1000,
+		DuplicateThreshold:         0.85,
+		DefaultImportance:          0.9,
+	}
+	recallConfig := AutoRecallConfig{
+		Enabled:        true,
+		MaxResults:     10,
+		MinScore:       0.5,
+		MinQueryLength: 15,
+	}
+
+	hooks := NewMemoryHooks(nil, captureConfig, recallConfig, nil)
+
+	// Check custom values were preserved
+	if hooks.captureConfig.MaxCapturesPerConversation != 5 {
+		t.Errorf("expected MaxCapturesPerConversation=5, got %d", hooks.captureConfig.MaxCapturesPerConversation)
+	}
+	if hooks.captureConfig.MinContentLength != 20 {
+		t.Errorf("expected MinContentLength=20, got %d", hooks.captureConfig.MinContentLength)
+	}
+	if hooks.captureConfig.MaxContentLength != 1000 {
+		t.Errorf("expected MaxContentLength=1000, got %d", hooks.captureConfig.MaxContentLength)
+	}
+	if hooks.captureConfig.DuplicateThreshold != 0.85 {
+		t.Errorf("expected DuplicateThreshold=0.85, got %f", hooks.captureConfig.DuplicateThreshold)
+	}
+	if hooks.captureConfig.DefaultImportance != 0.9 {
+		t.Errorf("expected DefaultImportance=0.9, got %f", hooks.captureConfig.DefaultImportance)
+	}
+
+	if hooks.recallConfig.MaxResults != 10 {
+		t.Errorf("expected MaxResults=10, got %d", hooks.recallConfig.MaxResults)
+	}
+	if hooks.recallConfig.MinScore != 0.5 {
+		t.Errorf("expected MinScore=0.5, got %f", hooks.recallConfig.MinScore)
+	}
+	if hooks.recallConfig.MinQueryLength != 15 {
+		t.Errorf("expected MinQueryLength=15, got %d", hooks.recallConfig.MinQueryLength)
+	}
+}
+
+func TestMemoryCategory_Constants(t *testing.T) {
+	tests := []struct {
+		category MemoryCategory
+		expected string
+	}{
+		{CategoryPreference, "preference"},
+		{CategoryFact, "fact"},
+		{CategoryDecision, "decision"},
+		{CategoryEntity, "entity"},
+		{CategoryOther, "other"},
+	}
+
+	for _, tt := range tests {
+		if string(tt.category) != tt.expected {
+			t.Errorf("MemoryCategory %v = %q, want %q", tt.category, tt.category, tt.expected)
+		}
+	}
+}
+
+func TestAutoCaptureConfig_Struct(t *testing.T) {
+	cfg := AutoCaptureConfig{
+		Enabled:                    true,
+		MaxCapturesPerConversation: 5,
+		MinContentLength:           20,
+		MaxContentLength:           1000,
+		DuplicateThreshold:         0.9,
+		DefaultImportance:          0.8,
+	}
+
+	if !cfg.Enabled {
+		t.Error("Enabled should be true")
+	}
+	if cfg.MaxCapturesPerConversation != 5 {
+		t.Errorf("MaxCapturesPerConversation = %d, want 5", cfg.MaxCapturesPerConversation)
+	}
+	if cfg.MinContentLength != 20 {
+		t.Errorf("MinContentLength = %d, want 20", cfg.MinContentLength)
+	}
+	if cfg.MaxContentLength != 1000 {
+		t.Errorf("MaxContentLength = %d, want 1000", cfg.MaxContentLength)
+	}
+	if cfg.DuplicateThreshold != 0.9 {
+		t.Errorf("DuplicateThreshold = %f, want 0.9", cfg.DuplicateThreshold)
+	}
+	if cfg.DefaultImportance != 0.8 {
+		t.Errorf("DefaultImportance = %f, want 0.8", cfg.DefaultImportance)
+	}
+}
+
+func TestAutoRecallConfig_Struct(t *testing.T) {
+	cfg := AutoRecallConfig{
+		Enabled:        true,
+		MaxResults:     10,
+		MinScore:       0.6,
+		MinQueryLength: 15,
+	}
+
+	if !cfg.Enabled {
+		t.Error("Enabled should be true")
+	}
+	if cfg.MaxResults != 10 {
+		t.Errorf("MaxResults = %d, want 10", cfg.MaxResults)
+	}
+	if cfg.MinScore != 0.6 {
+		t.Errorf("MinScore = %f, want 0.6", cfg.MinScore)
+	}
+	if cfg.MinQueryLength != 15 {
+		t.Errorf("MinQueryLength = %d, want 15", cfg.MinQueryLength)
+	}
+}
+
+func TestShouldCapture_EdgeCases(t *testing.T) {
+	cfg := AutoCaptureConfig{
+		MinContentLength: 10,
+		MaxContentLength: 500,
+	}
+
+	tests := []struct {
+		name     string
+		content  string
+		expected bool
+	}{
+		// More edge cases
+		{"emoji_heavy", "😀😀😀😀 Hello there everyone 😀", false},
+		{"czech_remember", "Pamatuj si moje jméno je Jan", true},
+		{"czech_prefer", "Preferuji tmavý režim", true},
+		{"czech_decided", "Rozhodli jsme se použít Go", true},
+		{"love_something", "I love programming in Rust", true},
+		{"hate_something", "I hate slow compile times", true},
+		{"want_something", "I want to learn Kubernetes", true},
+		{"need_something", "I need help with Docker", true},
+		{"always_do", "I always use VSCode for editing", true},
+		{"never_do", "I never work on weekends", true},
+		{"crucial_marker", "This is crucial for the project", true},
+		{"key_point_marker", "The key point is that we need tests", true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := shouldCapture(tc.content, cfg)
+			if result != tc.expected {
+				t.Errorf("shouldCapture(%q) = %v, want %v", truncate(tc.content, 50), result, tc.expected)
+			}
+		})
+	}
+}
+
+func TestDetectCategory_MoreCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		expected MemoryCategory
+	}{
+		// Czech language
+		{"czech_preference", "Radši používám vim", CategoryPreference},
+		{"czech_decision", "Budeme používat Python", CategoryDecision},
+		{"czech_entity", "Jmenuje se Pavel", CategoryEntity},
+		{"czech_fact", "Server je na portu 3000", CategoryFact},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := detectCategory(tc.content)
+			if result != tc.expected {
+				t.Errorf("detectCategory(%q) = %v, want %v", tc.content, result, tc.expected)
+			}
+		})
+	}
+}
+
+func TestCaptureCandidate_Struct(t *testing.T) {
+	candidate := captureCandidate{
+		content:  "Test content",
+		category: CategoryPreference,
+		role:     "user",
+	}
+
+	if candidate.content != "Test content" {
+		t.Errorf("content = %q, want %q", candidate.content, "Test content")
+	}
+	if candidate.category != CategoryPreference {
+		t.Errorf("category = %v, want %v", candidate.category, CategoryPreference)
+	}
+	if candidate.role != "user" {
+		t.Errorf("role = %q, want %q", candidate.role, "user")
+	}
+}

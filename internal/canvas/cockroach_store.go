@@ -180,7 +180,11 @@ func (s *CockroachStore) UpdateSession(ctx context.Context, session *Session) er
 		}
 		return fmt.Errorf("update canvas session: %w", err)
 	}
-	if rows, _ := res.RowsAffected(); rows == 0 {
+	rows, rowsErr := res.RowsAffected()
+	if rowsErr != nil {
+		return fmt.Errorf("update canvas session: %w", rowsErr)
+	}
+	if rows == 0 {
 		return ErrNotFound
 	}
 	return nil
@@ -191,7 +195,11 @@ func (s *CockroachStore) DeleteSession(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("delete canvas session: %w", err)
 	}
-	if rows, _ := res.RowsAffected(); rows == 0 {
+	rows, rowsErr := res.RowsAffected()
+	if rowsErr != nil {
+		return fmt.Errorf("delete canvas session: %w", rowsErr)
+	}
+	if rows == 0 {
 		return ErrNotFound
 	}
 	return nil
@@ -245,7 +253,11 @@ func (s *CockroachStore) DeleteState(ctx context.Context, sessionID string) erro
 	if err != nil {
 		return fmt.Errorf("delete canvas state: %w", err)
 	}
-	if rows, _ := res.RowsAffected(); rows == 0 {
+	rows, rowsErr := res.RowsAffected()
+	if rowsErr != nil {
+		return fmt.Errorf("delete canvas state: %w", rowsErr)
+	}
+	if rows == 0 {
 		return ErrNotFound
 	}
 	return nil
@@ -319,7 +331,11 @@ func (s *CockroachStore) DeleteEvents(ctx context.Context, sessionID string) err
 	if err != nil {
 		return fmt.Errorf("delete canvas events: %w", err)
 	}
-	if rows, _ := res.RowsAffected(); rows == 0 {
+	rows, rowsErr := res.RowsAffected()
+	if rowsErr != nil {
+		return fmt.Errorf("delete canvas events: %w", rowsErr)
+	}
+	if rows == 0 {
 		return ErrNotFound
 	}
 	return nil

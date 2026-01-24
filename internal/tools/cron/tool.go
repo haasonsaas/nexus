@@ -67,10 +67,9 @@ func (t *Tool) Execute(ctx context.Context, params json.RawMessage) (*agent.Tool
 	switch action {
 	case "list", "status":
 		jobs := t.scheduler.Jobs()
-		payload, _ := json.MarshalIndent(map[string]interface{}{
+		return jsonResult(map[string]interface{}{
 			"jobs": jobs,
-		}, "", "  ")
-		return &agent.ToolResult{Content: string(payload)}, nil
+		}), nil
 	case "run":
 		id := strings.TrimSpace(input.ID)
 		if id == "" {
@@ -79,17 +78,27 @@ func (t *Tool) Execute(ctx context.Context, params json.RawMessage) (*agent.Tool
 		if err := t.scheduler.RunJob(ctx, id); err != nil {
 			return toolError(fmt.Sprintf("run job: %v", err)), nil
 		}
-		payload, _ := json.MarshalIndent(map[string]interface{}{
+		return jsonResult(map[string]interface{}{
 			"status": "ran",
 			"id":     id,
-		}, "", "  ")
-		return &agent.ToolResult{Content: string(payload)}, nil
+		}), nil
 	default:
 		return toolError("unsupported action"), nil
 	}
 }
 
 func toolError(message string) *agent.ToolResult {
-	payload, _ := json.Marshal(map[string]string{"error": message})
+	payload, err := json.Marshal(map[string]string{"error": message})
+	if err != nil {
+		return &agent.ToolResult{Content: message, IsError: true}
+	}
 	return &agent.ToolResult{Content: string(payload), IsError: true}
+}
+
+func jsonResult(payload any) *agent.ToolResult {
+	encoded, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return toolError(fmt.Sprintf("encode result: %v", err))
+	}
+	return &agent.ToolResult{Content: string(encoded)}
 }

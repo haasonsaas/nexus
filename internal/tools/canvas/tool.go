@@ -179,6 +179,9 @@ func (t *Tool) Execute(ctx context.Context, params json.RawMessage) (*agent.Tool
 }
 
 func toolError(message string) *agent.ToolResult {
-	payload, _ := json.Marshal(map[string]string{"error": message})
+	payload, err := json.Marshal(map[string]string{"error": message})
+	if err != nil {
+		return &agent.ToolResult{Content: message, IsError: true}
+	}
 	return &agent.ToolResult{Content: string(payload), IsError: true}
 }

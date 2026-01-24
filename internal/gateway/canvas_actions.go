@@ -78,7 +78,10 @@ func (s *Server) buildCanvasActionMessage(action canvas.Action, session *canvas.
 		"session_id":          action.SessionID,
 		"received_at":         action.ReceivedAt.Format(time.RFC3339),
 	}
-	payloadJSON, _ := json.Marshal(payload)
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		payloadJSON = []byte("{}")
+	}
 
 	metadata := map[string]any{
 		"slack_channel":      session.ChannelID,

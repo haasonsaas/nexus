@@ -2,6 +2,8 @@
 
 A comprehensive web search tool for the Nexus agent framework that supports multiple search backends with content extraction capabilities.
 
+This package also ships a lightweight **web_fetch** tool for SSRF-safe page fetching and extraction.
+
 ## Features
 
 - **Multiple Search Backends**:
@@ -83,6 +85,20 @@ for _, result := range response.Results {
     fmt.Printf("URL: %s\n", result.URL)
     fmt.Printf("Snippet: %s\n\n", result.Snippet)
 }
+```
+
+## Web Fetch Tool
+
+Use `web_fetch` to retrieve and extract readable content from a single URL (no browser automation).
+
+```go
+fetchTool := websearch.NewWebFetchTool(&websearch.FetchConfig{MaxChars: 10000})
+
+paramsJSON, _ := json.Marshal(map[string]interface{}{
+    "url": "https://example.com",
+    "extract_mode": "markdown",
+})
+result, err := fetchTool.Execute(context.Background(), paramsJSON)
 ```
 
 ### Search with Content Extraction

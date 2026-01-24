@@ -7,6 +7,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"os"
 	"runtime"
 	"sort"
 	"strings"
@@ -704,6 +705,28 @@ func (h *Handler) apiConfig(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// apiConfigSchema handles GET /api/config/schema.
+func (h *Handler) apiConfigSchema(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var schema []byte
+	var err error
+	if h != nil && h.config != nil && h.config.ConfigManager != nil {
+		schema, err = h.config.ConfigManager.ConfigSchema(r.Context())
+	} else {
+		schema, err = config.JSONSchema()
+	}
+	if err != nil {
+		h.jsonError(w, "Failed to build config schema", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(schema) //nolint:errcheck
+}
+
 // apiArtifacts handles GET /api/artifacts.
 func (h *Handler) apiArtifacts(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -911,11 +934,9 @@ func (h *Handler) apiConfigPatch(w http.ResponseWriter, r *http.Request) {
 		h.jsonError(w, "Config path not available", http.StatusServiceUnavailable)
 		return
 	}
-	raw, err := doctor.LoadRawConfig(h.config.ConfigPath)
-	if err != nil {
-		h.jsonError(w, "Failed to read config", http.StatusInternalServerError)
-		return
-	}
+	applyRequested := strings.EqualFold(r.URL.Query().Get("apply"), "true") || strings.EqualFold(r.URL.Query().Get("apply"), "1")
+	baseHash := strings.TrimSpace(r.URL.Query().Get("base_hash"))
+	rawContent := ""
 
 	if strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
 		var payload map[string]any
@@ -923,22 +944,60 @@ func (h *Handler) apiConfigPatch(w http.ResponseWriter, r *http.Request) {
 			h.jsonError(w, "Invalid JSON body", http.StatusBadRequest)
 			return
 		}
-		if path, ok := payload["path"].(string); ok && strings.TrimSpace(path) != "" {
-			setPathValue(raw, path, payload["value"])
-		} else {
-			delete(payload, "path")
-			delete(payload, "value")
-			mergeMaps(raw, payload)
+		if apply, ok := payload["apply"].(bool); ok && apply {
+			applyRequested = true
+		}
+		if hash, ok := payload["base_hash"].(string); ok && strings.TrimSpace(hash) != "" {
+			baseHash = strings.TrimSpace(hash)
+		}
+		if rawPayload, ok := payload["raw"].(string); ok && strings.TrimSpace(rawPayload) != "" {
+			rawContent = rawPayload
+		}
+
+		if rawContent == "" {
+			raw, err := doctor.LoadRawConfig(h.config.ConfigPath)
+			if err != nil {
+				h.jsonError(w, "Failed to read config", http.StatusInternalServerError)
+				return
+			}
+			if path, ok := payload["path"].(string); ok && strings.TrimSpace(path) != "" {
+				setPathValue(raw, path, payload["value"])
+			} else {
+				delete(payload, "path")
+				delete(payload, "value")
+				delete(payload, "apply")
+				delete(payload, "base_hash")
+				delete(payload, "raw")
+				mergeMaps(raw, payload)
+			}
+			if err := doctor.WriteRawConfig(h.config.ConfigPath, raw); err != nil {
+				h.jsonError(w, "Failed to write config", http.StatusInternalServerError)
+				return
+			}
+		} else if err := writeRawConfigFile(h.config.ConfigPath, rawContent); err != nil {
+			h.jsonError(w, "Failed to write config", http.StatusInternalServerError)
+			return
 		}
 	} else {
 		if err := r.ParseForm(); err != nil {
 			h.jsonError(w, "Invalid form data", http.StatusBadRequest)
 			return
 		}
+		if strings.EqualFold(r.FormValue("apply"), "true") || strings.EqualFold(r.FormValue("apply"), "1") {
+			applyRequested = true
+		}
+		if hash := strings.TrimSpace(r.FormValue("base_hash")); hash != "" {
+			baseHash = hash
+		}
 		path := strings.TrimSpace(r.FormValue("path"))
 		value := strings.TrimSpace(r.FormValue("value"))
 		if path == "" {
 			h.jsonError(w, "path is required", http.StatusBadRequest)
+			return
+		}
+		raw, err := doctor.LoadRawConfig(h.config.ConfigPath)
+		if err != nil {
+			h.jsonError(w, "Failed to read config", http.StatusInternalServerError)
 			return
 		}
 		var decoded any
@@ -951,11 +1010,29 @@ func (h *Handler) apiConfigPatch(w http.ResponseWriter, r *http.Request) {
 		} else {
 			setPathValue(raw, path, value)
 		}
+		if err := doctor.WriteRawConfig(h.config.ConfigPath, raw); err != nil {
+			h.jsonError(w, "Failed to write config", http.StatusInternalServerError)
+			return
+		}
 	}
 
-	if err := doctor.WriteRawConfig(h.config.ConfigPath, raw); err != nil {
-		h.jsonError(w, "Failed to write config", http.StatusInternalServerError)
-		return
+	var applyResult any
+	if applyRequested {
+		if h.config.ConfigManager == nil {
+			h.jsonError(w, "Config apply not available", http.StatusServiceUnavailable)
+			return
+		}
+		if rawContent == "" {
+			if data, err := os.ReadFile(h.config.ConfigPath); err == nil {
+				rawContent = string(data)
+			}
+		}
+		result, err := h.config.ConfigManager.ApplyConfig(r.Context(), rawContent, baseHash)
+		if err != nil {
+			h.jsonError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		applyResult = result
 	}
 
 	configYAML, configPath := h.configSnapshot()
@@ -966,10 +1043,14 @@ func (h *Handler) apiConfigPatch(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	h.jsonResponse(w, map[string]string{
+	response := map[string]any{
 		"path":   configPath,
 		"config": configYAML,
-	})
+	}
+	if applyResult != nil {
+		response["apply"] = applyResult
+	}
+	h.jsonResponse(w, response)
 }
 
 // getSystemStatus gathers system health information.
@@ -1251,6 +1332,15 @@ func (h *Handler) configSnapshot() (string, string) {
 		return "", configPath
 	}
 	return string(payload), configPath
+}
+
+func writeRawConfigFile(path string, raw string) error {
+	data := []byte(raw)
+	mode := os.FileMode(0o644)
+	if info, err := os.Stat(path); err == nil {
+		mode = info.Mode().Perm()
+	}
+	return os.WriteFile(path, data, mode)
 }
 
 func (h *Handler) getQRCode(ctx context.Context, channelType models.ChannelType) (string, bool) {

@@ -158,6 +158,9 @@ func (m *ManagedServer) RegisterToolsWithRuntime(ctx context.Context) error {
 		return err
 	}
 
+	if m.toolManager != nil {
+		m.toolManager.SetSessionStore(m.Server.sessions)
+	}
 	return m.toolManager.RegisterTools(ctx, runtime)
 }
 

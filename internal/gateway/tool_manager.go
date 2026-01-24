@@ -14,12 +14,16 @@ import (
 	"github.com/haasonsaas/nexus/internal/infra"
 	"github.com/haasonsaas/nexus/internal/jobs"
 	"github.com/haasonsaas/nexus/internal/mcp"
+	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/tools/browser"
+	exectools "github.com/haasonsaas/nexus/internal/tools/exec"
+	"github.com/haasonsaas/nexus/internal/tools/files"
 	jobtools "github.com/haasonsaas/nexus/internal/tools/jobs"
 	"github.com/haasonsaas/nexus/internal/tools/memorysearch"
 	"github.com/haasonsaas/nexus/internal/tools/policy"
 	"github.com/haasonsaas/nexus/internal/tools/sandbox"
 	"github.com/haasonsaas/nexus/internal/tools/sandbox/firecracker"
+	sessiontools "github.com/haasonsaas/nexus/internal/tools/sessions"
 	"github.com/haasonsaas/nexus/internal/tools/websearch"
 )
 
@@ -34,6 +38,7 @@ type ToolManager struct {
 	mcpManager     *mcp.Manager
 	policyResolver *policy.Resolver
 	jobStore       jobs.Store
+	sessionStore   sessions.Store
 
 	// Managed resources
 	browserPool        *browser.Pool
@@ -50,6 +55,7 @@ type ToolManagerConfig struct {
 	MCPManager     *mcp.Manager
 	PolicyResolver *policy.Resolver
 	JobStore       jobs.Store
+	Sessions       sessions.Store
 	Logger         *slog.Logger
 }
 
@@ -66,9 +72,17 @@ func NewToolManager(cfg ToolManagerConfig) *ToolManager {
 		mcpManager:      cfg.MCPManager,
 		policyResolver:  cfg.PolicyResolver,
 		jobStore:        cfg.JobStore,
+		sessionStore:    cfg.Sessions,
 		registeredTools: make([]string, 0),
 		mcpTools:        make([]string, 0),
 	}
+}
+
+// SetSessionStore updates the session store reference for tool registration.
+func (m *ToolManager) SetSessionStore(store sessions.Store) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.sessionStore = store
 }
 
 // Start initializes managed tool resources.
@@ -193,6 +207,27 @@ func (m *ToolManager) RegisterTools(ctx context.Context, runtime *agent.Runtime)
 
 	cfg := m.config
 
+	fileCfg := files.Config{Workspace: cfg.Workspace.Path}
+	runtime.RegisterTool(files.NewReadTool(fileCfg))
+	runtime.RegisterTool(files.NewWriteTool(fileCfg))
+	runtime.RegisterTool(files.NewEditTool(fileCfg))
+	runtime.RegisterTool(files.NewApplyPatchTool(fileCfg))
+	m.registeredTools = append(m.registeredTools, "read", "write", "edit", "apply_patch")
+
+	execManager := exectools.NewManager(cfg.Workspace.Path)
+	runtime.RegisterTool(exectools.NewExecTool("exec", execManager))
+	runtime.RegisterTool(exectools.NewExecTool("bash", execManager))
+	runtime.RegisterTool(exectools.NewProcessTool(execManager))
+	m.registeredTools = append(m.registeredTools, "exec", "bash", "process")
+
+	if m.sessionStore != nil {
+		runtime.RegisterTool(sessiontools.NewListTool(m.sessionStore, cfg.Session.DefaultAgentID))
+		runtime.RegisterTool(sessiontools.NewHistoryTool(m.sessionStore))
+		runtime.RegisterTool(sessiontools.NewStatusTool(m.sessionStore))
+		runtime.RegisterTool(sessiontools.NewSendTool(m.sessionStore, runtime))
+		m.registeredTools = append(m.registeredTools, "sessions_list", "sessions_history", "session_status", "sessions_send")
+	}
+
 	// Register sandbox tool
 	if cfg.Tools.Sandbox.Enabled {
 		if err := m.registerSandboxTool(ctx, runtime); err != nil {
@@ -214,11 +249,32 @@ func (m *ToolManager) RegisterTools(ctx context.Context, runtime *agent.Runtime)
 		m.registerWebSearchTool(runtime)
 		m.registeredTools = append(m.registeredTools, "web_search")
 	}
+	if cfg.Tools.WebFetch.Enabled {
+		runtime.RegisterTool(websearch.NewWebFetchTool(&websearch.FetchConfig{MaxChars: cfg.Tools.WebFetch.MaxChars}))
+		m.registeredTools = append(m.registeredTools, "web_fetch")
+	}
 
 	// Register memory search tool
 	if cfg.Tools.MemorySearch.Enabled {
 		m.registerMemorySearchTool(runtime)
-		m.registeredTools = append(m.registeredTools, "memory_search")
+		runtime.RegisterTool(memorysearch.NewMemoryGetTool(&memorysearch.Config{
+			Directory:     cfg.Tools.MemorySearch.Directory,
+			MemoryFile:    cfg.Tools.MemorySearch.MemoryFile,
+			WorkspacePath: cfg.Workspace.Path,
+			MaxResults:    cfg.Tools.MemorySearch.MaxResults,
+			MaxSnippetLen: cfg.Tools.MemorySearch.MaxSnippetLen,
+			Mode:          cfg.Tools.MemorySearch.Mode,
+			Embeddings: memorysearch.EmbeddingsConfig{
+				Provider: cfg.Tools.MemorySearch.Embeddings.Provider,
+				APIKey:   cfg.Tools.MemorySearch.Embeddings.APIKey,
+				BaseURL:  cfg.Tools.MemorySearch.Embeddings.BaseURL,
+				Model:    cfg.Tools.MemorySearch.Embeddings.Model,
+				CacheDir: cfg.Tools.MemorySearch.Embeddings.CacheDir,
+				CacheTTL: cfg.Tools.MemorySearch.Embeddings.CacheTTL,
+				Timeout:  cfg.Tools.MemorySearch.Embeddings.Timeout,
+			},
+		}))
+		m.registeredTools = append(m.registeredTools, "memory_search", "memory_get")
 	}
 
 	// Register job status tool

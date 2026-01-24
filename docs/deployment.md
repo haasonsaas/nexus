@@ -295,6 +295,9 @@ data:
         enabled: true
         provider: searxng
         url: http://searxng:8080
+      web_fetch:
+        enabled: true
+        max_chars: 10000
       execution:
         max_iterations: 4
         parallelism: 2

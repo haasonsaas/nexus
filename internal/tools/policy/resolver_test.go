@@ -65,3 +65,51 @@ func TestResolverProviderDenyWins(t *testing.T) {
 		t.Fatal("expected provider-specific deny to override allow")
 	}
 }
+
+func TestResolverWildcardAllowAll(t *testing.T) {
+	resolver := NewResolver()
+	policy := &Policy{Allow: []string{"*"}}
+
+	if !resolver.IsAllowed(policy, "web_search") {
+		t.Fatal("expected wildcard to allow web_search")
+	}
+	if !resolver.IsAllowed(policy, "exec") {
+		t.Fatal("expected wildcard to allow exec")
+	}
+}
+
+func TestResolverWildcardDenyOverridesAllow(t *testing.T) {
+	resolver := NewResolver()
+	policy := &Policy{
+		Allow: []string{"*"},
+		Deny:  []string{"exec"},
+	}
+
+	if resolver.IsAllowed(policy, "exec") {
+		t.Fatal("expected deny to override wildcard allow")
+	}
+}
+
+func TestResolverWildcardPrefix(t *testing.T) {
+	resolver := NewResolver()
+	policy := &Policy{Allow: []string{"web_*"}}
+
+	if !resolver.IsAllowed(policy, "web_search") {
+		t.Fatal("expected wildcard prefix to allow web_search")
+	}
+	if !resolver.IsAllowed(policy, "web_fetch") {
+		t.Fatal("expected wildcard prefix to allow web_fetch")
+	}
+	if resolver.IsAllowed(policy, "memory_search") {
+		t.Fatal("expected wildcard prefix not to allow memory_search")
+	}
+}
+
+func TestResolverWildcardPrefixWithAlias(t *testing.T) {
+	resolver := NewResolver()
+	policy := &Policy{Allow: []string{"web_*"}}
+
+	if !resolver.IsAllowed(policy, "websearch") {
+		t.Fatal("expected wildcard prefix to allow websearch alias")
+	}
+}

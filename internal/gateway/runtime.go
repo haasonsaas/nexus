@@ -18,12 +18,21 @@ import (
 	"github.com/haasonsaas/nexus/internal/mcp"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/tools/browser"
+	canvastools "github.com/haasonsaas/nexus/internal/tools/canvas"
+	crontools "github.com/haasonsaas/nexus/internal/tools/cron"
+	exectools "github.com/haasonsaas/nexus/internal/tools/exec"
+	"github.com/haasonsaas/nexus/internal/tools/files"
+	gatewaytools "github.com/haasonsaas/nexus/internal/tools/gateway"
 	jobtools "github.com/haasonsaas/nexus/internal/tools/jobs"
 	"github.com/haasonsaas/nexus/internal/tools/memorysearch"
+	"github.com/haasonsaas/nexus/internal/tools/message"
+	modelstools "github.com/haasonsaas/nexus/internal/tools/models"
+	nodestools "github.com/haasonsaas/nexus/internal/tools/nodes"
 	"github.com/haasonsaas/nexus/internal/tools/reminders"
 	"github.com/haasonsaas/nexus/internal/tools/sandbox"
 	"github.com/haasonsaas/nexus/internal/tools/sandbox/firecracker"
 	"github.com/haasonsaas/nexus/internal/tools/servicenow"
+	sessiontools "github.com/haasonsaas/nexus/internal/tools/sessions"
 	"github.com/haasonsaas/nexus/internal/tools/websearch"
 )
 
@@ -319,6 +328,44 @@ func (s *Server) registerTools(ctx context.Context, runtime *agent.Runtime) erro
 		}
 	}
 
+	fileCfg := files.Config{Workspace: s.config.Workspace.Path}
+	runtime.RegisterTool(files.NewReadTool(fileCfg))
+	runtime.RegisterTool(files.NewWriteTool(fileCfg))
+	runtime.RegisterTool(files.NewEditTool(fileCfg))
+	runtime.RegisterTool(files.NewApplyPatchTool(fileCfg))
+
+	execManager := exectools.NewManager(s.config.Workspace.Path)
+	runtime.RegisterTool(exectools.NewExecTool("exec", execManager))
+	runtime.RegisterTool(exectools.NewExecTool("bash", execManager))
+	runtime.RegisterTool(exectools.NewProcessTool(execManager))
+
+	if s.sessions != nil {
+		runtime.RegisterTool(sessiontools.NewListTool(s.sessions, s.config.Session.DefaultAgentID))
+		runtime.RegisterTool(sessiontools.NewHistoryTool(s.sessions))
+		runtime.RegisterTool(sessiontools.NewStatusTool(s.sessions))
+		runtime.RegisterTool(sessiontools.NewSendTool(s.sessions, runtime))
+	}
+	if s.channels != nil {
+		runtime.RegisterTool(message.NewTool("message", s.channels, s.sessions, s.config.Session.DefaultAgentID))
+		runtime.RegisterTool(message.NewTool("send_message", s.channels, s.sessions, s.config.Session.DefaultAgentID))
+	}
+	if s.cronScheduler != nil {
+		runtime.RegisterTool(crontools.NewTool(s.cronScheduler))
+	}
+	if s.canvasHost != nil {
+		runtime.RegisterTool(canvastools.NewTool(s.canvasHost))
+	}
+
+	runtime.RegisterTool(gatewaytools.NewTool(s))
+
+	if s.modelCatalog != nil {
+		runtime.RegisterTool(modelstools.NewTool(s.modelCatalog, s.bedrockDiscovery))
+	}
+
+	if s.config.Edge.Enabled && s.edgeManager != nil {
+		runtime.RegisterTool(nodestools.NewTool(s.edgeManager, s.edgeTOFU))
+	}
+
 	if s.config.Tools.Browser.Enabled {
 		pool, err := browser.NewPool(browser.PoolConfig{
 			Headless: s.config.Tools.Browser.Headless,
@@ -351,6 +398,13 @@ func (s *Server) registerTools(ctx context.Context, runtime *agent.Runtime) erro
 		runtime.RegisterTool(websearch.NewWebSearchTool(searchConfig))
 	}
 
+	if s.config.Tools.WebFetch.Enabled {
+		fetchConfig := &websearch.FetchConfig{
+			MaxChars: s.config.Tools.WebFetch.MaxChars,
+		}
+		runtime.RegisterTool(websearch.NewWebFetchTool(fetchConfig))
+	}
+
 	if s.config.Tools.MemorySearch.Enabled {
 		searchConfig := &memorysearch.Config{
 			Directory:     s.config.Tools.MemorySearch.Directory,
@@ -370,6 +424,7 @@ func (s *Server) registerTools(ctx context.Context, runtime *agent.Runtime) erro
 			},
 		}
 		runtime.RegisterTool(memorysearch.NewMemorySearchTool(searchConfig))
+		runtime.RegisterTool(memorysearch.NewMemoryGetTool(searchConfig))
 	}
 
 	if s.jobStore != nil {

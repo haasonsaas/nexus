@@ -1,6 +1,7 @@
 package policy
 
 import (
+	"regexp"
 	"strings"
 	"sync"
 )
@@ -168,11 +169,7 @@ func (r *Resolver) Decide(policy *Policy, toolName string) Decision {
 
 	// Check denial first (deny always wins)
 	for _, d := range denied {
-		if d == normalized {
-			decision.Reason = "denied by rule: " + d
-			return decision
-		}
-		if strings.HasPrefix(normalized, "mcp:") && matchMCPPattern(d, normalized) {
+		if matchPattern(d, normalized) {
 			decision.Reason = "denied by rule: " + d
 			return decision
 		}
@@ -187,12 +184,7 @@ func (r *Resolver) Decide(policy *Policy, toolName string) Decision {
 
 	// Check allow list
 	for _, a := range allowed {
-		if a == normalized {
-			decision.Allowed = true
-			decision.Reason = "allowed by rule: " + a
-			return decision
-		}
-		if strings.HasPrefix(normalized, "mcp:") && matchMCPPattern(a, normalized) {
+		if matchPattern(a, normalized) {
 			decision.Allowed = true
 			decision.Reason = "allowed by rule: " + a
 			return decision
@@ -257,6 +249,24 @@ func matchMCPPattern(pattern, toolName string) bool {
 	}
 
 	return pattern == toolName
+}
+
+func matchPattern(pattern, toolName string) bool {
+	if pattern == "" {
+		return false
+	}
+	if pattern == "*" {
+		return true
+	}
+	if strings.HasPrefix(pattern, "mcp:") {
+		return matchMCPPattern(pattern, toolName)
+	}
+	if !strings.Contains(pattern, "*") {
+		return pattern == toolName
+	}
+	escaped := regexp.QuoteMeta(pattern)
+	regex := "^" + strings.ReplaceAll(escaped, "\\*", ".*") + "$"
+	return regexp.MustCompile(regex).MatchString(toolName)
 }
 
 // FilterAllowed filters a list of tools to only those allowed by the policy,

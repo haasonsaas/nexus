@@ -40,6 +40,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/media"
 	"github.com/haasonsaas/nexus/internal/media/transcribe"
 	"github.com/haasonsaas/nexus/internal/memory"
+	modelcatalog "github.com/haasonsaas/nexus/internal/models"
 	"github.com/haasonsaas/nexus/internal/observability"
 	"github.com/haasonsaas/nexus/internal/plugins"
 	"github.com/haasonsaas/nexus/internal/sessions"
@@ -107,6 +108,10 @@ type Server struct {
 
 	edgeManager *edge.Manager
 	edgeService *edge.Service
+	edgeTOFU    *edge.TOFUAuthenticator
+
+	modelCatalog     *modelcatalog.Catalog
+	bedrockDiscovery *modelcatalog.BedrockDiscovery
 
 	// Artifact repository for tool-produced files
 	artifactRepo artifacts.Repository
@@ -136,6 +141,8 @@ type Server struct {
 	// httpServer serves the HTTP dashboard, API, and control plane WebSocket
 	httpServer   *http.Server
 	httpListener net.Listener
+
+	configApplyMu sync.Mutex
 
 	// singletonLock prevents multiple gateway instances from running
 	singletonLock *GatewayLockHandle
@@ -255,6 +262,16 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	commands.RegisterBuiltins(commandRegistry)
 	commandParser := commands.NewParser(commandRegistry)
 
+	modelCatalog := modelcatalog.NewCatalog()
+	var bedrockDiscovery *modelcatalog.BedrockDiscovery
+	if cfg.LLM.Bedrock.Enabled {
+		bedrockCfg := buildBedrockDiscoveryConfig(cfg.LLM.Bedrock, logger)
+		bedrockDiscovery = modelcatalog.NewBedrockDiscovery(bedrockCfg, logger)
+		if err := bedrockDiscovery.RegisterWithCatalog(startupCtx, modelCatalog); err != nil {
+			logger.Warn("bedrock discovery failed", "error", err)
+		}
+	}
+
 	// Create job store (prefer DB when available)
 	var jobStore jobs.Store
 	if cfg.Database.URL != "" {
@@ -367,12 +384,14 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	// Initialize edge manager if enabled
 	var edgeManager *edge.Manager
 	var edgeService *edge.Service
+	var edgeTOFU *edge.TOFUAuthenticator
 	var artifactRepo artifacts.Repository
 	if cfg.Edge.Enabled {
-		edgeAuth, err := buildEdgeAuthenticator(cfg)
+		edgeAuth, tofuAuth, err := buildEdgeAuthenticator(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("edge authenticator: %w", err)
 		}
+		edgeTOFU = tofuAuth
 
 		managerConfig := edge.ManagerConfig{
 			HeartbeatInterval:  cfg.Edge.HeartbeatInterval,
@@ -434,6 +453,9 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		hooksRegistry:      hooksRegistry,
 		edgeManager:        edgeManager,
 		edgeService:        edgeService,
+		edgeTOFU:           edgeTOFU,
+		modelCatalog:       modelCatalog,
+		bedrockDiscovery:   bedrockDiscovery,
 		canvasHost:         canvasHost,
 		artifactRepo:       artifactRepo,
 		eventStore:         eventStore,
@@ -510,16 +532,17 @@ func (s *Server) registerChannelsFromConfig() error {
 }
 
 // buildEdgeAuthenticator creates an edge authenticator based on configuration.
-func buildEdgeAuthenticator(cfg *config.Config) (edge.Authenticator, error) {
+func buildEdgeAuthenticator(cfg *config.Config) (edge.Authenticator, *edge.TOFUAuthenticator, error) {
 	switch cfg.Edge.AuthMode {
 	case "dev":
-		return edge.NewDevAuthenticator(), nil
+		return edge.NewDevAuthenticator(), nil, nil
 	case "tofu":
-		return edge.NewTOFUAuthenticator(nil), nil
+		auth := edge.NewTOFUAuthenticator(nil)
+		return auth, auth, nil
 	case "token", "":
-		return edge.NewTokenAuthenticator(cfg.Edge.Tokens), nil
+		return edge.NewTokenAuthenticator(cfg.Edge.Tokens), nil, nil
 	default:
-		return nil, fmt.Errorf("unknown edge auth mode: %s", cfg.Edge.AuthMode)
+		return nil, nil, fmt.Errorf("unknown edge auth mode: %s", cfg.Edge.AuthMode)
 	}
 }
 

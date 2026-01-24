@@ -141,7 +141,7 @@ func (s *Server) isAllowedTarget(channel models.ChannelType, targetID string, po
 	}
 	provider := strings.ToLower(string(channel))
 	store := pairing.NewStore(provider)
-	allowlist, err := store.LoadAllowlist()
+	allowlist, err := store.GetAllowlist(provider)
 	if err != nil {
 		s.logger.Warn("failed to load pairing allowlist",
 			"channel", channel,
@@ -158,9 +158,30 @@ func (s *Server) handlePairingRequest(ctx context.Context, msg *models.Message, 
 	}
 	provider := strings.ToLower(string(msg.Channel))
 	store := pairing.NewStore(provider)
-	req, created, err := store.GetOrCreateRequest(senderID, extractSenderName(msg))
+	meta := map[string]string{}
+	if senderName := extractSenderName(msg); senderName != "" {
+		meta["sender_name"] = senderName
+	}
+	code, created, err := store.UpsertRequest(provider, senderID, meta)
 	if err != nil {
 		return err
+	}
+	req := pairing.Request{
+		ID:        senderID,
+		Code:      code,
+		CreatedAt: time.Now(),
+	}
+	if !created {
+		if pending, err := store.ListRequests(provider); err == nil {
+			for _, item := range pending {
+				if item != nil && item.ID == senderID {
+					req.CreatedAt = item.CreatedAt
+					req.LastSeenAt = item.LastSeenAt
+					req.Meta = item.Meta
+					break
+				}
+			}
+		}
 	}
 
 	content := buildPairingPrompt(provider, extractSenderName(msg), req, created)
@@ -203,7 +224,8 @@ func buildPairingPrompt(provider string, senderName string, req pairing.Request,
 	if !created {
 		status = "already pending"
 	}
-	expiresIn := time.Until(req.ExpiresAt).Round(time.Minute)
+	expiresAt := req.CreatedAt.Add(pairing.PendingTTL)
+	expiresIn := time.Until(expiresAt).Round(time.Minute)
 	if expiresIn < 0 {
 		expiresIn = 0
 	}

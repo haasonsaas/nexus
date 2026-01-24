@@ -78,7 +78,10 @@ func NewStore(dataDir string) *Store {
 	// Check if this looks like a channel name (gateway compatibility mode)
 	if !strings.Contains(dataDir, "/") && !strings.Contains(dataDir, "\\") {
 		// Single-channel mode: use default data dir
-		home, _ := os.UserHomeDir()
+		home, err := os.UserHomeDir()
+		if err != nil || strings.TrimSpace(home) == "" {
+			home = "."
+		}
 		return &Store{
 			dataDir: filepath.Join(home, ".nexus", "pairing"),
 			channel: dataDir,
@@ -288,7 +291,9 @@ func (s *Store) UpsertRequest(channel, id string, meta map[string]string) (strin
 	pruned = pruneExcess(pruned, MaxPending)
 	if MaxPending > 0 && len(pruned) >= MaxPending {
 		store.Requests = pruned
-		_ = s.writeStore(channel, store)
+		if err := s.writeStore(channel, store); err != nil {
+			return "", false, err
+		}
 		return "", false, ErrMaxPending
 	}
 
@@ -352,7 +357,9 @@ func (s *Store) ApproveCode(channel, code string) (string, *Request, error) {
 		// Save pruned state
 		if len(pruned) != len(store.Requests) {
 			store.Requests = pruned
-			_ = s.writeStore(channel, store)
+			if err := s.writeStore(channel, store); err != nil {
+				return "", nil, err
+			}
 		}
 		return "", nil, ErrCodeNotFound
 	}

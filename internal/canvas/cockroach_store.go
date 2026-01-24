@@ -331,7 +331,11 @@ func (s *CockroachStore) DeleteEvents(ctx context.Context, sessionID string) err
 	if err != nil {
 		return fmt.Errorf("delete canvas events: %w", err)
 	}
-	if rows, _ := res.RowsAffected(); rows == 0 {
+	rows, rowsErr := res.RowsAffected()
+	if rowsErr != nil {
+		return fmt.Errorf("delete canvas events: %w", rowsErr)
+	}
+	if rows == 0 {
 		return ErrNotFound
 	}
 	return nil

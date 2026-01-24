@@ -1271,3 +1271,289 @@ func TestPrepareWorkspace(t *testing.T) {
 		t.Errorf("escape file should exist (sanitized): %v", err)
 	}
 }
+
+func TestPool_Get_UnsupportedLanguage(t *testing.T) {
+	cfg := &Config{
+		Backend:        BackendDocker,
+		PoolSize:       0,
+		MaxPoolSize:    5,
+		DefaultTimeout: 30 * time.Second,
+		DefaultCPU:     1000,
+		DefaultMemory:  512,
+	}
+
+	pool, err := NewPool(cfg)
+	if err != nil {
+		t.Fatalf("NewPool failed: %v", err)
+	}
+	defer pool.Close()
+
+	_, err = pool.Get(context.Background(), "ruby")
+	if err == nil {
+		t.Error("expected error for unsupported language")
+	}
+	if !strings.Contains(err.Error(), "unsupported") {
+		t.Errorf("error = %q, want to contain 'unsupported'", err.Error())
+	}
+}
+
+func TestPool_Shrink_UnsupportedLanguage(t *testing.T) {
+	cfg := &Config{
+		Backend:        BackendDocker,
+		PoolSize:       0,
+		MaxPoolSize:    5,
+		DefaultTimeout: 30 * time.Second,
+		DefaultCPU:     1000,
+		DefaultMemory:  512,
+	}
+
+	pool, err := NewPool(cfg)
+	if err != nil {
+		t.Fatalf("NewPool failed: %v", err)
+	}
+	defer pool.Close()
+
+	err = pool.Shrink("ruby", 1)
+	if err == nil {
+		t.Error("expected error for unsupported language")
+	}
+	if !strings.Contains(err.Error(), "unsupported") {
+		t.Errorf("error = %q, want to contain 'unsupported'", err.Error())
+	}
+}
+
+func TestPool_Shrink_ClosedPool(t *testing.T) {
+	cfg := &Config{
+		Backend:        BackendDocker,
+		PoolSize:       0,
+		MaxPoolSize:    5,
+		DefaultTimeout: 30 * time.Second,
+		DefaultCPU:     1000,
+		DefaultMemory:  512,
+	}
+
+	pool, err := NewPool(cfg)
+	if err != nil {
+		t.Fatalf("NewPool failed: %v", err)
+	}
+
+	pool.Close()
+
+	err = pool.Shrink("python", 1)
+	if err == nil {
+		t.Error("expected error for closed pool")
+	}
+	if !strings.Contains(err.Error(), "closed") {
+		t.Errorf("error = %q, want to contain 'closed'", err.Error())
+	}
+}
+
+func TestPool_Health_ClosedPool(t *testing.T) {
+	cfg := &Config{
+		Backend:        BackendDocker,
+		PoolSize:       0,
+		MaxPoolSize:    5,
+		DefaultTimeout: 30 * time.Second,
+		DefaultCPU:     1000,
+		DefaultMemory:  512,
+	}
+
+	pool, err := NewPool(cfg)
+	if err != nil {
+		t.Fatalf("NewPool failed: %v", err)
+	}
+
+	pool.Close()
+
+	err = pool.Health()
+	if err == nil {
+		t.Error("expected error for closed pool")
+	}
+	if !strings.Contains(err.Error(), "closed") {
+		t.Errorf("error = %q, want to contain 'closed'", err.Error())
+	}
+}
+
+func TestPool_Warmup_UnsupportedLanguage(t *testing.T) {
+	cfg := &Config{
+		Backend:        BackendDocker,
+		PoolSize:       0,
+		MaxPoolSize:    5,
+		DefaultTimeout: 30 * time.Second,
+		DefaultCPU:     1000,
+		DefaultMemory:  512,
+	}
+
+	pool, err := NewPool(cfg)
+	if err != nil {
+		t.Fatalf("NewPool failed: %v", err)
+	}
+	defer pool.Close()
+
+	err = pool.Warmup(context.Background(), "ruby", 1)
+	if err == nil {
+		t.Error("expected error for unsupported language")
+	}
+	if !strings.Contains(err.Error(), "unsupported") {
+		t.Errorf("error = %q, want to contain 'unsupported'", err.Error())
+	}
+}
+
+func TestPool_Warmup_ClosedPool(t *testing.T) {
+	cfg := &Config{
+		Backend:        BackendDocker,
+		PoolSize:       0,
+		MaxPoolSize:    5,
+		DefaultTimeout: 30 * time.Second,
+		DefaultCPU:     1000,
+		DefaultMemory:  512,
+	}
+
+	pool, err := NewPool(cfg)
+	if err != nil {
+		t.Fatalf("NewPool failed: %v", err)
+	}
+
+	pool.Close()
+
+	err = pool.Warmup(context.Background(), "python", 1)
+	if err == nil {
+		t.Error("expected error for closed pool")
+	}
+	if !strings.Contains(err.Error(), "closed") {
+		t.Errorf("error = %q, want to contain 'closed'", err.Error())
+	}
+}
+
+func TestPool_Put_NilExecutor(t *testing.T) {
+	cfg := &Config{
+		Backend:        BackendDocker,
+		PoolSize:       0,
+		MaxPoolSize:    5,
+		DefaultTimeout: 30 * time.Second,
+		DefaultCPU:     1000,
+		DefaultMemory:  512,
+	}
+
+	pool, err := NewPool(cfg)
+	if err != nil {
+		t.Fatalf("NewPool failed: %v", err)
+	}
+	defer pool.Close()
+
+	// Should not panic
+	pool.Put(nil)
+}
+
+func TestPool_DoubleClose(t *testing.T) {
+	cfg := &Config{
+		Backend:        BackendDocker,
+		PoolSize:       0,
+		MaxPoolSize:    5,
+		DefaultTimeout: 30 * time.Second,
+		DefaultCPU:     1000,
+		DefaultMemory:  512,
+	}
+
+	pool, err := NewPool(cfg)
+	if err != nil {
+		t.Fatalf("NewPool failed: %v", err)
+	}
+
+	// First close should succeed
+	err = pool.Close()
+	if err != nil {
+		t.Errorf("first Close() error = %v", err)
+	}
+
+	// Second close should also succeed (idempotent)
+	err = pool.Close()
+	if err != nil {
+		t.Errorf("second Close() error = %v", err)
+	}
+}
+
+func TestFirecrackerExecutorWrapper_NilBackend(t *testing.T) {
+	wrapper := &firecrackerExecutorWrapper{
+		language: "python",
+		cpuLimit: 1000,
+		memLimit: 512,
+		backend:  nil,
+	}
+
+	// Language should still work
+	if lang := wrapper.Language(); lang != "python" {
+		t.Errorf("Language() = %q, want %q", lang, "python")
+	}
+
+	// Close should not panic
+	err := wrapper.Close()
+	if err != nil {
+		t.Errorf("Close() error = %v", err)
+	}
+
+	// Run should return error
+	_, err = wrapper.Run(context.Background(), &ExecuteParams{}, "/tmp")
+	if err == nil {
+		t.Error("expected error for nil backend")
+	}
+}
+
+func TestPrepareWorkspace_NoStdin(t *testing.T) {
+	params := &ExecuteParams{
+		Language: "python",
+		Code:     "print('hello')",
+		Stdin:    "",
+	}
+
+	workspace, err := prepareWorkspace(params)
+	if err != nil {
+		t.Fatalf("prepareWorkspace failed: %v", err)
+	}
+	defer os.RemoveAll(workspace)
+
+	// Check main file exists
+	mainPath := filepath.Join(workspace, "main.py")
+	if _, err := os.Stat(mainPath); err != nil {
+		t.Errorf("main file not found: %v", err)
+	}
+
+	// Check stdin file should NOT exist when empty
+	stdinPath := filepath.Join(workspace, "stdin.txt")
+	if _, err := os.Stat(stdinPath); !os.IsNotExist(err) {
+		t.Error("stdin file should not exist when stdin is empty")
+	}
+}
+
+func TestPrepareWorkspace_AllLanguages(t *testing.T) {
+	languages := []struct {
+		lang     string
+		filename string
+	}{
+		{"python", "main.py"},
+		{"nodejs", "main.js"},
+		{"go", "main.go"},
+		{"bash", "main.sh"},
+		{"unknown", "main.txt"},
+	}
+
+	for _, tc := range languages {
+		t.Run(tc.lang, func(t *testing.T) {
+			params := &ExecuteParams{
+				Language: tc.lang,
+				Code:     "test code",
+			}
+
+			workspace, err := prepareWorkspace(params)
+			if err != nil {
+				t.Fatalf("prepareWorkspace failed: %v", err)
+			}
+			defer os.RemoveAll(workspace)
+
+			mainPath := filepath.Join(workspace, tc.filename)
+			if _, err := os.Stat(mainPath); err != nil {
+				t.Errorf("main file %s not found: %v", tc.filename, err)
+			}
+		})
+	}
+}

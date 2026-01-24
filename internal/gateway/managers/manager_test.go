@@ -683,3 +683,85 @@ func TestRuntimeManager_StartStop(t *testing.T) {
 		}
 	})
 }
+
+
+func TestToolingManager_Accessors(t *testing.T) {
+	m := NewToolingManager(ToolingManagerConfig{})
+
+	// PolicyResolver should be created by default
+	if m.PolicyResolver() == nil {
+		t.Error("PolicyResolver should not be nil")
+	}
+
+	// HooksRegistry should be created by default
+	if m.HooksRegistry() == nil {
+		t.Error("HooksRegistry should not be nil")
+	}
+
+	// BrowserPool should be nil before start
+	if m.BrowserPool() != nil {
+		t.Error("BrowserPool should be nil before start")
+	}
+
+	// FirecrackerBackend should be nil when not configured
+	if m.FirecrackerBackend() != nil {
+		t.Error("FirecrackerBackend should be nil when not configured")
+	}
+
+	// MCPManager should be nil when not provided
+	if m.MCPManager() != nil {
+		t.Error("MCPManager should be nil when not provided")
+	}
+}
+
+func TestChannelManager_Accessors(t *testing.T) {
+	m := NewChannelManager(ChannelManagerConfig{})
+
+	// Registry should be initialized
+	if m.Registry() == nil {
+		t.Error("Registry should not be nil")
+	}
+
+	// MediaProcessor should be nil when not provided
+	if m.MediaProcessor() != nil {
+		t.Error("MediaProcessor should be nil when not provided")
+	}
+
+	// MediaAggregator should be nil when not provided
+	if m.MediaAggregator() != nil {
+		t.Error("MediaAggregator should be nil when not provided")
+	}
+}
+
+func TestSchedulerManager_Accessors(t *testing.T) {
+	cfg := &config.Config{}
+	m, err := NewSchedulerManager(SchedulerManagerConfig{
+		Config: cfg,
+	})
+	if err != nil {
+		t.Fatalf("NewSchedulerManager error: %v", err)
+	}
+
+	// All should be nil before start
+	if m.CronScheduler() != nil {
+		t.Error("CronScheduler should be nil before start")
+	}
+	if m.TaskScheduler() != nil {
+		t.Error("TaskScheduler should be nil before start")
+	}
+	if m.TaskStore() != nil {
+		t.Error("TaskStore should be nil before start")
+	}
+	if m.JobStore() != nil {
+		t.Error("JobStore should be nil before start")
+	}
+}
+
+
+func TestManagerInterface(t *testing.T) {
+	// Verify all managers implement the Manager interface
+	var _ Manager = (*RuntimeManager)(nil)
+	var _ Manager = (*ChannelManager)(nil)
+	var _ Manager = (*ToolingManager)(nil)
+	var _ Manager = (*SchedulerManager)(nil)
+}

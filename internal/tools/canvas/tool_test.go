@@ -17,7 +17,7 @@ func TestCanvasToolURL(t *testing.T) {
 		Port: 18793,
 		Root: root,
 	}
-	host, err := canvascore.NewHost(cfg, nil)
+	host, err := canvascore.NewHost(cfg, config.CanvasConfig{}, nil)
 	if err != nil {
 		t.Fatalf("host: %v", err)
 	}

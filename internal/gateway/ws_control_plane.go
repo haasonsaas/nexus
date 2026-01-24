@@ -148,6 +148,8 @@ type wsSession struct {
 	forwardedProto string
 	localAddress   string
 	requestScheme  string
+	canvasSession  string
+	canvasToken    string
 	connected      atomic.Bool
 	seq            int64
 	user           *models.User
@@ -170,6 +172,7 @@ func (h *wsControlPlane) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.TLS != nil {
 		requestScheme = "https"
 	}
+	query := r.URL.Query()
 	session := &wsSession{
 		control:        h,
 		conn:           conn,
@@ -181,6 +184,8 @@ func (h *wsControlPlane) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		forwardedProto: forwardedProto,
 		localAddress:   localAddress,
 		requestScheme:  requestScheme,
+		canvasSession:  strings.TrimSpace(query.Get("canvas_session")),
+		canvasToken:    strings.TrimSpace(query.Get("canvas_token")),
 		headerUser:     h.authenticateRequest(r),
 		idempotency:    make(map[string]struct{}),
 	}
@@ -620,6 +625,8 @@ func (s *wsSession) buildHelloPayload() map[string]any {
 			ForwardedProto: s.forwardedProto,
 			LocalAddress:   s.localAddress,
 			Scheme:         s.requestScheme,
+			SessionID:      s.canvasSession,
+			Token:          s.canvasToken,
 		}); canvasURL != "" {
 			serverPayload["canvasHostUrl"] = canvasURL
 		}

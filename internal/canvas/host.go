@@ -293,6 +293,8 @@ type Host struct {
 	liveReload   bool
 	injectClient bool
 	autoIndex    bool
+	tokenSecret  []byte
+	tokenTTL     time.Duration
 
 	logger *slog.Logger
 
@@ -311,10 +313,12 @@ type CanvasURLParams struct {
 	ForwardedProto string
 	LocalAddress   string
 	Scheme         string
+	SessionID      string
+	Token          string
 }
 
 // NewHost creates a canvas host for the given configuration.
-func NewHost(cfg config.CanvasHostConfig, logger *slog.Logger) (*Host, error) {
+func NewHost(cfg config.CanvasHostConfig, canvasCfg config.CanvasConfig, logger *slog.Logger) (*Host, error) {
 	if strings.TrimSpace(cfg.Root) == "" {
 		return nil, fmt.Errorf("canvas root is required")
 	}
@@ -328,6 +332,7 @@ func NewHost(cfg config.CanvasHostConfig, logger *slog.Logger) (*Host, error) {
 	liveReload := cfg.LiveReload != nil && *cfg.LiveReload
 	injectClient := cfg.InjectClient != nil && *cfg.InjectClient
 	autoIndex := cfg.AutoIndex != nil && *cfg.AutoIndex
+	tokenSecret := strings.TrimSpace(canvasCfg.Tokens.Secret)
 	return &Host{
 		host:         cfg.Host,
 		port:         cfg.Port,
@@ -337,6 +342,8 @@ func NewHost(cfg config.CanvasHostConfig, logger *slog.Logger) (*Host, error) {
 		liveReload:   liveReload,
 		injectClient: injectClient,
 		autoIndex:    autoIndex,
+		tokenSecret:  []byte(tokenSecret),
+		tokenTTL:     canvasCfg.Tokens.TTL,
 		logger:       logger.With("component", "canvas"),
 		clients:      make(map[*websocket.Conn]struct{}),
 		upgrader: websocket.Upgrader{
@@ -495,6 +502,26 @@ func (h *Host) CanvasURL(requestHost string) string {
 	return h.CanvasURLWithParams(CanvasURLParams{RequestHost: requestHost})
 }
 
+// CanvasSessionURL returns the absolute URL for a session-specific canvas path.
+func (h *Host) CanvasSessionURL(params CanvasURLParams, sessionID string) string {
+	params.SessionID = sessionID
+	return h.CanvasURLWithParams(params)
+}
+
+// SignedSessionURL returns a signed session-specific canvas URL.
+func (h *Host) SignedSessionURL(params CanvasURLParams, sessionID string, role string) (string, error) {
+	if h == nil {
+		return "", fmt.Errorf("canvas host is nil")
+	}
+	token, err := h.signSessionToken(sessionID, role)
+	if err != nil {
+		return "", err
+	}
+	params.SessionID = sessionID
+	params.Token = token
+	return h.CanvasURLWithParams(params), nil
+}
+
 // CanvasURLWithParams returns the absolute URL for the canvas root using request details.
 func (h *Host) CanvasURLWithParams(params CanvasURLParams) string {
 	if h == nil {
@@ -525,7 +552,24 @@ func (h *Host) CanvasURLWithParams(params CanvasURLParams) string {
 	}
 	host = trimHostBrackets(host)
 	hostPort := net.JoinHostPort(host, strconv.Itoa(h.port))
-	return fmt.Sprintf("%s://%s%s/", scheme, hostPort, h.canvasPrefix())
+	basePath := h.canvasPrefix()
+	if params.SessionID != "" {
+		basePath = path.Join(basePath, params.SessionID)
+	}
+	if !strings.HasSuffix(basePath, "/") {
+		basePath += "/"
+	}
+	parsed := url.URL{
+		Scheme: scheme,
+		Host:   hostPort,
+		Path:   basePath,
+	}
+	if token := strings.TrimSpace(params.Token); token != "" {
+		q := parsed.Query()
+		q.Set("token", token)
+		parsed.RawQuery = q.Encode()
+	}
+	return parsed.String()
 }
 
 func (h *Host) canvasHandler() http.Handler {
@@ -541,16 +585,47 @@ func (h *Host) canvasHandler() http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		fullPath, err := h.resolveFilePath(clean)
+		sessionID, sessionPath, err := h.sessionFromPath(clean)
 		if err != nil {
-			if clean == "/" || strings.HasSuffix(clean, "/") {
-				w.Header().Set("Content-Type", "text/html; charset=utf-8")
-				w.WriteHeader(http.StatusNotFound)
-				_, _ = w.Write([]byte("<!doctype html><meta charset=\"utf-8\" /><title>Nexus Canvas</title><pre>Missing file. Create index.html</pre>")) //nolint:errcheck
-				return
-			}
 			http.NotFound(w, r)
 			return
+		}
+
+		var fullPath string
+		if sessionID != "" {
+			if err := h.authorizeSessionRequest(r, sessionID); err != nil {
+				h.writeTokenError(w, err)
+				return
+			}
+			sessionRoot, err := h.ensureSessionRoot(sessionID)
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			fullPath, err = h.resolveFilePathWithRoot(sessionPath, sessionRoot, "", h.autoIndex)
+			if err != nil {
+				if sessionPath == "/" || strings.HasSuffix(sessionPath, "/") {
+					w.Header().Set("Content-Type", "text/html; charset=utf-8")
+					w.WriteHeader(http.StatusNotFound)
+					_, _ = w.Write([]byte("<!doctype html><meta charset=\"utf-8\" /><title>Nexus Canvas</title><pre>Missing file. Create index.html</pre>")) //nolint:errcheck
+					return
+				}
+				http.NotFound(w, r)
+				return
+			}
+		} else {
+			var err error
+			fullPath, err = h.resolveFilePath(clean)
+			if err != nil {
+				if clean == "/" || strings.HasSuffix(clean, "/") {
+					w.Header().Set("Content-Type", "text/html; charset=utf-8")
+					w.WriteHeader(http.StatusNotFound)
+					_, _ = w.Write([]byte("<!doctype html><meta charset=\"utf-8\" /><title>Nexus Canvas</title><pre>Missing file. Create index.html</pre>")) //nolint:errcheck
+					return
+				}
+				http.NotFound(w, r)
+				return
+			}
 		}
 		w.Header().Set("Cache-Control", "no-store")
 		if strings.HasSuffix(strings.ToLower(fullPath), ".html") {
@@ -951,6 +1026,83 @@ func normalizeNamespace(namespace string) string {
 	return clean
 }
 
+func (h *Host) sessionFromPath(clean string) (string, string, error) {
+	trimmed := strings.TrimPrefix(clean, "/")
+	if trimmed == "" || trimmed == "." {
+		return "", clean, nil
+	}
+	parts := strings.SplitN(trimmed, "/", 2)
+	sessionID := parts[0]
+	if !validSessionID(sessionID) {
+		return "", "", os.ErrNotExist
+	}
+	sessionPath := "/"
+	if len(parts) > 1 && parts[1] != "" {
+		sessionPath = "/" + parts[1]
+	}
+	return sessionID, sessionPath, nil
+}
+
+func (h *Host) ensureSessionRoot(sessionID string) (string, error) {
+	if !validSessionID(sessionID) {
+		return "", os.ErrNotExist
+	}
+	sessionRoot := filepath.Join(h.root, sessionID)
+	if h.autoIndex {
+		h.ensureIndex(sessionRoot)
+	} else if err := os.MkdirAll(sessionRoot, 0o755); err != nil {
+		return "", err
+	}
+	return sessionRoot, nil
+}
+
+func (h *Host) authorizeSessionRequest(r *http.Request, sessionID string) error {
+	if h == nil || len(h.tokenSecret) == 0 {
+		return nil
+	}
+	token := extractCanvasToken(r)
+	if token == "" {
+		return ErrTokenInvalid
+	}
+	access, err := ParseAccessToken(h.tokenSecret, token)
+	if err != nil {
+		return err
+	}
+	if access.SessionID != sessionID {
+		return ErrTokenInvalid
+	}
+	return nil
+}
+
+func (h *Host) signSessionToken(sessionID string, role string) (string, error) {
+	if h == nil || len(h.tokenSecret) == 0 {
+		return "", ErrTokenInvalid
+	}
+	ttl := h.tokenTTL
+	if ttl < 0 {
+		ttl = 0
+	}
+	token := AccessToken{
+		SessionID: sessionID,
+		Role:      role,
+	}
+	if ttl > 0 {
+		token.ExpiresAt = time.Now().Add(ttl).Unix()
+	}
+	return SignAccessToken(h.tokenSecret, token)
+}
+
+func (h *Host) writeTokenError(w http.ResponseWriter, err error) {
+	status := http.StatusUnauthorized
+	message := "Unauthorized"
+	if errors.Is(err, ErrTokenExpired) {
+		message = "Token expired"
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = w.Write([]byte(message)) //nolint:errcheck
+}
+
 func (h *Host) resolveFilePath(urlPath string) (string, error) {
 	return h.resolveFilePathWithRoot(urlPath, h.root, h.rootReal, h.autoIndex)
 }
@@ -1001,6 +1153,46 @@ func (h *Host) resolveFilePathWithRoot(urlPath string, root string, rootReal str
 		return "", os.ErrNotExist
 	}
 	return realPath, nil
+}
+
+func extractCanvasToken(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	if token := strings.TrimSpace(r.URL.Query().Get("token")); token != "" {
+		return token
+	}
+	if token := strings.TrimSpace(r.Header.Get("X-Canvas-Token")); token != "" {
+		return token
+	}
+	if authHeader := strings.TrimSpace(r.Header.Get("Authorization")); authHeader != "" {
+		lower := strings.ToLower(authHeader)
+		if strings.HasPrefix(lower, "bearer ") {
+			return strings.TrimSpace(authHeader[len("bearer "):])
+		}
+	}
+	return ""
+}
+
+func validSessionID(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return false
+	}
+	if strings.Contains(trimmed, "..") {
+		return false
+	}
+	for _, r := range trimmed {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case r == '-', r == '_', r == '.', r == ':':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func shouldIgnorePath(p string) bool {

@@ -102,6 +102,7 @@ type CanvasHostConfig struct {
 // CanvasConfig configures canvas persistence and retention.
 type CanvasConfig struct {
 	Retention CanvasRetentionConfig `yaml:"retention"`
+	Tokens    CanvasTokenConfig     `yaml:"tokens"`
 }
 
 // CanvasRetentionConfig controls how long canvas state and events are retained.
@@ -110,6 +111,12 @@ type CanvasRetentionConfig struct {
 	EventMaxAge   time.Duration `yaml:"event_max_age"`
 	StateMaxBytes int64         `yaml:"state_max_bytes"`
 	EventMaxBytes int64         `yaml:"event_max_bytes"`
+}
+
+// CanvasTokenConfig controls signed canvas access tokens.
+type CanvasTokenConfig struct {
+	Secret string        `yaml:"secret"`
+	TTL    time.Duration `yaml:"ttl"`
 }
 
 type DatabaseConfig struct {
@@ -1115,6 +1122,9 @@ func applyCanvasDefaults(cfg *CanvasConfig) {
 	if cfg.Retention.EventMaxBytes == 0 {
 		cfg.Retention.EventMaxBytes = 256 << 10 // 256 KiB
 	}
+	if cfg.Tokens.TTL == 0 {
+		cfg.Tokens.TTL = 30 * time.Minute
+	}
 }
 
 func applyDatabaseDefaults(cfg *DatabaseConfig) {
@@ -1626,6 +1636,14 @@ func validateConfig(cfg *Config) error {
 	}
 	if cfg.Canvas.Retention.EventMaxBytes < 0 {
 		issues = append(issues, "canvas.retention.event_max_bytes must be >= 0")
+	}
+	if cfg.Canvas.Tokens.TTL < 0 {
+		issues = append(issues, "canvas.tokens.ttl must be >= 0")
+	}
+	if secret := strings.TrimSpace(cfg.Canvas.Tokens.Secret); secret != "" {
+		if len(secret) < 32 {
+			issues = append(issues, "canvas.tokens.secret must be at least 32 characters for security")
+		}
 	}
 
 	if strings.TrimSpace(cfg.Artifacts.MetadataBackend) != "" {

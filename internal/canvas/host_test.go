@@ -3,9 +3,11 @@ package canvas
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 
@@ -22,7 +24,7 @@ func TestNewHost(t *testing.T) {
 			Namespace:  "/__nexus__",
 			LiveReload: &liveReload,
 		}
-		host, err := NewHost(cfg, nil)
+		host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 		if err != nil {
 			t.Errorf("NewHost error: %v", err)
 		}
@@ -37,7 +39,7 @@ func TestNewHost(t *testing.T) {
 			Root:      "",
 			Namespace: "/__nexus__",
 		}
-		_, err := NewHost(cfg, nil)
+		_, err := NewHost(cfg, config.CanvasConfig{}, nil)
 		if err == nil {
 			t.Error("expected error for empty root")
 		}
@@ -49,7 +51,7 @@ func TestNewHost(t *testing.T) {
 			Root:      "   ",
 			Namespace: "/__nexus__",
 		}
-		_, err := NewHost(cfg, nil)
+		_, err := NewHost(cfg, config.CanvasConfig{}, nil)
 		if err == nil {
 			t.Error("expected error for whitespace root")
 		}
@@ -62,7 +64,7 @@ func TestNewHost(t *testing.T) {
 			Root:      tmpDir,
 			Namespace: "/__nexus__",
 		}
-		_, err := NewHost(cfg, nil)
+		_, err := NewHost(cfg, config.CanvasConfig{}, nil)
 		if err == nil {
 			t.Error("expected error for zero port")
 		}
@@ -75,7 +77,7 @@ func TestNewHost(t *testing.T) {
 			Root:      tmpDir,
 			Namespace: "/__nexus__",
 		}
-		_, err := NewHost(cfg, nil)
+		_, err := NewHost(cfg, config.CanvasConfig{}, nil)
 		if err == nil {
 			t.Error("expected error for negative port")
 		}
@@ -98,7 +100,7 @@ func TestHost_CanvasURL(t *testing.T) {
 			Root:      tmpDir,
 			Namespace: "/__nexus__",
 		}
-		host, err := NewHost(cfg, nil)
+		host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 		if err != nil {
 			t.Fatalf("NewHost error: %v", err)
 		}
@@ -116,7 +118,7 @@ func TestHost_CanvasURL(t *testing.T) {
 			Root:      tmpDir,
 			Namespace: "/__nexus__",
 		}
-		host, err := NewHost(cfg, nil)
+		host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 		if err != nil {
 			t.Fatalf("NewHost error: %v", err)
 		}
@@ -134,7 +136,7 @@ func TestHost_CanvasURL(t *testing.T) {
 			Root:      tmpDir,
 			Namespace: "/__nexus__",
 		}
-		host, err := NewHost(cfg, nil)
+		host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 		if err != nil {
 			t.Fatalf("NewHost error: %v", err)
 		}
@@ -152,7 +154,7 @@ func TestHost_CanvasURL(t *testing.T) {
 			Root:      tmpDir,
 			Namespace: "/__nexus__",
 		}
-		host, err := NewHost(cfg, nil)
+		host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 		if err != nil {
 			t.Fatalf("NewHost error: %v", err)
 		}
@@ -173,7 +175,7 @@ func TestHost_CanvasURL(t *testing.T) {
 			Root:      tmpDir,
 			Namespace: "/__nexus__",
 		}
-		host, err := NewHost(cfg, nil)
+		host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 		if err != nil {
 			t.Fatalf("NewHost error: %v", err)
 		}
@@ -193,7 +195,7 @@ func TestHost_CanvasURL(t *testing.T) {
 			Root:      tmpDir,
 			Namespace: "/myapp",
 		}
-		host, err := NewHost(cfg, nil)
+		host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 		if err != nil {
 			t.Fatalf("NewHost error: %v", err)
 		}
@@ -211,13 +213,36 @@ func TestHost_CanvasURL(t *testing.T) {
 			Root:      tmpDir,
 			Namespace: "/__nexus__",
 		}
-		host, err := NewHost(cfg, nil)
+		host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 		if err != nil {
 			t.Fatalf("NewHost error: %v", err)
 		}
 		url := host.CanvasURL("")
 		if url != "http://[2001:db8::1]:18793/__nexus__/canvas/" {
 			t.Errorf("CanvasURL() = %q, want %q", url, "http://[2001:db8::1]:18793/__nexus__/canvas/")
+		}
+	})
+
+	t.Run("includes session and token when provided", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		cfg := config.CanvasHostConfig{
+			Host:      "0.0.0.0",
+			Port:      18793,
+			Root:      tmpDir,
+			Namespace: "/__nexus__",
+		}
+		host, err := NewHost(cfg, config.CanvasConfig{}, nil)
+		if err != nil {
+			t.Fatalf("NewHost error: %v", err)
+		}
+		url := host.CanvasURLWithParams(CanvasURLParams{
+			RequestHost: "nexus.example.com",
+			SessionID:   "session-1",
+			Token:       "token123",
+		})
+		want := "http://nexus.example.com:18793/__nexus__/canvas/session-1/?token=token123"
+		if url != want {
+			t.Errorf("CanvasURLWithParams() = %q, want %q", url, want)
 		}
 	})
 }
@@ -256,7 +281,7 @@ func TestInjectLiveReload(t *testing.T) {
 		LiveReload:   &liveReload,
 		InjectClient: &injectClient,
 	}
-	host, _ := NewHost(cfg, nil)
+	host, _ := NewHost(cfg, config.CanvasConfig{}, nil)
 
 	t.Run("injects before closing body", func(t *testing.T) {
 		html := `<html><body><h1>Test</h1></body></html>`
@@ -358,7 +383,7 @@ func TestHost_NamespacedPath(t *testing.T) {
 		Root:      tmpDir,
 		Namespace: "/myns",
 	}
-	host, err := NewHost(cfg, nil)
+	host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 	if err != nil {
 		t.Fatalf("NewHost error: %v", err)
 	}
@@ -388,7 +413,7 @@ func TestHost_NamespacedPath_RootNamespace(t *testing.T) {
 		Root:      tmpDir,
 		Namespace: "/",
 	}
-	host, err := NewHost(cfg, nil)
+	host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 	if err != nil {
 		t.Fatalf("NewHost error: %v", err)
 	}
@@ -405,7 +430,7 @@ func TestHost_Prefixes(t *testing.T) {
 		Root:      tmpDir,
 		Namespace: "/__nexus__",
 	}
-	host, err := NewHost(cfg, nil)
+	host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 	if err != nil {
 		t.Fatalf("NewHost error: %v", err)
 	}
@@ -433,7 +458,7 @@ func TestHost_LiveReloadScript(t *testing.T) {
 		Namespace:  "/__nexus__",
 		LiveReload: &liveReload,
 	}
-	host, err := NewHost(cfg, nil)
+	host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 	if err != nil {
 		t.Fatalf("NewHost error: %v", err)
 	}
@@ -461,7 +486,7 @@ func TestHost_EnsureRoot(t *testing.T) {
 			Root:      newRoot,
 			Namespace: "/__nexus__",
 		}
-		host, err := NewHost(cfg, nil)
+		host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 		if err != nil {
 			t.Fatalf("NewHost error: %v", err)
 		}
@@ -478,7 +503,7 @@ func TestHost_EnsureRoot(t *testing.T) {
 			Root:      tmpDir,
 			Namespace: "/__nexus__",
 		}
-		host, err := NewHost(cfg, nil)
+		host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 		if err != nil {
 			t.Fatalf("NewHost error: %v", err)
 		}
@@ -499,7 +524,7 @@ func TestHost_EnsureA2UI(t *testing.T) {
 			A2UIRoot:  a2uiDir,
 			Namespace: "/__nexus__",
 		}
-		host, err := NewHost(cfg, nil)
+		host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 		if err != nil {
 			t.Fatalf("NewHost error: %v", err)
 		}
@@ -683,7 +708,7 @@ func TestHost_ResolveFilePath(t *testing.T) {
 		Namespace: "/__nexus__",
 		AutoIndex: &autoIndex,
 	}
-	host, err := NewHost(cfg, nil)
+	host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 	if err != nil {
 		t.Fatalf("NewHost error: %v", err)
 	}
@@ -730,7 +755,7 @@ func TestHost_EnsureIndex(t *testing.T) {
 			Root:      canvasDir,
 			Namespace: "/__nexus__",
 		}
-		host, err := NewHost(cfg, nil)
+		host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 		if err != nil {
 			t.Fatalf("NewHost error: %v", err)
 		}
@@ -763,7 +788,7 @@ func TestHost_EnsureIndex(t *testing.T) {
 			Root:      tmpDir,
 			Namespace: "/__nexus__",
 		}
-		host, err := NewHost(cfg, nil)
+		host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 		if err != nil {
 			t.Fatalf("NewHost error: %v", err)
 		}
@@ -786,7 +811,7 @@ func TestHost_EnsureIndex(t *testing.T) {
 			Root:      t.TempDir(),
 			Namespace: "/__nexus__",
 		}
-		host, err := NewHost(cfg, nil)
+		host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 		if err != nil {
 			t.Fatalf("NewHost error: %v", err)
 		}
@@ -825,7 +850,7 @@ func TestHost_AddRemoveClients(t *testing.T) {
 		Root:      tmpDir,
 		Namespace: "/__nexus__",
 	}
-	host, err := NewHost(cfg, nil)
+	host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 	if err != nil {
 		t.Fatalf("NewHost error: %v", err)
 	}
@@ -846,7 +871,7 @@ func TestHost_CloseClients(t *testing.T) {
 		Root:      tmpDir,
 		Namespace: "/__nexus__",
 	}
-	host, err := NewHost(cfg, nil)
+	host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 	if err != nil {
 		t.Fatalf("NewHost error: %v", err)
 	}
@@ -867,7 +892,7 @@ func TestHost_BroadcastReload(t *testing.T) {
 		Namespace:  "/__nexus__",
 		LiveReload: &liveReload,
 	}
-	host, err := NewHost(cfg, nil)
+	host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 	if err != nil {
 		t.Fatalf("NewHost error: %v", err)
 	}
@@ -889,7 +914,7 @@ func TestHost_EnsureRoot_FileExists(t *testing.T) {
 		Root:      filePath,
 		Namespace: "/__nexus__",
 	}
-	host, err := NewHost(cfg, nil)
+	host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 	if err != nil {
 		t.Fatalf("NewHost error: %v", err)
 	}
@@ -907,7 +932,7 @@ func TestHost_EnsureA2UI_EmptyDir(t *testing.T) {
 		Root:      tmpDir,
 		Namespace: "/__nexus__",
 	}
-	host, err := NewHost(cfg, nil)
+	host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 	if err != nil {
 		t.Fatalf("NewHost error: %v", err)
 	}
@@ -924,7 +949,7 @@ func TestHost_ResolveFilePathWithRoot_EdgeCases(t *testing.T) {
 		Root:      tmpDir,
 		Namespace: "/__nexus__",
 	}
-	host, err := NewHost(cfg, nil)
+	host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 	if err != nil {
 		t.Fatalf("NewHost error: %v", err)
 	}
@@ -961,7 +986,7 @@ func TestHost_CanvasURLWithParams_SchemeOverride(t *testing.T) {
 		Root:      tmpDir,
 		Namespace: "/__nexus__",
 	}
-	host, err := NewHost(cfg, nil)
+	host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 	if err != nil {
 		t.Fatalf("NewHost error: %v", err)
 	}
@@ -983,7 +1008,7 @@ func TestHost_CanvasURLWithParams_ForwardedProtoEdgeCases(t *testing.T) {
 		Root:      tmpDir,
 		Namespace: "/__nexus__",
 	}
-	host, err := NewHost(cfg, nil)
+	host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 	if err != nil {
 		t.Fatalf("NewHost error: %v", err)
 	}
@@ -1018,7 +1043,7 @@ func TestHost_Start_AlreadyStarted(t *testing.T) {
 		Root:      tmpDir,
 		Namespace: "/__nexus__",
 	}
-	host, err := NewHost(cfg, nil)
+	host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 	if err != nil {
 		t.Fatalf("NewHost error: %v", err)
 	}
@@ -1040,7 +1065,7 @@ func TestHost_Close_Multiple(t *testing.T) {
 		Root:      tmpDir,
 		Namespace: "/__nexus__",
 	}
-	host, err := NewHost(cfg, nil)
+	host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 	if err != nil {
 		t.Fatalf("NewHost error: %v", err)
 	}
@@ -1063,7 +1088,7 @@ func TestHost_EnsureIndex_Whitespace(t *testing.T) {
 		Root:      tmpDir,
 		Namespace: "/__nexus__",
 	}
-	host, err := NewHost(cfg, nil)
+	host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 	if err != nil {
 		t.Fatalf("NewHost error: %v", err)
 	}
@@ -1085,7 +1110,7 @@ func TestHost_WatchRecursive(t *testing.T) {
 		Namespace:  "/__nexus__",
 		LiveReload: &liveReload,
 	}
-	host, err := NewHost(cfg, nil)
+	host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 	if err != nil {
 		t.Fatalf("NewHost error: %v", err)
 	}
@@ -1122,7 +1147,7 @@ func TestHost_WatchLoop_NilWatcher(t *testing.T) {
 		Root:      tmpDir,
 		Namespace: "/__nexus__",
 	}
-	host, err := NewHost(cfg, nil)
+	host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 	if err != nil {
 		t.Fatalf("NewHost error: %v", err)
 	}
@@ -1142,7 +1167,7 @@ func TestHost_Upgrader(t *testing.T) {
 		Namespace:  "/__nexus__",
 		LiveReload: &liveReload,
 	}
-	host, err := NewHost(cfg, nil)
+	host, err := NewHost(cfg, config.CanvasConfig{}, nil)
 	if err != nil {
 		t.Fatalf("NewHost error: %v", err)
 	}
@@ -1158,5 +1183,76 @@ func TestHost_Upgrader(t *testing.T) {
 	// CheckOrigin should return true for any request
 	if !host.upgrader.CheckOrigin(nil) {
 		t.Error("CheckOrigin should return true")
+	}
+}
+
+func TestCanvasHandler_TokenAuth(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := config.CanvasHostConfig{
+		Port:      18793,
+		Root:      tmpDir,
+		Namespace: "/__nexus__",
+	}
+	secret := "canvas-secret-should-be-long-enough-1234"
+	canvasCfg := config.CanvasConfig{
+		Tokens: config.CanvasTokenConfig{
+			Secret: secret,
+			TTL:    time.Hour,
+		},
+	}
+	host, err := NewHost(cfg, canvasCfg, nil)
+	if err != nil {
+		t.Fatalf("NewHost error: %v", err)
+	}
+
+	sessionID := "session-123"
+	sessionDir := filepath.Join(tmpDir, sessionID)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sessionDir, "index.html"), []byte("<html>ok</html>"), 0o644); err != nil {
+		t.Fatalf("write index: %v", err)
+	}
+
+	token, err := SignAccessToken([]byte(secret), AccessToken{
+		SessionID: sessionID,
+		ExpiresAt: time.Now().Add(time.Hour).Unix(),
+	})
+	if err != nil {
+		t.Fatalf("SignAccessToken error: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/"+sessionID+"/index.html?token="+token, nil)
+	rec := httptest.NewRecorder()
+	host.canvasHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	reqNoToken := httptest.NewRequest(http.MethodGet, "/"+sessionID+"/index.html", nil)
+	recNoToken := httptest.NewRecorder()
+	host.canvasHandler().ServeHTTP(recNoToken, reqNoToken)
+	if recNoToken.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for missing token, got %d", recNoToken.Code)
+	}
+}
+
+func TestCanvasHandler_PathTraversal(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := config.CanvasHostConfig{
+		Port:      18793,
+		Root:      tmpDir,
+		Namespace: "/__nexus__",
+	}
+	host, err := NewHost(cfg, config.CanvasConfig{}, nil)
+	if err != nil {
+		t.Fatalf("NewHost error: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/bad..id/index.html", nil)
+	rec := httptest.NewRecorder()
+	host.canvasHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for invalid session id, got %d", rec.Code)
 	}
 }

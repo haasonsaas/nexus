@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -13,7 +12,6 @@ import (
 	"github.com/haasonsaas/nexus/internal/memory"
 	"github.com/haasonsaas/nexus/internal/skills"
 	"github.com/haasonsaas/nexus/internal/templates"
-	"gopkg.in/yaml.v3"
 )
 
 // Config is the main configuration structure for Nexus.
@@ -349,7 +347,7 @@ type SignalConfig struct {
 	DM    ChannelPolicyConfig `yaml:"dm"`
 	Group ChannelPolicyConfig `yaml:"group"`
 
-	Presence SignalPresenceConfig `yaml:"presence"`
+	Presence SignalPresenceConfig  `yaml:"presence"`
 	Markdown ChannelMarkdownConfig `yaml:"markdown"`
 }
 
@@ -962,38 +960,30 @@ type ArtifactRedactionConfig struct {
 
 // Load reads and parses the configuration file.
 func Load(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
+	raw, err := LoadRaw(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	// Expand environment variables
-	expanded := os.ExpandEnv(string(data))
-
-	var cfg Config
-	decoder := yaml.NewDecoder(strings.NewReader(expanded))
-	decoder.KnownFields(true)
-	if err := decoder.Decode(&cfg); err != nil {
-		return nil, fmt.Errorf("failed to parse config: %w", err)
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		return nil, fmt.Errorf("failed to parse config: expected single document")
+	cfg, err := decodeRawConfig(raw)
+	if err != nil {
+		return nil, err
 	}
 	if err := ValidateVersion(cfg.Version); err != nil {
 		return nil, err
 	}
 
-	applyEnvOverrides(&cfg)
+	applyEnvOverrides(cfg)
 
 	// Apply defaults
-	applyDefaults(&cfg)
+	applyDefaults(cfg)
 
 	// Validate config
-	if err := validateConfig(&cfg); err != nil {
+	if err := validateConfig(cfg); err != nil {
 		return nil, err
 	}
 
-	return &cfg, nil
+	return cfg, nil
 }
 
 func applyDefaults(cfg *Config) {

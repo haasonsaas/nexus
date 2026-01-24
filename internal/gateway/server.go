@@ -138,6 +138,8 @@ type Server struct {
 	httpServer   *http.Server
 	httpListener net.Listener
 
+	configApplyMu sync.Mutex
+
 	// singletonLock prevents multiple gateway instances from running
 	singletonLock *GatewayLockHandle
 }

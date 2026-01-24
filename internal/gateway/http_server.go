@@ -36,6 +36,7 @@ func (s *Server) startHTTPServer(ctx context.Context) error {
 		SkillsManager:   s.skillsManager,
 		EdgeManager:     s.edgeManager,
 		GatewayConfig:   s.config,
+		ConfigManager:   s,
 		ConfigPath:      s.configPath,
 		DefaultAgentID:  s.config.Session.DefaultAgentID,
 		Logger:          s.logger,

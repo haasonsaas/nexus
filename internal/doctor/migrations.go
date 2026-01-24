@@ -1,8 +1,10 @@
 package doctor
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -19,23 +21,19 @@ type MigrationReport struct {
 
 // LoadRawConfig reads a YAML config file into a mutable map.
 func LoadRawConfig(path string) (map[string]any, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var raw map[string]any
-	if err := yaml.Unmarshal(data, &raw); err != nil {
-		return nil, err
-	}
-	if raw == nil {
-		raw = map[string]any{}
-	}
-	return raw, nil
+	return config.LoadRaw(path)
 }
 
-// WriteRawConfig writes a YAML config map back to disk.
+// WriteRawConfig writes a config map back to disk, preserving JSON/JSON5/YAML formats.
 func WriteRawConfig(path string, raw map[string]any) error {
-	data, err := yaml.Marshal(raw)
+	var data []byte
+	var err error
+	ext := strings.ToLower(filepath.Ext(path))
+	if ext == ".json" || ext == ".json5" {
+		data, err = json.MarshalIndent(raw, "", "  ")
+	} else {
+		data, err = yaml.Marshal(raw)
+	}
 	if err != nil {
 		return err
 	}

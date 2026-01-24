@@ -15,6 +15,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/auth"
 	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/config"
+	"github.com/haasonsaas/nexus/internal/controlplane"
 	"github.com/haasonsaas/nexus/internal/cron"
 	"github.com/haasonsaas/nexus/internal/edge"
 	"github.com/haasonsaas/nexus/internal/sessions"
@@ -48,6 +49,8 @@ type Config struct {
 	EdgeManager *edge.Manager
 	// GatewayConfig is the active runtime configuration (for summary views)
 	GatewayConfig *config.Config
+	// ConfigManager exposes config control plane operations (optional)
+	ConfigManager controlplane.ConfigManager
 	// ConfigPath is the path to the loaded config file (optional)
 	ConfigPath string
 	// DefaultAgentID is the agent ID used for listing sessions
@@ -149,6 +152,7 @@ func (h *Handler) setupRoutes() {
 	h.mux.HandleFunc("/api/nodes", h.apiNodes)
 	h.mux.HandleFunc("/api/nodes/", h.apiNode)
 	h.mux.HandleFunc("/api/config", h.apiConfig)
+	h.mux.HandleFunc("/api/config/schema", h.apiConfigSchema)
 	h.mux.HandleFunc("/api/artifacts", h.apiArtifacts)
 	h.mux.HandleFunc("/api/artifacts/", h.apiArtifact)
 }

@@ -1,3 +1,5 @@
+// Package pairing provides secure device pairing with one-time codes for
+// authenticating new users on messaging channels.
 package pairing
 
 import (
@@ -5,374 +7,480 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/haasonsaas/nexus/internal/security"
 )
 
 const (
+	// CodeLength is the length of pairing codes.
 	CodeLength = 8
-	CodeTTL    = time.Hour
+	// CodeAlphabet contains unambiguous characters (no 0O1I).
+	CodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+	// PendingTTL is how long a pending request stays valid.
+	PendingTTL = time.Hour
+	// MaxPending is the maximum number of pending requests per channel.
+	MaxPending = 3
 )
 
 var (
+	// ErrInvalidChannel indicates an invalid channel name.
+	ErrInvalidChannel = errors.New("invalid pairing channel")
+	// ErrMaxPending indicates too many pending requests.
+	ErrMaxPending = errors.New("maximum pending requests reached")
+	// ErrCodeNotFound indicates the pairing code wasn't found.
 	ErrCodeNotFound = errors.New("pairing code not found")
 )
 
+// Request represents a pending pairing request.
 type Request struct {
-	Code        string    `json:"code"`
-	SenderID    string    `json:"sender_id"`
-	SenderName  string    `json:"sender_name,omitempty"`
-	RequestedAt time.Time `json:"requested_at"`
-	ExpiresAt   time.Time `json:"expires_at"`
+	ID         string            `json:"id"`
+	Code       string            `json:"code"`
+	CreatedAt  time.Time         `json:"created_at"`
+	LastSeenAt time.Time         `json:"last_seen_at"`
+	Meta       map[string]string `json:"meta,omitempty"`
 }
 
+// IsExpired returns true if the request has expired.
+func (r *Request) IsExpired() bool {
+	return time.Since(r.CreatedAt) > PendingTTL
+}
+
+// storeData is the persisted format.
+type storeData struct {
+	Version  int        `json:"version"`
+	Requests []*Request `json:"requests"`
+}
+
+// allowFromData is the persisted allowlist format.
+type allowFromData struct {
+	Version   int      `json:"version"`
+	AllowFrom []string `json:"allow_from"`
+}
+
+// Store manages pairing requests and allowlists for a channel.
 type Store struct {
-	provider string
-	stateDir string
-	now      func() time.Time
-	rand     io.Reader
-	mu       sync.Mutex
+	mu      sync.RWMutex
+	dataDir string
 }
 
-func NewStore(provider string) *Store {
-	return NewStoreWithDir(provider, security.DefaultStateDir())
+// NewStore creates a new pairing store.
+func NewStore(dataDir string) *Store {
+	return &Store{dataDir: dataDir}
 }
 
-func NewStoreWithDir(provider string, stateDir string) *Store {
-	if strings.TrimSpace(stateDir) == "" {
-		stateDir = security.DefaultStateDir()
+// safeChannelKey sanitizes a channel name for use in filenames.
+func safeChannelKey(channel string) (string, error) {
+	raw := strings.TrimSpace(strings.ToLower(channel))
+	if raw == "" {
+		return "", ErrInvalidChannel
 	}
-	provider = strings.ToLower(strings.TrimSpace(provider))
-	if provider == "" {
-		provider = "default"
+	// Remove path traversal and special characters
+	safe := strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			return r
+		}
+		return '_'
+	}, raw)
+	if safe == "" || safe == "_" {
+		return "", ErrInvalidChannel
 	}
-	return &Store{
-		provider: provider,
-		stateDir: stateDir,
-		now:      time.Now,
-		rand:     rand.Reader,
-	}
+	return safe, nil
 }
 
-func (s *Store) LoadAllowlist() ([]string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.loadAllowlistLocked()
-}
-
-func (s *Store) SaveAllowlist(allowlist []string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	allowlist = sanitizeAllowlist(allowlist)
-	return s.writeJSONLocked(s.allowlistPath(), allowlist)
-}
-
-func (s *Store) Pending() ([]Request, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.loadPendingLocked()
-}
-
-func (s *Store) GetOrCreateRequest(senderID string, senderName string) (Request, bool, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	senderID = strings.TrimSpace(senderID)
-	if senderID == "" {
-		return Request{}, false, errors.New("sender id is required")
-	}
-
-	pending, err := s.loadPendingLocked()
+func (s *Store) pairingPath(channel string) (string, error) {
+	key, err := safeChannelKey(channel)
 	if err != nil {
-		return Request{}, false, err
+		return "", err
 	}
+	return filepath.Join(s.dataDir, fmt.Sprintf("%s-pairing.json", key)), nil
+}
 
-	now := s.now()
-	for _, req := range pending {
-		if req.SenderID == senderID && req.ExpiresAt.After(now) {
-			return req, false, nil
-		}
-	}
-
-	existingCodes := map[string]struct{}{}
-	for _, req := range pending {
-		if req.Code != "" {
-			existingCodes[req.Code] = struct{}{}
-		}
-	}
-
-	code, err := s.generateCode(existingCodes)
+func (s *Store) allowFromPath(channel string) (string, error) {
+	key, err := safeChannelKey(channel)
 	if err != nil {
-		return Request{}, false, err
+		return "", err
 	}
-
-	req := Request{
-		Code:        code,
-		SenderID:    senderID,
-		SenderName:  strings.TrimSpace(senderName),
-		RequestedAt: now,
-		ExpiresAt:   now.Add(CodeTTL),
-	}
-	pending = append(pending, req)
-	if err := s.writeJSONLocked(s.pendingPath(), pending); err != nil {
-		return Request{}, false, err
-	}
-	return req, true, nil
+	return filepath.Join(s.dataDir, fmt.Sprintf("%s-allowfrom.json", key)), nil
 }
 
-func (s *Store) Approve(code string) (Request, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	code = normalizeCode(code)
-	if code == "" {
-		return Request{}, ErrCodeNotFound
+// generateCode creates a random human-friendly code.
+func generateCode() (string, error) {
+	b := make([]byte, CodeLength)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
 	}
-
-	pending, err := s.loadPendingLocked()
-	if err != nil {
-		return Request{}, err
+	code := make([]byte, CodeLength)
+	for i := 0; i < CodeLength; i++ {
+		code[i] = CodeAlphabet[int(b[i])%len(CodeAlphabet)]
 	}
-
-	index := -1
-	var req Request
-	for i, candidate := range pending {
-		if normalizeCode(candidate.Code) == code {
-			index = i
-			req = candidate
-			break
-		}
-	}
-	if index == -1 {
-		return Request{}, ErrCodeNotFound
-	}
-
-	allowlist, err := s.loadAllowlistLocked()
-	if err != nil {
-		return Request{}, err
-	}
-	allowlist = append(allowlist, req.SenderID)
-	allowlist = sanitizeAllowlist(allowlist)
-	if err := s.writeJSONLocked(s.allowlistPath(), allowlist); err != nil {
-		return Request{}, err
-	}
-
-	pending = append(pending[:index], pending[index+1:]...)
-	if err := s.writeJSONLocked(s.pendingPath(), pending); err != nil {
-		return Request{}, err
-	}
-
-	return req, nil
+	return string(code), nil
 }
 
-func (s *Store) Deny(code string) (Request, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	code = normalizeCode(code)
-	if code == "" {
-		return Request{}, ErrCodeNotFound
-	}
-
-	pending, err := s.loadPendingLocked()
-	if err != nil {
-		return Request{}, err
-	}
-
-	index := -1
-	var req Request
-	for i, candidate := range pending {
-		if normalizeCode(candidate.Code) == code {
-			index = i
-			req = candidate
-			break
-		}
-	}
-	if index == -1 {
-		return Request{}, ErrCodeNotFound
-	}
-
-	pending = append(pending[:index], pending[index+1:]...)
-	if err := s.writeJSONLocked(s.pendingPath(), pending); err != nil {
-		return Request{}, err
-	}
-
-	return req, nil
-}
-
-func (s *Store) allowlistPath() string {
-	return filepath.Join(s.credentialsDir(), fmt.Sprintf("%s-allowFrom.json", s.provider))
-}
-
-func (s *Store) pendingPath() string {
-	return filepath.Join(s.credentialsDir(), fmt.Sprintf("%s-pairing.json", s.provider))
-}
-
-func (s *Store) credentialsDir() string {
-	return filepath.Join(s.stateDir, "credentials")
-}
-
-func (s *Store) loadAllowlistLocked() ([]string, error) {
-	path := s.allowlistPath()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []string{}, nil
-		}
-		return nil, err
-	}
-	if len(data) == 0 {
-		return []string{}, nil
-	}
-	var allowlist []string
-	if err := json.Unmarshal(data, &allowlist); err != nil {
-		return nil, err
-	}
-	return sanitizeAllowlist(allowlist), nil
-}
-
-func (s *Store) loadPendingLocked() ([]Request, error) {
-	path := s.pendingPath()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []Request{}, nil
-		}
-		return nil, err
-	}
-	if len(data) == 0 {
-		return []Request{}, nil
-	}
-	var pending []Request
-	if err := json.Unmarshal(data, &pending); err != nil {
-		return nil, err
-	}
-	filtered := pending[:0]
-	now := s.now()
-	for _, req := range pending {
-		if req.Code == "" || req.SenderID == "" {
-			continue
-		}
-		if req.ExpiresAt.IsZero() || req.ExpiresAt.After(now) {
-			req.Code = normalizeCode(req.Code)
-			filtered = append(filtered, req)
-		}
-	}
-	if len(filtered) != len(pending) {
-		if err := s.writeJSONLocked(path, filtered); err != nil {
-			return nil, err
-		}
-	}
-	return filtered, nil
-}
-
-func (s *Store) writeJSONLocked(path string, payload any) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(payload, "", "  ")
-	if err != nil {
-		return err
-	}
-	return writeFileAtomic(path, data, 0600)
-}
-
-func (s *Store) generateCode(existing map[string]struct{}) (string, error) {
-	for i := 0; i < 20; i++ {
-		code, err := randomCode(s.rand, CodeLength)
+// generateUniqueCode creates a code not in the existing set.
+func generateUniqueCode(existing map[string]bool) (string, error) {
+	for i := 0; i < 500; i++ {
+		code, err := generateCode()
 		if err != nil {
 			return "", err
 		}
-		if _, ok := existing[code]; ok {
-			continue
+		if !existing[code] {
+			return code, nil
 		}
-		return code, nil
 	}
 	return "", errors.New("failed to generate unique pairing code")
 }
 
-func randomCode(r io.Reader, length int) (string, error) {
-	const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-	if length <= 0 {
-		return "", errors.New("invalid code length")
-	}
-	buf := make([]byte, length)
-	_, err := io.ReadFull(r, buf)
+// readStore reads the pairing store for a channel.
+func (s *Store) readStore(channel string) (*storeData, error) {
+	path, err := s.pairingPath(channel)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	out := make([]byte, length)
-	for i := range buf {
-		out[i] = alphabet[int(buf[i])%len(alphabet)]
-	}
-	return string(out), nil
-}
 
-func normalizeCode(code string) string {
-	return strings.ToUpper(strings.TrimSpace(code))
-}
-
-func sanitizeAllowlist(values []string) []string {
-	seen := map[string]struct{}{}
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if trimmed == "" {
-			continue
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &storeData{Version: 1, Requests: nil}, nil
 		}
-		normalized := normalizeAllowToken(trimmed)
-		if normalized == "" {
-			continue
-		}
-		if _, ok := seen[normalized]; ok {
-			continue
-		}
-		seen[normalized] = struct{}{}
-		out = append(out, trimmed)
+		return nil, err
 	}
-	return out
+
+	var store storeData
+	if err := json.Unmarshal(data, &store); err != nil {
+		return &storeData{Version: 1, Requests: nil}, nil
+	}
+	return &store, nil
 }
 
-func normalizeAllowToken(value string) string {
-	token := strings.TrimSpace(value)
-	if token == "" {
-		return ""
-	}
-	token = strings.TrimPrefix(token, "@")
-	token = strings.TrimPrefix(token, "#")
-	if idx := strings.Index(token, ":"); idx >= 0 {
-		token = token[idx+1:]
-	}
-	return strings.ToLower(strings.TrimSpace(token))
-}
-
-func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".tmp-*")
+// writeStore writes the pairing store for a channel.
+func (s *Store) writeStore(channel string, store *storeData) error {
+	path, err := s.pairingPath(channel)
 	if err != nil {
 		return err
 	}
-	tmpName := tmp.Name()
-	defer func() {
-		_ = os.Remove(tmpName)
-	}()
 
-	if err := tmp.Chmod(perm); err != nil {
-		_ = tmp.Close()
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
+
+	data, err := json.MarshalIndent(store, "", "  ")
+	if err != nil {
 		return err
 	}
-	if err := tmp.Close(); err != nil {
+
+	// Write atomically
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0600); err != nil {
 		return err
 	}
-	return os.Rename(tmpName, path)
+	return os.Rename(tmp, path)
+}
+
+// pruneExpired removes expired requests from the list.
+func pruneExpired(requests []*Request) []*Request {
+	result := make([]*Request, 0, len(requests))
+	for _, r := range requests {
+		if !r.IsExpired() {
+			result = append(result, r)
+		}
+	}
+	return result
+}
+
+// pruneExcess removes oldest requests beyond the max limit.
+func pruneExcess(requests []*Request, max int) []*Request {
+	if max <= 0 || len(requests) <= max {
+		return requests
+	}
+	// Sort by LastSeenAt and keep most recent
+	// Simple approach: just keep the last N
+	return requests[len(requests)-max:]
+}
+
+// ListRequests returns all pending pairing requests for a channel.
+func (s *Store) ListRequests(channel string) ([]*Request, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	store, err := s.readStore(channel)
+	if err != nil {
+		return nil, err
+	}
+
+	pruned := pruneExpired(store.Requests)
+	pruned = pruneExcess(pruned, MaxPending)
+
+	// Write back if we pruned anything
+	if len(pruned) != len(store.Requests) {
+		store.Requests = pruned
+		if err := s.writeStore(channel, store); err != nil {
+			return nil, err
+		}
+	}
+
+	return pruned, nil
+}
+
+// UpsertRequest creates or updates a pairing request.
+// Returns the pairing code and whether it was newly created.
+func (s *Store) UpsertRequest(channel, id string, meta map[string]string) (string, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	store, err := s.readStore(channel)
+	if err != nil {
+		return "", false, err
+	}
+
+	now := time.Now()
+	pruned := pruneExpired(store.Requests)
+
+	// Check if request already exists
+	var existing *Request
+	existingIdx := -1
+	existingCodes := make(map[string]bool)
+	for i, r := range pruned {
+		existingCodes[r.Code] = true
+		if r.ID == id {
+			existing = r
+			existingIdx = i
+		}
+	}
+
+	if existing != nil {
+		// Update existing request
+		existing.LastSeenAt = now
+		if meta != nil {
+			existing.Meta = meta
+		}
+		store.Requests = pruned
+		if err := s.writeStore(channel, store); err != nil {
+			return "", false, err
+		}
+		return existing.Code, false, nil
+	}
+
+	// Check pending limit
+	pruned = pruneExcess(pruned, MaxPending)
+	if MaxPending > 0 && len(pruned) >= MaxPending {
+		store.Requests = pruned
+		_ = s.writeStore(channel, store)
+		return "", false, ErrMaxPending
+	}
+
+	// Create new request
+	code, err := generateUniqueCode(existingCodes)
+	if err != nil {
+		return "", false, err
+	}
+
+	request := &Request{
+		ID:         id,
+		Code:       code,
+		CreatedAt:  now,
+		LastSeenAt: now,
+		Meta:       meta,
+	}
+
+	store.Requests = append(pruned, request)
+	if existingIdx >= 0 {
+		store.Requests[existingIdx] = request
+	}
+
+	if err := s.writeStore(channel, store); err != nil {
+		return "", false, err
+	}
+
+	return code, true, nil
+}
+
+// ApproveCode approves a pairing code and adds the ID to the allowlist.
+// Returns the request ID if found, or ErrCodeNotFound.
+func (s *Store) ApproveCode(channel, code string) (string, *Request, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	code = strings.ToUpper(strings.TrimSpace(code))
+	if code == "" {
+		return "", nil, ErrCodeNotFound
+	}
+
+	store, err := s.readStore(channel)
+	if err != nil {
+		return "", nil, err
+	}
+
+	pruned := pruneExpired(store.Requests)
+
+	// Find the request with this code
+	var found *Request
+	foundIdx := -1
+	for i, r := range pruned {
+		if strings.ToUpper(r.Code) == code {
+			found = r
+			foundIdx = i
+			break
+		}
+	}
+
+	if found == nil {
+		// Save pruned state
+		if len(pruned) != len(store.Requests) {
+			store.Requests = pruned
+			_ = s.writeStore(channel, store)
+		}
+		return "", nil, ErrCodeNotFound
+	}
+
+	// Remove from pending requests
+	store.Requests = append(pruned[:foundIdx], pruned[foundIdx+1:]...)
+	if err := s.writeStore(channel, store); err != nil {
+		return "", nil, err
+	}
+
+	// Add to allowlist
+	if err := s.addToAllowlist(channel, found.ID); err != nil {
+		return "", nil, err
+	}
+
+	return found.ID, found, nil
+}
+
+// readAllowlist reads the allowlist for a channel.
+func (s *Store) readAllowlist(channel string) ([]string, error) {
+	path, err := s.allowFromPath(channel)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var store allowFromData
+	if err := json.Unmarshal(data, &store); err != nil {
+		return nil, nil
+	}
+	return store.AllowFrom, nil
+}
+
+// writeAllowlist writes the allowlist for a channel.
+func (s *Store) writeAllowlist(channel string, allowFrom []string) error {
+	path, err := s.allowFromPath(channel)
+	if err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return err
+	}
+
+	store := allowFromData{
+		Version:   1,
+		AllowFrom: allowFrom,
+	}
+
+	data, err := json.MarshalIndent(store, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
+// addToAllowlist adds an entry to the channel's allowlist.
+func (s *Store) addToAllowlist(channel, entry string) error {
+	entry = strings.TrimSpace(entry)
+	if entry == "" {
+		return nil
+	}
+
+	allowFrom, err := s.readAllowlist(channel)
+	if err != nil {
+		return err
+	}
+
+	// Check if already exists
+	for _, e := range allowFrom {
+		if e == entry {
+			return nil
+		}
+	}
+
+	allowFrom = append(allowFrom, entry)
+	return s.writeAllowlist(channel, allowFrom)
+}
+
+// GetAllowlist returns the allowlist for a channel.
+func (s *Store) GetAllowlist(channel string) ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.readAllowlist(channel)
+}
+
+// AddToAllowlist adds an entry to the channel's allowlist.
+func (s *Store) AddToAllowlist(channel, entry string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.addToAllowlist(channel, entry)
+}
+
+// RemoveFromAllowlist removes an entry from the channel's allowlist.
+func (s *Store) RemoveFromAllowlist(channel, entry string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	entry = strings.TrimSpace(entry)
+	if entry == "" {
+		return nil
+	}
+
+	allowFrom, err := s.readAllowlist(channel)
+	if err != nil {
+		return err
+	}
+
+	// Find and remove
+	found := false
+	result := make([]string, 0, len(allowFrom))
+	for _, e := range allowFrom {
+		if e == entry {
+			found = true
+			continue
+		}
+		result = append(result, e)
+	}
+
+	if !found {
+		return nil
+	}
+
+	return s.writeAllowlist(channel, result)
+}
+
+// IsAllowed checks if an ID is in the channel's allowlist.
+func (s *Store) IsAllowed(channel, id string) (bool, error) {
+	allowFrom, err := s.GetAllowlist(channel)
+	if err != nil {
+		return false, err
+	}
+
+	id = strings.TrimSpace(id)
+	for _, e := range allowFrom {
+		if e == id {
+			return true, nil
+		}
+	}
+	return false, nil
 }

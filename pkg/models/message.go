@@ -9,16 +9,21 @@ import (
 type ChannelType string
 
 const (
-	ChannelTelegram ChannelType = "telegram"
-	ChannelDiscord  ChannelType = "discord"
-	ChannelSlack    ChannelType = "slack"
-	ChannelAPI      ChannelType = "api"
-	ChannelWhatsApp ChannelType = "whatsapp"
-	ChannelSignal   ChannelType = "signal"
-	ChannelIMessage ChannelType = "imessage"
-	ChannelMatrix   ChannelType = "matrix"
-	ChannelTeams    ChannelType = "teams"
-	ChannelEmail    ChannelType = "email"
+	ChannelTelegram      ChannelType = "telegram"
+	ChannelDiscord       ChannelType = "discord"
+	ChannelSlack         ChannelType = "slack"
+	ChannelAPI           ChannelType = "api"
+	ChannelWhatsApp      ChannelType = "whatsapp"
+	ChannelSignal        ChannelType = "signal"
+	ChannelIMessage      ChannelType = "imessage"
+	ChannelMatrix        ChannelType = "matrix"
+	ChannelTeams         ChannelType = "teams"
+	ChannelEmail         ChannelType = "email"
+	ChannelMattermost    ChannelType = "mattermost"
+	ChannelNextcloudTalk ChannelType = "nextcloud-talk"
+	ChannelNostr         ChannelType = "nostr"
+	ChannelZalo          ChannelType = "zalo"
+	ChannelBlueBubbles   ChannelType = "bluebubbles"
 )
 
 // Direction indicates if a message is inbound or outbound.

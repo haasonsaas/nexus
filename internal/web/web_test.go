@@ -181,3 +181,60 @@ func TestConfig_Defaults(t *testing.T) {
 		t.Errorf("DefaultAgentID should default to empty, got %q", cfg.DefaultAgentID)
 	}
 }
+
+func TestNewHandler_CustomBasePath(t *testing.T) {
+	cfg := &Config{
+		BasePath:       "/custom",
+		DefaultAgentID: "agent-1",
+	}
+	h, err := NewHandler(cfg)
+	if err != nil {
+		t.Fatalf("NewHandler error: %v", err)
+	}
+	if h.config.BasePath != "/custom" {
+		t.Errorf("BasePath = %q, want /custom", h.config.BasePath)
+	}
+	if h.config.DefaultAgentID != "agent-1" {
+		t.Errorf("DefaultAgentID = %q, want agent-1", h.config.DefaultAgentID)
+	}
+}
+
+func TestFormatDuration_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    time.Duration
+		notEmpty bool
+	}{
+		{"zero", 0, true},
+		{"1 second", time.Second, true},
+		{"59 seconds", 59 * time.Second, true},
+		{"1 minute", time.Minute, true},
+		{"59 minutes", 59 * time.Minute, true},
+		{"1 hour", time.Hour, true},
+		{"23 hours", 23 * time.Hour, true},
+		{"2 days", 48 * time.Hour, true},
+		{"3 days 4 hours", 76 * time.Hour, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := formatDuration(tt.input)
+			if tt.notEmpty && result == "" {
+				t.Error("expected non-empty string")
+			}
+		})
+	}
+}
+
+func TestHandler_QRCodeMaps(t *testing.T) {
+	h, err := NewHandler(nil)
+	if err != nil {
+		t.Fatalf("NewHandler error: %v", err)
+	}
+	if h.qrCodes == nil {
+		t.Error("qrCodes map should not be nil")
+	}
+	if h.qrUpdated == nil {
+		t.Error("qrUpdated map should not be nil")
+	}
+}

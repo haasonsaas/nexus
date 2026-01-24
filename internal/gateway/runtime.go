@@ -18,6 +18,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/mcp"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/tools/browser"
+	crontools "github.com/haasonsaas/nexus/internal/tools/cron"
 	exectools "github.com/haasonsaas/nexus/internal/tools/exec"
 	"github.com/haasonsaas/nexus/internal/tools/files"
 	jobtools "github.com/haasonsaas/nexus/internal/tools/jobs"
@@ -343,6 +344,9 @@ func (s *Server) registerTools(ctx context.Context, runtime *agent.Runtime) erro
 	if s.channels != nil {
 		runtime.RegisterTool(message.NewTool("message", s.channels, s.sessions, s.config.Session.DefaultAgentID))
 		runtime.RegisterTool(message.NewTool("send_message", s.channels, s.sessions, s.config.Session.DefaultAgentID))
+	}
+	if s.cronScheduler != nil {
+		runtime.RegisterTool(crontools.NewTool(s.cronScheduler))
 	}
 
 	if s.config.Tools.Browser.Enabled {

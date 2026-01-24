@@ -181,6 +181,57 @@ func (s *Scheduler) Jobs() []*Job {
 	return out
 }
 
+// RunJob executes a specific cron job by id and updates its schedule metadata.
+func (s *Scheduler) RunJob(ctx context.Context, id string) error {
+	if s == nil {
+		return nil
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return errors.New("job id required")
+	}
+
+	now := s.now()
+	var target *Job
+	s.mu.Lock()
+	for _, job := range s.jobs {
+		if job != nil && job.ID == id {
+			target = job
+			break
+		}
+	}
+	if target == nil {
+		s.mu.Unlock()
+		return fmt.Errorf("job not found")
+	}
+	target.LastRun = now
+	schedule := target.Schedule
+	s.mu.Unlock()
+
+	err := s.executeJob(ctx, target)
+	next, ok, nextErr := schedule.Next(now)
+
+	s.mu.Lock()
+	if err != nil {
+		target.LastError = err.Error()
+	} else {
+		target.LastError = ""
+	}
+	if nextErr != nil {
+		target.LastError = nextErr.Error()
+		target.NextRun = time.Time{}
+		target.Enabled = false
+	} else if ok {
+		target.NextRun = next
+	} else {
+		target.NextRun = time.Time{}
+		target.Enabled = false
+	}
+	s.mu.Unlock()
+
+	return err
+}
+
 func (s *Scheduler) runDue(ctx context.Context) int {
 	now := s.now()
 	count := 0

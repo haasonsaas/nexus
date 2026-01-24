@@ -25,6 +25,7 @@ import (
 	jobtools "github.com/haasonsaas/nexus/internal/tools/jobs"
 	"github.com/haasonsaas/nexus/internal/tools/memorysearch"
 	"github.com/haasonsaas/nexus/internal/tools/message"
+	nodestools "github.com/haasonsaas/nexus/internal/tools/nodes"
 	"github.com/haasonsaas/nexus/internal/tools/reminders"
 	"github.com/haasonsaas/nexus/internal/tools/sandbox"
 	"github.com/haasonsaas/nexus/internal/tools/sandbox/firecracker"
@@ -351,6 +352,10 @@ func (s *Server) registerTools(ctx context.Context, runtime *agent.Runtime) erro
 	}
 	if s.canvasHost != nil {
 		runtime.RegisterTool(canvastools.NewTool(s.canvasHost))
+	}
+
+	if s.config.Edge.Enabled && s.edgeManager != nil {
+		runtime.RegisterTool(nodestools.NewTool(s.edgeManager, s.edgeTOFU))
 	}
 
 	if s.config.Tools.Browser.Enabled {

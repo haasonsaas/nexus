@@ -13,17 +13,17 @@
 - **Go runtime stability**: strong typed infra, CockroachDB backends, gRPC services.
 
 **Clawdbot strengths (parity gaps for Nexus):**
-- **Full tool surface** (exec/process/read/write/edit/apply_patch, web_fetch, message tooling, sessions tools, canvas tool, nodes tool, cron tool, gateway tool).
 - **Config control plane** (JSON5, $include, config schema exposure, config apply/patch RPC, UI hints).
 - **Provider breadth + model discovery** (Bedrock discovery, many providers, model selection/compat/fallback).
 - **Plugin/extension ecosystem** (channels + auth + memory + diagnostics + voice + lobster, etc.).
 - **Session safety utilities** (transcript repair, tool-result guard, write locks).
+- **Node & gateway control plane depth** (full node registry + pairing metadata, gateway tooling).
 
 **Biggest parity blockers:**
-1) **Core tool surface** in Nexus (missing read/write/edit/exec/process/apply_patch/web_fetch/canvas/message/sessions tools).
-2) **Channel/plugin breadth** (missing Mattermost/Nextcloud/Nostr/Tlon/Zalo/BlueBubbles/etc.).
-3) **Provider + auth profile depth** (model discovery, provider-specific auth flows, profiles/rotation).
-4) **Config control plane** (schema/UI hints, config apply/patch, JSON5 + includes).
+1) **Config control plane** (schema/UI hints, config apply/patch, JSON5 + includes).
+2) **Provider + auth profile depth** (model discovery, provider-specific auth flows, profiles/rotation).
+3) **Channel/plugin breadth** (missing Mattermost/Nextcloud/Nostr/Tlon/Zalo/BlueBubbles/etc.).
+4) **Node & gateway control plane depth** (node registry + pairing metadata, gateway tooling).
 
 ---
 
@@ -44,19 +44,19 @@ Legend: ✅ parity, 🟡 partial, ❌ missing
 ### 2) Tool Surface (Core Tools)
 | Tool | Clawdbot | Nexus | Status | Gap / Notes | Priority |
 |---|---|---|---|---|---|
-| `exec` / `bash` | ✅ | ❌ | No host exec tool; only sandbox `execute_code`. | P0 |
-| `process` | ✅ | ❌ | No background process tool. | P0 |
-| `read` / `write` / `edit` | ✅ | ❌ | No FS tools. | P0 |
-| `apply_patch` | ✅ | ❌ | No patch tool. | P0 |
-| `web_fetch` | ✅ | ❌ | Missing; only `web_search`. | P0 |
+| `exec` / `bash` | ✅ | ✅ | Host exec tools added with approval gating. | P0 |
+| `process` | ✅ | ✅ | Background process tool added. | P0 |
+| `read` / `write` / `edit` | ✅ | ✅ | Workspace-scoped filesystem tools added. | P0 |
+| `apply_patch` | ✅ | ✅ | Patch tool added with workspace scoping. | P0 |
+| `web_fetch` | ✅ | ✅ | SSRF-safe web fetch tool added. | P0 |
 | `browser` | ✅ | ✅ | Browser tool exists. | P1 |
-| `canvas` | ✅ | ❌ | Host exists; no tool to drive it. | P1 |
-| `nodes` | ✅ | 🟡 | Edge tools exist; missing unified nodes tool API. | P1 |
-| `cron` | ✅ | 🟡 | Cron scheduler exists; no `cron` tool. | P1 |
+| `canvas` | ✅ | 🟡 | Minimal tool returns canvas URL; no richer actions yet. | P1 |
+| `nodes` | ✅ | 🟡 | Nodes tool now exposes status/describe/pending/approve/reject/invoke; still missing full node registry + pairing metadata parity. | P1 |
+| `cron` | ✅ | 🟡 | Cron tool added (list/status/run); still limited to configured webhook jobs. | P1 |
 | `gateway` tool | ✅ | ❌ | Missing restart/tooling. | P2 |
-| `message` tool | ✅ | ❌ | Missing cross-channel message tool. | P1 |
-| Session tools (`sessions_*`) | ✅ | 🟡 | Subagent tools exist; sessions list/history/send/status missing. | P1 |
-| Memory tools (`memory_search`, `memory_get`) | ✅ | 🟡 | search exists, get missing. | P1 |
+| `message` tool | ✅ | ✅ | Cross-channel message tool added. | P1 |
+| Session tools (`sessions_*`) | ✅ | ✅ | Sessions list/history/send/status tools added. | P1 |
+| Memory tools (`memory_search`, `memory_get`) | ✅ | ✅ | memory_get added alongside search. | P1 |
 
 ### 3) Tool Policy + Safety
 | Feature | Clawdbot | Nexus | Status | Gap / Notes | Priority |
@@ -64,7 +64,7 @@ Legend: ✅ parity, 🟡 partial, ❌ missing
 | Global allow/deny | ✅ | ✅ | Implemented. | P2 |
 | Tool profiles + groups | ✅ | ✅ | Implemented but duplicate group definitions exist. | P2 |
 | Provider-specific policies | ✅ | ✅ | Implemented. | P2 |
-| Wildcard allow/deny | ✅ | 🟡 | MCP wildcards exist; core tool wildcards missing. | P0 |
+| Wildcard allow/deny | ✅ | ✅ | Wildcards now supported for core tools. | P0 |
 | Per-agent tool policy | ✅ | 🟡 | Partial (runtime policy can be scoped); needs config parity. | P1 |
 | Subagent tool policy | ✅ | ❌ | No default denylist for subagents. | P1 |
 | Sandbox tool allowlists | ✅ | ❌ | Missing sandbox-specific tool policy layer. | P1 |
@@ -77,7 +77,7 @@ Legend: ✅ parity, 🟡 partial, ❌ missing
 | Sandbox modes (off/all/non-main) | ✅ | ✅ | Implemented. | P2 |
 | Sandbox scopes (agent/session/shared) | ✅ | ✅ | Implemented. | P2 |
 | Exec approvals | ✅ | ✅ | Implemented. | P2 |
-| Host execution + allowFrom | ✅ | 🟡 | Elevated gating exists; no general exec tool yet. | P0 |
+| Host execution + allowFrom | ✅ | 🟡 | Host exec tool added; allowFrom granularity still limited. | P0 |
 | Firecracker support | ❌ | ✅ | Nexus has Firecracker backend. | P3 |
 
 ### 5) Channels + Messaging Integrations
@@ -197,6 +197,7 @@ Legend: ✅ parity, 🟡 partial, ❌ missing
 - ✅ Message tool (`message`, plus `send_message` alias) + exec/process tools (`exec`, `bash`, `process`).
 - ✅ Cron tool (`cron`) with list/status/run against configured webhook jobs.
 - ✅ Canvas tool (`canvas`) returns the canvas host URL (minimal surface).
+- ✅ Nodes tool (`nodes`) for edge status, TOFU approvals, and edge tool invocation.
 
 ---
 

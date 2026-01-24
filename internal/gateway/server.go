@@ -107,6 +107,7 @@ type Server struct {
 
 	edgeManager *edge.Manager
 	edgeService *edge.Service
+	edgeTOFU    *edge.TOFUAuthenticator
 
 	// Artifact repository for tool-produced files
 	artifactRepo artifacts.Repository
@@ -367,12 +368,14 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	// Initialize edge manager if enabled
 	var edgeManager *edge.Manager
 	var edgeService *edge.Service
+	var edgeTOFU *edge.TOFUAuthenticator
 	var artifactRepo artifacts.Repository
 	if cfg.Edge.Enabled {
-		edgeAuth, err := buildEdgeAuthenticator(cfg)
+		edgeAuth, tofuAuth, err := buildEdgeAuthenticator(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("edge authenticator: %w", err)
 		}
+		edgeTOFU = tofuAuth
 
 		managerConfig := edge.ManagerConfig{
 			HeartbeatInterval:  cfg.Edge.HeartbeatInterval,
@@ -434,6 +437,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		hooksRegistry:      hooksRegistry,
 		edgeManager:        edgeManager,
 		edgeService:        edgeService,
+		edgeTOFU:           edgeTOFU,
 		canvasHost:         canvasHost,
 		artifactRepo:       artifactRepo,
 		eventStore:         eventStore,
@@ -510,16 +514,17 @@ func (s *Server) registerChannelsFromConfig() error {
 }
 
 // buildEdgeAuthenticator creates an edge authenticator based on configuration.
-func buildEdgeAuthenticator(cfg *config.Config) (edge.Authenticator, error) {
+func buildEdgeAuthenticator(cfg *config.Config) (edge.Authenticator, *edge.TOFUAuthenticator, error) {
 	switch cfg.Edge.AuthMode {
 	case "dev":
-		return edge.NewDevAuthenticator(), nil
+		return edge.NewDevAuthenticator(), nil, nil
 	case "tofu":
-		return edge.NewTOFUAuthenticator(nil), nil
+		auth := edge.NewTOFUAuthenticator(nil)
+		return auth, auth, nil
 	case "token", "":
-		return edge.NewTokenAuthenticator(cfg.Edge.Tokens), nil
+		return edge.NewTokenAuthenticator(cfg.Edge.Tokens), nil, nil
 	default:
-		return nil, fmt.Errorf("unknown edge auth mode: %s", cfg.Edge.AuthMode)
+		return nil, nil, fmt.Errorf("unknown edge auth mode: %s", cfg.Edge.AuthMode)
 	}
 }
 

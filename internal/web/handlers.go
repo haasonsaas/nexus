@@ -65,6 +65,12 @@ type SkillsData struct {
 	Skills []*SkillSummary
 }
 
+// ToolsData holds data for tools page.
+type ToolsData struct {
+	PageData
+	Tools []models.ToolSummary
+}
+
 // NodesData holds data for nodes page.
 type NodesData struct {
 	PageData
@@ -309,6 +315,22 @@ func (h *Handler) handleSkills(w http.ResponseWriter, r *http.Request) {
 			User:        userFromContext(ctx),
 		},
 		Skills: h.listSkills(ctx),
+	}
+
+	h.render(w, "layout.html", data)
+}
+
+// handleTools renders the tools page.
+func (h *Handler) handleTools(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	data := ToolsData{
+		PageData: PageData{
+			Title:       "Tools",
+			CurrentPath: "/tools",
+			User:        userFromContext(ctx),
+		},
+		Tools: h.listTools(ctx),
 	}
 
 	h.render(w, "layout.html", data)

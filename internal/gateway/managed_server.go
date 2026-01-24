@@ -55,6 +55,7 @@ func NewManagedServer(cfg ManagedServerConfig) (*ManagedServer, error) {
 		JobStore:       server.jobStore,
 		Logger:         logger.With("component", "tool-manager"),
 	})
+	server.toolManager = toolManager
 
 	// Create scheduler manager
 	schedulerManager := NewSchedulerManager(SchedulerManagerConfig{

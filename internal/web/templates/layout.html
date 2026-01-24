@@ -28,6 +28,9 @@
             <li class="nav-item{{if eq .CurrentPath "/skills"}} active{{end}}">
                 <a href="/ui/skills">Skills</a>
             </li>
+            <li class="nav-item{{if eq .CurrentPath "/tools"}} active{{end}}">
+                <a href="/ui/tools">Tools</a>
+            </li>
             <li class="nav-item{{if eq .CurrentPath "/nodes"}} active{{end}}">
                 <a href="/ui/nodes">Nodes</a>
             </li>
@@ -70,6 +73,8 @@
             {{template "cron/page.html" .}}
         {{else if eq .CurrentPath "/skills"}}
             {{template "skills/page.html" .}}
+        {{else if eq .CurrentPath "/tools"}}
+            {{template "tools/page.html" .}}
         {{else if eq .CurrentPath "/nodes"}}
             {{template "nodes/page.html" .}}
         {{else if eq .CurrentPath "/config"}}

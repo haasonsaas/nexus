@@ -1,0 +1,42 @@
+{{define "tools/list.html"}}
+{{if .}}
+<div class="table-responsive">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Source</th>
+                <th>Description</th>
+                <th>Schema</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .}}
+            <tr>
+                <td class="mono">{{.Name}}</td>
+                <td>
+                    <div class="mono">{{.Source}}</div>
+                    {{if .Namespace}}
+                    <div class="text-muted mono">{{.Namespace}}</div>
+                    {{end}}
+                </td>
+                <td>{{.Description}}</td>
+                <td>
+                    {{if .Schema}}
+                    <details>
+                        <summary class="text-muted">View</summary>
+                        <pre class="mono text-muted" style="white-space: pre-wrap;">{{prettyJSON .Schema}}</pre>
+                    </details>
+                    {{else}}
+                    <span class="text-muted">-</span>
+                    {{end}}
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{else}}
+<p class="text-muted">No tools registered</p>
+{{end}}
+{{end}}

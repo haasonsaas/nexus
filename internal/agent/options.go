@@ -45,6 +45,9 @@ type RuntimeOptions struct {
 	// JobStore receives async tool job updates.
 	JobStore jobs.Store
 
+	// ToolResultGuard redacts tool results before persistence.
+	ToolResultGuard ToolResultGuard
+
 	// Logger receives runtime diagnostics.
 	Logger *slog.Logger
 }
@@ -100,6 +103,9 @@ func mergeRuntimeOptions(base RuntimeOptions, override RuntimeOptions) RuntimeOp
 	}
 	if override.JobStore != nil {
 		merged.JobStore = override.JobStore
+	}
+	if override.ToolResultGuard.active() {
+		merged.ToolResultGuard = override.ToolResultGuard
 	}
 	if override.Logger != nil {
 		merged.Logger = override.Logger

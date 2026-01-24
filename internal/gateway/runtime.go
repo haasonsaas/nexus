@@ -133,8 +133,16 @@ func (s *Server) ensureRuntime(ctx context.Context) (*agent.Runtime, error) {
 		ApprovalChecker:   s.approvalChecker,
 		ElevatedTools:     elevatedTools,
 		AsyncTools:        s.config.Tools.Execution.Async,
-		JobStore:          s.jobStore,
-		Logger:            s.logger,
+		ToolResultGuard: agent.ToolResultGuard{
+			Enabled:        s.config.Tools.Execution.ResultGuard.Enabled,
+			MaxChars:       s.config.Tools.Execution.ResultGuard.MaxChars,
+			Denylist:       s.config.Tools.Execution.ResultGuard.Denylist,
+			RedactPatterns: s.config.Tools.Execution.ResultGuard.RedactPatterns,
+			RedactionText:  s.config.Tools.Execution.ResultGuard.RedactionText,
+			TruncateSuffix: s.config.Tools.Execution.ResultGuard.TruncateSuffix,
+		},
+		JobStore: s.jobStore,
+		Logger:   s.logger,
 	})
 	if pruning := config.EffectiveContextPruningSettings(s.config.Session.ContextPruning); pruning != nil {
 		runtime.SetContextPruning(pruning)
@@ -181,7 +189,7 @@ func (s *Server) newProvider() (agent.LLMProvider, string, error) {
 	if providerID == "" {
 		providerID = "anthropic"
 	}
-	providerID = strings.ToLower(providerID)
+	providerID = normalizeProviderID(providerID)
 
 	primary, model, err := s.buildProvider(providerID)
 	if err != nil {
@@ -193,7 +201,7 @@ func (s *Server) newProvider() (agent.LLMProvider, string, error) {
 		orchestrator := agent.NewFailoverOrchestrator(primary, agent.DefaultFailoverConfig())
 
 		for _, fallbackID := range s.config.LLM.FallbackChain {
-			fallbackID = strings.ToLower(strings.TrimSpace(fallbackID))
+			fallbackID = normalizeProviderID(fallbackID)
 			if fallbackID == "" || fallbackID == providerID {
 				continue // Skip empty or duplicate of primary
 			}
@@ -217,48 +225,57 @@ func (s *Server) newProvider() (agent.LLMProvider, string, error) {
 
 // buildProvider creates a single LLM provider by ID.
 func (s *Server) buildProvider(providerID string) (agent.LLMProvider, string, error) {
-	providerCfg, ok := s.config.LLM.Providers[providerID]
+	baseID, profileID := splitProviderProfileID(providerID)
+	providerKey := strings.ToLower(strings.TrimSpace(baseID))
+	providerCfg, ok := s.config.LLM.Providers[providerKey]
+	if !ok {
+		providerCfg, ok = s.config.LLM.Providers[baseID]
+	}
 	if !ok {
 		return nil, "", fmt.Errorf("provider config missing for %q", providerID)
 	}
+	effectiveCfg, err := resolveProviderProfile(providerCfg, profileID)
+	if err != nil {
+		return nil, "", err
+	}
 
-	switch providerID {
+	switch providerKey {
 	case "anthropic":
-		if providerCfg.APIKey == "" {
+		if effectiveCfg.APIKey == "" {
 			return nil, "", errors.New("anthropic api key is required")
 		}
 		provider, err := providers.NewAnthropicProvider(providers.AnthropicConfig{
-			APIKey:       providerCfg.APIKey,
-			DefaultModel: providerCfg.DefaultModel,
-			BaseURL:      providerCfg.BaseURL,
+			APIKey:       effectiveCfg.APIKey,
+			DefaultModel: effectiveCfg.DefaultModel,
+			BaseURL:      effectiveCfg.BaseURL,
 		})
 		if err != nil {
 			return nil, "", err
 		}
-		return provider, providerCfg.DefaultModel, nil
+		return provider, effectiveCfg.DefaultModel, nil
 	case "openai":
-		if providerCfg.APIKey == "" {
+		if effectiveCfg.APIKey == "" {
 			return nil, "", errors.New("openai api key is required")
 		}
 		provider := providers.NewOpenAIProviderWithConfig(providers.OpenAIConfig{
-			APIKey:  providerCfg.APIKey,
-			BaseURL: providerCfg.BaseURL,
+			APIKey:  effectiveCfg.APIKey,
+			BaseURL: effectiveCfg.BaseURL,
 		})
-		return provider, providerCfg.DefaultModel, nil
+		return provider, effectiveCfg.DefaultModel, nil
 	case "google", "gemini":
-		if providerCfg.APIKey == "" {
+		if effectiveCfg.APIKey == "" {
 			return nil, "", errors.New("google api key is required")
 		}
 		provider, err := providers.NewGoogleProvider(providers.GoogleConfig{
-			APIKey:       providerCfg.APIKey,
-			DefaultModel: providerCfg.DefaultModel,
+			APIKey:       effectiveCfg.APIKey,
+			DefaultModel: effectiveCfg.DefaultModel,
 		})
 		if err != nil {
 			return nil, "", err
 		}
-		return provider, providerCfg.DefaultModel, nil
+		return provider, effectiveCfg.DefaultModel, nil
 	default:
-		return nil, "", fmt.Errorf("unsupported provider %q", providerID)
+		return nil, "", fmt.Errorf("unsupported provider %q", providerKey)
 	}
 }
 

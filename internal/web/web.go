@@ -2,7 +2,9 @@
 package web
 
 import (
+	"bytes"
 	"embed"
+	"encoding/json"
 	"html/template"
 	"io/fs"
 	"log/slog"
@@ -47,6 +49,8 @@ type Config struct {
 	SkillsManager *skills.Manager
 	// EdgeManager for listing connected nodes/tools
 	EdgeManager *edge.Manager
+	// ToolSummaryProvider supplies core + MCP tool metadata (optional)
+	ToolSummaryProvider ToolSummaryProvider
 	// GatewayConfig is the active runtime configuration (for summary views)
 	GatewayConfig *config.Config
 	// ConfigManager exposes config control plane operations (optional)
@@ -59,6 +63,11 @@ type Config struct {
 	Logger *slog.Logger
 	// ServerStartTime for uptime calculation
 	ServerStartTime time.Time
+}
+
+// ToolSummaryProvider exposes tool metadata for UI display.
+type ToolSummaryProvider interface {
+	ToolSummaries() []models.ToolSummary
 }
 
 // Handler is the main web UI HTTP handler.
@@ -97,6 +106,7 @@ func NewHandler(cfg *Config) (*Handler, error) {
 		"hasPrefix":      strings.HasPrefix,
 		"lower":          strings.ToLower,
 		"upper":          strings.ToUpper,
+		"prettyJSON":     prettyJSON,
 		"add":            func(a, b int) int { return a + b },
 		"sub":            func(a, b int) int { return a - b },
 	}
@@ -136,6 +146,7 @@ func (h *Handler) setupRoutes() {
 	h.mux.HandleFunc("/providers", h.handleProviders)
 	h.mux.HandleFunc("/cron", h.handleCron)
 	h.mux.HandleFunc("/skills", h.handleSkills)
+	h.mux.HandleFunc("/tools", h.handleTools)
 	h.mux.HandleFunc("/nodes", h.handleNodes)
 	h.mux.HandleFunc("/config", h.handleConfig)
 	h.mux.HandleFunc("/webchat", h.handleWebChat)
@@ -149,6 +160,7 @@ func (h *Handler) setupRoutes() {
 	h.mux.HandleFunc("/api/cron", h.apiCron)
 	h.mux.HandleFunc("/api/skills", h.apiSkills)
 	h.mux.HandleFunc("/api/skills/refresh", h.apiSkillsRefresh)
+	h.mux.HandleFunc("/api/tools", h.apiTools)
 	h.mux.HandleFunc("/api/nodes", h.apiNodes)
 	h.mux.HandleFunc("/api/nodes/", h.apiNode)
 	h.mux.HandleFunc("/api/config", h.apiConfig)
@@ -222,6 +234,17 @@ func formatDuration(d time.Duration) string {
 		return strings.Replace(strings.TrimSuffix((time.Duration(days)*24*time.Hour).String(), "0m0s"), "h", " days", 1)
 	}
 	return d.Round(time.Hour).String()
+}
+
+func prettyJSON(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var buf bytes.Buffer
+	if err := json.Indent(&buf, raw, "", "  "); err != nil {
+		return string(raw)
+	}
+	return buf.String()
 }
 
 func truncate(s string, n int) string {

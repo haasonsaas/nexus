@@ -526,10 +526,17 @@ type BedrockConfig struct {
 	DefaultMaxTokens int `yaml:"default_max_tokens"`
 }
 
-type LLMProviderConfig struct {
+type LLMProviderProfileConfig struct {
 	APIKey       string `yaml:"api_key"`
 	DefaultModel string `yaml:"default_model"`
 	BaseURL      string `yaml:"base_url"`
+}
+
+type LLMProviderConfig struct {
+	APIKey       string                              `yaml:"api_key"`
+	DefaultModel string                              `yaml:"default_model"`
+	BaseURL      string                              `yaml:"base_url"`
+	Profiles     map[string]LLMProviderProfileConfig `yaml:"profiles"`
 }
 
 type ToolsConfig struct {
@@ -578,16 +585,17 @@ type ToolJobsConfig struct {
 
 // ToolExecutionConfig controls runtime tool execution behavior.
 type ToolExecutionConfig struct {
-	MaxIterations   int            `yaml:"max_iterations"`
-	Parallelism     int            `yaml:"parallelism"`
-	Timeout         time.Duration  `yaml:"timeout"`
-	MaxAttempts     int            `yaml:"max_attempts"`
-	RetryBackoff    time.Duration  `yaml:"retry_backoff"`
-	DisableEvents   bool           `yaml:"disable_events"`
-	MaxToolCalls    int            `yaml:"max_tool_calls"`
-	RequireApproval []string       `yaml:"require_approval"`
-	Async           []string       `yaml:"async"`
-	Approval        ApprovalConfig `yaml:"approval"`
+	MaxIterations   int                   `yaml:"max_iterations"`
+	Parallelism     int                   `yaml:"parallelism"`
+	Timeout         time.Duration         `yaml:"timeout"`
+	MaxAttempts     int                   `yaml:"max_attempts"`
+	RetryBackoff    time.Duration         `yaml:"retry_backoff"`
+	DisableEvents   bool                  `yaml:"disable_events"`
+	MaxToolCalls    int                   `yaml:"max_tool_calls"`
+	RequireApproval []string              `yaml:"require_approval"`
+	Async           []string              `yaml:"async"`
+	Approval        ApprovalConfig        `yaml:"approval"`
+	ResultGuard     ToolResultGuardConfig `yaml:"result_guard"`
 }
 
 // ApprovalConfig controls tool approval behavior.
@@ -620,6 +628,16 @@ type ApprovalConfig struct {
 
 	// RequestTTL is how long approval requests remain valid.
 	RequestTTL time.Duration `yaml:"request_ttl"`
+}
+
+// ToolResultGuardConfig controls redaction of tool results before persistence.
+type ToolResultGuardConfig struct {
+	Enabled        bool     `yaml:"enabled"`
+	MaxChars       int      `yaml:"max_chars"`
+	Denylist       []string `yaml:"denylist"`
+	RedactPatterns []string `yaml:"redact_patterns"`
+	RedactionText  string   `yaml:"redaction_text"`
+	TruncateSuffix string   `yaml:"truncate_suffix"`
 }
 
 // ElevatedConfig controls elevated tool execution behavior and allowlists.
@@ -1392,6 +1410,12 @@ func applyToolsDefaults(cfg *Config) {
 	if cfg.Tools.Jobs.PruneInterval == 0 {
 		cfg.Tools.Jobs.PruneInterval = 1 * time.Hour
 	}
+	if strings.TrimSpace(cfg.Tools.Execution.ResultGuard.RedactionText) == "" {
+		cfg.Tools.Execution.ResultGuard.RedactionText = "[redacted]"
+	}
+	if strings.TrimSpace(cfg.Tools.Execution.ResultGuard.TruncateSuffix) == "" {
+		cfg.Tools.Execution.ResultGuard.TruncateSuffix = "...[truncated]"
+	}
 }
 
 func applyMemorySearchEmbeddingsDefaults(cfg *MemorySearchEmbeddingsConfig) {
@@ -1835,11 +1859,44 @@ func validateConfig(cfg *Config) error {
 		}
 	}
 
-	defaultProvider := strings.ToLower(strings.TrimSpace(cfg.LLM.DefaultProvider))
+	defaultProvider := strings.TrimSpace(cfg.LLM.DefaultProvider)
 	if defaultProvider != "" {
-		if _, ok := cfg.LLM.Providers[defaultProvider]; !ok {
-			if _, ok := cfg.LLM.Providers[cfg.LLM.DefaultProvider]; !ok {
-				issues = append(issues, fmt.Sprintf("llm.providers missing entry for default_provider %q", cfg.LLM.DefaultProvider))
+		providerID, profileID := splitProviderProfileID(defaultProvider)
+		providerKey := strings.ToLower(strings.TrimSpace(providerID))
+		providerCfg, ok := cfg.LLM.Providers[providerKey]
+		if !ok {
+			providerCfg, ok = cfg.LLM.Providers[providerID]
+		}
+		if !ok {
+			issues = append(issues, fmt.Sprintf("llm.providers missing entry for default_provider %q", cfg.LLM.DefaultProvider))
+		} else if profileID != "" {
+			if providerCfg.Profiles == nil {
+				issues = append(issues, fmt.Sprintf("llm.providers.%s.profiles missing profile %q", providerKey, profileID))
+			} else if _, ok := providerCfg.Profiles[profileID]; !ok {
+				issues = append(issues, fmt.Sprintf("llm.providers.%s.profiles missing profile %q", providerKey, profileID))
+			}
+		}
+	}
+	for i, entry := range cfg.LLM.FallbackChain {
+		value := strings.TrimSpace(entry)
+		if value == "" {
+			continue
+		}
+		providerID, profileID := splitProviderProfileID(value)
+		providerKey := strings.ToLower(strings.TrimSpace(providerID))
+		providerCfg, ok := cfg.LLM.Providers[providerKey]
+		if !ok {
+			providerCfg, ok = cfg.LLM.Providers[providerID]
+		}
+		if !ok {
+			issues = append(issues, fmt.Sprintf("llm.fallback_chain[%d] references unknown provider %q", i, entry))
+			continue
+		}
+		if profileID != "" {
+			if providerCfg.Profiles == nil {
+				issues = append(issues, fmt.Sprintf("llm.fallback_chain[%d] references missing profile %q", i, profileID))
+			} else if _, ok := providerCfg.Profiles[profileID]; !ok {
+				issues = append(issues, fmt.Sprintf("llm.fallback_chain[%d] references missing profile %q", i, profileID))
 			}
 		}
 	}
@@ -1912,6 +1969,9 @@ func validateConfig(cfg *Config) error {
 	if cfg.Tools.Execution.MaxToolCalls < 0 {
 		issues = append(issues, "tools.execution.max_tool_calls must be >= 0")
 	}
+	if cfg.Tools.Execution.ResultGuard.MaxChars < 0 {
+		issues = append(issues, "tools.execution.result_guard.max_chars must be >= 0")
+	}
 	if profile := strings.ToLower(strings.TrimSpace(cfg.Tools.Execution.Approval.Profile)); profile != "" {
 		switch profile {
 		case "coding", "messaging", "readonly", "full", "minimal":
@@ -1971,6 +2031,19 @@ func validChannelPolicy(policy string) bool {
 	default:
 		return false
 	}
+}
+
+func splitProviderProfileID(value string) (string, string) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", ""
+	}
+	for _, sep := range []string{":", "@", "/"} {
+		if parts := strings.SplitN(value, sep, 2); len(parts) == 2 {
+			return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+		}
+	}
+	return value, ""
 }
 
 func validCanvasRole(role string) bool {

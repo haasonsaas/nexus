@@ -21,8 +21,10 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/gorilla/websocket"
 
+	"github.com/haasonsaas/nexus/internal/auth"
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/ratelimit"
+	"github.com/haasonsaas/nexus/pkg/models"
 )
 
 const (
@@ -314,13 +316,50 @@ const (
         logEl.prepend(item);
       };
 
+      const sanitizeHTML = (html) => {
+        if (!html || typeof html !== "string") {
+          return "";
+        }
+        const template = document.createElement("template");
+        template.innerHTML = html;
+        const blockedTags = new Set(["script", "style", "iframe", "object", "embed", "link", "meta"]);
+        const walker = document.createTreeWalker(template.content, NodeFilter.SHOW_ELEMENT, null);
+        const nodesToRemove = [];
+        while (walker.nextNode()) {
+          const node = walker.currentNode;
+          const tagName = node.tagName ? node.tagName.toLowerCase() : "";
+          if (blockedTags.has(tagName)) {
+            nodesToRemove.push(node);
+            continue;
+          }
+          for (const attr of Array.from(node.attributes)) {
+            const name = attr.name.toLowerCase();
+            const value = attr.value || "";
+            if (name.startsWith("on")) {
+              node.removeAttribute(attr.name);
+              continue;
+            }
+            if ((name === "href" || name === "src" || name === "xlink:href") && /^\s*javascript:/i.test(value)) {
+              node.removeAttribute(attr.name);
+              continue;
+            }
+            if (name === "style" && /(expression|javascript:)/i.test(value)) {
+              node.removeAttribute(attr.name);
+              continue;
+            }
+          }
+        }
+        nodesToRemove.forEach((node) => node.remove());
+        return template.innerHTML;
+      };
+
       const renderPayload = (payload) => {
         if (!payload) {
           root.innerHTML = '<div class="empty"><h3>Waiting...</h3><p>No payload available yet.</p></div>';
           return;
         }
         if (payload.html) {
-          root.innerHTML = payload.html;
+          root.innerHTML = sanitizeHTML(payload.html);
           return;
         }
         if (payload.text || payload.markdown) {
@@ -709,6 +748,8 @@ type Host struct {
 	manager        *Manager
 	actionCallback ActionHandler
 	actionLimiter  *ratelimit.Limiter
+	authService    *auth.Service
+	metrics        *Metrics
 
 	logger *slog.Logger
 
@@ -789,6 +830,22 @@ func (h *Host) SetActionHandler(handler ActionHandler) {
 		return
 	}
 	h.actionCallback = handler
+}
+
+// SetAuthService attaches an auth service for canvas requests.
+func (h *Host) SetAuthService(service *auth.Service) {
+	if h == nil {
+		return
+	}
+	h.authService = service
+}
+
+// SetMetrics attaches metrics collectors for canvas activity.
+func (h *Host) SetMetrics(metrics *Metrics) {
+	if h == nil {
+		return
+	}
+	h.metrics = metrics
 }
 
 // Start begins serving the canvas host and optional live reload watcher.
@@ -946,11 +1003,11 @@ func (h *Host) CanvasSessionURL(params CanvasURLParams, sessionID string) string
 }
 
 // SignedSessionURL returns a signed session-specific canvas URL.
-func (h *Host) SignedSessionURL(params CanvasURLParams, sessionID string, role string) (string, error) {
+func (h *Host) SignedSessionURL(params CanvasURLParams, sessionID string, role string, userID string) (string, error) {
 	if h == nil {
 		return "", fmt.Errorf("canvas host is nil")
 	}
-	token, err := h.signSessionToken(sessionID, role)
+	token, err := h.signSessionToken(sessionID, role, userID)
 	if err != nil {
 		return "", err
 	}
@@ -1030,7 +1087,7 @@ func (h *Host) canvasHandler() http.Handler {
 
 		var fullPath string
 		if sessionID != "" {
-			if err := h.authorizeSessionRequest(r, sessionID); err != nil {
+			if _, _, err := h.authorizeSessionRequest(r, sessionID); err != nil {
 				h.writeTokenError(w, err)
 				return
 			}
@@ -1088,9 +1145,13 @@ func (h *Host) streamHandler() http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		if err := h.authorizeSessionRequest(r, sessionID); err != nil {
+		if _, _, err := h.authorizeSessionRequest(r, sessionID); err != nil {
 			h.writeTokenError(w, err)
 			return
+		}
+		if h.metrics != nil {
+			h.metrics.ViewerConnected()
+			defer h.metrics.ViewerDisconnected()
 		}
 
 		flusher, ok := w.(http.Flusher)
@@ -1182,19 +1243,38 @@ func (h *Host) actionsHandler() http.Handler {
 			http.Error(w, "name is required", http.StatusBadRequest)
 			return
 		}
-		if err := h.authorizeSessionRequest(r, sessionID); err != nil {
+		access, user, err := h.authorizeSessionRequest(r, sessionID)
+		if err != nil {
 			h.writeTokenError(w, err)
 			return
 		}
+		role := RoleEditor
+		if access != nil {
+			role = NormalizeRole(access.Role)
+		}
+		if !RoleAllowsAction(role) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		userID := strings.TrimSpace(req.UserID)
+		if access != nil && strings.TrimSpace(access.UserID) != "" {
+			userID = strings.TrimSpace(access.UserID)
+		}
+		if user != nil && strings.TrimSpace(user.ID) != "" {
+			userID = strings.TrimSpace(user.ID)
+		}
 		if h.actionLimiter != nil {
 			key := sessionID
-			if userID := strings.TrimSpace(req.UserID); userID != "" {
-				key = key + ":" + userID
+			if userID != "" {
+				key += ":" + userID
 			}
 			if !h.actionLimiter.Allow(key) {
 				http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
 				return
 			}
+		}
+		if h.metrics != nil {
+			h.metrics.RecordAction()
 		}
 
 		action := Action{
@@ -1203,10 +1283,14 @@ func (h *Host) actionsHandler() http.Handler {
 			Name:              strings.TrimSpace(req.Name),
 			SourceComponentID: strings.TrimSpace(req.SourceComponentID),
 			Context:           req.Context,
-			UserID:            strings.TrimSpace(req.UserID),
+			UserID:            userID,
 			ReceivedAt:        time.Now(),
 		}
-		if err := h.actionCallback(r.Context(), action); err != nil {
+		ctx := r.Context()
+		if user != nil {
+			ctx = auth.WithUser(ctx, user)
+		}
+		if err := h.actionCallback(ctx, action); err != nil {
 			h.logger.Warn("canvas action handler failed", "error", err)
 			http.Error(w, "action failed", http.StatusInternalServerError)
 			return
@@ -1616,6 +1700,12 @@ func (h *Host) sessionFromPath(clean string) (string, string, error) {
 	}
 	parts := strings.SplitN(trimmed, "/", 2)
 	sessionID := parts[0]
+	if h != nil && strings.Contains(sessionID, ".") && h.root != "" {
+		candidate := filepath.Join(h.root, sessionID)
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return "", clean, nil
+		}
+	}
 	if !validSessionID(sessionID) {
 		return "", "", os.ErrNotExist
 	}
@@ -1639,25 +1729,75 @@ func (h *Host) ensureSessionRoot(sessionID string) (string, error) {
 	return sessionRoot, nil
 }
 
-func (h *Host) authorizeSessionRequest(r *http.Request, sessionID string) error {
-	if h == nil || len(h.tokenSecret) == 0 {
+func (h *Host) authorizeSessionRequest(r *http.Request, sessionID string) (*AccessToken, *models.User, error) {
+	if h == nil {
+		return nil, nil, ErrUnauthorized
+	}
+	var access *AccessToken
+	if len(h.tokenSecret) > 0 {
+		token := extractCanvasToken(r)
+		if token != "" {
+			parsed, err := ParseAccessToken(h.tokenSecret, token)
+			if err != nil {
+				if h.authService == nil || !h.authService.Enabled() {
+					return nil, nil, err
+				}
+			} else {
+				if parsed.SessionID != sessionID {
+					return nil, nil, ErrTokenInvalid
+				}
+				parsed.Role = NormalizeRole(parsed.Role)
+				parsed.UserID = strings.TrimSpace(parsed.UserID)
+				access = parsed
+			}
+		} else if h.authService == nil || !h.authService.Enabled() {
+			return nil, nil, ErrTokenInvalid
+		}
+	}
+
+	var user *models.User
+	if h.authService != nil && h.authService.Enabled() {
+		user = h.authenticateRequest(r)
+		if user == nil && access == nil {
+			return access, nil, ErrUnauthorized
+		}
+	}
+
+	return access, user, nil
+}
+
+func (h *Host) authenticateRequest(r *http.Request) *models.User {
+	if h == nil || h.authService == nil || !h.authService.Enabled() || r == nil {
 		return nil
 	}
-	token := extractCanvasToken(r)
-	if token == "" {
-		return ErrTokenInvalid
+	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
+	if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+		token := strings.TrimSpace(authHeader[len("bearer "):])
+		if user, err := h.authService.ValidateJWT(token); err == nil {
+			return user
+		}
 	}
-	access, err := ParseAccessToken(h.tokenSecret, token)
-	if err != nil {
-		return err
+
+	apiKey := strings.TrimSpace(r.Header.Get("X-API-Key"))
+	if apiKey == "" {
+		apiKey = strings.TrimSpace(r.Header.Get("Api-Key"))
 	}
-	if access.SessionID != sessionID {
-		return ErrTokenInvalid
+	if apiKey != "" {
+		if user, err := h.authService.ValidateAPIKey(apiKey); err == nil {
+			return user
+		}
 	}
+
+	if cookie, err := r.Cookie("nexus_session"); err == nil && strings.TrimSpace(cookie.Value) != "" {
+		if user, err := h.authService.ValidateJWT(strings.TrimSpace(cookie.Value)); err == nil {
+			return user
+		}
+	}
+
 	return nil
 }
 
-func (h *Host) signSessionToken(sessionID string, role string) (string, error) {
+func (h *Host) signSessionToken(sessionID string, role string, userID string) (string, error) {
 	if h == nil || len(h.tokenSecret) == 0 {
 		return "", ErrTokenInvalid
 	}
@@ -1667,7 +1807,8 @@ func (h *Host) signSessionToken(sessionID string, role string) (string, error) {
 	}
 	token := AccessToken{
 		SessionID: sessionID,
-		Role:      role,
+		UserID:    strings.TrimSpace(userID),
+		Role:      NormalizeRole(role),
 	}
 	if ttl > 0 {
 		token.ExpiresAt = time.Now().Add(ttl).Unix()

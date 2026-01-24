@@ -13,11 +13,13 @@ import (
 var (
 	ErrTokenInvalid = errors.New("canvas: token invalid")
 	ErrTokenExpired = errors.New("canvas: token expired")
+	ErrUnauthorized = errors.New("canvas: unauthorized")
 )
 
 // AccessToken describes a signed canvas access token.
 type AccessToken struct {
 	SessionID string `json:"sid"`
+	UserID    string `json:"uid,omitempty"`
 	Role      string `json:"role,omitempty"`
 	ExpiresAt int64  `json:"exp"`
 }

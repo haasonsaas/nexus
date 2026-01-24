@@ -9,6 +9,7 @@ import (
 
 	"github.com/haasonsaas/nexus/internal/canvas"
 	"github.com/haasonsaas/nexus/internal/channels/slack"
+	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
@@ -52,11 +53,15 @@ func (s *Server) buildSlackCanvasLink(ctx context.Context, req slack.CanvasLinkR
 	if err != nil {
 		return "", err
 	}
-	role := strings.TrimSpace(s.config.Channels.Slack.Canvas.Role)
-	if role == "" {
-		role = "editor"
+	role := resolveSlackCanvasRole(s.config.Channels.Slack.Canvas, req)
+	signed, err := s.canvasHost.SignedSessionURL(canvas.CanvasURLParams{}, session.ID, role, req.UserID)
+	if err != nil {
+		if errors.Is(err, canvas.ErrTokenInvalid) {
+			return s.canvasHost.CanvasSessionURL(canvas.CanvasURLParams{}, session.ID), nil
+		}
+		return "", err
 	}
-	return s.canvasHost.SignedSessionURL(canvas.CanvasURLParams{}, session.ID, role)
+	return signed, nil
 }
 
 func buildSlackCanvasSessionKey(workspaceID, channelID, threadTS string) string {
@@ -65,6 +70,30 @@ func buildSlackCanvasSessionKey(workspaceID, channelID, threadTS string) string 
 		key += ":" + strings.TrimSpace(threadTS)
 	}
 	return key
+}
+
+func resolveSlackCanvasRole(cfg config.SlackCanvasConfig, req slack.CanvasLinkRequest) string {
+	workspaceID := strings.TrimSpace(req.WorkspaceID)
+	userID := strings.TrimSpace(req.UserID)
+	if workspaceID != "" && userID != "" {
+		if users := cfg.UserRoles[workspaceID]; len(users) > 0 {
+			if role, ok := users[userID]; ok {
+				return strings.TrimSpace(role)
+			}
+		}
+	}
+	if workspaceID != "" {
+		if role, ok := cfg.WorkspaceRoles[workspaceID]; ok {
+			return strings.TrimSpace(role)
+		}
+	}
+	if strings.TrimSpace(cfg.DefaultRole) != "" {
+		return strings.TrimSpace(cfg.DefaultRole)
+	}
+	if strings.TrimSpace(cfg.Role) != "" {
+		return strings.TrimSpace(cfg.Role)
+	}
+	return "editor"
 }
 
 func ensureCanvasSession(ctx context.Context, store canvas.Store, key string, workspaceID string, channelID string, threadTS string) (*canvas.Session, error) {

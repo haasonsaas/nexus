@@ -445,11 +445,14 @@ type SlackConfig struct {
 }
 
 type SlackCanvasConfig struct {
-	Enabled           bool     `yaml:"enabled"`
-	Command           string   `yaml:"command"`
-	ShortcutCallback  string   `yaml:"shortcut_callback"`
-	AllowedWorkspaces []string `yaml:"allowed_workspaces"`
-	Role              string   `yaml:"role"`
+	Enabled           bool                         `yaml:"enabled"`
+	Command           string                       `yaml:"command"`
+	ShortcutCallback  string                       `yaml:"shortcut_callback"`
+	AllowedWorkspaces []string                     `yaml:"allowed_workspaces"`
+	Role              string                       `yaml:"role"`
+	DefaultRole       string                       `yaml:"default_role"`
+	WorkspaceRoles    map[string]string            `yaml:"workspace_roles"`
+	UserRoles         map[string]map[string]string `yaml:"user_roles"`
 }
 
 type TeamsConfig struct {
@@ -1242,8 +1245,15 @@ func applySlackCanvasDefaults(cfg *SlackCanvasConfig) {
 	if strings.TrimSpace(cfg.ShortcutCallback) == "" {
 		cfg.ShortcutCallback = "open_canvas"
 	}
+	if strings.TrimSpace(cfg.DefaultRole) == "" {
+		if strings.TrimSpace(cfg.Role) != "" {
+			cfg.DefaultRole = cfg.Role
+		} else {
+			cfg.DefaultRole = "editor"
+		}
+	}
 	if strings.TrimSpace(cfg.Role) == "" {
-		cfg.Role = "editor"
+		cfg.Role = cfg.DefaultRole
 	}
 }
 
@@ -1639,6 +1649,36 @@ func validateConfig(cfg *Config) error {
 		} else if !strings.HasPrefix(command, "/") {
 			issues = append(issues, "channels.slack.canvas.command must start with \"/\"")
 		}
+		if !validCanvasRole(cfg.Channels.Slack.Canvas.DefaultRole) {
+			issues = append(issues, "channels.slack.canvas.default_role must be \"viewer\", \"editor\", or \"admin\"")
+		}
+		if !validCanvasRole(cfg.Channels.Slack.Canvas.Role) {
+			issues = append(issues, "channels.slack.canvas.role must be \"viewer\", \"editor\", or \"admin\"")
+		}
+		for workspaceID, role := range cfg.Channels.Slack.Canvas.WorkspaceRoles {
+			if strings.TrimSpace(workspaceID) == "" {
+				issues = append(issues, "channels.slack.canvas.workspace_roles has an empty workspace id")
+				continue
+			}
+			if !validCanvasRole(role) {
+				issues = append(issues, fmt.Sprintf("channels.slack.canvas.workspace_roles[%s] must be \"viewer\", \"editor\", or \"admin\"", workspaceID))
+			}
+		}
+		for workspaceID, users := range cfg.Channels.Slack.Canvas.UserRoles {
+			if strings.TrimSpace(workspaceID) == "" {
+				issues = append(issues, "channels.slack.canvas.user_roles has an empty workspace id")
+				continue
+			}
+			for userID, role := range users {
+				if strings.TrimSpace(userID) == "" {
+					issues = append(issues, fmt.Sprintf("channels.slack.canvas.user_roles[%s] has an empty user id", workspaceID))
+					continue
+				}
+				if !validCanvasRole(role) {
+					issues = append(issues, fmt.Sprintf("channels.slack.canvas.user_roles[%s][%s] must be \"viewer\", \"editor\", or \"admin\"", workspaceID, userID))
+				}
+			}
+		}
 	}
 
 	if !validScope(cfg.Session.SlackScope) {
@@ -1711,6 +1751,9 @@ func validateConfig(cfg *Config) error {
 			if *cfg.CanvasHost.InjectClient && !*cfg.CanvasHost.LiveReload {
 				issues = append(issues, "canvas_host.inject_client requires canvas_host.live_reload to be true")
 			}
+		}
+		if strings.TrimSpace(cfg.Canvas.Tokens.Secret) == "" && strings.TrimSpace(cfg.Auth.JWTSecret) == "" && len(cfg.Auth.APIKeys) == 0 {
+			issues = append(issues, "canvas_host.enabled requires auth.jwt_secret, auth.api_keys, or canvas.tokens.secret")
 		}
 	}
 	if cfg.Canvas.Retention.StateMaxAge < 0 {
@@ -1902,6 +1945,15 @@ func validateChannelPolicy(issues *[]string, field string, cfg ChannelPolicyConf
 func validChannelPolicy(policy string) bool {
 	switch strings.ToLower(strings.TrimSpace(policy)) {
 	case "open", "allowlist", "pairing", "disabled":
+		return true
+	default:
+		return false
+	}
+}
+
+func validCanvasRole(role string) bool {
+	switch strings.ToLower(strings.TrimSpace(role)) {
+	case "", "viewer", "editor", "admin":
 		return true
 	default:
 		return false

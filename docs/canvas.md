@@ -39,8 +39,9 @@ slack:{workspace_id}:{channel_id}[:thread_ts]
 
 ## Authentication and authorization
 ### Access model
-- All canvas endpoints require auth + session token validation.
-- Canvas links are signed, expiring URLs (HMAC or JWT).
+- Canvas endpoints require authentication plus session token validation when configured.
+- Canvas links are signed, expiring URLs (HMAC) scoped to a session and role.
+- Canvas host requires either `canvas.tokens.secret` or `auth` (JWT/API keys) to be configured.
 - Tokens embed session id, workspace id, channel/thread scope, and role.
 
 ### Roles
@@ -49,8 +50,21 @@ slack:{workspace_id}:{channel_id}[:thread_ts]
 - **Admin**: can manage sessions and revoke tokens.
 
 ### Role assignment
-- Primary source: configuration (by Slack workspace, user, or group).
+- Primary source: configuration (by Slack workspace and user).
 - Optional future: dynamic roles from an identity provider.
+
+Example role configuration:
+```
+channels:
+  slack:
+    canvas:
+      default_role: editor
+      workspace_roles:
+        T1234567890: admin
+      user_roles:
+        T1234567890:
+          U1234567890: viewer
+```
 
 ## Data model and persistence
 - **canvas_sessions**: id, workspace, channel, thread, created_at, updated_at
@@ -107,4 +121,3 @@ State is stored as a full JSON snapshot, and events are appended for replay.
 - **Session mapping**: default channel-level, thread-specific override.
 - **Auth model**: signed URLs + server-side RBAC.
 - **Persistence**: JSON snapshots + append-only event log.
-

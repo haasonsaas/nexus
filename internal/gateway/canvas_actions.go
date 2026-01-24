@@ -28,7 +28,7 @@ func (s *Server) handleCanvasAction(ctx context.Context, action canvas.Action) e
 
 	if s.auditLogger != nil {
 		s.auditLogger.Log(ctx, &audit.Event{
-			Type:      audit.EventMessageReceived,
+			Type:      audit.EventCanvasAction,
 			Level:     audit.LevelInfo,
 			Timestamp: time.Now(),
 			SessionID: action.SessionID,
@@ -107,7 +107,7 @@ func (s *Server) buildCanvasActionMessage(action canvas.Action, session *canvas.
 	msg := &models.Message{
 		ID:        uuid.NewString(),
 		Channel:   models.ChannelSlack,
-		ChannelID: action.ID,
+		ChannelID: session.ChannelID,
 		Direction: models.DirectionInbound,
 		Role:      models.RoleUser,
 		Content:   fmt.Sprintf("Canvas action: %s\n%s", action.Name, string(payloadJSON)),

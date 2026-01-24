@@ -161,6 +161,9 @@ func (slackPlugin) Build(cfg *config.Config, logger *slog.Logger) (channels.Adap
 			ShortcutCallback:  cfg.Channels.Slack.Canvas.ShortcutCallback,
 			AllowedWorkspaces: cfg.Channels.Slack.Canvas.AllowedWorkspaces,
 			Role:              cfg.Channels.Slack.Canvas.Role,
+			DefaultRole:       cfg.Channels.Slack.Canvas.DefaultRole,
+			WorkspaceRoles:    cfg.Channels.Slack.Canvas.WorkspaceRoles,
+			UserRoles:         cfg.Channels.Slack.Canvas.UserRoles,
 		},
 	})
 }

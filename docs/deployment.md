@@ -12,6 +12,12 @@ This guide covers deploying Nexus in both managed (Kubernetes) and self-hosted c
 
 ## Quick Start (Local Development)
 
+### Windows (WSL2)
+
+Windows installs should use WSL2 (Ubuntu recommended). See `docs/platforms/windows.md`
+for WSL setup, systemd enablement, and portproxy notes. Run the Linux steps
+inside your WSL distro.
+
 ```bash
 # Clone the repo
 git clone https://github.com/yourorg/nexus.git

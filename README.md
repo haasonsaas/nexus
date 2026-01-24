@@ -129,6 +129,7 @@ Full Model Context Protocol support:
 - Go 1.24+
 - Docker (for CockroachDB and optional services)
 - A bot token for at least one messaging platform
+- Windows users: run via WSL2 (see `docs/platforms/windows.md`)
 
 ### Installation
 

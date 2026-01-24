@@ -636,3 +636,119 @@ func TestMemoryRepository_ListArtifacts_Limit(t *testing.T) {
 		t.Errorf("ListArtifacts returned %d artifacts, want 3", len(results))
 	}
 }
+
+func TestExtensionForMime(t *testing.T) {
+	tests := []struct {
+		mimeType string
+		expected string
+	}{
+		{"image/png", ".png"},
+		{"image/jpeg", ".jpg"},
+		{"image/gif", ".gif"},
+		{"image/webp", ".webp"},
+		{"video/mp4", ".mp4"},
+		{"video/webm", ".webm"},
+		{"application/pdf", ".pdf"},
+		{"text/plain", ".txt"},
+		{"application/json", ".json"},
+		{"application/octet-stream", ".dat"},
+		{"unknown/type", ".dat"},
+		{"", ".dat"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.mimeType, func(t *testing.T) {
+			result := extensionForMime(tt.mimeType)
+			if result != tt.expected {
+				t.Errorf("extensionForMime(%q) = %q, want %q", tt.mimeType, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestLocalStore_GetNotFound(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewLocalStore(dir)
+	if err != nil {
+		t.Fatalf("NewLocalStore: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	_, err = store.Get(ctx, "nonexistent-id")
+	if err == nil {
+		t.Error("expected error for nonexistent artifact")
+	}
+}
+
+func TestLocalStore_DeleteNonexistent(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewLocalStore(dir)
+	if err != nil {
+		t.Fatalf("NewLocalStore: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	// Should not return error for nonexistent artifact
+	err = store.Delete(ctx, "nonexistent-id")
+	if err != nil {
+		t.Errorf("Delete nonexistent: %v", err)
+	}
+}
+
+func TestLocalStore_ExistsNotFound(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewLocalStore(dir)
+	if err != nil {
+		t.Fatalf("NewLocalStore: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	exists, err := store.Exists(ctx, "nonexistent-id")
+	if err != nil {
+		t.Errorf("Exists: %v", err)
+	}
+	if exists {
+		t.Error("expected exists=false for nonexistent artifact")
+	}
+}
+
+func TestLocalStore_PutDifferentTypes(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewLocalStore(dir)
+	if err != nil {
+		t.Fatalf("NewLocalStore: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+
+	types := []struct {
+		mimeType     string
+		metadataType string
+		ext          string
+	}{
+		{"image/png", "screenshot", ".png"},
+		{"image/jpeg", "photo", ".jpg"},
+		{"video/mp4", "recording", ".mp4"},
+		{"application/pdf", "document", ".pdf"},
+	}
+
+	for _, tt := range types {
+		t.Run(tt.mimeType, func(t *testing.T) {
+			id := "artifact-" + tt.metadataType
+			ref, err := store.Put(ctx, id, bytes.NewReader([]byte("data")), PutOptions{
+				MimeType: tt.mimeType,
+				Metadata: map[string]string{"type": tt.metadataType},
+			})
+			if err != nil {
+				t.Fatalf("Put: %v", err)
+			}
+			if ref == "" {
+				t.Error("expected non-empty reference")
+			}
+		})
+	}
+}

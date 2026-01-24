@@ -2,6 +2,7 @@ package canvas
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -295,6 +296,7 @@ type Host struct {
 	autoIndex    bool
 	tokenSecret  []byte
 	tokenTTL     time.Duration
+	manager      *Manager
 
 	logger *slog.Logger
 
@@ -356,6 +358,14 @@ func NewHost(cfg config.CanvasHostConfig, canvasCfg config.CanvasConfig, logger 
 	}, nil
 }
 
+// SetManager attaches a canvas manager to enable realtime APIs.
+func (h *Host) SetManager(manager *Manager) {
+	if h == nil {
+		return
+	}
+	h.manager = manager
+}
+
 // Start begins serving the canvas host and optional live reload watcher.
 func (h *Host) Start(ctx context.Context) error {
 	if h == nil {
@@ -386,6 +396,7 @@ func (h *Host) Start(ctx context.Context) error {
 	mux.HandleFunc(canvasPrefix, func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, canvasPrefix+"/", http.StatusFound)
 	})
+	mux.Handle(path.Join(canvasPrefix, "api/stream"), h.streamHandler())
 
 	if h.liveReload {
 		mux.Handle(h.liveReloadScriptPath(), h.liveReloadScriptHandler())
@@ -633,6 +644,74 @@ func (h *Host) canvasHandler() http.Handler {
 			return
 		}
 		http.ServeFile(w, r, fullPath)
+	})
+}
+
+func (h *Host) streamHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if h == nil || h.manager == nil || h.manager.Hub() == nil {
+			http.Error(w, "canvas stream unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		sessionID := strings.TrimSpace(r.URL.Query().Get("session"))
+		if sessionID == "" {
+			http.Error(w, "missing session", http.StatusBadRequest)
+			return
+		}
+		if !validSessionID(sessionID) {
+			http.NotFound(w, r)
+			return
+		}
+		if err := h.authorizeSessionRequest(r, sessionID); err != nil {
+			h.writeTokenError(w, err)
+			return
+		}
+
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+		w.Header().Set("X-Accel-Buffering", "no")
+		w.WriteHeader(http.StatusOK)
+		flusher.Flush()
+
+		if store := h.manager.Store(); store != nil {
+			if state, err := store.GetState(r.Context(), sessionID); err == nil && state != nil {
+				_ = writeStreamMessage(w, StreamMessage{
+					Type:      "state",
+					SessionID: sessionID,
+					Payload:   state.StateJSON,
+					Timestamp: time.Now(),
+				})
+				flusher.Flush()
+			}
+		}
+
+		stream, cancel := h.manager.Hub().Subscribe(sessionID)
+		defer cancel()
+
+		keepalive := time.NewTicker(15 * time.Second)
+		defer keepalive.Stop()
+
+		for {
+			select {
+			case <-r.Context().Done():
+				return
+			case msg := <-stream:
+				if err := writeStreamMessage(w, msg); err != nil {
+					return
+				}
+				flusher.Flush()
+			case <-keepalive.C:
+				_, _ = w.Write([]byte(": keepalive\n\n")) //nolint:errcheck
+				flusher.Flush()
+			}
+		}
 	})
 }
 
@@ -1193,6 +1272,15 @@ func validSessionID(value string) bool {
 		}
 	}
 	return true
+}
+
+func writeStreamMessage(w io.Writer, msg StreamMessage) error {
+	payload, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(w, "data: %s\n\n", payload)
+	return err
 }
 
 func shouldIgnorePath(p string) bool {

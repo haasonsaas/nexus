@@ -352,8 +352,8 @@ func (s *Server) registerTools(ctx context.Context, runtime *agent.Runtime) erro
 	if s.cronScheduler != nil {
 		runtime.RegisterTool(crontools.NewTool(s.cronScheduler))
 	}
-	if s.canvasHost != nil {
-		runtime.RegisterTool(canvastools.NewTool(s.canvasHost))
+	if s.canvasHost != nil || s.canvasManager != nil {
+		runtime.RegisterTool(canvastools.NewTool(s.canvasHost, s.canvasManager))
 	}
 
 	runtime.RegisterTool(gatewaytools.NewTool(s))

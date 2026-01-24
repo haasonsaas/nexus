@@ -137,6 +137,8 @@ type Server struct {
 
 	// canvasHost serves the dedicated canvas host
 	canvasHost *canvas.Host
+	// canvasManager handles realtime canvas state updates
+	canvasManager *canvas.Manager
 
 	// httpServer serves the HTTP dashboard, API, and control plane WebSocket
 	httpServer   *http.Server
@@ -226,6 +228,32 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		} else {
 			canvasHost = host
 		}
+	}
+
+	// Initialize canvas manager and store
+	var canvasStore canvas.Store
+	if cfg.Database.URL != "" {
+		storeCfg := storage.DefaultCockroachConfig()
+		if cfg.Database.MaxConnections > 0 {
+			storeCfg.MaxOpenConns = cfg.Database.MaxConnections
+		}
+		if cfg.Database.ConnMaxLifetime > 0 {
+			storeCfg.ConnMaxLifetime = cfg.Database.ConnMaxLifetime
+		}
+		dbStore, err := canvas.NewCockroachStoreFromDSN(cfg.Database.URL, storeCfg)
+		if err != nil {
+			logger.Warn("canvas store falling back to memory", "error", err)
+			canvasStore = canvas.NewMemoryStore()
+		} else {
+			canvasStore = dbStore
+			logger.Info("using database-backed canvas store")
+		}
+	} else {
+		canvasStore = canvas.NewMemoryStore()
+	}
+	canvasManager := canvas.NewManager(canvasStore, logger)
+	if canvasHost != nil {
+		canvasHost.SetManager(canvasManager)
 	}
 
 	// Initialize vector memory manager (optional, returns nil if not enabled)
@@ -457,6 +485,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		modelCatalog:       modelCatalog,
 		bedrockDiscovery:   bedrockDiscovery,
 		canvasHost:         canvasHost,
+		canvasManager:      canvasManager,
 		artifactRepo:       artifactRepo,
 		eventStore:         eventStore,
 		eventRecorder:      eventRecorder,

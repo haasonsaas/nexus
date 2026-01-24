@@ -31,3 +31,13 @@ type ToolEvent struct {
 	StartedAt    time.Time       `json:"started_at,omitempty"`
 	FinishedAt   time.Time       `json:"finished_at,omitempty"`
 }
+
+// ToolSummary describes a tool available for use in the agent system.
+type ToolSummary struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Schema      json.RawMessage `json:"schema,omitempty"`
+	Source      string          `json:"source"`
+	Namespace   string          `json:"namespace,omitempty"`
+	Canonical   string          `json:"canonical,omitempty"`
+}

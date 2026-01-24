@@ -33,9 +33,9 @@ type computerUseParams struct {
 // computerUseTool performs direct mouse/keyboard/screenshot actions for computer use.
 func computerUseTool(policy *ComputerUsePolicy) *Tool {
 	return &Tool{
-		Name:        "nodes.computer_use",
-		Description: "Perform computer-use actions (mouse, keyboard, scroll, screenshot). Intended for Claude computer use.",
-		InputSchema: computeruse.SchemaJSON,
+		Name:              "nodes.computer_use",
+		Description:       "Perform computer-use actions (mouse, keyboard, scroll, screenshot). Intended for Claude computer use.",
+		InputSchema:       computeruse.SchemaJSON,
 		RequiresApproval:  true,
 		TimeoutSeconds:    60,
 		ProducesArtifacts: true,
@@ -296,16 +296,16 @@ func displayInfo() DisplayInfo {
 }
 
 type swiftSystemInfo struct {
-	DisplayWidthPx   int     `json:"display_width_px"`
-	DisplayHeightPx  int     `json:"display_height_px"`
-	DisplayScale     float64 `json:"display_scale"`
-	DisplayNumber    int     `json:"display_number"`
-	DisplayCount     int     `json:"display_count"`
-	PermAccessibility string `json:"perm_accessibility"`
-	PermScreenRecording string `json:"perm_screen_recording"`
-	PermCamera        string `json:"perm_camera"`
-	PermMicrophone    string `json:"perm_microphone"`
-	PermNotifications string `json:"perm_notifications"`
+	DisplayWidthPx      int     `json:"display_width_px"`
+	DisplayHeightPx     int     `json:"display_height_px"`
+	DisplayScale        float64 `json:"display_scale"`
+	DisplayNumber       int     `json:"display_number"`
+	DisplayCount        int     `json:"display_count"`
+	PermAccessibility   string  `json:"perm_accessibility"`
+	PermScreenRecording string  `json:"perm_screen_recording"`
+	PermCamera          string  `json:"perm_camera"`
+	PermMicrophone      string  `json:"perm_microphone"`
+	PermNotifications   string  `json:"perm_notifications"`
 }
 
 var displayInfoOnce sync.Once
@@ -320,17 +320,17 @@ func loadDisplayInfo() (DisplayInfo, error) {
 			return
 		}
 		displayInfoCache = DisplayInfo{
-			WidthPx:      info.DisplayWidthPx,
-			HeightPx:     info.DisplayHeightPx,
-			Scale:        info.DisplayScale,
+			WidthPx:       info.DisplayWidthPx,
+			HeightPx:      info.DisplayHeightPx,
+			Scale:         info.DisplayScale,
 			DisplayNumber: info.DisplayNumber,
-			Count:        info.DisplayCount,
+			Count:         info.DisplayCount,
 			Permissions: map[string]string{
-				"perm_accessibility":   info.PermAccessibility,
+				"perm_accessibility":    info.PermAccessibility,
 				"perm_screen_recording": info.PermScreenRecording,
-				"perm_camera":          info.PermCamera,
-				"perm_microphone":      info.PermMicrophone,
-				"perm_notifications":   info.PermNotifications,
+				"perm_camera":           info.PermCamera,
+				"perm_microphone":       info.PermMicrophone,
+				"perm_notifications":    info.PermNotifications,
 			},
 		}
 	})

@@ -22,6 +22,17 @@ canvas_host:
   # auto_index: true
   # a2ui_root: ./a2ui
 
+canvas:
+  retention:
+    # How long to keep the latest canvas snapshot.
+    state_max_age: 720h
+    # How long to retain canvas events for replay.
+    event_max_age: 168h
+    # Maximum size of stored canvas snapshot in bytes.
+    state_max_bytes: 1048576
+    # Maximum size of stored canvas event payload in bytes.
+    event_max_bytes: 262144
+
 commands:
   # Enable text command handling
   enabled: true

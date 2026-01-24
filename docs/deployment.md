@@ -204,6 +204,7 @@ data:
       context_pruning:
         # mode: cache-ttl
         # ttl: 5m
+        # cache ttl timestamp stored in session metadata as context_pruning_cache_ttl_at (RFC3339)
         # keep_last_assistants: 3
         # soft_trim_ratio: 0.3
         # hard_clear_ratio: 0.5

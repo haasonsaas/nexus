@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	agentctx "github.com/haasonsaas/nexus/internal/agent/context"
 	"github.com/haasonsaas/nexus/internal/jobs"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/tools/policy"
@@ -154,6 +156,82 @@ func (stubStore) AppendMessage(ctx context.Context, sessionID string, msg *model
 
 func (stubStore) GetHistory(ctx context.Context, sessionID string, limit int) ([]*models.Message, error) {
 	return nil, nil
+}
+
+type messageRecordingProvider struct {
+	providerName string
+	lastMessages []CompletionMessage
+}
+
+func (p *messageRecordingProvider) Complete(ctx context.Context, req *CompletionRequest) (<-chan *CompletionChunk, error) {
+	p.lastMessages = req.Messages
+	ch := make(chan *CompletionChunk, 1)
+	ch <- &CompletionChunk{Text: "ok"}
+	close(ch)
+	return ch, nil
+}
+
+func (p *messageRecordingProvider) Name() string { return p.providerName }
+
+func (p *messageRecordingProvider) Models() []Model { return nil }
+
+func (p *messageRecordingProvider) SupportsTools() bool { return false }
+
+type historyStore struct {
+	mu      sync.Mutex
+	history []*models.Message
+	updated *models.Session
+}
+
+func (h *historyStore) Create(ctx context.Context, session *models.Session) error { return nil }
+
+func (h *historyStore) Get(ctx context.Context, id string) (*models.Session, error) { return nil, nil }
+
+func (h *historyStore) Update(ctx context.Context, session *models.Session) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if session == nil {
+		h.updated = nil
+		return nil
+	}
+	clone := *session
+	h.updated = &clone
+	return nil
+}
+
+func (h *historyStore) Delete(ctx context.Context, id string) error { return nil }
+
+func (h *historyStore) GetByKey(ctx context.Context, key string) (*models.Session, error) {
+	return nil, nil
+}
+
+func (h *historyStore) GetOrCreate(ctx context.Context, key string, agentID string, channel models.ChannelType, channelID string) (*models.Session, error) {
+	return nil, nil
+}
+
+func (h *historyStore) List(ctx context.Context, agentID string, opts sessions.ListOptions) ([]*models.Session, error) {
+	return nil, nil
+}
+
+func (h *historyStore) AppendMessage(ctx context.Context, sessionID string, msg *models.Message) error {
+	return nil
+}
+
+func (h *historyStore) GetHistory(ctx context.Context, sessionID string, limit int) ([]*models.Message, error) {
+	return h.history, nil
+}
+
+func findFirstToolResultContent(messages []CompletionMessage) string {
+	for _, msg := range messages {
+		if msg.Role != "tool" {
+			continue
+		}
+		if len(msg.ToolResults) == 0 {
+			continue
+		}
+		return msg.ToolResults[0].Content
+	}
+	return ""
 }
 
 type testTool struct {
@@ -378,6 +456,117 @@ func TestProcessUsesContextSystemPromptOverride(t *testing.T) {
 
 	if provider.lastSystem != "override prompt" {
 		t.Fatalf("expected override prompt, got %q", provider.lastSystem)
+	}
+}
+
+func TestRuntimeContextPruningCacheTTLPrunesAndPersists(t *testing.T) {
+	provider := &messageRecordingProvider{providerName: "anthropic"}
+	history := []*models.Message{
+		{Role: models.RoleUser, Content: "hello"},
+		{Role: models.RoleAssistant, ToolCalls: []models.ToolCall{{ID: "tc-1", Name: "fetch"}}},
+		{Role: models.RoleTool, ToolResults: []models.ToolResult{{ToolCallID: "tc-1", Content: strings.Repeat("a", 200)}}},
+		{Role: models.RoleAssistant, Content: "done"},
+	}
+	store := &historyStore{history: history}
+	runtime := NewRuntime(provider, store)
+
+	packOpts := agentctx.DefaultPackOptions()
+	packOpts.MaxChars = 500
+	runtime.SetPackOptions(&packOpts)
+
+	settings := agentctx.DefaultContextPruningSettings()
+	settings.Mode = agentctx.ContextPruningCacheTTL
+	settings.TTL = time.Minute
+	settings.KeepLastAssistants = 1
+	settings.SoftTrimRatio = 0.1
+	settings.SoftTrim.MaxChars = 50
+	settings.SoftTrim.HeadChars = 10
+	settings.SoftTrim.TailChars = 10
+	settings.HardClear.Enabled = false
+	runtime.SetContextPruning(&settings)
+
+	past := time.Now().Add(-2 * settings.TTL)
+	session := &models.Session{
+		ID:       "session-1",
+		Channel:  models.ChannelTelegram,
+		Metadata: map[string]any{contextPruningCacheTouchKey: past.Format(time.RFC3339Nano)},
+	}
+	msg := &models.Message{Role: models.RoleUser, Content: "hi"}
+
+	ch, err := runtime.Process(WithModel(context.Background(), "unknown-model"), session, msg)
+	if err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+	for range ch {
+	}
+
+	trimmed := findFirstToolResultContent(provider.lastMessages)
+	if !strings.Contains(trimmed, "Tool result trimmed") {
+		t.Fatalf("expected trimmed tool result, got %q", trimmed)
+	}
+
+	store.mu.Lock()
+	updated := store.updated
+	store.mu.Unlock()
+	if updated == nil || updated.Metadata == nil {
+		t.Fatalf("expected session update with metadata")
+	}
+	if _, ok := updated.Metadata[contextPruningCacheTouchKey]; !ok {
+		t.Fatalf("expected context pruning cache timestamp to be persisted")
+	}
+}
+
+func TestRuntimeContextPruningSkipsIneligibleProvider(t *testing.T) {
+	provider := &messageRecordingProvider{providerName: "openai"}
+	history := []*models.Message{
+		{Role: models.RoleUser, Content: "hello"},
+		{Role: models.RoleAssistant, ToolCalls: []models.ToolCall{{ID: "tc-1", Name: "fetch"}}},
+		{Role: models.RoleTool, ToolResults: []models.ToolResult{{ToolCallID: "tc-1", Content: strings.Repeat("b", 200)}}},
+		{Role: models.RoleAssistant, Content: "done"},
+	}
+	store := &historyStore{history: history}
+	runtime := NewRuntime(provider, store)
+
+	packOpts := agentctx.DefaultPackOptions()
+	packOpts.MaxChars = 500
+	runtime.SetPackOptions(&packOpts)
+
+	settings := agentctx.DefaultContextPruningSettings()
+	settings.Mode = agentctx.ContextPruningCacheTTL
+	settings.TTL = time.Minute
+	settings.KeepLastAssistants = 1
+	settings.SoftTrimRatio = 0.1
+	settings.SoftTrim.MaxChars = 50
+	settings.SoftTrim.HeadChars = 10
+	settings.SoftTrim.TailChars = 10
+	settings.HardClear.Enabled = false
+	runtime.SetContextPruning(&settings)
+
+	past := time.Now().Add(-2 * settings.TTL)
+	session := &models.Session{
+		ID:       "session-2",
+		Channel:  models.ChannelTelegram,
+		Metadata: map[string]any{contextPruningCacheTouchKey: past.Format(time.RFC3339Nano)},
+	}
+	msg := &models.Message{Role: models.RoleUser, Content: "hi"}
+
+	ch, err := runtime.Process(WithModel(context.Background(), "unknown-model"), session, msg)
+	if err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+	for range ch {
+	}
+
+	trimmed := findFirstToolResultContent(provider.lastMessages)
+	if trimmed != strings.Repeat("b", 200) {
+		t.Fatalf("expected tool result to remain untrimmed, got %q", trimmed)
+	}
+
+	store.mu.Lock()
+	updated := store.updated
+	store.mu.Unlock()
+	if updated != nil {
+		t.Fatalf("expected no session update for ineligible provider")
 	}
 }
 

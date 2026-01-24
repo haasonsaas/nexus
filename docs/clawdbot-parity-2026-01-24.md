@@ -192,6 +192,7 @@ Legend: ✅ parity, 🟡 partial, ❌ missing
 - ✅ Wildcard matching for tool allow/deny.
 - ✅ Baseline `web_fetch` tool (SSRF-safe, content extraction) and registration.
 - ✅ Config + docs updated to surface `web_fetch`.
+- ✅ Core filesystem tools (`read`, `write`, `edit`, `apply_patch`) + `memory_get` tool.
 
 ---
 

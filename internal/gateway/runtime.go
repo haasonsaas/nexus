@@ -18,6 +18,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/mcp"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/tools/browser"
+	"github.com/haasonsaas/nexus/internal/tools/files"
 	jobtools "github.com/haasonsaas/nexus/internal/tools/jobs"
 	"github.com/haasonsaas/nexus/internal/tools/memorysearch"
 	"github.com/haasonsaas/nexus/internal/tools/reminders"
@@ -319,6 +320,12 @@ func (s *Server) registerTools(ctx context.Context, runtime *agent.Runtime) erro
 		}
 	}
 
+	fileCfg := files.Config{Workspace: s.config.Workspace.Path}
+	runtime.RegisterTool(files.NewReadTool(fileCfg))
+	runtime.RegisterTool(files.NewWriteTool(fileCfg))
+	runtime.RegisterTool(files.NewEditTool(fileCfg))
+	runtime.RegisterTool(files.NewApplyPatchTool(fileCfg))
+
 	if s.config.Tools.Browser.Enabled {
 		pool, err := browser.NewPool(browser.PoolConfig{
 			Headless: s.config.Tools.Browser.Headless,
@@ -377,6 +384,7 @@ func (s *Server) registerTools(ctx context.Context, runtime *agent.Runtime) erro
 			},
 		}
 		runtime.RegisterTool(memorysearch.NewMemorySearchTool(searchConfig))
+		runtime.RegisterTool(memorysearch.NewMemoryGetTool(searchConfig))
 	}
 
 	if s.jobStore != nil {

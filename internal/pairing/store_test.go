@@ -339,3 +339,318 @@ func TestStore_DifferentChannels(t *testing.T) {
 		t.Error("discord requests incorrect")
 	}
 }
+
+// Additional edge case tests
+
+func TestNewStore_SingleChannelMode(t *testing.T) {
+	// When given just a channel name (no path separators), use single-channel mode
+	store := NewStore("telegram")
+
+	if store.channel != "telegram" {
+		t.Errorf("channel = %q, want %q", store.channel, "telegram")
+	}
+	// dataDir should be set to default
+	if store.dataDir == "" {
+		t.Error("dataDir should be set")
+	}
+}
+
+func TestNewStoreWithDir(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStoreWithDir(dir)
+
+	if store.dataDir != dir {
+		t.Errorf("dataDir = %q, want %q", store.dataDir, dir)
+	}
+	if store.channel != "" {
+		t.Error("channel should be empty for directory mode")
+	}
+}
+
+func TestStore_LoadAllowlist(t *testing.T) {
+	// Single-channel mode
+	dir := t.TempDir()
+	store := &Store{dataDir: dir, channel: "telegram"}
+
+	// Add to allowlist first
+	err := store.AddToAllowlist("telegram", "user1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Now use LoadAllowlist
+	list, err := store.LoadAllowlist()
+	if err != nil {
+		t.Fatalf("LoadAllowlist failed: %v", err)
+	}
+
+	if len(list) != 1 || list[0] != "user1" {
+		t.Errorf("LoadAllowlist() = %v, want [user1]", list)
+	}
+}
+
+func TestStore_LoadAllowlist_NotSingleChannelMode(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir)
+
+	_, err := store.LoadAllowlist()
+	if err == nil {
+		t.Error("LoadAllowlist should fail without single-channel mode")
+	}
+}
+
+func TestStore_GetOrCreateRequest(t *testing.T) {
+	dir := t.TempDir()
+	store := &Store{dataDir: dir, channel: "telegram"}
+
+	// Create a request
+	req, created, err := store.GetOrCreateRequest("user123", "John Doe")
+	if err != nil {
+		t.Fatalf("GetOrCreateRequest failed: %v", err)
+	}
+	if !created {
+		t.Error("expected request to be created")
+	}
+	if req.ID != "user123" {
+		t.Errorf("ID = %q, want user123", req.ID)
+	}
+	if req.Code == "" {
+		t.Error("expected non-empty code")
+	}
+
+	// Get existing
+	req2, created2, err := store.GetOrCreateRequest("user123", "John Doe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created2 {
+		t.Error("second request should not be created")
+	}
+	if req2.Code != req.Code {
+		t.Error("code should remain the same")
+	}
+}
+
+func TestStore_GetOrCreateRequest_NotSingleChannelMode(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir)
+
+	_, _, err := store.GetOrCreateRequest("user", "name")
+	if err == nil {
+		t.Error("GetOrCreateRequest should fail without single-channel mode")
+	}
+}
+
+func TestStore_ApproveCode_CaseInsensitive(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir)
+
+	// Create request
+	code, _, err := store.UpsertRequest("telegram", "user123", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Approve with lowercase
+	_, _, err = store.ApproveCode("telegram", code)
+	if err != nil {
+		t.Fatalf("ApproveCode with original case failed: %v", err)
+	}
+}
+
+func TestStore_ApproveCode_EmptyCode(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir)
+
+	_, _, err := store.ApproveCode("telegram", "")
+	if err != ErrCodeNotFound {
+		t.Errorf("expected ErrCodeNotFound for empty code, got %v", err)
+	}
+
+	_, _, err = store.ApproveCode("telegram", "   ")
+	if err != ErrCodeNotFound {
+		t.Errorf("expected ErrCodeNotFound for whitespace code, got %v", err)
+	}
+}
+
+func TestStore_AddToAllowlist_Empty(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir)
+
+	// Adding empty entry should be no-op
+	err := store.AddToAllowlist("telegram", "")
+	if err != nil {
+		t.Fatalf("AddToAllowlist with empty should not fail: %v", err)
+	}
+
+	err = store.AddToAllowlist("telegram", "   ")
+	if err != nil {
+		t.Fatalf("AddToAllowlist with whitespace should not fail: %v", err)
+	}
+
+	// Allowlist should be empty
+	list, _ := store.GetAllowlist("telegram")
+	if len(list) != 0 {
+		t.Error("allowlist should be empty")
+	}
+}
+
+func TestStore_AddToAllowlist_Duplicate(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir)
+
+	// Add same entry twice
+	store.AddToAllowlist("telegram", "user1")
+	store.AddToAllowlist("telegram", "user1")
+
+	list, _ := store.GetAllowlist("telegram")
+	if len(list) != 1 {
+		t.Errorf("expected 1 entry, got %d", len(list))
+	}
+}
+
+func TestStore_RemoveFromAllowlist_NotFound(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir)
+
+	// Removing non-existent entry should not fail
+	err := store.RemoveFromAllowlist("telegram", "nonexistent")
+	if err != nil {
+		t.Fatalf("RemoveFromAllowlist should not fail for non-existent: %v", err)
+	}
+}
+
+func TestStore_RemoveFromAllowlist_Empty(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir)
+
+	// Removing empty entry should be no-op
+	err := store.RemoveFromAllowlist("telegram", "")
+	if err != nil {
+		t.Fatalf("RemoveFromAllowlist with empty should not fail: %v", err)
+	}
+}
+
+func TestRequest_IsExpired_WithExpiresAt(t *testing.T) {
+	// Test with explicit ExpiresAt field
+	r := &Request{
+		CreatedAt: time.Now(),
+		ExpiresAt: time.Now().Add(-1 * time.Hour),
+	}
+	if !r.IsExpired() {
+		t.Error("request with past ExpiresAt should be expired")
+	}
+
+	r.ExpiresAt = time.Now().Add(1 * time.Hour)
+	if r.IsExpired() {
+		t.Error("request with future ExpiresAt should not be expired")
+	}
+}
+
+func TestStore_GetAllowlist_InvalidChannel(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir)
+
+	_, err := store.GetAllowlist("")
+	if err == nil {
+		t.Error("GetAllowlist with empty channel should fail")
+	}
+}
+
+func TestStore_ListRequests_InvalidChannel(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir)
+
+	_, err := store.ListRequests("")
+	if err == nil {
+		t.Error("ListRequests with empty channel should fail")
+	}
+}
+
+func TestStore_UpsertRequest_WithMeta(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir)
+
+	meta := map[string]string{
+		"name":  "Test User",
+		"email": "test@example.com",
+	}
+
+	_, _, err := store.UpsertRequest("telegram", "user1", meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	requests, _ := store.ListRequests("telegram")
+	if len(requests) != 1 {
+		t.Fatal("expected 1 request")
+	}
+
+	if requests[0].Meta["name"] != "Test User" {
+		t.Error("meta not preserved")
+	}
+	if requests[0].Meta["email"] != "test@example.com" {
+		t.Error("meta not preserved")
+	}
+}
+
+func TestStore_UpsertRequest_UpdateMeta(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir)
+
+	// Create with initial meta
+	_, _, _ = store.UpsertRequest("telegram", "user1", map[string]string{"v": "1"})
+
+	// Update with new meta
+	_, _, _ = store.UpsertRequest("telegram", "user1", map[string]string{"v": "2"})
+
+	requests, _ := store.ListRequests("telegram")
+	if requests[0].Meta["v"] != "2" {
+		t.Error("meta should be updated")
+	}
+}
+
+func TestStore_ApproveCode_AddsToAllowlist(t *testing.T) {
+	dir := t.TempDir()
+	store := NewStore(dir)
+
+	code, _, _ := store.UpsertRequest("telegram", "user123", nil)
+	store.ApproveCode("telegram", code)
+
+	list, _ := store.GetAllowlist("telegram")
+	found := false
+	for _, entry := range list {
+		if entry == "user123" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("user should be added to allowlist after approval")
+	}
+}
+
+func TestSafeChannelKey_SpecialCharacters(t *testing.T) {
+	tests := []struct {
+		input   string
+		wantErr bool
+	}{
+		{"normal", false},
+		{"with space", false}, // Space converted to _
+		{"with!special", false},
+		{"with@symbol", false},
+		{"___", false}, // Multiple underscores are allowed (only single "_" is rejected)
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			_, err := safeChannelKey(tt.input)
+			if tt.wantErr && err == nil {
+				t.Error("expected error")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}

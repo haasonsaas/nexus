@@ -419,7 +419,9 @@ func runPairingDecision(cmd *cobra.Command, code string, provider string, approv
 		id, req, err = store.ApproveCode(provider, code)
 		if err == nil {
 			// Remove from allowlist since we're denying
-			_ = store.RemoveFromAllowlist(provider, id)
+			if removeErr := store.RemoveFromAllowlist(provider, id); removeErr != nil {
+				return fmt.Errorf("remove from allowlist: %w", removeErr)
+			}
 		}
 	}
 	if err != nil {

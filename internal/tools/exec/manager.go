@@ -89,17 +89,21 @@ func (m *Manager) startBackground(ctx context.Context, command string, cwd strin
 	if timeout > 0 {
 		runCtx, cancel = context.WithTimeout(ctx, timeout)
 	}
-
-	cmd, stdout, stderr, err := m.buildCommand(runCtx, command, cwd, env, "")
-	if err != nil {
+	cancelOnErr := func() {
 		if cancel != nil {
 			cancel()
 		}
+	}
+
+	cmd, stdout, stderr, err := m.buildCommand(runCtx, command, cwd, env, "")
+	if err != nil {
+		cancelOnErr()
 		return nil, err
 	}
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
+		cancelOnErr()
 		return nil, fmt.Errorf("stdin pipe: %w", err)
 	}
 
@@ -115,11 +119,15 @@ func (m *Manager) startBackground(ctx context.Context, command string, cwd strin
 	}
 
 	if err := cmd.Start(); err != nil {
+		cancelOnErr()
+		_ = stdin.Close()
 		return nil, fmt.Errorf("start command: %w", err)
 	}
 
 	if input != "" {
-		_, _ = io.WriteString(stdin, input)
+		if _, err := io.WriteString(stdin, input); err != nil {
+			_ = stdin.Close()
+		}
 	}
 
 	go func() {

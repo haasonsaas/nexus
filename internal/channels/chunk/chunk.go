@@ -147,7 +147,6 @@ type FenceSpan struct {
 }
 
 var fenceRegex = regexp.MustCompile("(?m)^([ \t]*)(```+|~~~+)([^\n]*)\n")
-var closeFenceRegex = regexp.MustCompile("(?m)^([ \t]*)(```+|~~~+)[ \t]*$")
 
 // parseFenceSpans finds all code fence spans in text.
 func parseFenceSpans(text string) []FenceSpan {

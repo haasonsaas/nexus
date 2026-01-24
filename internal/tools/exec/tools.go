@@ -96,11 +96,10 @@ func (t *ExecTool) Execute(ctx context.Context, params json.RawMessage) (*agent.
 		if err != nil {
 			return toolError(err.Error()), nil
 		}
-		payload, _ := json.MarshalIndent(map[string]interface{}{
+		return jsonResult(map[string]interface{}{
 			"status":     "running",
 			"process_id": proc.id,
-		}, "", "  ")
-		return &agent.ToolResult{Content: string(payload)}, nil
+		}), nil
 	}
 
 	result, err := t.manager.runSync(ctx, command, input.Cwd, input.Env, input.Input, timeout)
@@ -176,8 +175,7 @@ func (t *ProcessTool) Execute(ctx context.Context, params json.RawMessage) (*age
 
 	switch action {
 	case "list":
-		payload, _ := json.MarshalIndent(map[string]interface{}{"processes": t.manager.list()}, "", "  ")
-		return &agent.ToolResult{Content: string(payload)}, nil
+		return jsonResult(map[string]interface{}{"processes": t.manager.list()}), nil
 	case "status", "log", "write", "kill", "remove":
 		if strings.TrimSpace(input.ProcessID) == "" {
 			return toolError("process_id is required"), nil
@@ -188,15 +186,13 @@ func (t *ProcessTool) Execute(ctx context.Context, params json.RawMessage) (*age
 		}
 		switch action {
 		case "status":
-			payload, _ := json.MarshalIndent(proc.info(), "", "  ")
-			return &agent.ToolResult{Content: string(payload)}, nil
+			return jsonResult(proc.info()), nil
 		case "log":
-			payload, _ := json.MarshalIndent(map[string]interface{}{
+			return jsonResult(map[string]interface{}{
 				"stdout": proc.stdout.String(),
 				"stderr": proc.stderr.String(),
 				"status": proc.status(),
-			}, "", "  ")
-			return &agent.ToolResult{Content: string(payload)}, nil
+			}), nil
 		case "write":
 			if proc.stdin == nil {
 				return toolError("process stdin unavailable"), nil
@@ -207,10 +203,9 @@ func (t *ProcessTool) Execute(ctx context.Context, params json.RawMessage) (*age
 			if _, err := proc.stdin.Write([]byte(input.Input)); err != nil {
 				return toolError(fmt.Sprintf("write stdin: %v", err)), nil
 			}
-			payload, _ := json.MarshalIndent(map[string]interface{}{
+			return jsonResult(map[string]interface{}{
 				"status": "written",
-			}, "", "  ")
-			return &agent.ToolResult{Content: string(payload)}, nil
+			}), nil
 		case "kill":
 			if proc.cmd.Process == nil {
 				return toolError("process not running"), nil
@@ -218,10 +213,9 @@ func (t *ProcessTool) Execute(ctx context.Context, params json.RawMessage) (*age
 			if err := proc.cmd.Process.Kill(); err != nil {
 				return toolError(fmt.Sprintf("kill process: %v", err)), nil
 			}
-			payload, _ := json.MarshalIndent(map[string]interface{}{
+			return jsonResult(map[string]interface{}{
 				"status": "killed",
-			}, "", "  ")
-			return &agent.ToolResult{Content: string(payload)}, nil
+			}), nil
 		case "remove":
 			if proc.status() == "running" {
 				return toolError("process still running"), nil
@@ -229,16 +223,26 @@ func (t *ProcessTool) Execute(ctx context.Context, params json.RawMessage) (*age
 			if !t.manager.remove(proc.id) {
 				return toolError("remove failed"), nil
 			}
-			payload, _ := json.MarshalIndent(map[string]interface{}{
+			return jsonResult(map[string]interface{}{
 				"status": "removed",
-			}, "", "  ")
-			return &agent.ToolResult{Content: string(payload)}, nil
+			}), nil
 		}
 	}
 	return toolError("unsupported action"), nil
 }
 
 func toolError(message string) *agent.ToolResult {
-	payload, _ := json.Marshal(map[string]string{"error": message})
+	payload, err := json.Marshal(map[string]string{"error": message})
+	if err != nil {
+		return &agent.ToolResult{Content: message, IsError: true}
+	}
 	return &agent.ToolResult{Content: string(payload), IsError: true}
+}
+
+func jsonResult(payload any) *agent.ToolResult {
+	encoded, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return toolError(fmt.Sprintf("encode result: %v", err))
+	}
+	return &agent.ToolResult{Content: string(encoded)}
 }

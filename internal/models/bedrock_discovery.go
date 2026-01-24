@@ -319,16 +319,6 @@ func hasTextModality(modalities []types.ModelModality) bool {
 	return false
 }
 
-// hasImageModality checks if the modalities include image.
-func hasImageModality(modalities []types.ModelModality) bool {
-	for _, m := range modalities {
-		if m == types.ModelModalityImage {
-			return true
-		}
-	}
-	return false
-}
-
 // inferTier determines the model tier based on ID and name.
 func inferTier(id, name string) Tier {
 	lower := strings.ToLower(id + " " + name)

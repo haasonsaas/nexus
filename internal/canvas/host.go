@@ -699,12 +699,15 @@ func (h *Host) streamHandler() http.Handler {
 
 		if store := h.manager.Store(); store != nil {
 			if state, err := store.GetState(r.Context(), sessionID); err == nil && state != nil {
-				_ = writeStreamMessage(w, StreamMessage{
+				if err := writeStreamMessage(w, StreamMessage{
 					Type:      "state",
 					SessionID: sessionID,
 					Payload:   state.StateJSON,
 					Timestamp: time.Now(),
-				})
+				}); err != nil {
+					h.logger.Warn("canvas stream write failed", "error", err)
+					return
+				}
 				flusher.Flush()
 			}
 		}
@@ -801,7 +804,9 @@ func (h *Host) actionsHandler() http.Handler {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
-		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+		if err := json.NewEncoder(w).Encode(map[string]any{"ok": true}); err != nil {
+			h.logger.Warn("canvas action response failed", "error", err)
+		}
 	})
 }
 

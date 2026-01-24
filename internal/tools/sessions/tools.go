@@ -430,10 +430,13 @@ func (t *SendTool) Execute(ctx context.Context, params json.RawMessage) (*agent.
 				// Drain
 			}
 		}()
-		payload, _ := json.MarshalIndent(map[string]interface{}{
+		payload, err := json.MarshalIndent(map[string]interface{}{
 			"status":     "queued",
 			"session_id": session.ID,
 		}, "", "  ")
+		if err != nil {
+			return toolError(fmt.Sprintf("encode result: %v", err)), nil
+		}
 		return &agent.ToolResult{Content: string(payload)}, nil
 	}
 
@@ -484,6 +487,9 @@ func resolveSession(ctx context.Context, store sessionstore.Store, id, key strin
 }
 
 func toolError(message string) *agent.ToolResult {
-	payload, _ := json.Marshal(map[string]string{"error": message})
+	payload, err := json.Marshal(map[string]string{"error": message})
+	if err != nil {
+		return &agent.ToolResult{Content: message, IsError: true}
+	}
 	return &agent.ToolResult{Content: string(payload), IsError: true}
 }

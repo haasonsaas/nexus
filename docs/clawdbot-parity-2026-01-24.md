@@ -194,6 +194,7 @@ Legend: ✅ parity, 🟡 partial, ❌ missing
 - ✅ Config + docs updated to surface `web_fetch`.
 - ✅ Core filesystem tools (`read`, `write`, `edit`, `apply_patch`) + `memory_get` tool.
 - ✅ Session tools (`sessions_list`, `sessions_history`, `session_status`, `sessions_send`).
+- ✅ Message tool (`message`, plus `send_message` alias) + exec/process tools (`exec`, `bash`, `process`).
 
 ---
 

@@ -16,6 +16,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/mcp"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/tools/browser"
+	exectools "github.com/haasonsaas/nexus/internal/tools/exec"
 	"github.com/haasonsaas/nexus/internal/tools/files"
 	jobtools "github.com/haasonsaas/nexus/internal/tools/jobs"
 	"github.com/haasonsaas/nexus/internal/tools/memorysearch"
@@ -212,6 +213,12 @@ func (m *ToolManager) RegisterTools(ctx context.Context, runtime *agent.Runtime)
 	runtime.RegisterTool(files.NewEditTool(fileCfg))
 	runtime.RegisterTool(files.NewApplyPatchTool(fileCfg))
 	m.registeredTools = append(m.registeredTools, "read", "write", "edit", "apply_patch")
+
+	execManager := exectools.NewManager(cfg.Workspace.Path)
+	runtime.RegisterTool(exectools.NewExecTool("exec", execManager))
+	runtime.RegisterTool(exectools.NewExecTool("bash", execManager))
+	runtime.RegisterTool(exectools.NewProcessTool(execManager))
+	m.registeredTools = append(m.registeredTools, "exec", "bash", "process")
 
 	if m.sessionStore != nil {
 		runtime.RegisterTool(sessiontools.NewListTool(m.sessionStore, cfg.Session.DefaultAgentID))

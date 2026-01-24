@@ -18,9 +18,11 @@ import (
 	"github.com/haasonsaas/nexus/internal/mcp"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/tools/browser"
+	exectools "github.com/haasonsaas/nexus/internal/tools/exec"
 	"github.com/haasonsaas/nexus/internal/tools/files"
 	jobtools "github.com/haasonsaas/nexus/internal/tools/jobs"
 	"github.com/haasonsaas/nexus/internal/tools/memorysearch"
+	"github.com/haasonsaas/nexus/internal/tools/message"
 	"github.com/haasonsaas/nexus/internal/tools/reminders"
 	"github.com/haasonsaas/nexus/internal/tools/sandbox"
 	"github.com/haasonsaas/nexus/internal/tools/sandbox/firecracker"
@@ -327,11 +329,20 @@ func (s *Server) registerTools(ctx context.Context, runtime *agent.Runtime) erro
 	runtime.RegisterTool(files.NewEditTool(fileCfg))
 	runtime.RegisterTool(files.NewApplyPatchTool(fileCfg))
 
+	execManager := exectools.NewManager(s.config.Workspace.Path)
+	runtime.RegisterTool(exectools.NewExecTool("exec", execManager))
+	runtime.RegisterTool(exectools.NewExecTool("bash", execManager))
+	runtime.RegisterTool(exectools.NewProcessTool(execManager))
+
 	if s.sessions != nil {
 		runtime.RegisterTool(sessiontools.NewListTool(s.sessions, s.config.Session.DefaultAgentID))
 		runtime.RegisterTool(sessiontools.NewHistoryTool(s.sessions))
 		runtime.RegisterTool(sessiontools.NewStatusTool(s.sessions))
 		runtime.RegisterTool(sessiontools.NewSendTool(s.sessions, runtime))
+	}
+	if s.channels != nil {
+		runtime.RegisterTool(message.NewTool("message", s.channels, s.sessions, s.config.Session.DefaultAgentID))
+		runtime.RegisterTool(message.NewTool("send_message", s.channels, s.sessions, s.config.Session.DefaultAgentID))
 	}
 
 	if s.config.Tools.Browser.Enabled {

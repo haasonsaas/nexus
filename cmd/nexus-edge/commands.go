@@ -158,7 +158,9 @@ func installLaunchd(ctx context.Context, execPath, configPath string, overwrite 
 	}
 
 	if start {
-		_ = runCommand(ctx, "launchctl", "unload", plistPath) // best-effort
+		if err := runCommand(ctx, "launchctl", "unload", plistPath); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: launchctl unload failed: %v\n", err)
+		}
 		if err := runCommand(ctx, "launchctl", "load", "-w", plistPath); err != nil {
 			return err
 		}
@@ -170,7 +172,9 @@ func installLaunchd(ctx context.Context, execPath, configPath string, overwrite 
 func uninstallLaunchd(ctx context.Context) error {
 	plistPath := launchdPlistPath()
 	if fileExists(plistPath) {
-		_ = runCommand(ctx, "launchctl", "unload", plistPath) // best-effort
+		if err := runCommand(ctx, "launchctl", "unload", plistPath); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: launchctl unload failed: %v\n", err)
+		}
 		if err := os.Remove(plistPath); err != nil {
 			return err
 		}
@@ -205,11 +209,15 @@ func installSystemd(ctx context.Context, execPath, configPath string, overwrite 
 func uninstallSystemd(ctx context.Context) error {
 	unitPath := systemdUnitPath()
 	if fileExists(unitPath) {
-		_ = runCommand(ctx, "systemctl", "--user", "disable", "--now", "nexus-edge") // best-effort
+		if err := runCommand(ctx, "systemctl", "--user", "disable", "--now", "nexus-edge"); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: systemctl disable failed: %v\n", err)
+		}
 		if err := os.Remove(unitPath); err != nil {
 			return err
 		}
-		_ = runCommand(ctx, "systemctl", "--user", "daemon-reload") // best-effort
+		if err := runCommand(ctx, "systemctl", "--user", "daemon-reload"); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: systemctl daemon-reload failed: %v\n", err)
+		}
 	}
 	return nil
 }

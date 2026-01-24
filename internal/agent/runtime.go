@@ -1124,6 +1124,18 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 		return err
 	}
 
+	// 5a) Apply context transform if configured
+	if transform := ContextTransformFromContext(ctx); transform != nil {
+		messages, err = transform(ctx, messages)
+		if err != nil {
+			emitter.RunError(ctx, fmt.Errorf("context transform failed: %w", err), false)
+			return err
+		}
+	}
+
+	// 5b) Get steering queue from context for mid-run interruptions
+	steeringQueue := SteeringQueueFromContext(ctx)
+
 	// 6) Tools (filtered by policy)
 	tools := r.tools.AsLLMTools()
 	var resolver *policy.Resolver
@@ -1162,6 +1174,15 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 		req.System = strings.Join(systemParts, "\n\n")
 	}
 
+	// 7a) Apply thinking level from context
+	if thinkingLevel := ThinkingLevelFromContext(ctx); thinkingLevel != ThinkingOff {
+		budget := GetThinkingBudget(thinkingLevel)
+		if budget > 0 {
+			req.EnableThinking = true
+			req.ThinkingBudgetTokens = budget
+		}
+	}
+
 	// Tool executor config
 	toolExecCfg := ToolExecConfig{
 		Concurrency:    runOpts.ToolParallelism,
@@ -1190,7 +1211,21 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 		emitter.SetIter(iter)
 		emitter.IterStarted(ctx)
 
-		completion, err := r.provider.Complete(ctx, req)
+		// Resolve API key dynamically if resolver is configured
+		// This supports short-lived OAuth tokens that may expire
+		completionCtx := ctx
+		if resolver := APIKeyResolverFromContext(ctx); resolver != nil {
+			resolvedKey, keyErr := resolver(ctx, r.provider.Name())
+			if keyErr != nil {
+				emitter.RunError(ctx, fmt.Errorf("API key resolution failed: %w", keyErr), true)
+				return keyErr
+			}
+			if resolvedKey != "" {
+				completionCtx = WithResolvedAPIKey(ctx, resolvedKey)
+			}
+		}
+
+		completion, err := r.provider.Complete(completionCtx, req)
 		if err != nil {
 			emitter.RunError(ctx, err, true)
 			return err
@@ -1274,8 +1309,32 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 			ToolCalls: assistantMsg.ToolCalls,
 		})
 
-		// No tools requested => done
+		// No tools requested => check for follow-up messages before finishing
 		if len(toolCalls) == 0 {
+			// Check for follow-up messages that were queued during execution
+			if steeringQueue != nil {
+				if followUps := steeringQueue.GetFollowUpMessages(); len(followUps) > 0 {
+					for _, followUp := range followUps {
+						// Emit follow-up event
+						emitter.FollowUpQueued(ctx, followUp.Content, len(followUps))
+
+						// Inject follow-up message into the conversation
+						role := followUp.Role
+						if role == "" {
+							role = "user"
+						}
+						followUpCompMsg := CompletionMessage{
+							Role:        role,
+							Content:     followUp.Content,
+							Attachments: followUp.Attachments,
+						}
+						req.Messages = append(req.Messages, followUpCompMsg)
+					}
+					// Continue to next iteration to process follow-up messages
+					emitter.IterFinished(ctx)
+					continue
+				}
+			}
 			emitter.IterFinished(ctx)
 			return nil
 		}
@@ -1513,7 +1572,36 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 			ToolResults: results,
 		})
 
+		// 8a) Check for steering messages after tool execution
+		if steeringQueue != nil {
+			if steeringMsgs := steeringQueue.GetSteeringMessages(); len(steeringMsgs) > 0 {
+				for _, steering := range steeringMsgs {
+					// Emit steering event
+					emitter.SteeringInjected(ctx, steering.Content, len(steeringMsgs))
+
+					// Inject steering message into the conversation
+					role := steering.Role
+					if role == "" {
+						role = "user"
+					}
+					steeringCompMsg := CompletionMessage{
+						Role:        role,
+						Content:     steering.Content,
+						Attachments: steering.Attachments,
+					}
+					req.Messages = append(req.Messages, steeringCompMsg)
+
+					// If this steering message wants to skip remaining iterations, break the loop
+					if steering.SkipRemainingTools {
+						emitter.IterFinished(ctx)
+						goto nextIteration
+					}
+				}
+			}
+		}
+
 		emitter.IterFinished(ctx)
+	nextIteration:
 	}
 
 	maxIterErr := fmt.Errorf("max iterations (%d) reached", maxIters)

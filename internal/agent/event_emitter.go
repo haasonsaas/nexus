@@ -246,6 +246,53 @@ func (e *EventEmitter) ContextPacked(ctx context.Context, diag *models.ContextEv
 	return event
 }
 
+// SteeringInjected emits a steering.injected event when a steering message interrupts the run.
+func (e *EventEmitter) SteeringInjected(ctx context.Context, content string, count int) models.AgentEvent {
+	event := e.base(models.AgentEventSteeringInjected)
+	event.Steering = &models.SteeringEventPayload{
+		Content: content,
+		Count:   count,
+	}
+	e.emit(ctx, event)
+	return event
+}
+
+// ToolsSkipped emits a tools.skipped event when tool calls are skipped due to steering.
+func (e *EventEmitter) ToolsSkipped(ctx context.Context, toolCallIDs []string) models.AgentEvent {
+	event := e.base(models.AgentEventToolsSkipped)
+	event.Steering = &models.SteeringEventPayload{
+		SkippedTools: toolCallIDs,
+		Count:        len(toolCallIDs),
+	}
+	e.emit(ctx, event)
+	return event
+}
+
+// FollowUpQueued emits a followup.queued event when a follow-up message is queued.
+func (e *EventEmitter) FollowUpQueued(ctx context.Context, content string, count int) models.AgentEvent {
+	event := e.base(models.AgentEventFollowUpQueued)
+	event.Steering = &models.SteeringEventPayload{
+		Content: content,
+		Count:   count,
+	}
+	e.emit(ctx, event)
+	return event
+}
+
+// TurnStarted emits a turn.started event at the beginning of a turn.
+func (e *EventEmitter) TurnStarted(ctx context.Context) models.AgentEvent {
+	event := e.base(models.AgentEventTurnStarted)
+	e.emit(ctx, event)
+	return event
+}
+
+// TurnFinished emits a turn.finished event at the end of a turn.
+func (e *EventEmitter) TurnFinished(ctx context.Context) models.AgentEvent {
+	event := e.base(models.AgentEventTurnFinished)
+	e.emit(ctx, event)
+	return event
+}
+
 // StatsCollector accumulates run statistics by processing AgentEvents.
 // It tracks iterations, tokens, tool calls, timing, and errors.
 type StatsCollector struct {

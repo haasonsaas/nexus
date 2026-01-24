@@ -35,12 +35,13 @@ type AgentEvent struct {
 	IterIndex int `json:"iter_index,omitempty"`
 
 	// Exactly one payload should be non-nil for a given Type.
-	Text    *TextEventPayload    `json:"text,omitempty"`
-	Tool    *ToolEventPayload    `json:"tool,omitempty"`
-	Stream  *StreamEventPayload  `json:"stream,omitempty"`
-	Error   *ErrorEventPayload   `json:"error,omitempty"`
-	Stats   *StatsEventPayload   `json:"stats,omitempty"`
-	Context *ContextEventPayload `json:"context,omitempty"`
+	Text     *TextEventPayload     `json:"text,omitempty"`
+	Tool     *ToolEventPayload     `json:"tool,omitempty"`
+	Stream   *StreamEventPayload   `json:"stream,omitempty"`
+	Error    *ErrorEventPayload    `json:"error,omitempty"`
+	Stats    *StatsEventPayload    `json:"stats,omitempty"`
+	Context  *ContextEventPayload  `json:"context,omitempty"`
+	Steering *SteeringEventPayload `json:"steering,omitempty"`
 }
 
 // AgentEventType identifies the kind of agent event.
@@ -73,6 +74,11 @@ const (
 
 	// Context packing diagnostics
 	AgentEventContextPacked AgentEventType = "context.packed"
+
+	// Steering events
+	AgentEventSteeringInjected AgentEventType = "steering.injected" // Steering message interrupted the run
+	AgentEventToolsSkipped     AgentEventType = "tools.skipped"     // Tools were skipped due to steering
+	AgentEventFollowUpQueued   AgentEventType = "followup.queued"   // Follow-up message queued for later
 )
 
 // TextEventPayload is generic human-readable text (logs, status messages).
@@ -175,6 +181,21 @@ type RunStats struct {
 
 	// Error count
 	Errors int `json:"errors,omitempty"`
+}
+
+// SteeringEventPayload describes steering and follow-up message events.
+type SteeringEventPayload struct {
+	// Content is the text content of the steering/follow-up message.
+	Content string `json:"content,omitempty"`
+
+	// Count is the number of messages (for multi-message events).
+	Count int `json:"count,omitempty"`
+
+	// SkippedTools lists tool call IDs that were skipped due to steering.
+	SkippedTools []string `json:"skipped_tools,omitempty"`
+
+	// Priority indicates steering message priority (higher = first).
+	Priority int `json:"priority,omitempty"`
 }
 
 // ContextEventPayload contains context packing diagnostics.

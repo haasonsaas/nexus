@@ -25,6 +25,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/tools/sandbox"
 	"github.com/haasonsaas/nexus/internal/tools/sandbox/firecracker"
 	"github.com/haasonsaas/nexus/internal/tools/servicenow"
+	sessiontools "github.com/haasonsaas/nexus/internal/tools/sessions"
 	"github.com/haasonsaas/nexus/internal/tools/websearch"
 )
 
@@ -325,6 +326,13 @@ func (s *Server) registerTools(ctx context.Context, runtime *agent.Runtime) erro
 	runtime.RegisterTool(files.NewWriteTool(fileCfg))
 	runtime.RegisterTool(files.NewEditTool(fileCfg))
 	runtime.RegisterTool(files.NewApplyPatchTool(fileCfg))
+
+	if s.sessions != nil {
+		runtime.RegisterTool(sessiontools.NewListTool(s.sessions, s.config.Session.DefaultAgentID))
+		runtime.RegisterTool(sessiontools.NewHistoryTool(s.sessions))
+		runtime.RegisterTool(sessiontools.NewStatusTool(s.sessions))
+		runtime.RegisterTool(sessiontools.NewSendTool(s.sessions, runtime))
+	}
 
 	if s.config.Tools.Browser.Enabled {
 		pool, err := browser.NewPool(browser.PoolConfig{

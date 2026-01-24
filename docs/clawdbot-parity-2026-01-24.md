@@ -193,6 +193,7 @@ Legend: ✅ parity, 🟡 partial, ❌ missing
 - ✅ Baseline `web_fetch` tool (SSRF-safe, content extraction) and registration.
 - ✅ Config + docs updated to surface `web_fetch`.
 - ✅ Core filesystem tools (`read`, `write`, `edit`, `apply_patch`) + `memory_get` tool.
+- ✅ Session tools (`sessions_list`, `sessions_history`, `session_status`, `sessions_send`).
 
 ---
 

@@ -27,11 +27,11 @@ func DefaultConfig() Config {
 
 // Bucket implements token bucket rate limiting.
 type Bucket struct {
-	mu          sync.Mutex
-	tokens      float64
-	maxTokens   float64
-	refillRate  float64 // tokens per second
-	lastRefill  time.Time
+	mu         sync.Mutex
+	tokens     float64
+	maxTokens  float64
+	refillRate float64 // tokens per second
+	lastRefill time.Time
 }
 
 // NewBucket creates a new token bucket.
@@ -213,10 +213,10 @@ func (l *Limiter) Reset(key string) {
 
 // Status returns rate limit status for a key.
 type Status struct {
-	Key            string        `json:"key"`
-	AllowedNow     bool          `json:"allowed_now"`
-	TokensRemaining float64      `json:"tokens_remaining"`
-	WaitTime       time.Duration `json:"wait_time"`
+	Key             string        `json:"key"`
+	AllowedNow      bool          `json:"allowed_now"`
+	TokensRemaining float64       `json:"tokens_remaining"`
+	WaitTime        time.Duration `json:"wait_time"`
 }
 
 // GetStatus returns the rate limit status for a key.

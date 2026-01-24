@@ -6,11 +6,11 @@ import (
 
 func TestGetChannelInfo(t *testing.T) {
 	tests := []struct {
-		channel          string
-		wantMaxLen       int
-		wantMarkdown     bool
-		wantMentions     bool
-		wantMentionFmt   string
+		channel        string
+		wantMaxLen     int
+		wantMarkdown   bool
+		wantMentions   bool
+		wantMentionFmt string
 	}{
 		{"telegram", 4096, true, true, "@%s"},
 		{"discord", 2000, true, true, "<@%s>"},
@@ -185,9 +185,9 @@ func TestToSlackMarkdown(t *testing.T) {
 
 func TestDeliveryContext_ShouldChunk(t *testing.T) {
 	tests := []struct {
-		channel    string
-		textLen    int
-		wantChunk  bool
+		channel   string
+		textLen   int
+		wantChunk bool
 	}{
 		{"telegram", 4000, false},
 		{"telegram", 5000, true},
@@ -242,9 +242,9 @@ func TestDeliveryContext_FormatText(t *testing.T) {
 func TestChannelInfo_Attachments(t *testing.T) {
 	// Verify attachment limits are set correctly
 	tests := []struct {
-		channel        string
-		wantAttach     bool
-		wantMaxBytes   int64
+		channel      string
+		wantAttach   bool
+		wantMaxBytes int64
 	}{
 		{"telegram", true, 50 * 1024 * 1024},
 		{"discord", true, 8 * 1024 * 1024},
@@ -329,8 +329,8 @@ func TestGetChannelInfo_AllChannels(t *testing.T) {
 func TestChannelInfo_HTMLSupport(t *testing.T) {
 	// Check which channels support HTML
 	tests := []struct {
-		channel     string
-		wantHTML    bool
+		channel  string
+		wantHTML bool
 	}{
 		{"matrix", true},
 		{"email", true},

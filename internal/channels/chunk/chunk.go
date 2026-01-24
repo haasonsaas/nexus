@@ -13,14 +13,14 @@ const DefaultChunkLimit = 4000
 
 // ChannelLimits defines default message size limits for various platforms.
 var ChannelLimits = map[string]int{
-	"telegram":  4096,
-	"discord":   2000,
-	"slack":     40000,
-	"whatsapp":  65536,
-	"signal":    65536,
-	"sms":       160,
-	"matrix":    65536,
-	"imessage":  20000,
+	"telegram": 4096,
+	"discord":  2000,
+	"slack":    40000,
+	"whatsapp": 65536,
+	"signal":   65536,
+	"sms":      160,
+	"matrix":   65536,
+	"imessage": 20000,
 }
 
 // GetChannelLimit returns the message size limit for a channel.

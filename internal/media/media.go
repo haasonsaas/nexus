@@ -70,26 +70,26 @@ var extensionToMIME = map[string]string{
 	".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 	".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 
-	".txt": "text/plain",
-	".csv": "text/csv",
-	".md":  "text/markdown",
-	".htm": "text/html",
+	".txt":  "text/plain",
+	".csv":  "text/csv",
+	".md":   "text/markdown",
+	".htm":  "text/html",
 	".html": "text/html",
 }
 
 // mimeToExtension maps MIME types to preferred file extensions.
 var mimeToExtension = map[string]string{
-	"image/heic":     ".heic",
-	"image/heif":     ".heif",
-	"image/jpeg":     ".jpg",
-	"image/png":      ".png",
-	"image/webp":     ".webp",
-	"image/gif":      ".gif",
-	"audio/mpeg":     ".mp3",
-	"audio/ogg":      ".ogg",
-	"video/mp4":      ".mp4",
+	"image/heic":      ".heic",
+	"image/heif":      ".heif",
+	"image/jpeg":      ".jpg",
+	"image/png":       ".png",
+	"image/webp":      ".webp",
+	"image/gif":       ".gif",
+	"audio/mpeg":      ".mp3",
+	"audio/ogg":       ".ogg",
+	"video/mp4":       ".mp4",
 	"application/pdf": ".pdf",
-	"text/plain":    ".txt",
+	"text/plain":      ".txt",
 }
 
 // audioExtensions contains extensions for audio files.

@@ -259,8 +259,8 @@ func TestGetExtension_EdgeCases(t *testing.T) {
 		{"url with both query and fragment", "https://x.com/a.png?q=1#frag", ".png"},
 		{"dotfile", ".gitignore", ".gitignore"}, // filepath.Ext returns the whole thing
 		{"multiple dots", "file.tar.gz", ".gz"},
-		{"trailing dot", "file.", "."},  // filepath.Ext returns "."
-		{"only dots", "...", "."},       // filepath.Ext returns "."
+		{"trailing dot", "file.", "."}, // filepath.Ext returns "."
+		{"only dots", "...", "."},      // filepath.Ext returns "."
 	}
 
 	for _, tt := range tests {

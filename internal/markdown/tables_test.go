@@ -325,9 +325,9 @@ func TestDefaultTableModeForChannel(t *testing.T) {
 
 func TestParseTableMode(t *testing.T) {
 	tests := []struct {
-		input   string
-		def     TableMode
-		want    TableMode
+		input string
+		def   TableMode
+		want  TableMode
 	}{
 		{"off", TableModeCode, TableModeOff},
 		{"OFF", TableModeCode, TableModeOff},

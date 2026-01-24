@@ -358,7 +358,7 @@ func runPairingList(cmd *cobra.Command, provider string) error {
 	found := false
 	for _, name := range providers {
 		store := pairing.NewStore(name)
-		pending, err := store.Pending()
+		pending, err := store.ListRequests(name)
 		if err != nil {
 			return err
 		}
@@ -368,9 +368,9 @@ func runPairingList(cmd *cobra.Command, provider string) error {
 		found = true
 		fmt.Fprintf(out, "%s:\n", name)
 		for _, req := range pending {
-			label := req.SenderName
+			label := req.Meta["name"]
 			if strings.TrimSpace(label) == "" {
-				label = req.SenderID
+				label = req.ID
 			}
 			expiresIn := time.Until(req.ExpiresAt).Round(time.Minute)
 			if expiresIn < 0 {
@@ -409,12 +409,18 @@ func runPairingDecision(cmd *cobra.Command, code string, provider string, approv
 	}
 
 	store := pairing.NewStore(provider)
-	var req pairing.Request
+	var req *pairing.Request
 	var err error
+	var id string
 	if approve {
-		req, err = store.Approve(code)
+		id, req, err = store.ApproveCode(provider, code)
 	} else {
-		req, err = store.Deny(code)
+		// Deny just removes from pending without adding to allowlist
+		id, req, err = store.ApproveCode(provider, code)
+		if err == nil {
+			// Remove from allowlist since we're denying
+			_ = store.RemoveFromAllowlist(provider, id)
+		}
 	}
 	if err != nil {
 		if errors.Is(err, pairing.ErrCodeNotFound) {
@@ -427,11 +433,17 @@ func runPairingDecision(cmd *cobra.Command, code string, provider string, approv
 	if approve {
 		action = "Approved"
 	}
-	label := req.SenderName
-	if strings.TrimSpace(label) == "" {
-		label = req.SenderID
+	label := ""
+	if req != nil {
+		label = req.Meta["name"]
+		if strings.TrimSpace(label) == "" {
+			label = req.ID
+		}
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "%s %s for %s (%s).\n", action, req.Code, provider, label)
+	if label == "" {
+		label = id
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "%s %s for %s (%s).\n", action, code, provider, label)
 	return nil
 }
 
@@ -447,7 +459,7 @@ func findPairingProviderForCode(code string) (string, error) {
 	var match string
 	for _, provider := range pairingProviders {
 		store := pairing.NewStore(provider)
-		pending, err := store.Pending()
+		pending, err := store.ListRequests(provider)
 		if err != nil {
 			return "", err
 		}

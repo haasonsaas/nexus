@@ -46,6 +46,9 @@ type CanvasConfig struct {
 	ShortcutCallback  string
 	AllowedWorkspaces []string
 	Role              string
+	DefaultRole       string
+	WorkspaceRoles    map[string]string
+	UserRoles         map[string]map[string]string
 }
 
 // CanvasLinkRequest describes a Slack request for a canvas link.
@@ -87,8 +90,15 @@ func (c *Config) Validate() error {
 	if strings.TrimSpace(c.Canvas.ShortcutCallback) == "" {
 		c.Canvas.ShortcutCallback = "open_canvas"
 	}
+	if strings.TrimSpace(c.Canvas.DefaultRole) == "" {
+		if strings.TrimSpace(c.Canvas.Role) != "" {
+			c.Canvas.DefaultRole = c.Canvas.Role
+		} else {
+			c.Canvas.DefaultRole = "editor"
+		}
+	}
 	if strings.TrimSpace(c.Canvas.Role) == "" {
-		c.Canvas.Role = "editor"
+		c.Canvas.Role = c.Canvas.DefaultRole
 	}
 
 	return nil
@@ -512,7 +522,7 @@ func (a *Adapter) handleSlashCommand(command slack.SlashCommand) {
 	})
 	if err != nil {
 		a.logger.Error("canvas slash command failed", "error", err, "workspace", command.TeamID, "channel", command.ChannelID)
-		a.sendCanvasEphemeral(ctx, command.ChannelID, command.UserID, "Unable to open the canvas right now.")
+		a.sendCanvasEphemeral(a.canvasContext(), command.ChannelID, command.UserID, "Unable to open the canvas right now.")
 		return
 	}
 	a.sendCanvasEphemeral(ctx, command.ChannelID, command.UserID, "Open the canvas: "+formatCanvasLink(link))
@@ -559,7 +569,7 @@ func (a *Adapter) handleInteractive(callback slack.InteractionCallback) {
 	})
 	if err != nil {
 		a.logger.Error("canvas shortcut failed", "error", err, "workspace", callback.Team.ID, "channel", channelID)
-		a.sendCanvasEphemeral(ctx, channelID, userID, "Unable to open the canvas right now.")
+		a.sendCanvasEphemeral(a.canvasContext(), channelID, userID, "Unable to open the canvas right now.")
 		return
 	}
 	a.sendCanvasEphemeral(ctx, channelID, userID, "Open the canvas: "+formatCanvasLink(link))

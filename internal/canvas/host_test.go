@@ -1,7 +1,9 @@
 package canvas
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
+	"github.com/haasonsaas/nexus/internal/auth"
 	"github.com/haasonsaas/nexus/internal/config"
 )
 
@@ -1255,4 +1258,332 @@ func TestCanvasHandler_PathTraversal(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 for invalid session id, got %d", rec.Code)
 	}
+}
+
+func TestCanvasHandler_AuthService(t *testing.T) {
+	t.Run("requires auth when no token secret", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		cfg := config.CanvasHostConfig{
+			Port:      18793,
+			Root:      tmpDir,
+			Namespace: "/__nexus__",
+		}
+		host, err := NewHost(cfg, config.CanvasConfig{}, nil)
+		if err != nil {
+			t.Fatalf("NewHost error: %v", err)
+		}
+		host.SetAuthService(auth.NewService(auth.Config{
+			APIKeys: []auth.APIKeyConfig{{Key: "api-key-1", UserID: "user-1"}},
+		}))
+
+		sessionID := "session-123"
+		sessionDir := filepath.Join(tmpDir, sessionID)
+		if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(sessionDir, "index.html"), []byte("<html>ok</html>"), 0o644); err != nil {
+			t.Fatalf("write index: %v", err)
+		}
+
+		reqNoAuth := httptest.NewRequest(http.MethodGet, "/"+sessionID+"/index.html", nil)
+		recNoAuth := httptest.NewRecorder()
+		host.canvasHandler().ServeHTTP(recNoAuth, reqNoAuth)
+		if recNoAuth.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 for missing auth, got %d", recNoAuth.Code)
+		}
+
+		reqAuth := httptest.NewRequest(http.MethodGet, "/"+sessionID+"/index.html", nil)
+		reqAuth.Header.Set("X-API-Key", "api-key-1")
+		recAuth := httptest.NewRecorder()
+		host.canvasHandler().ServeHTTP(recAuth, reqAuth)
+		if recAuth.Code != http.StatusOK {
+			t.Fatalf("expected 200 with auth, got %d", recAuth.Code)
+		}
+	})
+
+	t.Run("allows token without auth when token secret configured", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		cfg := config.CanvasHostConfig{
+			Port:      18793,
+			Root:      tmpDir,
+			Namespace: "/__nexus__",
+		}
+		secret := "canvas-secret-should-be-long-enough-1234"
+		canvasCfg := config.CanvasConfig{
+			Tokens: config.CanvasTokenConfig{
+				Secret: secret,
+				TTL:    time.Hour,
+			},
+		}
+		host, err := NewHost(cfg, canvasCfg, nil)
+		if err != nil {
+			t.Fatalf("NewHost error: %v", err)
+		}
+		host.SetAuthService(auth.NewService(auth.Config{
+			APIKeys: []auth.APIKeyConfig{{Key: "api-key-1", UserID: "user-1"}},
+		}))
+
+		sessionID := "session-123"
+		sessionDir := filepath.Join(tmpDir, sessionID)
+		if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(sessionDir, "index.html"), []byte("<html>ok</html>"), 0o644); err != nil {
+			t.Fatalf("write index: %v", err)
+		}
+
+		token, err := SignAccessToken([]byte(secret), AccessToken{
+			SessionID: sessionID,
+			ExpiresAt: time.Now().Add(time.Hour).Unix(),
+		})
+		if err != nil {
+			t.Fatalf("SignAccessToken error: %v", err)
+		}
+
+		reqNoAuth := httptest.NewRequest(http.MethodGet, "/"+sessionID+"/index.html?token="+token, nil)
+		recNoAuth := httptest.NewRecorder()
+		host.canvasHandler().ServeHTTP(recNoAuth, reqNoAuth)
+		if recNoAuth.Code != http.StatusOK {
+			t.Fatalf("expected 200 with token, got %d", recNoAuth.Code)
+		}
+	})
+
+	t.Run("allows auth without token when token secret configured", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		cfg := config.CanvasHostConfig{
+			Port:      18793,
+			Root:      tmpDir,
+			Namespace: "/__nexus__",
+		}
+		secret := "canvas-secret-should-be-long-enough-1234"
+		canvasCfg := config.CanvasConfig{
+			Tokens: config.CanvasTokenConfig{
+				Secret: secret,
+				TTL:    time.Hour,
+			},
+		}
+		host, err := NewHost(cfg, canvasCfg, nil)
+		if err != nil {
+			t.Fatalf("NewHost error: %v", err)
+		}
+		host.SetAuthService(auth.NewService(auth.Config{
+			APIKeys: []auth.APIKeyConfig{{Key: "api-key-1", UserID: "user-1"}},
+		}))
+
+		sessionID := "session-123"
+		sessionDir := filepath.Join(tmpDir, sessionID)
+		if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(sessionDir, "index.html"), []byte("<html>ok</html>"), 0o644); err != nil {
+			t.Fatalf("write index: %v", err)
+		}
+
+		reqAuth := httptest.NewRequest(http.MethodGet, "/"+sessionID+"/index.html", nil)
+		reqAuth.Header.Set("X-API-Key", "api-key-1")
+		recAuth := httptest.NewRecorder()
+		host.canvasHandler().ServeHTTP(recAuth, reqAuth)
+		if recAuth.Code != http.StatusOK {
+			t.Fatalf("expected 200 with auth, got %d", recAuth.Code)
+		}
+	})
+}
+
+func TestCanvasHandler_RootDirectoryPreferred(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := config.CanvasHostConfig{
+		Port:      18793,
+		Root:      tmpDir,
+		Namespace: "/__nexus__",
+	}
+	host, err := NewHost(cfg, config.CanvasConfig{}, nil)
+	if err != nil {
+		t.Fatalf("NewHost error: %v", err)
+	}
+	host.SetManager(NewManager(NewMemoryStore(), nil))
+	if err := os.MkdirAll(filepath.Join(tmpDir, "assets"), 0o755); err != nil {
+		t.Fatalf("mkdir assets: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "assets", "index.html"), []byte("<html>asset</html>"), 0o644); err != nil {
+		t.Fatalf("write asset: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/assets/index.html", nil)
+	rec := httptest.NewRecorder()
+	host.canvasHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for root asset, got %d", rec.Code)
+	}
+}
+
+func TestCanvasActions_RoleEnforced(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := config.CanvasHostConfig{
+		Port:      18793,
+		Root:      tmpDir,
+		Namespace: "/__nexus__",
+	}
+	secret := "canvas-secret-should-be-long-enough-1234"
+	canvasCfg := config.CanvasConfig{
+		Tokens: config.CanvasTokenConfig{
+			Secret: secret,
+			TTL:    time.Hour,
+		},
+	}
+	host, err := NewHost(cfg, canvasCfg, nil)
+	if err != nil {
+		t.Fatalf("NewHost error: %v", err)
+	}
+	called := false
+	host.SetActionHandler(func(ctx context.Context, action Action) error {
+		called = true
+		return nil
+	})
+
+	sessionID := "session-123"
+	body, err := json.Marshal(map[string]any{
+		"session_id": sessionID,
+		"name":       "toggle",
+	})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+
+	viewerToken, err := SignAccessToken([]byte(secret), AccessToken{
+		SessionID: sessionID,
+		Role:      RoleViewer,
+		ExpiresAt: time.Now().Add(time.Hour).Unix(),
+	})
+	if err != nil {
+		t.Fatalf("SignAccessToken error: %v", err)
+	}
+
+	reqViewer := httptest.NewRequest(http.MethodPost, "/api/action", bytes.NewReader(body))
+	reqViewer.Header.Set("Content-Type", "application/json")
+	reqViewer.Header.Set("X-Canvas-Token", viewerToken)
+	recViewer := httptest.NewRecorder()
+	host.actionsHandler().ServeHTTP(recViewer, reqViewer)
+	if recViewer.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for viewer role, got %d", recViewer.Code)
+	}
+	if called {
+		t.Fatalf("action handler should not be called for viewer role")
+	}
+
+	editorToken, err := SignAccessToken([]byte(secret), AccessToken{
+		SessionID: sessionID,
+		Role:      RoleEditor,
+		ExpiresAt: time.Now().Add(time.Hour).Unix(),
+	})
+	if err != nil {
+		t.Fatalf("SignAccessToken error: %v", err)
+	}
+
+	reqEditor := httptest.NewRequest(http.MethodPost, "/api/action", bytes.NewReader(body))
+	reqEditor.Header.Set("Content-Type", "application/json")
+	reqEditor.Header.Set("X-Canvas-Token", editorToken)
+	recEditor := httptest.NewRecorder()
+	host.actionsHandler().ServeHTTP(recEditor, reqEditor)
+	if recEditor.Code != http.StatusAccepted {
+		t.Fatalf("expected 202 for editor role, got %d", recEditor.Code)
+	}
+	if !called {
+		t.Fatalf("expected action handler to be called for editor role")
+	}
+}
+
+func TestCanvasActions_DefaultRoleForAuth(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := config.CanvasHostConfig{
+		Port:      18793,
+		Root:      tmpDir,
+		Namespace: "/__nexus__",
+	}
+	secret := "canvas-secret-should-be-long-enough-1234"
+
+	t.Run("defaults to viewer", func(t *testing.T) {
+		canvasCfg := config.CanvasConfig{
+			Tokens: config.CanvasTokenConfig{
+				Secret: secret,
+				TTL:    time.Hour,
+			},
+			Actions: config.CanvasActionConfig{
+				DefaultRole: "viewer",
+			},
+		}
+		host, err := NewHost(cfg, canvasCfg, nil)
+		if err != nil {
+			t.Fatalf("NewHost error: %v", err)
+		}
+		host.SetAuthService(auth.NewService(auth.Config{
+			APIKeys: []auth.APIKeyConfig{{Key: "api-key-1", UserID: "user-1"}},
+		}))
+		called := false
+		host.SetActionHandler(func(ctx context.Context, action Action) error {
+			called = true
+			return nil
+		})
+
+		body, err := json.Marshal(map[string]any{
+			"session_id": "session-123",
+			"name":       "toggle",
+		})
+		if err != nil {
+			t.Fatalf("marshal payload: %v", err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/api/action", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-API-Key", "api-key-1")
+		rec := httptest.NewRecorder()
+		host.actionsHandler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for default viewer role, got %d", rec.Code)
+		}
+		if called {
+			t.Fatalf("action handler should not be called for viewer default role")
+		}
+	})
+
+	t.Run("allows editor", func(t *testing.T) {
+		canvasCfg := config.CanvasConfig{
+			Tokens: config.CanvasTokenConfig{
+				Secret: secret,
+				TTL:    time.Hour,
+			},
+			Actions: config.CanvasActionConfig{
+				DefaultRole: "editor",
+			},
+		}
+		host, err := NewHost(cfg, canvasCfg, nil)
+		if err != nil {
+			t.Fatalf("NewHost error: %v", err)
+		}
+		host.SetAuthService(auth.NewService(auth.Config{
+			APIKeys: []auth.APIKeyConfig{{Key: "api-key-1", UserID: "user-1"}},
+		}))
+		called := false
+		host.SetActionHandler(func(ctx context.Context, action Action) error {
+			called = true
+			return nil
+		})
+
+		body, err := json.Marshal(map[string]any{
+			"session_id": "session-123",
+			"name":       "toggle",
+		})
+		if err != nil {
+			t.Fatalf("marshal payload: %v", err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/api/action", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-API-Key", "api-key-1")
+		rec := httptest.NewRecorder()
+		host.actionsHandler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusAccepted {
+			t.Fatalf("expected 202 for editor default role, got %d", rec.Code)
+		}
+		if !called {
+			t.Fatalf("expected action handler to be called for editor default role")
+		}
+	})
 }

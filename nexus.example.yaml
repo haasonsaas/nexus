@@ -38,6 +38,8 @@ canvas:
     secret: ${CANVAS_TOKEN_SECRET}
     ttl: 30m
   actions:
+    # Role applied to authenticated requests without a signed canvas token.
+    default_role: viewer
     rate_limit:
       enabled: true
       requests_per_second: 10
@@ -224,7 +226,12 @@ channels:
       command: /canvas
       shortcut_callback: open_canvas
       # allowed_workspaces: ["T1234567890"]
-      # role: editor
+      # default_role: editor
+      # workspace_roles:
+      #   T1234567890: admin
+      # user_roles:
+      #   T1234567890:
+      #     U1234567890: viewer
 
 llm:
   default_provider: anthropic

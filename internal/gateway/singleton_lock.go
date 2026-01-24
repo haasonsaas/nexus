@@ -139,6 +139,7 @@ func AcquireGatewayLock(opts GatewayLockOptions) (*GatewayLockHandle, error) {
 			data, err := json.Marshal(payload)
 			if err != nil {
 				_ = file.Close()
+				_ = os.Remove(lockPath)
 				return nil, &GatewayLockError{
 					Message: "failed to serialize lock payload",
 					Cause:   err,
@@ -146,6 +147,7 @@ func AcquireGatewayLock(opts GatewayLockOptions) (*GatewayLockHandle, error) {
 			}
 			if _, err := file.Write(data); err != nil {
 				_ = file.Close()
+				_ = os.Remove(lockPath)
 				return nil, &GatewayLockError{
 					Message: "failed to write lock payload",
 					Cause:   err,

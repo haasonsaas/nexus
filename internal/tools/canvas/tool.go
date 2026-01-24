@@ -89,7 +89,7 @@ func (t *Tool) Execute(ctx context.Context, params json.RawMessage) (*agent.Tool
 		}
 		url := t.host.CanvasURL("")
 		if sessionID := strings.TrimSpace(input.SessionID); sessionID != "" {
-			if signed, err := t.host.SignedSessionURL(canvascore.CanvasURLParams{}, sessionID, strings.TrimSpace(input.Role)); err == nil {
+			if signed, err := t.host.SignedSessionURL(canvascore.CanvasURLParams{}, sessionID, strings.TrimSpace(input.Role), ""); err == nil {
 				url = signed
 			} else {
 				url = t.host.CanvasSessionURL(canvascore.CanvasURLParams{}, sessionID)

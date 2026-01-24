@@ -44,6 +44,11 @@ const (
 	EventGatewayStartup  EventType = "gateway.startup"
 	EventGatewayShutdown EventType = "gateway.shutdown"
 	EventGatewayError    EventType = "gateway.error"
+
+	// Canvas events
+	EventCanvasAction EventType = "canvas.action"
+	EventCanvasUpdate EventType = "canvas.update"
+	EventCanvasReset  EventType = "canvas.reset"
 )
 
 // Level represents audit log severity.

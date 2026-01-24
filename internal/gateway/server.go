@@ -253,9 +253,13 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	} else {
 		canvasStore = canvas.NewMemoryStore()
 	}
+	canvasMetrics := canvas.NewMetrics()
 	canvasManager := canvas.NewManager(canvasStore, logger)
+	canvasManager.SetMetrics(canvasMetrics)
 	if canvasHost != nil {
 		canvasHost.SetManager(canvasManager)
+		canvasHost.SetMetrics(canvasMetrics)
+		canvasHost.SetAuthService(authService)
 	}
 
 	var auditLogger *audit.Logger
@@ -265,6 +269,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	} else {
 		auditLogger = loggerInstance
 	}
+	canvasManager.SetAuditLogger(auditLogger)
 
 	// Initialize vector memory manager (optional, returns nil if not enabled)
 	if cfg.VectorMemory.Enabled && cfg.VectorMemory.Pgvector.UseCockroachDB && cfg.VectorMemory.Pgvector.DSN == "" {

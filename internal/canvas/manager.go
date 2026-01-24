@@ -6,13 +6,18 @@ import (
 	"errors"
 	"log/slog"
 	"time"
+
+	"github.com/haasonsaas/nexus/internal/audit"
+	"github.com/haasonsaas/nexus/internal/auth"
 )
 
 // Manager coordinates persistence and realtime broadcasts.
 type Manager struct {
-	store  Store
-	hub    *Hub
-	logger *slog.Logger
+	store       Store
+	hub         *Hub
+	logger      *slog.Logger
+	auditLogger *audit.Logger
+	metrics     *Metrics
 }
 
 // NewManager creates a canvas manager.
@@ -46,6 +51,20 @@ func (m *Manager) Hub() *Hub {
 	return m.hub
 }
 
+func (m *Manager) SetAuditLogger(logger *audit.Logger) {
+	if m == nil {
+		return
+	}
+	m.auditLogger = logger
+}
+
+func (m *Manager) SetMetrics(metrics *Metrics) {
+	if m == nil {
+		return
+	}
+	m.metrics = metrics
+}
+
 // Push appends an event and broadcasts it to subscribers.
 func (m *Manager) Push(ctx context.Context, sessionID string, payload json.RawMessage) (*StreamMessage, error) {
 	if m == nil || m.store == nil {
@@ -59,6 +78,11 @@ func (m *Manager) Push(ctx context.Context, sessionID string, payload json.RawMe
 	}); err != nil {
 		return nil, err
 	}
+	m.recordStateChange(ctx, sessionID, audit.EventCanvasUpdate, "canvas.update", payload)
+	if m.metrics != nil {
+		m.metrics.RecordUpdate()
+	}
+
 	msg := StreamMessage{
 		Type:      "event",
 		SessionID: sessionID,
@@ -81,6 +105,11 @@ func (m *Manager) Reset(ctx context.Context, sessionID string, state json.RawMes
 	}); err != nil {
 		return nil, err
 	}
+	m.recordStateChange(ctx, sessionID, audit.EventCanvasReset, "canvas.reset", state)
+	if m.metrics != nil {
+		m.metrics.RecordUpdate()
+	}
+
 	msg := StreamMessage{
 		Type:      "reset",
 		SessionID: sessionID,
@@ -110,4 +139,27 @@ func (m *Manager) Snapshot(ctx context.Context, sessionID string) (*State, []*Ev
 		return nil, nil, err
 	}
 	return state, events, nil
+}
+
+func (m *Manager) recordStateChange(ctx context.Context, sessionID string, eventType audit.EventType, action string, payload json.RawMessage) {
+	if m == nil || m.auditLogger == nil {
+		return
+	}
+	userID := ""
+	if user, ok := auth.UserFromContext(ctx); ok && user != nil {
+		userID = user.ID
+	}
+	details := map[string]any{
+		"canvas_session_id": sessionID,
+		"payload_bytes":     len(payload),
+	}
+	m.auditLogger.Log(ctx, &audit.Event{
+		Type:      eventType,
+		Level:     audit.LevelInfo,
+		Timestamp: time.Now(),
+		SessionID: sessionID,
+		Action:    action,
+		Details:   details,
+		UserID:    userID,
+	})
 }

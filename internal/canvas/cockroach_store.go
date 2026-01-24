@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -223,6 +224,9 @@ func (s *CockroachStore) UpsertState(ctx context.Context, state *State) error {
 		state.UpdatedAt,
 	)
 	if err != nil {
+		if isForeignKeyViolation(err) {
+			return ErrNotFound
+		}
 		return fmt.Errorf("upsert canvas state: %w", err)
 	}
 	return nil
@@ -284,6 +288,9 @@ func (s *CockroachStore) AppendEvent(ctx context.Context, event *Event) error {
 		event.CreatedAt,
 	)
 	if err != nil {
+		if isForeignKeyViolation(err) {
+			return ErrNotFound
+		}
 		return fmt.Errorf("append canvas event: %w", err)
 	}
 	return nil
@@ -352,9 +359,21 @@ func isUniqueViolation(err error) bool {
 	if err == nil {
 		return false
 	}
-	pqErr, ok := err.(*pq.Error)
-	if ok && pqErr.Code == "23505" {
+	var pqErr *pq.Error
+	if errors.As(err, &pqErr) && pqErr.Code == "23505" {
 		return true
 	}
 	return strings.Contains(strings.ToLower(err.Error()), "duplicate")
+}
+
+func isForeignKeyViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	var pqErr *pq.Error
+	if errors.As(err, &pqErr) && pqErr.Code == "23503" {
+		return true
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "foreign key") || strings.Contains(message, "violates foreign key constraint")
 }

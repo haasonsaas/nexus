@@ -684,7 +684,6 @@ func TestRuntimeManager_StartStop(t *testing.T) {
 	})
 }
 
-
 func TestToolingManager_Accessors(t *testing.T) {
 	m := NewToolingManager(ToolingManagerConfig{})
 
@@ -756,7 +755,6 @@ func TestSchedulerManager_Accessors(t *testing.T) {
 		t.Error("JobStore should be nil before start")
 	}
 }
-
 
 func TestManagerInterface(t *testing.T) {
 	// Verify all managers implement the Manager interface

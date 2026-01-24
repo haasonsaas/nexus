@@ -237,3 +237,267 @@ func TestNormalizeHeaderMIME(t *testing.T) {
 		})
 	}
 }
+
+// Additional edge case tests
+
+func TestMaxBytesForKind_Unknown(t *testing.T) {
+	// Unknown kind should return document max (fallback)
+	got := MaxBytesForKind(KindUnknown)
+	if got != MaxDocumentBytes {
+		t.Errorf("MaxBytesForKind(KindUnknown) = %d, want %d", got, MaxDocumentBytes)
+	}
+}
+
+func TestGetExtension_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		want string
+	}{
+		{"http url", "http://example.com/file.mp3", ".mp3"},
+		{"mixed case url", "HTTP://EXAMPLE.COM/FILE.MP3", ".mp3"},
+		{"url with both query and fragment", "https://x.com/a.png?q=1#frag", ".png"},
+		{"dotfile", ".gitignore", ".gitignore"}, // filepath.Ext returns the whole thing
+		{"multiple dots", "file.tar.gz", ".gz"},
+		{"trailing dot", "file.", "."},  // filepath.Ext returns "."
+		{"only dots", "...", "."},       // filepath.Ext returns "."
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := GetExtension(tt.path)
+			if got != tt.want {
+				t.Errorf("GetExtension(%q) = %q, want %q", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMIMEFromExtension_AllMappings(t *testing.T) {
+	// Test more extension mappings
+	tests := []struct {
+		ext  string
+		want string
+	}{
+		{".heic", "image/heic"},
+		{".heif", "image/heif"},
+		{".webp", "image/webp"},
+		{".gif", "image/gif"},
+		{".bmp", "image/bmp"},
+		{".svg", "image/svg+xml"},
+		{".ico", "image/x-icon"},
+		{".ogg", "audio/ogg"},
+		{".wav", "audio/wav"},
+		{".flac", "audio/flac"},
+		{".m4a", "audio/mp4"},
+		{".aac", "audio/aac"},
+		{".opus", "audio/opus"},
+		{".mp4", "video/mp4"},
+		{".webm", "video/webm"},
+		{".avi", "video/x-msvideo"},
+		{".mov", "video/quicktime"},
+		{".mkv", "video/x-matroska"},
+		{".json", "application/json"},
+		{".xml", "application/xml"},
+		{".zip", "application/zip"},
+		{".gz", "application/gzip"},
+		{".tar", "application/x-tar"},
+		{".7z", "application/x-7z-compressed"},
+		{".rar", "application/vnd.rar"},
+		{".doc", "application/msword"},
+		{".docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
+		{".xls", "application/vnd.ms-excel"},
+		{".xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+		{".ppt", "application/vnd.ms-powerpoint"},
+		{".pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation"},
+		{".txt", "text/plain"},
+		{".csv", "text/csv"},
+		{".md", "text/markdown"},
+		{".htm", "text/html"},
+		{".html", "text/html"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.ext, func(t *testing.T) {
+			got := MIMEFromExtension(tt.ext)
+			if got != tt.want {
+				t.Errorf("MIMEFromExtension(%q) = %q, want %q", tt.ext, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestExtensionFromMIME_AllMappings(t *testing.T) {
+	tests := []struct {
+		mime string
+		want string
+	}{
+		{"image/heic", ".heic"},
+		{"image/heif", ".heif"},
+		{"image/webp", ".webp"},
+		{"image/gif", ".gif"},
+		{"audio/ogg", ".ogg"},
+		{"video/mp4", ".mp4"},
+		{"  IMAGE/PNG  ", ".png"}, // with whitespace
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.mime, func(t *testing.T) {
+			got := ExtensionFromMIME(tt.mime)
+			if got != tt.want {
+				t.Errorf("ExtensionFromMIME(%q) = %q, want %q", tt.mime, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsAudioExtension_AllAudioTypes(t *testing.T) {
+	audioExts := []string{".aac", ".flac", ".m4a", ".mp3", ".oga", ".ogg", ".opus", ".wav"}
+	for _, ext := range audioExts {
+		if !IsAudioExtension(ext) {
+			t.Errorf("IsAudioExtension(%q) = false, want true", ext)
+		}
+	}
+}
+
+func TestDetectMIME_AllFallbacks(t *testing.T) {
+	// JPEG magic bytes
+	jpegData := []byte{0xFF, 0xD8, 0xFF, 0xE0}
+	mime := DetectMIME(jpegData, "", "")
+	if mime != "image/jpeg" {
+		t.Errorf("DetectMIME for JPEG = %q, want image/jpeg", mime)
+	}
+
+	// GIF magic bytes
+	gifData := []byte{0x47, 0x49, 0x46, 0x38, 0x39, 0x61} // GIF89a
+	mime = DetectMIME(gifData, "", "")
+	if mime != "image/gif" {
+		t.Errorf("DetectMIME for GIF = %q, want image/gif", mime)
+	}
+
+	// Octet-stream should fallback to extension
+	unknownData := []byte{0x00, 0x01, 0x02, 0x03}
+	mime = DetectMIME(unknownData, "file.mp3", "")
+	if mime != "audio/mpeg" {
+		t.Errorf("DetectMIME with unknown data = %q, want audio/mpeg", mime)
+	}
+
+	// Empty everything returns empty
+	mime = DetectMIME(nil, "", "")
+	if mime != "" {
+		t.Errorf("DetectMIME with nothing = %q, want empty", mime)
+	}
+
+	// Header normalization
+	mime = DetectMIME(nil, "", "  TEXT/HTML; charset=utf-8  ")
+	if mime != "text/html" {
+		t.Errorf("DetectMIME with header = %q, want text/html", mime)
+	}
+}
+
+func TestValidateSize_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name  string
+		size  int64
+		mime  string
+		valid bool
+	}{
+		{"image at limit", MaxImageBytes, "image/png", true},
+		{"image over limit", MaxImageBytes + 1, "image/png", false},
+		{"audio at limit", MaxAudioBytes, "audio/mpeg", true},
+		{"audio over limit", MaxAudioBytes + 1, "audio/mpeg", false},
+		{"video at limit", MaxVideoBytes, "video/mp4", true},
+		{"video over limit", MaxVideoBytes + 1, "video/mp4", false},
+		{"document at limit", MaxDocumentBytes, "application/pdf", true},
+		{"document over limit", MaxDocumentBytes + 1, "application/pdf", false},
+		{"zero size", 0, "image/png", true},
+		{"negative size", -1, "image/png", true}, // negative is less than limit
+		{"unknown mime uses document limit", MaxDocumentBytes, "unknown/type", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ValidateSize(tt.size, tt.mime)
+			if got != tt.valid {
+				t.Errorf("ValidateSize(%d, %q) = %v, want %v", tt.size, tt.mime, got, tt.valid)
+			}
+		})
+	}
+}
+
+func TestImageMIMEFromFormat_AllFormats(t *testing.T) {
+	tests := []struct {
+		format string
+		want   string
+	}{
+		{"heic", "image/heic"},
+		{"heif", "image/heif"},
+		{"bmp", "image/bmp"},
+		{"svg", "image/svg+xml"},
+		{"WEBP", "image/webp"},
+		{"GIF", "image/gif"},
+		{"PNG", "image/png"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.format, func(t *testing.T) {
+			got := ImageMIMEFromFormat(tt.format)
+			if got != tt.want {
+				t.Errorf("ImageMIMEFromFormat(%q) = %q, want %q", tt.format, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsGIF_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		mime     string
+		filename string
+		want     bool
+	}{
+		{"mime only", "image/gif", "", true},
+		{"filename only", "", "file.gif", true},
+		{"both match", "image/gif", "file.gif", true},
+		{"mime uppercase", "IMAGE/GIF", "", true},
+		{"filename uppercase", "", "FILE.GIF", true},
+		{"neither", "image/png", "file.png", false},
+		{"empty both", "", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsGIF(tt.mime, tt.filename)
+			if got != tt.want {
+				t.Errorf("IsGIF(%q, %q) = %v, want %v", tt.mime, tt.filename, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestKindFromMIME_MoreTypes(t *testing.T) {
+	tests := []struct {
+		mime string
+		want Kind
+	}{
+		{"application/octet-stream", KindDocument},
+		{"application/x-tar", KindDocument},
+		{"text/html", KindDocument},
+		{"text/css", KindDocument},
+		{"text/javascript", KindDocument},
+		{"audio/wav", KindAudio},
+		{"audio/x-wav", KindAudio},
+		{"video/x-msvideo", KindVideo},
+		{"image/svg+xml", KindImage},
+		{"image/x-icon", KindImage},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.mime, func(t *testing.T) {
+			got := KindFromMIME(tt.mime)
+			if got != tt.want {
+				t.Errorf("KindFromMIME(%q) = %v, want %v", tt.mime, got, tt.want)
+			}
+		})
+	}
+}

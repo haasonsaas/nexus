@@ -285,3 +285,273 @@ func TestChannelInfo_Capabilities(t *testing.T) {
 		t.Error("signal should not support threads")
 	}
 }
+
+// Additional edge case tests
+
+func TestGetChannelInfo_CaseInsensitive(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"TELEGRAM", "telegram"},
+		{"Telegram", "telegram"},
+		{"DISCORD", "discord"},
+		{"Discord", "discord"},
+		{"SLACK", "slack"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			info := GetChannelInfo(tt.input)
+			if info.Name != tt.want {
+				t.Errorf("GetChannelInfo(%q).Name = %q, want %q", tt.input, info.Name, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetChannelInfo_AllChannels(t *testing.T) {
+	channels := []string{
+		"telegram", "discord", "slack", "whatsapp", "signal",
+		"imessage", "matrix", "sms", "email", "teams",
+	}
+
+	for _, ch := range channels {
+		t.Run(ch, func(t *testing.T) {
+			info := GetChannelInfo(ch)
+			if info.Name != ch {
+				t.Errorf("Name = %q, want %q", info.Name, ch)
+			}
+		})
+	}
+}
+
+func TestChannelInfo_HTMLSupport(t *testing.T) {
+	// Check which channels support HTML
+	tests := []struct {
+		channel     string
+		wantHTML    bool
+	}{
+		{"matrix", true},
+		{"email", true},
+		{"teams", true},
+		{"telegram", false},
+		{"discord", false},
+		{"slack", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.channel, func(t *testing.T) {
+			info := GetChannelInfo(tt.channel)
+			if info.SupportsHTML != tt.wantHTML {
+				t.Errorf("SupportsHTML = %v, want %v", info.SupportsHTML, tt.wantHTML)
+			}
+		})
+	}
+}
+
+func TestChannelInfo_MarkdownFlavor(t *testing.T) {
+	tests := []struct {
+		channel string
+		want    string
+	}{
+		{"telegram", "telegram"},
+		{"discord", "discord"},
+		{"slack", "slack"},
+		{"whatsapp", "whatsapp"},
+		{"signal", "none"},
+		{"sms", "none"},
+		{"matrix", "standard"},
+		{"email", "standard"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.channel, func(t *testing.T) {
+			info := GetChannelInfo(tt.channel)
+			if info.MarkdownFlavor != tt.want {
+				t.Errorf("MarkdownFlavor = %q, want %q", info.MarkdownFlavor, tt.want)
+			}
+		})
+	}
+}
+
+func TestDeliveryContext_New(t *testing.T) {
+	dc := New("telegram")
+
+	if dc.Channel.Name != "telegram" {
+		t.Errorf("Channel.Name = %q, want %q", dc.Channel.Name, "telegram")
+	}
+	if dc.UserID != "" {
+		t.Error("UserID should be empty")
+	}
+	if dc.ConversationID != "" {
+		t.Error("ConversationID should be empty")
+	}
+	if dc.ThreadID != "" {
+		t.Error("ThreadID should be empty")
+	}
+	if dc.ReplyToMessageID != "" {
+		t.Error("ReplyToMessageID should be empty")
+	}
+}
+
+func TestDeliveryContext_FormatMention_EmptyFormat(t *testing.T) {
+	// For channels without mention support
+	dc := New("sms")
+	got := dc.FormatMention("12345")
+	if got != "12345" {
+		t.Errorf("FormatMention() = %q, want %q", got, "12345")
+	}
+}
+
+func TestDeliveryContext_ShouldChunk_UnlimitedChannel(t *testing.T) {
+	// Email has no message limit (0)
+	dc := New("email")
+
+	// Even very long text shouldn't need chunking
+	longText := make([]byte, 1000000)
+	for i := range longText {
+		longText[i] = 'a'
+	}
+
+	if dc.ShouldChunk(string(longText)) {
+		t.Error("email channel should not require chunking")
+	}
+}
+
+func TestStripMarkdown_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"empty", "", ""},
+		{"no markdown", "plain text", "plain text"},
+		{"nested bold italic", "***bold italic***", "bold italic"}, // Both stripped
+		{"multiple headers", "# H1\n## H2\n### H3", "H1\nH2\nH3"},
+		{"dash bullet points", "- item 1\n- item 2", "- item 1\n- item 2"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := StripMarkdown(tt.input)
+			if got != tt.want {
+				t.Errorf("StripMarkdown() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestToSlackMarkdown_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"empty", "", ""},
+		{"no markdown", "plain text", "plain text"},
+		{"multiple bold", "**one** and **two**", "*one* and *two*"},
+		{"multiple links", "[a](http://a.com) [b](http://b.com)", "<http://a.com|a> <http://b.com|b>"},
+		{"mixed", "**bold** _italic_ ~~strike~~", "*bold* _italic_ ~strike~"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ToSlackMarkdown(tt.input)
+			if got != tt.want {
+				t.Errorf("ToSlackMarkdown() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestToTelegramMarkdown(t *testing.T) {
+	// ToTelegramMarkdown escapes special characters
+	input := "Hello_world"
+	got := ToTelegramMarkdown(input)
+
+	// The underscore should be escaped
+	if got == input {
+		t.Error("ToTelegramMarkdown should escape special characters")
+	}
+}
+
+func TestDeliveryContext_FormatText_UnknownChannel(t *testing.T) {
+	dc := New("unknown_channel")
+
+	// Unknown channels use "none" flavor, which strips markdown
+	input := "**bold** text"
+	got := dc.FormatText(input)
+
+	if got != "bold text" {
+		t.Errorf("FormatText() = %q, want %q", got, "bold text")
+	}
+}
+
+func TestChannelInfo_Teams(t *testing.T) {
+	info := GetChannelInfo("teams")
+
+	if info.MaxMessageLength != 28000 {
+		t.Errorf("MaxMessageLength = %d, want 28000", info.MaxMessageLength)
+	}
+	if !info.SupportsMarkdown {
+		t.Error("teams should support markdown")
+	}
+	if !info.SupportsHTML {
+		t.Error("teams should support HTML")
+	}
+	if info.MentionFormat != "<at>%s</at>" {
+		t.Errorf("MentionFormat = %q, want %q", info.MentionFormat, "<at>%s</at>")
+	}
+}
+
+func TestChannelInfo_WhatsApp(t *testing.T) {
+	info := GetChannelInfo("whatsapp")
+
+	if info.MaxMessageLength != 65536 {
+		t.Errorf("MaxMessageLength = %d, want 65536", info.MaxMessageLength)
+	}
+	if !info.SupportsReactions {
+		t.Error("whatsapp should support reactions")
+	}
+	if info.SupportsEditing {
+		t.Error("whatsapp should not support editing")
+	}
+	if info.MentionFormat != "@%s" {
+		t.Errorf("MentionFormat = %q, want %q", info.MentionFormat, "@%s")
+	}
+}
+
+func TestChannelInfo_Matrix(t *testing.T) {
+	info := GetChannelInfo("matrix")
+
+	if !info.SupportsMarkdown {
+		t.Error("matrix should support markdown")
+	}
+	if !info.SupportsHTML {
+		t.Error("matrix should support HTML")
+	}
+	if info.MarkdownFlavor != "standard" {
+		t.Errorf("MarkdownFlavor = %q, want standard", info.MarkdownFlavor)
+	}
+	if !info.SupportsEditing {
+		t.Error("matrix should support editing")
+	}
+}
+
+func TestChannelInfo_IMessage(t *testing.T) {
+	info := GetChannelInfo("imessage")
+
+	if info.MaxMessageLength != 20000 {
+		t.Errorf("MaxMessageLength = %d, want 20000", info.MaxMessageLength)
+	}
+	if info.SupportsMarkdown {
+		t.Error("imessage should not support markdown")
+	}
+	if info.SupportsEditing {
+		t.Error("imessage should not support editing")
+	}
+	if !info.SupportsReactions {
+		t.Error("imessage should support reactions")
+	}
+}

@@ -32,6 +32,11 @@ canvas:
     state_max_bytes: 1048576
     # Maximum size of stored canvas event payload in bytes.
     event_max_bytes: 262144
+  tokens:
+    # Secret used to sign canvas access tokens.
+    # Generate with: openssl rand -base64 32
+    secret: ${CANVAS_TOKEN_SECRET}
+    ttl: 30m
 
 commands:
   # Enable text command handling

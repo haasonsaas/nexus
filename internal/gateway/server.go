@@ -220,7 +220,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	// Initialize dedicated canvas host when enabled
 	var canvasHost *canvas.Host
 	if cfg.CanvasHost.Enabled != nil && *cfg.CanvasHost.Enabled {
-		host, err := canvas.NewHost(cfg.CanvasHost, logger)
+		host, err := canvas.NewHost(cfg.CanvasHost, cfg.Canvas, logger)
 		if err != nil {
 			logger.Warn("canvas host init failed", "error", err)
 		} else {

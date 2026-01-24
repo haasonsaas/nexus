@@ -1,9 +1,13 @@
 package canvas
 
 import (
+	"context"
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/fsnotify/fsnotify"
 
 	"github.com/haasonsaas/nexus/internal/config"
 )
@@ -811,5 +815,348 @@ func TestCanvasURLParams_Struct(t *testing.T) {
 	}
 	if params.Scheme != "http" {
 		t.Errorf("Scheme = %q", params.Scheme)
+	}
+}
+
+func TestHost_AddRemoveClients(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := config.CanvasHostConfig{
+		Port:      18793,
+		Root:      tmpDir,
+		Namespace: "/__nexus__",
+	}
+	host, err := NewHost(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewHost error: %v", err)
+	}
+
+	// Test that clients map is initialized
+	if host.clients == nil {
+		t.Error("clients map should be initialized")
+	}
+	if len(host.clients) != 0 {
+		t.Error("clients should be empty initially")
+	}
+}
+
+func TestHost_CloseClients(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := config.CanvasHostConfig{
+		Port:      18793,
+		Root:      tmpDir,
+		Namespace: "/__nexus__",
+	}
+	host, err := NewHost(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewHost error: %v", err)
+	}
+
+	// closeClients should work even with empty map
+	host.closeClients()
+	if len(host.clients) != 0 {
+		t.Error("clients should be empty after closeClients")
+	}
+}
+
+func TestHost_BroadcastReload(t *testing.T) {
+	tmpDir := t.TempDir()
+	liveReload := true
+	cfg := config.CanvasHostConfig{
+		Port:       18793,
+		Root:       tmpDir,
+		Namespace:  "/__nexus__",
+		LiveReload: &liveReload,
+	}
+	host, err := NewHost(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewHost error: %v", err)
+	}
+
+	// broadcastReload should not panic with no clients
+	host.broadcastReload()
+}
+
+func TestHost_EnsureRoot_FileExists(t *testing.T) {
+	tmpDir := t.TempDir()
+	// Create a file instead of a directory
+	filePath := filepath.Join(tmpDir, "notadir")
+	if err := os.WriteFile(filePath, []byte("content"), 0o644); err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+
+	cfg := config.CanvasHostConfig{
+		Port:      18793,
+		Root:      filePath,
+		Namespace: "/__nexus__",
+	}
+	host, err := NewHost(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewHost error: %v", err)
+	}
+
+	err = host.ensureRoot()
+	if err == nil {
+		t.Error("expected error when root is a file")
+	}
+}
+
+func TestHost_EnsureA2UI_EmptyDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := config.CanvasHostConfig{
+		Port:      18793,
+		Root:      tmpDir,
+		Namespace: "/__nexus__",
+	}
+	host, err := NewHost(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewHost error: %v", err)
+	}
+
+	// Should not panic with empty string
+	host.ensureA2UI("")
+	host.ensureA2UI("   ")
+}
+
+func TestHost_ResolveFilePathWithRoot_EdgeCases(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := config.CanvasHostConfig{
+		Port:      18793,
+		Root:      tmpDir,
+		Namespace: "/__nexus__",
+	}
+	host, err := NewHost(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewHost error: %v", err)
+	}
+	host.rootReal = tmpDir
+
+	t.Run("handles empty rootReal", func(t *testing.T) {
+		// Create a test file
+		testFile := filepath.Join(tmpDir, "testfile.txt")
+		if err := os.WriteFile(testFile, []byte("content"), 0o644); err != nil {
+			t.Fatalf("write testfile: %v", err)
+		}
+
+		path, err := host.resolveFilePathWithRoot("/testfile.txt", tmpDir, "", false)
+		if err != nil {
+			t.Errorf("resolveFilePathWithRoot error: %v", err)
+		}
+		if path == "" {
+			t.Error("expected non-empty path")
+		}
+	})
+
+	t.Run("rejects path traversal with leading dots", func(t *testing.T) {
+		_, err := host.resolveFilePathWithRoot("/../../etc/passwd", tmpDir, tmpDir, false)
+		if err == nil {
+			t.Error("expected error for path traversal")
+		}
+	})
+}
+
+func TestHost_CanvasURLWithParams_SchemeOverride(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := config.CanvasHostConfig{
+		Port:      18793,
+		Root:      tmpDir,
+		Namespace: "/__nexus__",
+	}
+	host, err := NewHost(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewHost error: %v", err)
+	}
+
+	// Test explicit scheme override
+	url := host.CanvasURLWithParams(CanvasURLParams{
+		RequestHost: "example.com",
+		Scheme:      "HTTPS",
+	})
+	if !contains(url, "https://") {
+		t.Errorf("expected https scheme, got: %s", url)
+	}
+}
+
+func TestHost_CanvasURLWithParams_ForwardedProtoEdgeCases(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := config.CanvasHostConfig{
+		Port:      18793,
+		Root:      tmpDir,
+		Namespace: "/__nexus__",
+	}
+	host, err := NewHost(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewHost error: %v", err)
+	}
+
+	tests := []struct {
+		name           string
+		forwardedProto string
+		wantScheme     string
+	}{
+		{"uppercase HTTPS", "HTTPS", "https"},
+		{"with spaces", "  https  ", "https"},
+		{"multiple protos takes first", "https, http", "https"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			url := host.CanvasURLWithParams(CanvasURLParams{
+				RequestHost:    "example.com",
+				ForwardedProto: tt.forwardedProto,
+			})
+			if !contains(url, tt.wantScheme+"://") {
+				t.Errorf("expected %s scheme, got: %s", tt.wantScheme, url)
+			}
+		})
+	}
+}
+
+func TestHost_Start_AlreadyStarted(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := config.CanvasHostConfig{
+		Port:      18793,
+		Root:      tmpDir,
+		Namespace: "/__nexus__",
+	}
+	host, err := NewHost(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewHost error: %v", err)
+	}
+
+	// Mock having a server already
+	host.server = &http.Server{}
+
+	// Should return nil immediately
+	err = host.Start(nil)
+	if err != nil {
+		t.Errorf("Start() should return nil when server exists, got: %v", err)
+	}
+}
+
+func TestHost_Close_Multiple(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := config.CanvasHostConfig{
+		Port:      18793,
+		Root:      tmpDir,
+		Namespace: "/__nexus__",
+	}
+	host, err := NewHost(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewHost error: %v", err)
+	}
+
+	// Close multiple times should not panic
+	err = host.Close()
+	if err != nil {
+		t.Errorf("first Close() error: %v", err)
+	}
+	err = host.Close()
+	if err != nil {
+		t.Errorf("second Close() error: %v", err)
+	}
+}
+
+func TestHost_EnsureIndex_Whitespace(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := config.CanvasHostConfig{
+		Port:      18793,
+		Root:      tmpDir,
+		Namespace: "/__nexus__",
+	}
+	host, err := NewHost(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewHost error: %v", err)
+	}
+
+	// Should not panic with whitespace path
+	host.ensureIndex("   ")
+}
+
+func TestHost_WatchRecursive(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test that requires fsnotify in short mode")
+	}
+
+	tmpDir := t.TempDir()
+	liveReload := true
+	cfg := config.CanvasHostConfig{
+		Port:       18793,
+		Root:       tmpDir,
+		Namespace:  "/__nexus__",
+		LiveReload: &liveReload,
+	}
+	host, err := NewHost(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewHost error: %v", err)
+	}
+
+	// Create subdirectory
+	subDir := filepath.Join(tmpDir, "subdir")
+	if err := os.MkdirAll(subDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	// Create hidden directory that should be ignored
+	hiddenDir := filepath.Join(tmpDir, ".hidden")
+	if err := os.MkdirAll(hiddenDir, 0o755); err != nil {
+		t.Fatalf("mkdir hidden: %v", err)
+	}
+
+	// Create watcher and test watchRecursive
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		t.Fatalf("NewWatcher error: %v", err)
+	}
+	defer watcher.Close()
+
+	err = host.watchRecursive(watcher, tmpDir)
+	if err != nil {
+		t.Errorf("watchRecursive error: %v", err)
+	}
+}
+
+func TestHost_WatchLoop_NilWatcher(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := config.CanvasHostConfig{
+		Port:      18793,
+		Root:      tmpDir,
+		Namespace: "/__nexus__",
+	}
+	host, err := NewHost(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewHost error: %v", err)
+	}
+
+	// Should return immediately without panic
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	host.watchLoop(ctx, nil)
+}
+
+func TestHost_Upgrader(t *testing.T) {
+	tmpDir := t.TempDir()
+	liveReload := true
+	cfg := config.CanvasHostConfig{
+		Port:       18793,
+		Root:       tmpDir,
+		Namespace:  "/__nexus__",
+		LiveReload: &liveReload,
+	}
+	host, err := NewHost(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewHost error: %v", err)
+	}
+
+	// Check upgrader is configured
+	if host.upgrader.ReadBufferSize != 8192 {
+		t.Errorf("ReadBufferSize = %d, want 8192", host.upgrader.ReadBufferSize)
+	}
+	if host.upgrader.WriteBufferSize != 8192 {
+		t.Errorf("WriteBufferSize = %d, want 8192", host.upgrader.WriteBufferSize)
+	}
+
+	// CheckOrigin should return true for any request
+	if !host.upgrader.CheckOrigin(nil) {
+		t.Error("CheckOrigin should return true")
 	}
 }

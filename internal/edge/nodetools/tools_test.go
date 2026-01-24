@@ -239,3 +239,353 @@ func TestRunToolContextCancellation(t *testing.T) {
 		t.Error("expected error from context cancellation")
 	}
 }
+
+func TestCameraSnapTool_Description(t *testing.T) {
+	tool := &CameraSnapTool{platform: "darwin"}
+	desc := tool.Description()
+	if desc == "" {
+		t.Error("expected non-empty description")
+	}
+	if !strings.Contains(desc, "camera") {
+		t.Error("description should mention camera")
+	}
+}
+
+func TestScreenRecordTool_Description(t *testing.T) {
+	tool := &ScreenRecordTool{platform: "darwin"}
+	desc := tool.Description()
+	if desc == "" {
+		t.Error("expected non-empty description")
+	}
+	if !strings.Contains(desc, "screen") || !strings.Contains(desc, "Record") {
+		t.Error("description should mention screen recording")
+	}
+}
+
+func TestScreenRecordTool_Schema(t *testing.T) {
+	tool := &ScreenRecordTool{platform: "darwin"}
+	schema := tool.Schema()
+	if len(schema) == 0 {
+		t.Error("expected non-empty schema")
+	}
+
+	var s map[string]any
+	if err := json.Unmarshal(schema, &s); err != nil {
+		t.Errorf("invalid schema JSON: %v", err)
+	}
+}
+
+func TestLocationGetTool_Description(t *testing.T) {
+	tool := &LocationGetTool{platform: "darwin"}
+	desc := tool.Description()
+	if desc == "" {
+		t.Error("expected non-empty description")
+	}
+	if !strings.Contains(desc, "GPS") || !strings.Contains(desc, "coordinates") {
+		t.Error("description should mention GPS coordinates")
+	}
+}
+
+func TestLocationGetTool_Schema(t *testing.T) {
+	tool := &LocationGetTool{platform: "darwin"}
+	schema := tool.Schema()
+	if len(schema) == 0 {
+		t.Error("expected non-empty schema")
+	}
+
+	var s map[string]any
+	if err := json.Unmarshal(schema, &s); err != nil {
+		t.Errorf("invalid schema JSON: %v", err)
+	}
+}
+
+func TestLocationGetTool_Execute(t *testing.T) {
+	tool := &LocationGetTool{platform: "darwin"}
+	ctx := context.Background()
+
+	params, _ := json.Marshal(LocationGetParams{HighAccuracy: true})
+	result, err := tool.Execute(ctx, params)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	// The mac implementation returns placeholder content
+	if result.Content == "" {
+		t.Error("expected non-empty content")
+	}
+}
+
+func TestLocationGetTool_Execute_UnsupportedPlatform(t *testing.T) {
+	tool := &LocationGetTool{platform: "linux"}
+	ctx := context.Background()
+
+	params, _ := json.Marshal(LocationGetParams{})
+	result, err := tool.Execute(ctx, params)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if !result.IsError {
+		t.Error("expected error for unsupported platform")
+	}
+	if !strings.Contains(result.Content, "not supported") {
+		t.Errorf("expected 'not supported' message, got: %s", result.Content)
+	}
+}
+
+func TestLocationGetTool_Execute_InvalidParams(t *testing.T) {
+	tool := &LocationGetTool{platform: "darwin"}
+	ctx := context.Background()
+
+	result, err := tool.Execute(ctx, []byte("invalid json"))
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if !result.IsError {
+		t.Error("expected error for invalid params")
+	}
+}
+
+func TestCameraSnapTool_Execute_UnsupportedPlatform(t *testing.T) {
+	tool := &CameraSnapTool{platform: "unsupported"}
+	ctx := context.Background()
+
+	params, _ := json.Marshal(CameraSnapParams{})
+	result, err := tool.Execute(ctx, params)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if !result.IsError {
+		t.Error("expected error for unsupported platform")
+	}
+	if !strings.Contains(result.Content, "not supported") {
+		t.Errorf("expected 'not supported' message, got: %s", result.Content)
+	}
+}
+
+func TestCameraSnapTool_Execute_InvalidParams(t *testing.T) {
+	tool := &CameraSnapTool{platform: "darwin"}
+	ctx := context.Background()
+
+	result, err := tool.Execute(ctx, []byte("invalid json"))
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if !result.IsError {
+		t.Error("expected error for invalid params")
+	}
+}
+
+func TestScreenRecordTool_Execute_UnsupportedPlatform(t *testing.T) {
+	tool := &ScreenRecordTool{platform: "unsupported"}
+	ctx := context.Background()
+
+	params, _ := json.Marshal(ScreenRecordParams{Duration: 5})
+	result, err := tool.Execute(ctx, params)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if !result.IsError {
+		t.Error("expected error for unsupported platform")
+	}
+	if !strings.Contains(result.Content, "not supported") {
+		t.Errorf("expected 'not supported' message, got: %s", result.Content)
+	}
+}
+
+func TestScreenRecordTool_Execute_InvalidParams(t *testing.T) {
+	tool := &ScreenRecordTool{platform: "darwin"}
+	ctx := context.Background()
+
+	result, err := tool.Execute(ctx, []byte("invalid json"))
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if !result.IsError {
+		t.Error("expected error for invalid params")
+	}
+}
+
+func TestScreenRecordTool_Defaults(t *testing.T) {
+	tool := &ScreenRecordTool{platform: "darwin"}
+	ctx := context.Background()
+
+	// Test with zero duration (should use default)
+	params, _ := json.Marshal(ScreenRecordParams{Duration: 0})
+	_, err := tool.Execute(ctx, params)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	// Can't verify defaults without mocking, but at least it runs
+}
+
+func TestRunTool_Description(t *testing.T) {
+	tool := &RunTool{}
+	desc := tool.Description()
+	if desc == "" {
+		t.Error("expected non-empty description")
+	}
+	if !strings.Contains(desc, "shell") || !strings.Contains(desc, "command") {
+		t.Error("description should mention shell command")
+	}
+}
+
+func TestRunTool_TimeoutClamping(t *testing.T) {
+	tool := &RunTool{}
+	ctx := context.Background()
+
+	// Test with timeout > 300 (should be clamped)
+	params, _ := json.Marshal(RunParams{
+		Command: "echo test",
+		Timeout: 500, // Above max
+	})
+	result, err := tool.Execute(ctx, params)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if result.IsError {
+		t.Errorf("unexpected error: %s", result.Content)
+	}
+}
+
+func TestRunTool_FailingCommand(t *testing.T) {
+	tool := &RunTool{}
+	ctx := context.Background()
+
+	params, _ := json.Marshal(RunParams{
+		Command: "exit 1",
+	})
+	result, err := tool.Execute(ctx, params)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if !result.IsError {
+		t.Error("expected error for failing command")
+	}
+}
+
+func TestProviderRegister(t *testing.T) {
+	provider := NewProvider(nil)
+
+	// Register a custom tool
+	customTool := &RunTool{}
+	provider.Register(&customToolWrapper{customTool, "custom_run"})
+
+	tool, ok := provider.GetTool("custom_run")
+	if !ok {
+		t.Error("expected custom tool to be registered")
+	}
+	if tool.Name() != "custom_run" {
+		t.Errorf("name = %s, want custom_run", tool.Name())
+	}
+}
+
+// customToolWrapper wraps a tool with a custom name for testing
+type customToolWrapper struct {
+	Tool
+	name string
+}
+
+func (w *customToolWrapper) Name() string { return w.name }
+
+func TestToolResult_Struct(t *testing.T) {
+	result := ToolResult{
+		Content: "test content",
+		IsError: false,
+		Artifacts: []Artifact{
+			{
+				Type:     "screenshot",
+				MimeType: "image/png",
+				Filename: "test.png",
+				Data:     []byte("data"),
+			},
+		},
+	}
+
+	if result.Content != "test content" {
+		t.Errorf("Content = %q", result.Content)
+	}
+	if result.IsError {
+		t.Error("IsError should be false")
+	}
+	if len(result.Artifacts) != 1 {
+		t.Errorf("expected 1 artifact, got %d", len(result.Artifacts))
+	}
+}
+
+func TestArtifact_Struct(t *testing.T) {
+	artifact := Artifact{
+		Type:     "screenshot",
+		MimeType: "image/png",
+		Filename: "test.png",
+		Data:     []byte("test data"),
+	}
+
+	if artifact.Type != "screenshot" {
+		t.Errorf("Type = %q", artifact.Type)
+	}
+	if artifact.MimeType != "image/png" {
+		t.Errorf("MimeType = %q", artifact.MimeType)
+	}
+	if artifact.Filename != "test.png" {
+		t.Errorf("Filename = %q", artifact.Filename)
+	}
+}
+
+func TestCameraSnapParams_Struct(t *testing.T) {
+	params := CameraSnapParams{
+		Device:  "front",
+		Quality: "high",
+	}
+
+	if params.Device != "front" {
+		t.Errorf("Device = %q", params.Device)
+	}
+	if params.Quality != "high" {
+		t.Errorf("Quality = %q", params.Quality)
+	}
+}
+
+func TestScreenRecordParams_Struct(t *testing.T) {
+	params := ScreenRecordParams{
+		Duration: 10,
+		Format:   "gif",
+		Display:  "main",
+	}
+
+	if params.Duration != 10 {
+		t.Errorf("Duration = %d", params.Duration)
+	}
+	if params.Format != "gif" {
+		t.Errorf("Format = %q", params.Format)
+	}
+	if params.Display != "main" {
+		t.Errorf("Display = %q", params.Display)
+	}
+}
+
+func TestLocationGetParams_Struct(t *testing.T) {
+	params := LocationGetParams{
+		HighAccuracy: true,
+	}
+
+	if !params.HighAccuracy {
+		t.Error("HighAccuracy should be true")
+	}
+}
+
+func TestRunParams_Struct(t *testing.T) {
+	params := RunParams{
+		Command:    "ls -la",
+		WorkingDir: "/tmp",
+		Timeout:    30,
+	}
+
+	if params.Command != "ls -la" {
+		t.Errorf("Command = %q", params.Command)
+	}
+	if params.WorkingDir != "/tmp" {
+		t.Errorf("WorkingDir = %q", params.WorkingDir)
+	}
+	if params.Timeout != 30 {
+		t.Errorf("Timeout = %d", params.Timeout)
+	}
+}

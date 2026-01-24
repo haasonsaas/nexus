@@ -324,3 +324,121 @@ func TestCallbackExecutor(t *testing.T) {
 		}
 	})
 }
+
+func TestAgentExecutorConfig_Struct(t *testing.T) {
+	cfg := AgentExecutorConfig{
+		Logger: nil,
+	}
+	if cfg.Logger != nil {
+		t.Error("Logger should be nil")
+	}
+}
+
+func TestNewAgentExecutor(t *testing.T) {
+	t.Run("creates executor with nil logger", func(t *testing.T) {
+		exec := NewAgentExecutor(nil, nil, AgentExecutorConfig{})
+		if exec == nil {
+			t.Fatal("expected non-nil executor")
+		}
+		if exec.logger == nil {
+			t.Error("logger should default to slog.Default()")
+		}
+	})
+
+	t.Run("stores runtime and sessions", func(t *testing.T) {
+		exec := NewAgentExecutor(nil, nil, AgentExecutorConfig{})
+		if exec.runtime != nil {
+			t.Error("runtime should be nil when not provided")
+		}
+		if exec.sessions != nil {
+			t.Error("sessions should be nil when not provided")
+		}
+	})
+}
+
+func TestAgentExecutor_Execute_NilTask(t *testing.T) {
+	exec := NewAgentExecutor(nil, nil, AgentExecutorConfig{})
+	ctx := context.Background()
+
+	_, err := exec.Execute(ctx, nil, &TaskExecution{})
+	if err == nil {
+		t.Error("expected error for nil task")
+	}
+	if err.Error() != "task is required" {
+		t.Errorf("error = %q, want %q", err.Error(), "task is required")
+	}
+}
+
+func TestAgentExecutor_Execute_NilExecution(t *testing.T) {
+	exec := NewAgentExecutor(nil, nil, AgentExecutorConfig{})
+	ctx := context.Background()
+
+	_, err := exec.Execute(ctx, &ScheduledTask{}, nil)
+	if err == nil {
+		t.Error("expected error for nil execution")
+	}
+	if err.Error() != "execution is required" {
+		t.Errorf("error = %q, want %q", err.Error(), "execution is required")
+	}
+}
+
+func TestNoOpExecutor_Struct(t *testing.T) {
+	exec := &NoOpExecutor{
+		Response: "test",
+		Error:    errors.New("test error"),
+		Delay:    100 * time.Millisecond,
+	}
+
+	if exec.Response != "test" {
+		t.Errorf("Response = %q, want %q", exec.Response, "test")
+	}
+	if exec.Delay != 100*time.Millisecond {
+		t.Errorf("Delay = %v, want %v", exec.Delay, 100*time.Millisecond)
+	}
+}
+
+func TestCallbackExecutor_Struct(t *testing.T) {
+	called := false
+	exec := &CallbackExecutor{
+		Fn: func(ctx context.Context, task *ScheduledTask, e *TaskExecution) (string, error) {
+			called = true
+			return "ok", nil
+		},
+	}
+
+	if exec.Fn == nil {
+		t.Error("Fn should not be nil")
+	}
+
+	// Call to verify struct works
+	_, _ = exec.Fn(context.Background(), nil, nil)
+	if !called {
+		t.Error("Fn should have been called")
+	}
+}
+
+func TestRoutingExecutor_Struct(t *testing.T) {
+	router := NewRoutingExecutor(nil, nil, nil)
+	if router == nil {
+		t.Fatal("expected non-nil router")
+	}
+	if router.logger == nil {
+		t.Error("logger should default to slog.Default()")
+	}
+}
+
+func TestNewRoutingExecutor_WithLogger(t *testing.T) {
+	agentExec := &NoOpExecutor{Response: "agent"}
+	msgExec := &NoOpExecutor{Response: "message"}
+
+	router := NewRoutingExecutor(agentExec, msgExec, nil)
+	if router == nil {
+		t.Fatal("expected non-nil router")
+	}
+	if router.agentExecutor == nil {
+		t.Error("agentExecutor should be set")
+	}
+	if router.messageExecutor == nil {
+		t.Error("messageExecutor should be set")
+	}
+}

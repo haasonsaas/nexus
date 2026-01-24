@@ -78,6 +78,7 @@ import (
 
 	"github.com/google/uuid"
 	agentctx "github.com/haasonsaas/nexus/internal/agent/context"
+	ctxwindow "github.com/haasonsaas/nexus/internal/context"
 	"github.com/haasonsaas/nexus/internal/jobs"
 	"github.com/haasonsaas/nexus/internal/observability"
 	"github.com/haasonsaas/nexus/internal/sessions"
@@ -91,6 +92,8 @@ type sessionKey struct{}
 type runtimeOptsKey struct{}
 type elevatedKey struct{}
 type modelKey struct{}
+
+const contextPruningCacheTouchKey = "context_pruning_cache_ttl_at"
 
 // WithSession stores a session in the context.
 func WithSession(ctx context.Context, session *models.Session) context.Context {
@@ -566,6 +569,11 @@ type Runtime struct {
 	// packOpts configures context packing behavior
 	packOpts *agentctx.PackOptions
 
+	// contextPruning configures in-memory tool result pruning
+	contextPruningMu sync.RWMutex
+	contextPruning   *agentctx.ContextPruningSettings
+	cacheTouch       sync.Map
+
 	// summarizeConfig configures conversation summarization
 	summarizeConfig *agentctx.SummarizationConfig
 
@@ -695,9 +703,90 @@ func (r *Runtime) SetPackOptions(opts *agentctx.PackOptions) {
 	r.packOpts = opts
 }
 
+// SetContextPruning configures in-memory tool result pruning.
+func (r *Runtime) SetContextPruning(settings *agentctx.ContextPruningSettings) {
+	r.contextPruningMu.Lock()
+	defer r.contextPruningMu.Unlock()
+	if settings == nil {
+		r.contextPruning = nil
+		r.cacheTouch = sync.Map{}
+		return
+	}
+	clone := *settings
+	clone.Tools.Allow = append([]string(nil), settings.Tools.Allow...)
+	clone.Tools.Deny = append([]string(nil), settings.Tools.Deny...)
+	r.contextPruning = &clone
+}
+
 // SetSummarizationConfig configures conversation summarization.
 func (r *Runtime) SetSummarizationConfig(config *agentctx.SummarizationConfig) {
 	r.summarizeConfig = config
+}
+
+func (r *Runtime) contextPruningSettings() *agentctx.ContextPruningSettings {
+	r.contextPruningMu.RLock()
+	defer r.contextPruningMu.RUnlock()
+	return r.contextPruning
+}
+
+func (r *Runtime) cacheTouchAt(sessionID string) (time.Time, bool) {
+	if sessionID == "" {
+		return time.Time{}, false
+	}
+	if value, ok := r.cacheTouch.Load(sessionID); ok {
+		if ts, ok := value.(time.Time); ok {
+			return ts, true
+		}
+	}
+	return time.Time{}, false
+}
+
+func (r *Runtime) setCacheTouchAt(sessionID string, ts time.Time) {
+	if sessionID == "" {
+		return
+	}
+	r.cacheTouch.Store(sessionID, ts)
+}
+
+func cacheTouchFromSession(session *models.Session) (time.Time, bool) {
+	if session == nil || session.Metadata == nil {
+		return time.Time{}, false
+	}
+	raw, ok := session.Metadata[contextPruningCacheTouchKey]
+	if !ok || raw == nil {
+		return time.Time{}, false
+	}
+	switch value := raw.(type) {
+	case time.Time:
+		if value.IsZero() {
+			return time.Time{}, false
+		}
+		return value, true
+	case string:
+		parsed, err := time.Parse(time.RFC3339Nano, value)
+		if err != nil {
+			parsed, err = time.Parse(time.RFC3339, value)
+		}
+		if err != nil || parsed.IsZero() {
+			return time.Time{}, false
+		}
+		return parsed, true
+	default:
+		return time.Time{}, false
+	}
+}
+
+func (r *Runtime) persistCacheTouch(ctx context.Context, session *models.Session, ts time.Time) {
+	if session == nil || r.sessions == nil {
+		return
+	}
+	if session.Metadata == nil {
+		session.Metadata = map[string]any{}
+	}
+	session.Metadata[contextPruningCacheTouchKey] = ts.Format(time.RFC3339Nano)
+	if err := r.sessions.Update(ctx, session); err != nil && r.opts.Logger != nil {
+		r.opts.Logger.Debug("failed to persist context pruning cache timestamp", "error", err, "session_id", session.ID)
+	}
 }
 
 // Use registers a plugin to receive agent events during processing.
@@ -960,10 +1049,36 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 		summaryMsg = agentctx.FindLatestSummary(history)
 	}
 
+	model := r.defaultModel
+	if override, ok := modelFromContext(ctx); ok {
+		model = override
+	}
+
 	// 4) Context packing
 	packOpts := agentctx.DefaultPackOptions()
 	if r.packOpts != nil {
 		packOpts = *r.packOpts
+	}
+	if settings := r.contextPruningSettings(); settings != nil && settings.Mode == agentctx.ContextPruningCacheTTL {
+		if isCacheTTLEligibleProvider(r.provider.Name(), model) {
+			now := time.Now()
+			lastTouch, ok := r.cacheTouchAt(session.ID)
+			if !ok {
+				if stored, storedOK := cacheTouchFromSession(session); storedOK {
+					lastTouch = stored
+					ok = true
+					r.setCacheTouchAt(session.ID, stored)
+				}
+			}
+			if ok && settings.TTL > 0 && now.Sub(lastTouch) >= settings.TTL {
+				charWindow := contextPruningCharWindow(model, packOpts)
+				if charWindow > 0 {
+					history = agentctx.PruneContextMessages(history, *settings, charWindow)
+				}
+			}
+			r.setCacheTouchAt(session.ID, now)
+			r.persistCacheTouch(ctx, session, now)
+		}
 	}
 	packer := agentctx.NewPacker(packOpts)
 
@@ -1016,10 +1131,7 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 		Tools:     tools,
 		MaxTokens: 4096,
 	}
-	if r.defaultModel != "" {
-		req.Model = r.defaultModel
-	}
-	if model, ok := modelFromContext(ctx); ok {
+	if model != "" {
 		req.Model = model
 	}
 	if len(systemParts) > 0 {
@@ -1466,6 +1578,33 @@ func (r *Runtime) handleContextDone(ctx context.Context, emitter *EventEmitter, 
 	// Explicit cancellation
 	emitter.RunCancelled(bgCtx)
 	return ErrContextCancelled
+}
+
+func isCacheTTLEligibleProvider(providerName, model string) bool {
+	name := strings.ToLower(strings.TrimSpace(providerName))
+	model = strings.ToLower(strings.TrimSpace(model))
+	if name == "anthropic" {
+		return true
+	}
+	if name == "openrouter" && strings.HasPrefix(model, "anthropic/") {
+		return true
+	}
+	return false
+}
+
+func contextPruningCharWindow(model string, packOpts agentctx.PackOptions) int {
+	if strings.TrimSpace(model) != "" {
+		if tokens, ok := ctxwindow.GetModelContextWindow(model); ok && tokens > 0 {
+			chars := int(float64(tokens) / ctxwindow.TokensPerChar)
+			if chars > 0 {
+				return chars
+			}
+		}
+	}
+	if packOpts.MaxChars > 0 {
+		return packOpts.MaxChars
+	}
+	return 0
 }
 
 // executeToolsWithEvents executes tools concurrently and emits tool lifecycle events.

@@ -121,13 +121,14 @@ type APIKeyConfig struct {
 }
 
 type SessionConfig struct {
-	DefaultAgentID string             `yaml:"default_agent_id"`
-	SlackScope     string             `yaml:"slack_scope"`
-	DiscordScope   string             `yaml:"discord_scope"`
-	Memory         MemoryConfig       `yaml:"memory"`
-	Heartbeat      HeartbeatConfig    `yaml:"heartbeat"`
-	MemoryFlush    MemoryFlushConfig  `yaml:"memory_flush"`
-	Scoping        SessionScopeConfig `yaml:"scoping"`
+	DefaultAgentID string               `yaml:"default_agent_id"`
+	SlackScope     string               `yaml:"slack_scope"`
+	DiscordScope   string               `yaml:"discord_scope"`
+	Memory         MemoryConfig         `yaml:"memory"`
+	Heartbeat      HeartbeatConfig      `yaml:"heartbeat"`
+	MemoryFlush    MemoryFlushConfig    `yaml:"memory_flush"`
+	ContextPruning ContextPruningConfig `yaml:"context_pruning"`
+	Scoping        SessionScopeConfig   `yaml:"scoping"`
 }
 
 // SessionScopeConfig controls advanced session scoping behavior.
@@ -183,6 +184,38 @@ type MemoryFlushConfig struct {
 	Enabled   bool   `yaml:"enabled"`
 	Threshold int    `yaml:"threshold"`
 	Prompt    string `yaml:"prompt"`
+}
+
+// ContextPruningConfig controls in-memory tool result pruning for sessions.
+type ContextPruningConfig struct {
+	Mode                 string                  `yaml:"mode"`
+	TTL                  *time.Duration          `yaml:"ttl"`
+	KeepLastAssistants   *int                    `yaml:"keep_last_assistants"`
+	SoftTrimRatio        *float64                `yaml:"soft_trim_ratio"`
+	HardClearRatio       *float64                `yaml:"hard_clear_ratio"`
+	MinPrunableToolChars *int                    `yaml:"min_prunable_tool_chars"`
+	Tools                ContextPruningToolMatch `yaml:"tools"`
+	SoftTrim             ContextPruningSoftTrim  `yaml:"soft_trim"`
+	HardClear            ContextPruningHardClear `yaml:"hard_clear"`
+}
+
+// ContextPruningToolMatch selects which tool results can be trimmed.
+type ContextPruningToolMatch struct {
+	Allow []string `yaml:"allow"`
+	Deny  []string `yaml:"deny"`
+}
+
+// ContextPruningSoftTrim configures soft trimming of tool result content.
+type ContextPruningSoftTrim struct {
+	MaxChars  *int `yaml:"max_chars"`
+	HeadChars *int `yaml:"head_chars"`
+	TailChars *int `yaml:"tail_chars"`
+}
+
+// ContextPruningHardClear configures hard clearing of tool result content.
+type ContextPruningHardClear struct {
+	Enabled     *bool  `yaml:"enabled"`
+	Placeholder string `yaml:"placeholder"`
 }
 
 type WorkspaceConfig struct {
@@ -1480,6 +1513,7 @@ func validateConfig(cfg *Config) error {
 			issues = append(issues, fmt.Sprintf("session.scoping.reset_by_channel[%s].mode must be \"never\", \"daily\", \"idle\", or \"daily+idle\"", channel))
 		}
 	}
+	validateContextPruning(&issues, cfg.Session.ContextPruning)
 	if cfg.Workspace.MaxChars < 0 {
 		issues = append(issues, "workspace.max_chars must be >= 0")
 	}
@@ -1698,6 +1732,37 @@ func validResetMode(mode string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func validateContextPruning(issues *[]string, cfg ContextPruningConfig) {
+	mode := strings.ToLower(strings.TrimSpace(cfg.Mode))
+	if mode != "" && mode != "off" && mode != "cache-ttl" {
+		*issues = append(*issues, "session.context_pruning.mode must be \"off\" or \"cache-ttl\"")
+	}
+	if cfg.TTL != nil && *cfg.TTL < 0 {
+		*issues = append(*issues, "session.context_pruning.ttl must be >= 0")
+	}
+	if cfg.KeepLastAssistants != nil && *cfg.KeepLastAssistants < 0 {
+		*issues = append(*issues, "session.context_pruning.keep_last_assistants must be >= 0")
+	}
+	if cfg.SoftTrimRatio != nil && (*cfg.SoftTrimRatio < 0 || *cfg.SoftTrimRatio > 1) {
+		*issues = append(*issues, "session.context_pruning.soft_trim_ratio must be between 0 and 1")
+	}
+	if cfg.HardClearRatio != nil && (*cfg.HardClearRatio < 0 || *cfg.HardClearRatio > 1) {
+		*issues = append(*issues, "session.context_pruning.hard_clear_ratio must be between 0 and 1")
+	}
+	if cfg.MinPrunableToolChars != nil && *cfg.MinPrunableToolChars < 0 {
+		*issues = append(*issues, "session.context_pruning.min_prunable_tool_chars must be >= 0")
+	}
+	if cfg.SoftTrim.MaxChars != nil && *cfg.SoftTrim.MaxChars < 0 {
+		*issues = append(*issues, "session.context_pruning.soft_trim.max_chars must be >= 0")
+	}
+	if cfg.SoftTrim.HeadChars != nil && *cfg.SoftTrim.HeadChars < 0 {
+		*issues = append(*issues, "session.context_pruning.soft_trim.head_chars must be >= 0")
+	}
+	if cfg.SoftTrim.TailChars != nil && *cfg.SoftTrim.TailChars < 0 {
+		*issues = append(*issues, "session.context_pruning.soft_trim.tail_chars must be >= 0")
 	}
 }
 

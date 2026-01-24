@@ -201,6 +201,24 @@ data:
         enabled: false
         threshold: 80
         prompt: "Session nearing compaction. If there are durable facts, store them in memory/YYYY-MM-DD.md or MEMORY.md. Reply NO_REPLY if nothing needs attention."
+      context_pruning:
+        # mode: cache-ttl
+        # ttl: 5m
+        # cache ttl timestamp stored in session metadata as context_pruning_cache_ttl_at (RFC3339)
+        # keep_last_assistants: 3
+        # soft_trim_ratio: 0.3
+        # hard_clear_ratio: 0.5
+        # min_prunable_tool_chars: 50000
+        # tools:
+        #   allow: ["*"]
+        #   deny: []
+        # soft_trim:
+        #   max_chars: 4000
+        #   head_chars: 1500
+        #   tail_chars: 1500
+        # hard_clear:
+        #   enabled: true
+        #   placeholder: "[Old tool result content cleared]"
 
     workspace:
       enabled: false

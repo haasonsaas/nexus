@@ -38,6 +38,8 @@ canvas:
     secret: ${CANVAS_TOKEN_SECRET}
     ttl: 30m
   actions:
+    # Role applied to authenticated requests without a signed canvas token.
+    default_role: viewer
     rate_limit:
       enabled: true
       requests_per_second: 10

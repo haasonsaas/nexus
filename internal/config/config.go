@@ -125,7 +125,8 @@ type CanvasTokenConfig struct {
 
 // CanvasActionConfig configures canvas UI action handling.
 type CanvasActionConfig struct {
-	RateLimit ratelimit.Config `yaml:"rate_limit"`
+	RateLimit   ratelimit.Config `yaml:"rate_limit"`
+	DefaultRole string           `yaml:"default_role"`
 }
 
 type DatabaseConfig struct {
@@ -1154,6 +1155,9 @@ func applyCanvasActionDefaults(cfg *CanvasActionConfig) {
 	if cfg == nil {
 		return
 	}
+	if strings.TrimSpace(cfg.DefaultRole) == "" {
+		cfg.DefaultRole = "viewer"
+	}
 	if cfg.RateLimit.RequestsPerSecond == 0 && cfg.RateLimit.BurstSize == 0 && !cfg.RateLimit.Enabled {
 		cfg.RateLimit = ratelimit.DefaultConfig()
 		return
@@ -1767,6 +1771,9 @@ func validateConfig(cfg *Config) error {
 	}
 	if cfg.Canvas.Retention.EventMaxBytes < 0 {
 		issues = append(issues, "canvas.retention.event_max_bytes must be >= 0")
+	}
+	if strings.TrimSpace(cfg.Canvas.Actions.DefaultRole) != "" && !validCanvasRole(cfg.Canvas.Actions.DefaultRole) {
+		issues = append(issues, "canvas.actions.default_role must be \"viewer\", \"editor\", or \"admin\"")
 	}
 	if cfg.Canvas.Tokens.TTL < 0 {
 		issues = append(issues, "canvas.tokens.ttl must be >= 0")

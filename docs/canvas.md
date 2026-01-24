@@ -52,6 +52,7 @@ slack:{workspace_id}:{channel_id}[:thread_ts]
 ### Role assignment
 - Primary source: configuration (by Slack workspace and user).
 - Optional future: dynamic roles from an identity provider.
+- Auth-only requests (no signed token) use `canvas.actions.default_role` (default: viewer) for action permissions.
 
 Example role configuration:
 ```
@@ -95,6 +96,7 @@ State is stored as a full JSON snapshot, and events are appended for replay.
 - Action endpoint:
   - `POST /__nexus__/canvas/api/action`
 - Payload includes action name, source component id, and context.
+- HTML payloads are sanitized before rendering; prefer A2UI for rich UI.
 
 ## Slack entrypoints
 - `/canvas` slash command replies with an ephemeral link to the canvas for the current channel/thread.

@@ -322,34 +322,79 @@ const (
         }
         const template = document.createElement("template");
         template.innerHTML = html;
-        const blockedTags = new Set(["script", "style", "iframe", "object", "embed", "link", "meta"]);
-        const walker = document.createTreeWalker(template.content, NodeFilter.SHOW_ELEMENT, null);
-        const nodesToRemove = [];
-        while (walker.nextNode()) {
-          const node = walker.currentNode;
-          const tagName = node.tagName ? node.tagName.toLowerCase() : "";
-          if (blockedTags.has(tagName)) {
-            nodesToRemove.push(node);
-            continue;
+        const allowedTags = new Set([
+          "a", "b", "blockquote", "br", "code", "div", "em", "h1", "h2", "h3", "h4", "h5", "h6",
+          "hr", "i", "img", "li", "ol", "p", "pre", "span", "strong", "table", "tbody", "td", "th",
+          "thead", "tr", "ul"
+        ]);
+        const globalAttrs = new Set(["class", "id", "title"]);
+        const tagAttrs = {
+          a: new Set(["href", "rel", "target", "title"]),
+          img: new Set(["alt", "height", "src", "title", "width"]),
+        };
+        const isAllowedAttr = (tag, name) => {
+          if (name.startsWith("data-") || name.startsWith("aria-")) {
+            return true;
           }
-          for (const attr of Array.from(node.attributes)) {
-            const name = attr.name.toLowerCase();
-            const value = attr.value || "";
-            if (name.startsWith("on")) {
-              node.removeAttribute(attr.name);
-              continue;
+          if (globalAttrs.has(name)) {
+            return true;
+          }
+          const allowed = tagAttrs[tag];
+          return !!(allowed && allowed.has(name));
+        };
+        const isSafeUrl = (value) => {
+          if (!value) return false;
+          const trimmed = value.trim();
+          if (trimmed.startsWith("#") || trimmed.startsWith("/") || trimmed.startsWith("./") || trimmed.startsWith("../")) {
+            return true;
+          }
+          try {
+            const url = new URL(trimmed, window.location.origin);
+            return ["http:", "https:", "mailto:", "tel:"].includes(url.protocol);
+          } catch {
+            return false;
+          }
+        };
+        const sanitizeNode = (node) => {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            const tag = node.tagName.toLowerCase();
+            if (!allowedTags.has(tag)) {
+              const text = document.createTextNode(node.textContent || "");
+              node.replaceWith(text);
+              return;
             }
-            if ((name === "href" || name === "src" || name === "xlink:href") && /^\s*javascript:/i.test(value)) {
-              node.removeAttribute(attr.name);
-              continue;
+            for (const attr of Array.from(node.attributes)) {
+              const name = attr.name.toLowerCase();
+              const value = attr.value || "";
+              if (name.startsWith("on")) {
+                node.removeAttribute(attr.name);
+                continue;
+              }
+              if (!isAllowedAttr(tag, name)) {
+                node.removeAttribute(attr.name);
+                continue;
+              }
+              if ((name === "href" || name === "src") && !isSafeUrl(value)) {
+                node.removeAttribute(attr.name);
+              }
             }
-            if (name === "style" && /(expression|javascript:)/i.test(value)) {
-              node.removeAttribute(attr.name);
-              continue;
+            if (tag === "a") {
+              const target = node.getAttribute("target");
+              if (target && target.toLowerCase() === "_blank") {
+                const rel = (node.getAttribute("rel") || "").split(/\s+/).filter(Boolean);
+                if (!rel.includes("noopener")) rel.push("noopener");
+                if (!rel.includes("noreferrer")) rel.push("noreferrer");
+                node.setAttribute("rel", rel.join(" "));
+              }
             }
           }
+          for (const child of Array.from(node.childNodes)) {
+            sanitizeNode(child);
+          }
+        };
+        for (const child of Array.from(template.content.childNodes)) {
+          sanitizeNode(child);
         }
-        nodesToRemove.forEach((node) => node.remove());
         return template.innerHTML;
       };
 
@@ -733,23 +778,24 @@ const (
 
 // Host serves a canvas directory on a dedicated HTTP server with optional live reload.
 type Host struct {
-	host           string
-	port           int
-	root           string
-	rootReal       string
-	namespace      string
-	a2uiRoot       string
-	a2uiRootReal   string
-	liveReload     bool
-	injectClient   bool
-	autoIndex      bool
-	tokenSecret    []byte
-	tokenTTL       time.Duration
-	manager        *Manager
-	actionCallback ActionHandler
-	actionLimiter  *ratelimit.Limiter
-	authService    *auth.Service
-	metrics        *Metrics
+	host              string
+	port              int
+	root              string
+	rootReal          string
+	namespace         string
+	a2uiRoot          string
+	a2uiRootReal      string
+	liveReload        bool
+	injectClient      bool
+	autoIndex         bool
+	tokenSecret       []byte
+	tokenTTL          time.Duration
+	manager           *Manager
+	actionCallback    ActionHandler
+	actionLimiter     *ratelimit.Limiter
+	actionDefaultRole string
+	authService       *auth.Service
+	metrics           *Metrics
 
 	logger *slog.Logger
 
@@ -792,20 +838,26 @@ func NewHost(cfg config.CanvasHostConfig, canvasCfg config.CanvasConfig, logger 
 	if canvasCfg.Actions.RateLimit.Enabled {
 		actionLimiter = ratelimit.NewLimiter(canvasCfg.Actions.RateLimit)
 	}
+	actionDefaultRole := strings.TrimSpace(canvasCfg.Actions.DefaultRole)
+	if actionDefaultRole == "" {
+		actionDefaultRole = RoleViewer
+	}
+	actionDefaultRole = NormalizeRole(actionDefaultRole)
 	return &Host{
-		host:          cfg.Host,
-		port:          cfg.Port,
-		root:          cfg.Root,
-		namespace:     namespace,
-		a2uiRoot:      strings.TrimSpace(cfg.A2UIRoot),
-		liveReload:    liveReload,
-		injectClient:  injectClient,
-		autoIndex:     autoIndex,
-		tokenSecret:   []byte(tokenSecret),
-		tokenTTL:      canvasCfg.Tokens.TTL,
-		logger:        logger.With("component", "canvas"),
-		actionLimiter: actionLimiter,
-		clients:       make(map[*websocket.Conn]struct{}),
+		host:              cfg.Host,
+		port:              cfg.Port,
+		root:              cfg.Root,
+		namespace:         namespace,
+		a2uiRoot:          strings.TrimSpace(cfg.A2UIRoot),
+		liveReload:        liveReload,
+		injectClient:      injectClient,
+		autoIndex:         autoIndex,
+		tokenSecret:       []byte(tokenSecret),
+		tokenTTL:          canvasCfg.Tokens.TTL,
+		logger:            logger.With("component", "canvas"),
+		actionLimiter:     actionLimiter,
+		actionDefaultRole: actionDefaultRole,
+		clients:           make(map[*websocket.Conn]struct{}),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  8192,
 			WriteBufferSize: 8192,
@@ -1084,6 +1136,17 @@ func (h *Host) canvasHandler() http.Handler {
 			http.NotFound(w, r)
 			return
 		}
+		if sessionID != "" && strings.TrimSpace(h.root) != "" {
+			candidate := filepath.Join(h.root, sessionID)
+			if info, statErr := os.Stat(candidate); statErr == nil && info != nil {
+				if h.manager != nil && h.manager.Store() != nil {
+					if _, err := h.manager.Store().GetSession(r.Context(), sessionID); errors.Is(err, ErrNotFound) {
+						sessionID = ""
+						sessionPath = clean
+					}
+				}
+			}
+		}
 
 		var fullPath string
 		if sessionID != "" {
@@ -1251,6 +1314,8 @@ func (h *Host) actionsHandler() http.Handler {
 		role := RoleEditor
 		if access != nil {
 			role = NormalizeRole(access.Role)
+		} else if user != nil {
+			role = NormalizeRole(h.actionDefaultRole)
 		}
 		if !RoleAllowsAction(role) {
 			http.Error(w, "forbidden", http.StatusForbidden)

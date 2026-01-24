@@ -1389,6 +1389,33 @@ func TestCanvasHandler_AuthService(t *testing.T) {
 	})
 }
 
+func TestCanvasHandler_RootDirectoryPreferred(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := config.CanvasHostConfig{
+		Port:      18793,
+		Root:      tmpDir,
+		Namespace: "/__nexus__",
+	}
+	host, err := NewHost(cfg, config.CanvasConfig{}, nil)
+	if err != nil {
+		t.Fatalf("NewHost error: %v", err)
+	}
+	host.SetManager(NewManager(NewMemoryStore(), nil))
+	if err := os.MkdirAll(filepath.Join(tmpDir, "assets"), 0o755); err != nil {
+		t.Fatalf("mkdir assets: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "assets", "index.html"), []byte("<html>asset</html>"), 0o644); err != nil {
+		t.Fatalf("write asset: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/assets/index.html", nil)
+	rec := httptest.NewRecorder()
+	host.canvasHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for root asset, got %d", rec.Code)
+	}
+}
+
 func TestCanvasActions_RoleEnforced(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := config.CanvasHostConfig{
@@ -1463,4 +1490,100 @@ func TestCanvasActions_RoleEnforced(t *testing.T) {
 	if !called {
 		t.Fatalf("expected action handler to be called for editor role")
 	}
+}
+
+func TestCanvasActions_DefaultRoleForAuth(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := config.CanvasHostConfig{
+		Port:      18793,
+		Root:      tmpDir,
+		Namespace: "/__nexus__",
+	}
+	secret := "canvas-secret-should-be-long-enough-1234"
+
+	t.Run("defaults to viewer", func(t *testing.T) {
+		canvasCfg := config.CanvasConfig{
+			Tokens: config.CanvasTokenConfig{
+				Secret: secret,
+				TTL:    time.Hour,
+			},
+			Actions: config.CanvasActionConfig{
+				DefaultRole: "viewer",
+			},
+		}
+		host, err := NewHost(cfg, canvasCfg, nil)
+		if err != nil {
+			t.Fatalf("NewHost error: %v", err)
+		}
+		host.SetAuthService(auth.NewService(auth.Config{
+			APIKeys: []auth.APIKeyConfig{{Key: "api-key-1", UserID: "user-1"}},
+		}))
+		called := false
+		host.SetActionHandler(func(ctx context.Context, action Action) error {
+			called = true
+			return nil
+		})
+
+		body, err := json.Marshal(map[string]any{
+			"session_id": "session-123",
+			"name":       "toggle",
+		})
+		if err != nil {
+			t.Fatalf("marshal payload: %v", err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/api/action", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-API-Key", "api-key-1")
+		rec := httptest.NewRecorder()
+		host.actionsHandler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for default viewer role, got %d", rec.Code)
+		}
+		if called {
+			t.Fatalf("action handler should not be called for viewer default role")
+		}
+	})
+
+	t.Run("allows editor", func(t *testing.T) {
+		canvasCfg := config.CanvasConfig{
+			Tokens: config.CanvasTokenConfig{
+				Secret: secret,
+				TTL:    time.Hour,
+			},
+			Actions: config.CanvasActionConfig{
+				DefaultRole: "editor",
+			},
+		}
+		host, err := NewHost(cfg, canvasCfg, nil)
+		if err != nil {
+			t.Fatalf("NewHost error: %v", err)
+		}
+		host.SetAuthService(auth.NewService(auth.Config{
+			APIKeys: []auth.APIKeyConfig{{Key: "api-key-1", UserID: "user-1"}},
+		}))
+		called := false
+		host.SetActionHandler(func(ctx context.Context, action Action) error {
+			called = true
+			return nil
+		})
+
+		body, err := json.Marshal(map[string]any{
+			"session_id": "session-123",
+			"name":       "toggle",
+		})
+		if err != nil {
+			t.Fatalf("marshal payload: %v", err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/api/action", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-API-Key", "api-key-1")
+		rec := httptest.NewRecorder()
+		host.actionsHandler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusAccepted {
+			t.Fatalf("expected 202 for editor default role, got %d", rec.Code)
+		}
+		if !called {
+			t.Fatalf("expected action handler to be called for editor default role")
+		}
+	})
 }

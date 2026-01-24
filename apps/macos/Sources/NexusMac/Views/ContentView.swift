@@ -4,6 +4,7 @@ enum SidebarItem: String, CaseIterable, Hashable {
     case overview = "Overview"
     case edge = "Edge Service"
     case nodes = "Nodes"
+    case computerUse = "Computer Use"
     case sessions = "Sessions"
     case providers = "Providers"
     case skills = "Skills"
@@ -18,6 +19,7 @@ enum SidebarItem: String, CaseIterable, Hashable {
         case .overview: return "gauge"
         case .edge: return "bolt.horizontal"
         case .nodes: return "desktopcomputer"
+        case .computerUse: return "cursorarrow"
         case .sessions: return "bubble.left.and.bubble.right"
         case .providers: return "antenna.radiowaves.left.and.right"
         case .skills: return "wand.and.stars"
@@ -49,6 +51,8 @@ struct ContentView: View {
                 EdgeServiceView()
             case .nodes:
                 NodesView()
+            case .computerUse:
+                ComputerUseView()
             case .sessions:
                 SessionsView()
             case .providers:

@@ -247,10 +247,12 @@ func (e *ToolExecutor) executeWithTimeout(ctx context.Context, call models.ToolC
 				IsError:    true,
 			}, false
 		}
+		attachments := artifactsToAttachments(res.result.Artifacts)
 		return models.ToolResult{
-			ToolCallID: call.ID,
-			Content:    res.result.Content,
-			IsError:    res.result.IsError,
+			ToolCallID:  call.ID,
+			Content:     res.result.Content,
+			IsError:     res.result.IsError,
+			Attachments: attachments,
 		}, false
 	}
 }

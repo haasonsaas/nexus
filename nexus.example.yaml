@@ -295,6 +295,14 @@ tools:
     headless: true
     # Optional: connect to remote Playwright server
     # url: http://playwright:3000
+  computer_use:
+    enabled: false
+    # Default edge to target for computer use (optional)
+    edge_id: ""
+    # Optional display overrides when node metadata is unavailable
+    display_width_px: 0
+    display_height_px: 0
+    display_number: 0
   websearch:
     enabled: true
     provider: searxng

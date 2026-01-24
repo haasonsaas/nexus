@@ -5,6 +5,7 @@
 // - screen_capture: Capture screenshots
 // - location_get: Get current GPS location
 // - shell_run: Execute shell commands
+// - computer_use: Mouse/keyboard/screenshot automation
 package main
 
 import (
@@ -24,11 +25,12 @@ import (
 )
 
 // RegisterNodeTools registers all node-specific tools with the daemon.
-func RegisterNodeTools(daemon *EdgeDaemon, shellPolicy *ShellPolicy) {
+func RegisterNodeTools(daemon *EdgeDaemon, policy NodePolicy) {
 	daemon.RegisterTool(cameraSnapTool())
 	daemon.RegisterTool(screenCaptureTool())
 	daemon.RegisterTool(locationGetTool())
-	daemon.RegisterTool(shellRunTool(shellPolicy))
+	daemon.RegisterTool(shellRunTool(policy.Shell))
+	daemon.RegisterTool(computerUseTool(policy.ComputerUse))
 }
 
 // cameraSnapTool takes a photo using the device camera.

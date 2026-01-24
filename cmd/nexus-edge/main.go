@@ -260,11 +260,11 @@ func (d *EdgeDaemon) register() error {
 					Artifacts: true,
 				},
 				Version: Version,
-				Metadata: map[string]string{
+				Metadata: mergeMetadata(map[string]string{
 					"os":       runtime.GOOS,
 					"arch":     runtime.GOARCH,
 					"hostname": d.config.Name,
-				},
+				}, computerUseMetadata()),
 			},
 		},
 	})
@@ -288,6 +288,19 @@ func normalizeChannelTypes(values []string) []string {
 		out = append(out, normalized)
 	}
 	return out
+}
+
+func mergeMetadata(base, extra map[string]string) map[string]string {
+	if base == nil {
+		base = make(map[string]string)
+	}
+	for key, value := range extra {
+		if strings.TrimSpace(key) == "" || strings.TrimSpace(value) == "" {
+			continue
+		}
+		base[key] = value
+	}
+	return base
 }
 
 // heartbeatLoop sends periodic heartbeats.
@@ -553,8 +566,8 @@ local capabilities like device access, browser relay, and edge-only channels.`,
 				},
 			})
 
-			// Register node tools (camera, screen, location, shell)
-			RegisterNodeTools(daemon, config.NodePolicy.Shell)
+			// Register node tools (camera, screen, location, shell, computer use)
+			RegisterNodeTools(daemon, config.NodePolicy)
 
 			// Register browser relay tools (Chrome DevTools Protocol)
 			RegisterBrowserTools(daemon)

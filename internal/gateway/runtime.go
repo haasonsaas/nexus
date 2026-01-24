@@ -19,6 +19,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/tools/browser"
 	canvastools "github.com/haasonsaas/nexus/internal/tools/canvas"
+	"github.com/haasonsaas/nexus/internal/tools/computeruse"
 	crontools "github.com/haasonsaas/nexus/internal/tools/cron"
 	exectools "github.com/haasonsaas/nexus/internal/tools/exec"
 	"github.com/haasonsaas/nexus/internal/tools/files"
@@ -473,6 +474,16 @@ func (s *Server) registerEdgeTools(runtime *agent.Runtime) {
 		runtime.RegisterTool(tool)
 	}
 	s.logger.Info("registered edge tools", "count", len(provider.GetTools()))
+
+	if s.config != nil && s.config.Tools.ComputerUse.Enabled {
+		runtime.RegisterTool(computeruse.NewTool(s.edgeManager, computeruse.Config{
+			EdgeID:          s.config.Tools.ComputerUse.EdgeID,
+			DisplayWidthPx:  s.config.Tools.ComputerUse.DisplayWidthPx,
+			DisplayHeightPx: s.config.Tools.ComputerUse.DisplayHeightPx,
+			DisplayNumber:   s.config.Tools.ComputerUse.DisplayNumber,
+		}))
+		s.logger.Info("registered computer use tool", "edge_id", s.config.Tools.ComputerUse.EdgeID)
+	}
 }
 
 // parseMemoryMB parses a memory string (e.g., "512MB", "1GB") to megabytes.

@@ -1529,12 +1529,17 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 			}
 		}
 
-		// Persist tool message
+		// Persist tool message without inline attachments to avoid bloating storage.
+		resultsForStorage := make([]models.ToolResult, len(results))
+		for i := range results {
+			resultsForStorage[i] = results[i]
+			resultsForStorage[i].Attachments = nil
+		}
 		toolMsg := &models.Message{
 			ID:          uuid.NewString(),
 			SessionID:   session.ID,
 			Role:        models.RoleTool,
-			ToolResults: results,
+			ToolResults: resultsForStorage,
 			CreatedAt:   time.Now(),
 		}
 		if err := appendMessage(toolMsg); err != nil {

@@ -200,6 +200,32 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func invokeTool(edgeID: String, toolName: String, payload: [String: Any], approved: Bool) async -> ToolInvocationResult? {
+        guard let data = try? JSONSerialization.data(withJSONObject: payload, options: []),
+              let input = String(data: data, encoding: .utf8) else {
+            lastError = "Failed to encode tool payload"
+            return nil
+        }
+        return await invokeTool(edgeID: edgeID, toolName: toolName, input: input, approved: approved)
+    }
+
+    func images(from result: ToolInvocationResult) -> [NSImage] {
+        guard let artifacts = result.artifacts else { return [] }
+        return artifacts.compactMap { imageFromArtifact($0) }
+    }
+
+    func imageFromArtifact(_ artifact: ToolInvocationArtifact) -> NSImage? {
+        let isImage = artifact.mimeType.lowercased().hasPrefix("image/") || artifact.type == "screenshot"
+        guard isImage else { return nil }
+        if let data = artifact.data, let image = NSImage(data: data) {
+            return image
+        }
+        if let ref = artifact.reference, let data = decodeDataURL(ref), let image = NSImage(data: data) {
+            return image
+        }
+        return nil
+    }
+
     func refreshEdgeServiceStatus() {
         lastError = nil
         if !FileManager.default.fileExists(atPath: plistPath) {
@@ -329,6 +355,15 @@ final class AppModel: ObservableObject {
             return nil
         }
         return NexusAPI(baseURL: trimmedURL, apiKey: apiKey)
+    }
+
+    private func decodeDataURL(_ raw: String) -> Data? {
+        guard raw.hasPrefix("data:") else { return nil }
+        let parts = raw.split(separator: ",", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else { return nil }
+        let meta = parts[0]
+        guard meta.contains(";base64") else { return nil }
+        return Data(base64Encoded: parts[1])
     }
 
     private func normalizeBaseURL(_ raw: String) -> String {

@@ -451,13 +451,29 @@ func (p *AnthropicProvider) Complete(ctx context.Context, req *agent.CompletionR
 	go func() {
 		defer close(chunks)
 
+		useBeta := p.hasComputerUse(req.Tools)
+		var betaTools []anthropic.BetaToolUnionParam
+		var betaErr error
+		if useBeta {
+			betaTools, betaErr = p.convertToolsBeta(req.Tools)
+			if betaErr != nil {
+				chunks <- &agent.CompletionChunk{Error: fmt.Errorf("anthropic: failed to convert tools: %w", betaErr)}
+				return
+			}
+		}
+
 		// Convert request to Anthropic format with retries
 		var stream *ssestream.Stream[anthropic.MessageStreamEventUnion]
+		var betaStream *ssestream.Stream[anthropic.BetaRawMessageStreamEventUnion]
 		var err error
 
 		// Retry loop with exponential backoff for transient failures
 		for attempt := 0; attempt <= p.maxRetries; attempt++ {
-			stream, err = p.createStream(ctx, req)
+			if useBeta {
+				betaStream, err = p.createBetaStream(ctx, req, betaTools)
+			} else {
+				stream, err = p.createStream(ctx, req)
+			}
 			if err == nil {
 				break
 			}
@@ -491,7 +507,11 @@ func (p *AnthropicProvider) Complete(ctx context.Context, req *agent.CompletionR
 		}
 
 		// Process streaming events and send chunks to channel
-		p.processStream(stream, chunks, p.getModel(req.Model))
+		if useBeta {
+			p.processBetaStream(betaStream, chunks, p.getModel(req.Model))
+		} else {
+			p.processStream(stream, chunks, p.getModel(req.Model))
+		}
 	}()
 
 	return chunks, nil
@@ -565,6 +585,46 @@ func (p *AnthropicProvider) createStream(ctx context.Context, req *agent.Complet
 	// Create streaming request using Anthropic SDK
 	stream := p.client.Messages.NewStreaming(ctx, params)
 
+	return stream, nil
+}
+
+// createBetaStream creates a beta Anthropic streaming request for computer use tools.
+func (p *AnthropicProvider) createBetaStream(ctx context.Context, req *agent.CompletionRequest, tools []anthropic.BetaToolUnionParam) (*ssestream.Stream[anthropic.BetaRawMessageStreamEventUnion], error) {
+	// Convert messages to beta format
+	messages, err := p.convertMessagesBeta(req.Messages)
+	if err != nil {
+		return nil, fmt.Errorf("anthropic: failed to convert messages: %w", err)
+	}
+
+	params := anthropic.BetaMessageNewParams{
+		Model:     anthropic.Model(p.getModel(req.Model)),
+		Messages:  messages,
+		MaxTokens: int64(p.getMaxTokens(req.MaxTokens)),
+		Betas:     []anthropic.AnthropicBeta{anthropic.AnthropicBetaComputerUse2025_01_24},
+	}
+
+	if req.System != "" {
+		params.System = []anthropic.BetaTextBlockParam{
+			{
+				Type: "text",
+				Text: req.System,
+			},
+		}
+	}
+
+	if len(tools) > 0 {
+		params.Tools = tools
+	}
+
+	if req.EnableThinking {
+		budgetTokens := int64(req.ThinkingBudgetTokens)
+		if budgetTokens < 1024 {
+			budgetTokens = 10000
+		}
+		params.Thinking = anthropic.BetaThinkingConfigParamOfEnabled(budgetTokens)
+	}
+
+	stream := p.client.Beta.Messages.NewStreaming(ctx, params)
 	return stream, nil
 }
 
@@ -762,6 +822,124 @@ func (p *AnthropicProvider) processStream(stream *ssestream.Stream[anthropic.Mes
 	}
 }
 
+// processBetaStream processes Server-Sent Events from Anthropic's beta streaming API.
+func (p *AnthropicProvider) processBetaStream(stream *ssestream.Stream[anthropic.BetaRawMessageStreamEventUnion], chunks chan<- *agent.CompletionChunk, model string) {
+	var currentToolCall *models.ToolCall
+	var currentToolInput strings.Builder
+	emptyEventCount := 0
+	inThinkingBlock := false
+
+	var inputTokens int
+	var outputTokens int
+
+	for stream.Next() {
+		event := stream.Current()
+		eventProcessed := false
+
+		switch event.Type {
+		case "message_start":
+			messageStart := event.AsMessageStart()
+			if messageStart.Message.Usage.InputTokens > 0 {
+				inputTokens = int(messageStart.Message.Usage.InputTokens)
+			}
+			eventProcessed = true
+
+		case "content_block_start":
+			contentBlockStart := event.AsContentBlockStart()
+			contentBlock := contentBlockStart.ContentBlock
+			switch contentBlock.Type {
+			case "thinking":
+				inThinkingBlock = true
+				chunks <- &agent.CompletionChunk{ThinkingStart: true}
+				eventProcessed = true
+			case "tool_use":
+				toolUse := contentBlock.AsToolUse()
+				currentToolCall = &models.ToolCall{
+					ID:   toolUse.ID,
+					Name: toolUse.Name,
+				}
+				currentToolInput.Reset()
+				eventProcessed = true
+			}
+
+		case "content_block_delta":
+			contentBlockDelta := event.AsContentBlockDelta()
+			delta := contentBlockDelta.Delta
+			switch delta.Type {
+			case "text_delta":
+				if delta.Text != "" {
+					chunks <- &agent.CompletionChunk{Text: delta.Text}
+					eventProcessed = true
+				}
+			case "thinking_delta":
+				if delta.Thinking != "" {
+					chunks <- &agent.CompletionChunk{Thinking: delta.Thinking}
+					eventProcessed = true
+				}
+			case "input_json_delta":
+				if delta.PartialJSON != "" {
+					currentToolInput.WriteString(delta.PartialJSON)
+					eventProcessed = true
+				}
+			}
+
+		case "content_block_stop":
+			if inThinkingBlock {
+				chunks <- &agent.CompletionChunk{ThinkingEnd: true}
+				inThinkingBlock = false
+				eventProcessed = true
+			} else if currentToolCall != nil {
+				currentToolCall.Input = json.RawMessage(currentToolInput.String())
+				chunks <- &agent.CompletionChunk{ToolCall: currentToolCall}
+				currentToolCall = nil
+				eventProcessed = true
+			}
+
+		case "message_delta":
+			messageDelta := event.AsMessageDelta()
+			if messageDelta.Usage.OutputTokens > 0 {
+				outputTokens = int(messageDelta.Usage.OutputTokens)
+			}
+			eventProcessed = true
+
+		case "message_stop":
+			chunks <- &agent.CompletionChunk{
+				Done:         true,
+				InputTokens:  inputTokens,
+				OutputTokens: outputTokens,
+			}
+			return
+
+		case "error":
+			chunks <- &agent.CompletionChunk{
+				Error: p.wrapError(errors.New("anthropic stream error"), model),
+			}
+			return
+		}
+
+		if eventProcessed {
+			emptyEventCount = 0
+		} else {
+			emptyEventCount++
+			if emptyEventCount >= maxEmptyStreamEvents {
+				chunks <- &agent.CompletionChunk{
+					Error: p.wrapError(
+						fmt.Errorf("stream appears malformed: received %d consecutive empty events", emptyEventCount),
+						model,
+					),
+				}
+				return
+			}
+		}
+	}
+
+	if err := stream.Err(); err != nil {
+		chunks <- &agent.CompletionChunk{
+			Error: p.wrapError(err, model),
+		}
+	}
+}
+
 // convertMessages converts internal message format to Anthropic API format.
 //
 // This method handles the translation between our unified message format and
@@ -847,6 +1025,164 @@ func (p *AnthropicProvider) convertMessages(messages []agent.CompletionMessage) 
 	return result, nil
 }
 
+func (p *AnthropicProvider) hasComputerUse(tools []agent.Tool) bool {
+	for _, tool := range tools {
+		if provider, ok := tool.(agent.ComputerUseConfigProvider); ok {
+			if provider.ComputerUseConfig() != nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// convertMessagesBeta converts internal messages to Anthropic beta message format.
+func (p *AnthropicProvider) convertMessagesBeta(messages []agent.CompletionMessage) ([]anthropic.BetaMessageParam, error) {
+	var result []anthropic.BetaMessageParam
+
+	for _, msg := range messages {
+		if msg.Role == "system" {
+			continue
+		}
+
+		var content []anthropic.BetaContentBlockParamUnion
+
+		if msg.Content != "" {
+			content = append(content, anthropic.NewBetaTextBlock(msg.Content))
+		}
+
+		content = append(content, betaAttachmentBlocks(msg.Attachments)...)
+
+		for _, toolResult := range msg.ToolResults {
+			toolBlock := anthropic.BetaToolResultBlockParam{
+				ToolUseID: toolResult.ToolCallID,
+			}
+			if toolResult.IsError {
+				toolBlock.IsError = anthropic.Bool(true)
+			}
+
+			var toolContent []anthropic.BetaToolResultBlockParamContentUnion
+			if toolResult.Content != "" {
+				toolContent = append(toolContent, anthropic.BetaToolResultBlockParamContentUnion{
+					OfText: &anthropic.BetaTextBlockParam{Text: toolResult.Content},
+				})
+			}
+			for _, attachment := range toolResult.Attachments {
+				if img := betaImageBlockFromAttachment(attachment); img != nil {
+					toolContent = append(toolContent, anthropic.BetaToolResultBlockParamContentUnion{
+						OfImage: img,
+					})
+				}
+			}
+			if len(toolContent) > 0 {
+				toolBlock.Content = toolContent
+			}
+
+			content = append(content, anthropic.BetaContentBlockParamUnion{
+				OfToolResult: &toolBlock,
+			})
+		}
+
+		for _, toolCall := range msg.ToolCalls {
+			var input map[string]interface{}
+			if err := json.Unmarshal(toolCall.Input, &input); err != nil {
+				return nil, fmt.Errorf("invalid tool call input: %w", err)
+			}
+			content = append(content, anthropic.NewBetaToolUseBlock(
+				toolCall.ID,
+				input,
+				toolCall.Name,
+			))
+		}
+
+		role := anthropic.BetaMessageParamRoleUser
+		if msg.Role == "assistant" {
+			role = anthropic.BetaMessageParamRoleAssistant
+		}
+		result = append(result, anthropic.BetaMessageParam{
+			Role:    role,
+			Content: content,
+		})
+	}
+
+	return result, nil
+}
+
+func betaAttachmentBlocks(attachments []models.Attachment) []anthropic.BetaContentBlockParamUnion {
+	if len(attachments) == 0 {
+		return nil
+	}
+	var blocks []anthropic.BetaContentBlockParamUnion
+	for _, attachment := range attachments {
+		if img := betaImageBlockFromAttachment(attachment); img != nil {
+			blocks = append(blocks, anthropic.BetaContentBlockParamUnion{OfImage: img})
+		}
+	}
+	return blocks
+}
+
+func betaImageBlockFromAttachment(att models.Attachment) *anthropic.BetaImageBlockParam {
+	if att.Type != "image" && !strings.HasPrefix(att.MimeType, "image/") {
+		return nil
+	}
+	if mediaType, data, ok := parseDataURL(att.URL); ok {
+		mt, ok := betaMediaType(mediaType)
+		if !ok {
+			return nil
+		}
+		return &anthropic.BetaImageBlockParam{
+			Source: anthropic.BetaImageBlockParamSourceUnion{
+				OfBase64: &anthropic.BetaBase64ImageSourceParam{
+					Data:      data,
+					MediaType: mt,
+				},
+			},
+		}
+	}
+	if att.URL != "" {
+		return &anthropic.BetaImageBlockParam{
+			Source: anthropic.BetaImageBlockParamSourceUnion{
+				OfURL: &anthropic.BetaURLImageSourceParam{URL: att.URL},
+			},
+		}
+	}
+	return nil
+}
+
+func betaMediaType(mediaType string) (anthropic.BetaBase64ImageSourceMediaType, bool) {
+	switch strings.ToLower(mediaType) {
+	case "image/jpeg", "image/jpg":
+		return anthropic.BetaBase64ImageSourceMediaTypeImageJPEG, true
+	case "image/png":
+		return anthropic.BetaBase64ImageSourceMediaTypeImagePNG, true
+	case "image/gif":
+		return anthropic.BetaBase64ImageSourceMediaTypeImageGIF, true
+	case "image/webp":
+		return anthropic.BetaBase64ImageSourceMediaTypeImageWebP, true
+	default:
+		return "", false
+	}
+}
+
+func parseDataURL(raw string) (string, string, bool) {
+	if !strings.HasPrefix(raw, "data:") {
+		return "", "", false
+	}
+	parts := strings.SplitN(raw, ",", 2)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	meta := strings.TrimPrefix(parts[0], "data:")
+	if !strings.HasSuffix(meta, ";base64") {
+		return "", "", false
+	}
+	mediaType := strings.TrimSuffix(meta, ";base64")
+	if mediaType == "" {
+		return "", "", false
+	}
+	return mediaType, parts[1], true
+}
+
 // convertTools converts internal tool definitions to Anthropic API format.
 //
 // This method translates tool definitions from our internal format to Anthropic's
@@ -892,6 +1228,40 @@ func (p *AnthropicProvider) convertTools(tools []agent.Tool) ([]anthropic.ToolUn
 		}
 		toolParam.OfTool.Description = anthropic.String(tool.Description())
 
+		result = append(result, toolParam)
+	}
+
+	return result, nil
+}
+
+// convertToolsBeta converts internal tool definitions to Anthropic beta tool format.
+func (p *AnthropicProvider) convertToolsBeta(tools []agent.Tool) ([]anthropic.BetaToolUnionParam, error) {
+	var result []anthropic.BetaToolUnionParam
+	computerUseAdded := false
+
+	for _, tool := range tools {
+		if provider, ok := tool.(agent.ComputerUseConfigProvider); ok && !computerUseAdded {
+			if cfg := provider.ComputerUseConfig(); cfg != nil && cfg.DisplayWidthPx > 0 && cfg.DisplayHeightPx > 0 {
+				param := anthropic.BetaToolUnionParamOfComputerUseTool20250124(int64(cfg.DisplayHeightPx), int64(cfg.DisplayWidthPx))
+				if param.OfComputerUseTool20250124 != nil && cfg.DisplayNumber > 0 {
+					param.OfComputerUseTool20250124.DisplayNumber = anthropic.Int(int64(cfg.DisplayNumber))
+				}
+				result = append(result, param)
+				computerUseAdded = true
+				continue
+			}
+		}
+
+		var schema anthropic.BetaToolInputSchemaParam
+		if err := json.Unmarshal(tool.Schema(), &schema); err != nil {
+			return nil, fmt.Errorf("invalid tool schema for %s: %w", tool.Name(), err)
+		}
+
+		toolParam := anthropic.BetaToolUnionParamOfTool(schema, tool.Name())
+		if toolParam.OfTool == nil {
+			return nil, fmt.Errorf("invalid tool schema for %s: missing tool definition", tool.Name())
+		}
+		toolParam.OfTool.Description = anthropic.String(tool.Description())
 		result = append(result, toolParam)
 	}
 

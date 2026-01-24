@@ -23,6 +23,7 @@ Nodes declare what they can do:
 | `filesystem` | File access | Yes |
 | `shell` | Command execution | Yes |
 | `browser` | Browser relay | No |
+| `computer_use` | UI automation (mouse/keyboard/screen) | Yes |
 | `channels` | Message channel hosting | No |
 
 ## Pairing Flow
@@ -162,7 +163,16 @@ When a node is paired, it receives default permissions:
 | filesystem | Yes | Yes | Yes |
 | shell | Yes | Yes | Yes |
 | browser | Yes | Yes | No |
+| computer_use | Yes | Yes | Yes |
 | channels | Yes | Yes | No |
+
+## Computer Use Tool
+
+Nexus exposes a `computer` tool that proxies to `nodes.computer_use` on a
+connected edge. It supports UI actions such as mouse movement, clicks, typing,
+scrolling, and screenshots. The edge reports display and permission metadata
+(`display_width_px`, `display_height_px`, `display_scale`, `display_number`,
+and `perm_*` keys) so agents can reason about available UI capabilities.
 
 ### Custom Permissions
 

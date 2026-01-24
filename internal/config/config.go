@@ -535,6 +535,7 @@ type LLMProviderConfig struct {
 type ToolsConfig struct {
 	Sandbox      SandboxConfig       `yaml:"sandbox"`
 	Browser      BrowserConfig       `yaml:"browser"`
+	ComputerUse  ComputerUseConfig   `yaml:"computer_use"`
 	WebSearch    WebSearchConfig     `yaml:"websearch"`
 	WebFetch     WebFetchConfig      `yaml:"web_fetch"`
 	MemorySearch MemorySearchConfig  `yaml:"memory_search"`
@@ -551,6 +552,20 @@ type ServiceNowConfig struct {
 	InstanceURL string `yaml:"instance_url"`
 	Username    string `yaml:"username"`
 	Password    string `yaml:"password"`
+}
+
+// ComputerUseConfig controls the Claude computer use tool routing.
+type ComputerUseConfig struct {
+	// Enabled registers the computer use tool in the runtime.
+	Enabled bool `yaml:"enabled"`
+	// EdgeID selects the default edge to target for computer use.
+	EdgeID string `yaml:"edge_id"`
+	// DisplayWidthPx overrides the display width in pixels when metadata is unavailable.
+	DisplayWidthPx int `yaml:"display_width_px"`
+	// DisplayHeightPx overrides the display height in pixels when metadata is unavailable.
+	DisplayHeightPx int `yaml:"display_height_px"`
+	// DisplayNumber overrides the display number (0-based) when metadata is unavailable.
+	DisplayNumber int `yaml:"display_number"`
 }
 
 // ToolJobsConfig controls async tool job persistence.

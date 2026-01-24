@@ -68,6 +68,7 @@ struct NodeSummary: Codable, Identifiable, Hashable {
     let tools: [String]
     let channelTypes: [String]?
     let version: String?
+    let metadata: [String: String]?
 
     var id: String { edgeId }
 
@@ -80,6 +81,7 @@ struct NodeSummary: Codable, Identifiable, Hashable {
         case tools
         case channelTypes = "channel_types"
         case version
+        case metadata
     }
 }
 
@@ -141,12 +143,36 @@ struct ToolInvocationResult: Codable {
     let isError: Bool
     let durationMs: Int64
     let errorDetails: String?
+    let artifacts: [ToolInvocationArtifact]?
 
     private enum CodingKeys: String, CodingKey {
         case content
         case isError = "is_error"
         case durationMs = "duration_ms"
         case errorDetails = "error_details"
+        case artifacts
+    }
+}
+
+struct ToolInvocationArtifact: Codable, Hashable {
+    let id: String
+    let type: String
+    let mimeType: String
+    let filename: String?
+    let size: Int64
+    let reference: String?
+    let data: Data?
+    let ttlSeconds: Int?
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case type
+        case mimeType = "mime_type"
+        case filename
+        case size
+        case reference
+        case data
+        case ttlSeconds = "ttl_seconds"
     }
 }
 

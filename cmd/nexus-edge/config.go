@@ -104,6 +104,17 @@ func mergeConfig(base, override Config) Config {
 			base.NodePolicy.Shell.Denylist = override.NodePolicy.Shell.Denylist
 		}
 	}
+	if override.NodePolicy.ComputerUse != nil {
+		if base.NodePolicy.ComputerUse == nil {
+			base.NodePolicy.ComputerUse = &ComputerUsePolicy{}
+		}
+		if len(override.NodePolicy.ComputerUse.Allowlist) > 0 {
+			base.NodePolicy.ComputerUse.Allowlist = override.NodePolicy.ComputerUse.Allowlist
+		}
+		if len(override.NodePolicy.ComputerUse.Denylist) > 0 {
+			base.NodePolicy.ComputerUse.Denylist = override.NodePolicy.ComputerUse.Denylist
+		}
+	}
 	return base
 }
 

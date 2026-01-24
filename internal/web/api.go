@@ -110,14 +110,15 @@ type SkillSummary struct {
 
 // NodeSummary is a UI-friendly edge node snapshot.
 type NodeSummary struct {
-	EdgeID        string    `json:"edge_id"`
-	Name          string    `json:"name"`
-	Status        string    `json:"status"`
-	ConnectedAt   time.Time `json:"connected_at"`
-	LastHeartbeat time.Time `json:"last_heartbeat"`
-	Tools         []string  `json:"tools"`
-	ChannelTypes  []string  `json:"channel_types,omitempty"`
-	Version       string    `json:"version,omitempty"`
+	EdgeID        string            `json:"edge_id"`
+	Name          string            `json:"name"`
+	Status        string            `json:"status"`
+	ConnectedAt   time.Time         `json:"connected_at"`
+	LastHeartbeat time.Time         `json:"last_heartbeat"`
+	Tools         []string          `json:"tools"`
+	ChannelTypes  []string          `json:"channel_types,omitempty"`
+	Version       string            `json:"version,omitempty"`
+	Metadata      map[string]string `json:"metadata,omitempty"`
 }
 
 // NodeToolSummary is a UI-friendly tool snapshot for a node.
@@ -1299,6 +1300,7 @@ func (h *Handler) listNodes() []*NodeSummary {
 			Tools:         edgeStatus.Tools,
 			ChannelTypes:  edgeStatus.ChannelTypes,
 			Version:       edgeStatus.Version,
+			Metadata:      edgeStatus.Metadata,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {

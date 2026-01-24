@@ -77,9 +77,10 @@ type ToolCall struct {
 
 // ToolResult represents the output of a tool execution.
 type ToolResult struct {
-	ToolCallID string `json:"tool_call_id"`
-	Content    string `json:"content"`
-	IsError    bool   `json:"is_error,omitempty"`
+	ToolCallID  string       `json:"tool_call_id"`
+	Content     string       `json:"content"`
+	IsError     bool         `json:"is_error,omitempty"`
+	Attachments []Attachment `json:"attachments,omitempty"`
 }
 
 // Session represents a conversation thread between a user and an agent.

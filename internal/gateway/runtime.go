@@ -22,9 +22,11 @@ import (
 	crontools "github.com/haasonsaas/nexus/internal/tools/cron"
 	exectools "github.com/haasonsaas/nexus/internal/tools/exec"
 	"github.com/haasonsaas/nexus/internal/tools/files"
+	gatewaytools "github.com/haasonsaas/nexus/internal/tools/gateway"
 	jobtools "github.com/haasonsaas/nexus/internal/tools/jobs"
 	"github.com/haasonsaas/nexus/internal/tools/memorysearch"
 	"github.com/haasonsaas/nexus/internal/tools/message"
+	modelstools "github.com/haasonsaas/nexus/internal/tools/models"
 	nodestools "github.com/haasonsaas/nexus/internal/tools/nodes"
 	"github.com/haasonsaas/nexus/internal/tools/reminders"
 	"github.com/haasonsaas/nexus/internal/tools/sandbox"
@@ -352,6 +354,12 @@ func (s *Server) registerTools(ctx context.Context, runtime *agent.Runtime) erro
 	}
 	if s.canvasHost != nil {
 		runtime.RegisterTool(canvastools.NewTool(s.canvasHost))
+	}
+
+	runtime.RegisterTool(gatewaytools.NewTool(s))
+
+	if s.modelCatalog != nil {
+		runtime.RegisterTool(modelstools.NewTool(s.modelCatalog, s.bedrockDiscovery))
 	}
 
 	if s.config.Edge.Enabled && s.edgeManager != nil {

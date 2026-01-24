@@ -13,14 +13,14 @@
 - **Go runtime stability**: strong typed infra, CockroachDB backends, gRPC services.
 
 **Clawdbot strengths (parity gaps for Nexus):**
-- **Config control plane** (JSON5, $include, config schema exposure, config apply/patch RPC, UI hints).
+- **Config control plane** (UI hints + fully hot-reloadable apply/patch across all subsystems).
 - **Provider breadth + model discovery** (Bedrock discovery, many providers, model selection/compat/fallback).
 - **Plugin/extension ecosystem** (channels + auth + memory + diagnostics + voice + lobster, etc.).
 - **Session safety utilities** (transcript repair, tool-result guard, write locks).
 - **Node & gateway control plane depth** (full node registry + pairing metadata, gateway tooling).
 
 **Biggest parity blockers:**
-1) **Config control plane** (schema/UI hints, config apply/patch, JSON5 + includes).
+1) **Config control plane** (UI hints, full hot-reload apply/patch across all subsystems).
 2) **Provider + auth profile depth** (model discovery, provider-specific auth flows, profiles/rotation).
 3) **Channel/plugin breadth** (missing Mattermost/Nextcloud/Nostr/Tlon/Zalo/BlueBubbles/etc.).
 4) **Node & gateway control plane depth** (node registry + pairing metadata, gateway tooling).
@@ -34,10 +34,10 @@ Legend: ✅ parity, 🟡 partial, ❌ missing
 | Feature | Clawdbot | Nexus | Status | Gap / Notes | Priority |
 |---|---|---|---|---|---|
 | Strict config validation | Zod + plugin-aware | YAML strict + schema validation | ✅ | Nexus strict, but plugin-aware 2nd pass is lighter. | P1 |
-| Config schema exposure (UI forms) | JSON Schema + UI hints | ❌ | No schema exposure to UIs. | P1 |
-| Config apply/patch RPC | `config.apply`, `config.patch` | ❌ | Missing hot apply + restart. | P1 |
-| JSON5 config | ✅ | ❌ (YAML) | Optional parity; might keep YAML. | P2 |
-| `$include` for config | ✅ | ❌ | No includes; large configs harder to manage. | P1 |
+| Config schema exposure (UI forms) | JSON Schema + UI hints | 🟡 | JSON Schema endpoint added; UI hints still missing. | P1 |
+| Config apply/patch RPC | `config.apply`, `config.patch` | 🟡 | Apply/patch endpoints + gateway tool added; most changes still require restart. | P1 |
+| JSON5 config | ✅ | ✅ | JSON5 loader added (YAML still supported). | P2 |
+| `$include` for config | ✅ | ✅ | `$include` now supported for config composition. | P1 |
 | Per-agent config overlay | ✅ | 🟡 | Some per-agent settings via AGENTS.md; less control than Clawdbot. | P1 |
 | Config doctor + repairs | ✅ | ✅ | Nexus doctor exists (audit + repairs). | P2 |
 
@@ -53,7 +53,7 @@ Legend: ✅ parity, 🟡 partial, ❌ missing
 | `canvas` | ✅ | 🟡 | Minimal tool returns canvas URL; no richer actions yet. | P1 |
 | `nodes` | ✅ | 🟡 | Nodes tool now exposes status/describe/pending/approve/reject/invoke; still missing full node registry + pairing metadata parity. | P1 |
 | `cron` | ✅ | 🟡 | Cron tool added (list/status/run); still limited to configured webhook jobs. | P1 |
-| `gateway` tool | ✅ | ❌ | Missing restart/tooling. | P2 |
+| `gateway` tool | ✅ | 🟡 | Gateway tool added (status/config get/schema/apply); restart/update tooling still missing. | P2 |
 | `message` tool | ✅ | ✅ | Cross-channel message tool added. | P1 |
 | Session tools (`sessions_*`) | ✅ | ✅ | Sessions list/history/send/status tools added. | P1 |
 | Memory tools (`memory_search`, `memory_get`) | ✅ | ✅ | memory_get added alongside search. | P1 |
@@ -117,7 +117,7 @@ Legend: ✅ parity, 🟡 partial, ❌ missing
 | Feature | Clawdbot | Nexus | Status | Notes | Priority |
 |---|---|---|---|---|---|
 | Providers breadth | ✅ (many) | 🟡 (Anthropic, OpenAI, Google) | ❌ | Missing Bedrock/OpenRouter/etc. | P1 |
-| Bedrock discovery | ✅ | ❌ | Missing. | P1 |
+| Bedrock discovery | ✅ | 🟡 | Discovery wired into model catalog; no Bedrock provider client yet. | P1 |
 | Model selection/fallback | ✅ | 🟡 | Basic fallback exists; not full parity. | P1 |
 | Auth profiles + rotation | ✅ | ❌ | Missing. | P1 |
 | Model catalog persistence | ✅ | 🟡 | Minimal. | P2 |
@@ -167,9 +167,8 @@ Legend: ✅ parity, 🟡 partial, ❌ missing
 - Add `cron` tool around existing scheduler.
 
 ### Phase 2 — Config & Plugins (P1–P2)
-- Add config `$include` support and JSON5 loader (optional dual-format).
-- Add config schema endpoint + UI hints.
-- Add `config.apply` / `config.patch` RPC.
+- Add config UI hints + schema annotations for UI forms.
+- Add fully hot-reloadable config apply/patch (most changes still require restart).
 - Port extension-style plugins: `llm-task`, `lobster`, `diagnostics-otel`.
 
 ### Phase 3 — Providers & Auth (P1–P2)
@@ -198,6 +197,8 @@ Legend: ✅ parity, 🟡 partial, ❌ missing
 - ✅ Cron tool (`cron`) with list/status/run against configured webhook jobs.
 - ✅ Canvas tool (`canvas`) returns the canvas host URL (minimal surface).
 - ✅ Nodes tool (`nodes`) for edge status, TOFU approvals, and edge tool invocation.
+- ✅ Config control plane: JSON5 loader, `$include`, schema endpoint, soft apply/patch.
+- ✅ Gateway control tool (`gateway`) and model catalog tool (`models`) with Bedrock discovery hook.
 
 ---
 

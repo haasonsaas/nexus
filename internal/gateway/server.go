@@ -40,6 +40,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/media"
 	"github.com/haasonsaas/nexus/internal/media/transcribe"
 	"github.com/haasonsaas/nexus/internal/memory"
+	modelcatalog "github.com/haasonsaas/nexus/internal/models"
 	"github.com/haasonsaas/nexus/internal/observability"
 	"github.com/haasonsaas/nexus/internal/plugins"
 	"github.com/haasonsaas/nexus/internal/sessions"
@@ -108,6 +109,9 @@ type Server struct {
 	edgeManager *edge.Manager
 	edgeService *edge.Service
 	edgeTOFU    *edge.TOFUAuthenticator
+
+	modelCatalog     *modelcatalog.Catalog
+	bedrockDiscovery *modelcatalog.BedrockDiscovery
 
 	// Artifact repository for tool-produced files
 	artifactRepo artifacts.Repository
@@ -257,6 +261,16 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	commandRegistry := commands.NewRegistry(logger)
 	commands.RegisterBuiltins(commandRegistry)
 	commandParser := commands.NewParser(commandRegistry)
+
+	modelCatalog := modelcatalog.NewCatalog()
+	var bedrockDiscovery *modelcatalog.BedrockDiscovery
+	if cfg.LLM.Bedrock.Enabled {
+		bedrockCfg := buildBedrockDiscoveryConfig(cfg.LLM.Bedrock, logger)
+		bedrockDiscovery = modelcatalog.NewBedrockDiscovery(bedrockCfg, logger)
+		if err := bedrockDiscovery.RegisterWithCatalog(startupCtx, modelCatalog); err != nil {
+			logger.Warn("bedrock discovery failed", "error", err)
+		}
+	}
 
 	// Create job store (prefer DB when available)
 	var jobStore jobs.Store
@@ -440,6 +454,8 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		edgeManager:        edgeManager,
 		edgeService:        edgeService,
 		edgeTOFU:           edgeTOFU,
+		modelCatalog:       modelCatalog,
+		bedrockDiscovery:   bedrockDiscovery,
 		canvasHost:         canvasHost,
 		artifactRepo:       artifactRepo,
 		eventStore:         eventStore,

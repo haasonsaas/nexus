@@ -107,11 +107,14 @@ Track where sessions came from for debugging and UI display:
 - `/whoami` - Show sender identity
 - `/help [command]` - Command help
 
-### 8. Session Pruning (vs Compaction)
+### 8. Session Pruning (vs Compaction) ✅
 
-Separate in-memory tool result trimming from persistent compaction:
-- Pruning: Trim old tool results per-request, doesn't persist
-- Compaction: Summarize and persist
+**Status:** Implemented at `internal/agent/context/pruning.go` and `internal/agent/runtime.go`
+
+Implementation notes:
+- Prunes tool results in-memory per request (no persistence)
+- Keeps recent assistant turns and protects bootstrap messages
+- Soft trims oversized tool outputs before hard clearing
 
 ### 9. Elevated Mode ✅
 
@@ -153,13 +156,12 @@ UI clients querying gateway for session state.
 | Security Audits | ✅ Done | `internal/doctor/security_audit.go` |
 | AgentDir Collision | ✅ Done | `internal/multiagent/config.go` |
 | Telegram Forums | ✅ Done | `internal/channels/telegram/adapter.go` |
-| Session Pruning | ⏳ Pending | - |
+| Session Pruning | ✅ Done | `internal/agent/context/pruning.go` |
 | Hook Packs | ⏳ Future | - |
 
 ## Remaining Work
 
-1. **Session Pruning** - In-memory tool result trimming (separate from persistent compaction)
-2. **Hook Packs** - npm-style hook package installation
+1. **Hook Packs** - npm-style hook package installation
 
 ## Notes
 

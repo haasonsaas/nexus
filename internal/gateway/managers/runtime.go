@@ -159,6 +159,11 @@ func (m *RuntimeManager) Runtime(ctx context.Context) (*agent.Runtime, error) {
 	if m.defaultModel != "" {
 		runtime.SetDefaultModel(m.defaultModel)
 	}
+	if m.config != nil {
+		if pruning := config.EffectiveContextPruningSettings(m.config.Session.ContextPruning); pruning != nil {
+			runtime.SetContextPruning(pruning)
+		}
+	}
 
 	m.runtime = runtime
 	return runtime, nil

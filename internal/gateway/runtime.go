@@ -13,6 +13,7 @@ import (
 
 	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/haasonsaas/nexus/internal/agent/providers"
+	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/edge"
 	"github.com/haasonsaas/nexus/internal/mcp"
 	"github.com/haasonsaas/nexus/internal/sessions"
@@ -125,6 +126,9 @@ func (s *Server) ensureRuntime(ctx context.Context) (*agent.Runtime, error) {
 		JobStore:          s.jobStore,
 		Logger:            s.logger,
 	})
+	if pruning := config.EffectiveContextPruningSettings(s.config.Session.ContextPruning); pruning != nil {
+		runtime.SetContextPruning(pruning)
+	}
 
 	// Initialize broadcast manager if configured
 	if s.broadcastManager == nil && s.config.Gateway.Broadcast.Groups != nil && len(s.config.Gateway.Broadcast.Groups) > 0 {

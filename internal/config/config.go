@@ -19,6 +19,7 @@ type Config struct {
 	Version       int                       `yaml:"version"`
 	Server        ServerConfig              `yaml:"server"`
 	CanvasHost    CanvasHostConfig          `yaml:"canvas_host"`
+	Canvas        CanvasConfig              `yaml:"canvas"`
 	Gateway       GatewayConfig             `yaml:"gateway"`
 	Commands      CommandsConfig            `yaml:"commands"`
 	Database      DatabaseConfig            `yaml:"database"`
@@ -96,6 +97,19 @@ type CanvasHostConfig struct {
 	InjectClient *bool  `yaml:"inject_client"`
 	AutoIndex    *bool  `yaml:"auto_index"`
 	A2UIRoot     string `yaml:"a2ui_root"`
+}
+
+// CanvasConfig configures canvas persistence and retention.
+type CanvasConfig struct {
+	Retention CanvasRetentionConfig `yaml:"retention"`
+}
+
+// CanvasRetentionConfig controls how long canvas state and events are retained.
+type CanvasRetentionConfig struct {
+	StateMaxAge   time.Duration `yaml:"state_max_age"`
+	EventMaxAge   time.Duration `yaml:"event_max_age"`
+	StateMaxBytes int64         `yaml:"state_max_bytes"`
+	EventMaxBytes int64         `yaml:"event_max_bytes"`
 }
 
 type DatabaseConfig struct {
@@ -989,6 +1003,7 @@ func Load(path string) (*Config, error) {
 func applyDefaults(cfg *Config) {
 	applyServerDefaults(&cfg.Server)
 	applyCanvasHostDefaults(&cfg.CanvasHost, cfg)
+	applyCanvasDefaults(&cfg.Canvas)
 	applyDatabaseDefaults(&cfg.Database)
 	applyAuthDefaults(&cfg.Auth)
 	applyChannelDefaults(&cfg.Channels)
@@ -1081,6 +1096,24 @@ func applyCanvasHostDefaults(cfg *CanvasHostConfig, rootCfg *Config) {
 			enabled = true
 		}
 		cfg.Enabled = &enabled
+	}
+}
+
+func applyCanvasDefaults(cfg *CanvasConfig) {
+	if cfg == nil {
+		return
+	}
+	if cfg.Retention.StateMaxAge == 0 {
+		cfg.Retention.StateMaxAge = 30 * 24 * time.Hour
+	}
+	if cfg.Retention.EventMaxAge == 0 {
+		cfg.Retention.EventMaxAge = 7 * 24 * time.Hour
+	}
+	if cfg.Retention.StateMaxBytes == 0 {
+		cfg.Retention.StateMaxBytes = 1 << 20 // 1 MiB
+	}
+	if cfg.Retention.EventMaxBytes == 0 {
+		cfg.Retention.EventMaxBytes = 256 << 10 // 256 KiB
 	}
 }
 
@@ -1581,6 +1614,18 @@ func validateConfig(cfg *Config) error {
 				issues = append(issues, "canvas_host.inject_client requires canvas_host.live_reload to be true")
 			}
 		}
+	}
+	if cfg.Canvas.Retention.StateMaxAge < 0 {
+		issues = append(issues, "canvas.retention.state_max_age must be >= 0")
+	}
+	if cfg.Canvas.Retention.EventMaxAge < 0 {
+		issues = append(issues, "canvas.retention.event_max_age must be >= 0")
+	}
+	if cfg.Canvas.Retention.StateMaxBytes < 0 {
+		issues = append(issues, "canvas.retention.state_max_bytes must be >= 0")
+	}
+	if cfg.Canvas.Retention.EventMaxBytes < 0 {
+		issues = append(issues, "canvas.retention.event_max_bytes must be >= 0")
 	}
 
 	if strings.TrimSpace(cfg.Artifacts.MetadataBackend) != "" {

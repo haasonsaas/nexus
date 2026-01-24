@@ -271,7 +271,10 @@ func runLinuxComputerAction(ctx context.Context, action string, params computerU
 				data[strings.ToLower(strings.TrimSpace(parts[0]))] = val
 			}
 		}
-		payload, _ := json.Marshal(data)
+		payload, err := json.Marshal(data)
+		if err != nil {
+			return &ToolResult{Content: fmt.Sprintf("failed to marshal system info: %v", err), IsError: true}, nil
+		}
 		return &ToolResult{Content: string(payload)}, nil
 	default:
 		return &ToolResult{Content: fmt.Sprintf("action %q not supported on linux", action), IsError: true}, nil

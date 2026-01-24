@@ -219,6 +219,12 @@ channels:
     group:
       policy: allowlist
       # allow_from: ["C1234567890"]
+    canvas:
+      enabled: false
+      command: /canvas
+      shortcut_callback: open_canvas
+      # allowed_workspaces: ["T1234567890"]
+      # role: editor
 
 llm:
   default_provider: anthropic

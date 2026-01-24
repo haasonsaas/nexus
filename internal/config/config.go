@@ -441,6 +441,15 @@ type SlackConfig struct {
 	Group ChannelPolicyConfig `yaml:"group"`
 
 	Markdown ChannelMarkdownConfig `yaml:"markdown"`
+	Canvas   SlackCanvasConfig     `yaml:"canvas"`
+}
+
+type SlackCanvasConfig struct {
+	Enabled           bool     `yaml:"enabled"`
+	Command           string   `yaml:"command"`
+	ShortcutCallback  string   `yaml:"shortcut_callback"`
+	AllowedWorkspaces []string `yaml:"allowed_workspaces"`
+	Role              string   `yaml:"role"`
 }
 
 type TeamsConfig struct {
@@ -1204,6 +1213,7 @@ func applyChannelDefaults(cfg *ChannelsConfig) {
 	applyChannelPolicyDefaults(&cfg.Discord.Group)
 	applyChannelPolicyDefaults(&cfg.Slack.DM)
 	applyChannelPolicyDefaults(&cfg.Slack.Group)
+	applySlackCanvasDefaults(&cfg.Slack.Canvas)
 	applyChannelPolicyDefaults(&cfg.WhatsApp.DM)
 	applyChannelPolicyDefaults(&cfg.WhatsApp.Group)
 	applyChannelPolicyDefaults(&cfg.Signal.DM)
@@ -1219,6 +1229,21 @@ func applyChannelDefaults(cfg *ChannelsConfig) {
 func applyChannelPolicyDefaults(cfg *ChannelPolicyConfig) {
 	if strings.TrimSpace(cfg.Policy) == "" {
 		cfg.Policy = "open"
+	}
+}
+
+func applySlackCanvasDefaults(cfg *SlackCanvasConfig) {
+	if cfg == nil {
+		return
+	}
+	if strings.TrimSpace(cfg.Command) == "" {
+		cfg.Command = "/canvas"
+	}
+	if strings.TrimSpace(cfg.ShortcutCallback) == "" {
+		cfg.ShortcutCallback = "open_canvas"
+	}
+	if strings.TrimSpace(cfg.Role) == "" {
+		cfg.Role = "editor"
 	}
 }
 
@@ -1607,6 +1632,14 @@ func validateConfig(cfg *Config) error {
 	validateChannelPolicy(&issues, "channels.matrix.group", cfg.Channels.Matrix.Group)
 	validateChannelPolicy(&issues, "channels.teams.dm", cfg.Channels.Teams.DM)
 	validateChannelPolicy(&issues, "channels.teams.group", cfg.Channels.Teams.Group)
+	if cfg.Channels.Slack.Canvas.Enabled {
+		command := strings.TrimSpace(cfg.Channels.Slack.Canvas.Command)
+		if command == "" {
+			issues = append(issues, "channels.slack.canvas.command is required when canvas is enabled")
+		} else if !strings.HasPrefix(command, "/") {
+			issues = append(issues, "channels.slack.canvas.command must start with \"/\"")
+		}
+	}
 
 	if !validScope(cfg.Session.SlackScope) {
 		issues = append(issues, "session.slack_scope must be \"thread\" or \"channel\"")

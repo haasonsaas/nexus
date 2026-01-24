@@ -571,7 +571,11 @@ func (s *Server) registerChannelsFromConfig() error {
 	if s.runtimePlugins == nil {
 		s.runtimePlugins = plugins.DefaultRuntimeRegistry()
 	}
-	return s.runtimePlugins.LoadChannels(s.config, s.channels)
+	if err := s.runtimePlugins.LoadChannels(s.config, s.channels); err != nil {
+		return err
+	}
+	s.configureSlackCanvas()
+	return nil
 }
 
 // buildEdgeAuthenticator creates an edge authenticator based on configuration.

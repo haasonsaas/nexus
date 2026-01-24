@@ -18,6 +18,8 @@ type SlackAPIClient interface {
 	PostMessage(channelID string, options ...slack.MsgOption) (string, string, error)
 	PostMessageContext(ctx context.Context, channelID string, options ...slack.MsgOption) (string, string, error)
 	UpdateMessageContext(ctx context.Context, channelID, timestamp string, options ...slack.MsgOption) (string, string, string, error)
+	PostEphemeral(channelID, userID string, options ...slack.MsgOption) (string, error)
+	PostEphemeralContext(ctx context.Context, channelID, userID string, options ...slack.MsgOption) (string, error)
 
 	// Reactions
 	AddReaction(name string, item slack.ItemRef) error
@@ -59,6 +61,8 @@ type MockSlackClient struct {
 	PostMessageFunc          func(channelID string, options ...slack.MsgOption) (string, string, error)
 	PostMessageContextFunc   func(ctx context.Context, channelID string, options ...slack.MsgOption) (string, string, error)
 	UpdateMessageContextFunc func(ctx context.Context, channelID, timestamp string, options ...slack.MsgOption) (string, string, string, error)
+	PostEphemeralFunc        func(channelID, userID string, options ...slack.MsgOption) (string, error)
+	PostEphemeralContextFunc func(ctx context.Context, channelID, userID string, options ...slack.MsgOption) (string, error)
 	AddReactionFunc          func(name string, item slack.ItemRef) error
 	AddReactionContextFunc   func(ctx context.Context, name string, item slack.ItemRef) error
 	UploadFileV2Func         func(params slack.UploadFileV2Parameters) (*slack.FileSummary, error)
@@ -102,6 +106,20 @@ func (m *MockSlackClient) UpdateMessageContext(ctx context.Context, channelID, t
 		return m.UpdateMessageContextFunc(ctx, channelID, timestamp, options...)
 	}
 	return channelID, timestamp, "", nil
+}
+
+func (m *MockSlackClient) PostEphemeral(channelID, userID string, options ...slack.MsgOption) (string, error) {
+	if m.PostEphemeralFunc != nil {
+		return m.PostEphemeralFunc(channelID, userID, options...)
+	}
+	return "ephemeral-ts", nil
+}
+
+func (m *MockSlackClient) PostEphemeralContext(ctx context.Context, channelID, userID string, options ...slack.MsgOption) (string, error) {
+	if m.PostEphemeralContextFunc != nil {
+		return m.PostEphemeralContextFunc(ctx, channelID, userID, options...)
+	}
+	return m.PostEphemeral(channelID, userID, options...)
 }
 
 func (m *MockSlackClient) AddReaction(name string, item slack.ItemRef) error {

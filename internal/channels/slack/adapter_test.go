@@ -118,6 +118,15 @@ func TestConfig_DefaultValues(t *testing.T) {
 	if cfg.Logger == nil {
 		t.Error("Logger should not be nil after validation")
 	}
+	if cfg.Canvas.Command != "/canvas" {
+		t.Errorf("Canvas.Command = %q, want /canvas", cfg.Canvas.Command)
+	}
+	if cfg.Canvas.ShortcutCallback != "open_canvas" {
+		t.Errorf("Canvas.ShortcutCallback = %q, want open_canvas", cfg.Canvas.ShortcutCallback)
+	}
+	if cfg.Canvas.Role != "editor" {
+		t.Errorf("Canvas.Role = %q, want editor", cfg.Canvas.Role)
+	}
 }
 
 func TestConfig_CustomValues(t *testing.T) {
@@ -142,6 +151,27 @@ func TestConfig_CustomValues(t *testing.T) {
 
 	if cfg.RateBurst != 20 {
 		t.Errorf("RateBurst = %d, want 20", cfg.RateBurst)
+	}
+}
+
+func TestCanvasWorkspaceAllowed(t *testing.T) {
+	adapter := &Adapter{
+		cfg: Config{
+			Canvas: CanvasConfig{
+				AllowedWorkspaces: []string{"T123", "T999"},
+			},
+		},
+	}
+	if !adapter.canvasWorkspaceAllowed("T123") {
+		t.Error("expected workspace to be allowed")
+	}
+	if adapter.canvasWorkspaceAllowed("T000") {
+		t.Error("expected workspace to be rejected")
+	}
+
+	unrestricted := &Adapter{cfg: Config{Canvas: CanvasConfig{}}}
+	if !unrestricted.canvasWorkspaceAllowed("anything") {
+		t.Error("expected empty allowlist to allow all workspaces")
 	}
 }
 

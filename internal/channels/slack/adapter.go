@@ -34,7 +34,31 @@ type Config struct {
 
 	// Logger is an optional slog.Logger instance
 	Logger *slog.Logger
+
+	// Canvas controls canvas entrypoints like /canvas and message shortcuts.
+	Canvas CanvasConfig
 }
+
+// CanvasConfig configures Slack canvas entrypoints.
+type CanvasConfig struct {
+	Enabled           bool
+	Command           string
+	ShortcutCallback  string
+	AllowedWorkspaces []string
+	Role              string
+}
+
+// CanvasLinkRequest describes a Slack request for a canvas link.
+type CanvasLinkRequest struct {
+	WorkspaceID string
+	ChannelID   string
+	ThreadTS    string
+	UserID      string
+	Source      string
+}
+
+// CanvasLinkProvider builds a signed canvas URL for a Slack context.
+type CanvasLinkProvider func(ctx context.Context, req CanvasLinkRequest) (string, error)
 
 // Validate checks if the configuration is valid and applies defaults.
 func (c *Config) Validate() error {
@@ -56,6 +80,15 @@ func (c *Config) Validate() error {
 
 	if c.Logger == nil {
 		c.Logger = slog.Default()
+	}
+	if strings.TrimSpace(c.Canvas.Command) == "" {
+		c.Canvas.Command = "/canvas"
+	}
+	if strings.TrimSpace(c.Canvas.ShortcutCallback) == "" {
+		c.Canvas.ShortcutCallback = "open_canvas"
+	}
+	if strings.TrimSpace(c.Canvas.Role) == "" {
+		c.Canvas.Role = "editor"
 	}
 
 	return nil
@@ -81,6 +114,8 @@ type Adapter struct {
 	logger       *slog.Logger
 	degraded     bool
 	degradedMu   sync.RWMutex
+	canvasMu     sync.RWMutex
+	canvasLinker CanvasLinkProvider
 }
 
 // NewAdapter creates a new Slack adapter with the given configuration.
@@ -112,6 +147,16 @@ func NewAdapter(cfg Config) (*Adapter, error) {
 		metrics:     channels.NewMetrics(models.ChannelSlack),
 		logger:      cfg.Logger.With("adapter", "slack"),
 	}, nil
+}
+
+// SetCanvasLinkProvider configures a callback for generating canvas links.
+func (a *Adapter) SetCanvasLinkProvider(provider CanvasLinkProvider) {
+	if a == nil {
+		return
+	}
+	a.canvasMu.Lock()
+	defer a.canvasMu.Unlock()
+	a.canvasLinker = provider
 }
 
 // Start begins listening for messages from Slack via Socket Mode.
@@ -377,14 +422,26 @@ func (a *Adapter) handleEvents() {
 				a.handleEventsAPI(event)
 
 			case socketmode.EventTypeSlashCommand:
-				// Acknowledge slash commands (can be implemented if needed)
-				a.socketClient.Ack(*event.Request)
-				a.logger.Debug("received slash command")
+				if event.Request != nil {
+					a.socketClient.Ack(*event.Request)
+				}
+				command, ok := event.Data.(slack.SlashCommand)
+				if !ok {
+					a.logger.Warn("could not type cast slash command payload")
+					continue
+				}
+				go a.handleSlashCommand(command)
 
 			case socketmode.EventTypeInteractive:
-				// Acknowledge interactive events (can be implemented if needed)
-				a.socketClient.Ack(*event.Request)
-				a.logger.Debug("received interactive event")
+				if event.Request != nil {
+					a.socketClient.Ack(*event.Request)
+				}
+				callback, ok := event.Data.(slack.InteractionCallback)
+				if !ok {
+					a.logger.Warn("could not type cast interactive payload")
+					continue
+				}
+				go a.handleInteractive(callback)
 			}
 		}
 	}
@@ -421,6 +478,91 @@ func (a *Adapter) handleEventsAPI(event socketmode.Event) {
 			a.handleMessage(ev)
 		}
 	}
+}
+
+func (a *Adapter) handleSlashCommand(command slack.SlashCommand) {
+	if !a.cfg.Canvas.Enabled {
+		return
+	}
+	if !a.canvasCommandMatches(command.Command) {
+		return
+	}
+	if strings.TrimSpace(command.ChannelID) == "" || strings.TrimSpace(command.UserID) == "" {
+		a.logger.Warn("canvas slash command missing channel or user", "channel", command.ChannelID, "user", command.UserID)
+		return
+	}
+	if !a.canvasWorkspaceAllowed(command.TeamID) {
+		a.sendCanvasEphemeral(a.canvasContext(), command.ChannelID, command.UserID, "Canvas is not enabled for this workspace.")
+		return
+	}
+	linker := a.canvasProvider()
+	if linker == nil {
+		a.logger.Warn("canvas link provider not configured")
+		a.sendCanvasEphemeral(a.canvasContext(), command.ChannelID, command.UserID, "Canvas is not configured yet.")
+		return
+	}
+	ctx, cancel := context.WithTimeout(a.canvasContext(), 5*time.Second)
+	defer cancel()
+	link, err := linker(ctx, CanvasLinkRequest{
+		WorkspaceID: command.TeamID,
+		ChannelID:   command.ChannelID,
+		ThreadTS:    "",
+		UserID:      command.UserID,
+		Source:      "slash",
+	})
+	if err != nil {
+		a.logger.Error("canvas slash command failed", "error", err, "workspace", command.TeamID, "channel", command.ChannelID)
+		a.sendCanvasEphemeral(ctx, command.ChannelID, command.UserID, "Unable to open the canvas right now.")
+		return
+	}
+	a.sendCanvasEphemeral(ctx, command.ChannelID, command.UserID, "Open the canvas: "+formatCanvasLink(link))
+}
+
+func (a *Adapter) handleInteractive(callback slack.InteractionCallback) {
+	if !a.cfg.Canvas.Enabled {
+		return
+	}
+	if callback.Type != slack.InteractionTypeMessageAction && callback.Type != slack.InteractionTypeShortcut {
+		return
+	}
+	if !a.canvasShortcutMatches(callback) {
+		return
+	}
+	channelID := strings.TrimSpace(callback.Channel.ID)
+	if channelID == "" {
+		channelID = strings.TrimSpace(callback.Container.ChannelID)
+	}
+	userID := strings.TrimSpace(callback.User.ID)
+	if channelID == "" || userID == "" {
+		a.logger.Warn("canvas shortcut missing channel or user", "channel", channelID, "user", userID)
+		return
+	}
+	if !a.canvasWorkspaceAllowed(callback.Team.ID) {
+		a.sendCanvasEphemeral(a.canvasContext(), channelID, userID, "Canvas is not enabled for this workspace.")
+		return
+	}
+	linker := a.canvasProvider()
+	if linker == nil {
+		a.logger.Warn("canvas link provider not configured")
+		a.sendCanvasEphemeral(a.canvasContext(), channelID, userID, "Canvas is not configured yet.")
+		return
+	}
+	threadTS := resolveThreadTimestamp(callback)
+	ctx, cancel := context.WithTimeout(a.canvasContext(), 5*time.Second)
+	defer cancel()
+	link, err := linker(ctx, CanvasLinkRequest{
+		WorkspaceID: callback.Team.ID,
+		ChannelID:   channelID,
+		ThreadTS:    threadTS,
+		UserID:      userID,
+		Source:      "shortcut",
+	})
+	if err != nil {
+		a.logger.Error("canvas shortcut failed", "error", err, "workspace", callback.Team.ID, "channel", channelID)
+		a.sendCanvasEphemeral(ctx, channelID, userID, "Unable to open the canvas right now.")
+		return
+	}
+	a.sendCanvasEphemeral(ctx, channelID, userID, "Open the canvas: "+formatCanvasLink(link))
 }
 
 // handleAppMention processes app mention events (@bot mentions).
@@ -675,6 +817,92 @@ func parseSlackTimestamp(ts string) (time.Time, error) {
 	nsec = nsec * 1000
 
 	return time.Unix(sec, nsec), nil
+}
+
+func (a *Adapter) canvasProvider() CanvasLinkProvider {
+	a.canvasMu.RLock()
+	defer a.canvasMu.RUnlock()
+	return a.canvasLinker
+}
+
+func (a *Adapter) canvasContext() context.Context {
+	if a == nil || a.ctx == nil {
+		return context.Background()
+	}
+	return a.ctx
+}
+
+func (a *Adapter) canvasCommandMatches(command string) bool {
+	return strings.EqualFold(strings.TrimSpace(command), strings.TrimSpace(a.cfg.Canvas.Command))
+}
+
+func (a *Adapter) canvasShortcutMatches(callback slack.InteractionCallback) bool {
+	target := strings.TrimSpace(a.cfg.Canvas.ShortcutCallback)
+	if target == "" {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(callback.CallbackID), target) {
+		return true
+	}
+	if strings.EqualFold(strings.TrimSpace(callback.ActionID), target) {
+		return true
+	}
+	if strings.EqualFold(strings.TrimSpace(callback.Name), target) {
+		return true
+	}
+	return false
+}
+
+func (a *Adapter) canvasWorkspaceAllowed(workspaceID string) bool {
+	if len(a.cfg.Canvas.AllowedWorkspaces) == 0 {
+		return true
+	}
+	id := strings.TrimSpace(workspaceID)
+	for _, allowed := range a.cfg.Canvas.AllowedWorkspaces {
+		if strings.EqualFold(strings.TrimSpace(allowed), id) {
+			return true
+		}
+	}
+	return false
+}
+
+func resolveThreadTimestamp(callback slack.InteractionCallback) string {
+	if strings.TrimSpace(callback.Container.ThreadTs) != "" {
+		return strings.TrimSpace(callback.Container.ThreadTs)
+	}
+	if strings.TrimSpace(callback.Message.ThreadTimestamp) != "" {
+		return strings.TrimSpace(callback.Message.ThreadTimestamp)
+	}
+	return ""
+}
+
+func formatCanvasLink(url string) string {
+	trimmed := strings.TrimSpace(url)
+	if trimmed == "" {
+		return trimmed
+	}
+	if strings.HasPrefix(trimmed, "<") && strings.Contains(trimmed, ">") {
+		return trimmed
+	}
+	return "<" + trimmed + "|Canvas link>"
+}
+
+func (a *Adapter) sendCanvasEphemeral(ctx context.Context, channelID string, userID string, text string) {
+	if a == nil || a.client == nil {
+		return
+	}
+	channelID = strings.TrimSpace(channelID)
+	userID = strings.TrimSpace(userID)
+	if channelID == "" || userID == "" || strings.TrimSpace(text) == "" {
+		return
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	_, err := a.client.PostEphemeralContext(ctx, channelID, userID, slack.MsgOptionText(text, false))
+	if err != nil {
+		a.logger.Warn("failed to send canvas ephemeral message", "error", err, "channel", channelID)
+	}
 }
 
 // SendTypingIndicator is a no-op for Slack as it doesn't support programmatic typing indicators.

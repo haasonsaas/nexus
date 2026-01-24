@@ -155,6 +155,13 @@ func (slackPlugin) Build(cfg *config.Config, logger *slog.Logger) (channels.Adap
 		BotToken: cfg.Channels.Slack.BotToken,
 		AppToken: cfg.Channels.Slack.AppToken,
 		Logger:   logger,
+		Canvas: slack.CanvasConfig{
+			Enabled:           cfg.Channels.Slack.Canvas.Enabled,
+			Command:           cfg.Channels.Slack.Canvas.Command,
+			ShortcutCallback:  cfg.Channels.Slack.Canvas.ShortcutCallback,
+			AllowedWorkspaces: cfg.Channels.Slack.Canvas.AllowedWorkspaces,
+			Role:              cfg.Channels.Slack.Canvas.Role,
+		},
 	})
 }
 

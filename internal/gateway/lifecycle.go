@@ -190,6 +190,11 @@ func (s *Server) Stop(ctx context.Context) error {
 			s.logger.Error("error closing canvas host", "error", err)
 		}
 	}
+	if s.auditLogger != nil {
+		if err := s.auditLogger.Close(); err != nil {
+			s.logger.Error("error closing audit logger", "error", err)
+		}
+	}
 	if err := s.stores.Close(); err != nil {
 		s.logger.Error("error closing storage stores", "error", err)
 	}

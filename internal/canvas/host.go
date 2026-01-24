@@ -22,6 +22,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/haasonsaas/nexus/internal/config"
+	"github.com/haasonsaas/nexus/internal/ratelimit"
 )
 
 const (
@@ -284,19 +285,21 @@ const (
 
 // Host serves a canvas directory on a dedicated HTTP server with optional live reload.
 type Host struct {
-	host         string
-	port         int
-	root         string
-	rootReal     string
-	namespace    string
-	a2uiRoot     string
-	a2uiRootReal string
-	liveReload   bool
-	injectClient bool
-	autoIndex    bool
-	tokenSecret  []byte
-	tokenTTL     time.Duration
-	manager      *Manager
+	host           string
+	port           int
+	root           string
+	rootReal       string
+	namespace      string
+	a2uiRoot       string
+	a2uiRootReal   string
+	liveReload     bool
+	injectClient   bool
+	autoIndex      bool
+	tokenSecret    []byte
+	tokenTTL       time.Duration
+	manager        *Manager
+	actionCallback ActionHandler
+	actionLimiter  *ratelimit.Limiter
 
 	logger *slog.Logger
 
@@ -335,19 +338,24 @@ func NewHost(cfg config.CanvasHostConfig, canvasCfg config.CanvasConfig, logger 
 	injectClient := cfg.InjectClient != nil && *cfg.InjectClient
 	autoIndex := cfg.AutoIndex != nil && *cfg.AutoIndex
 	tokenSecret := strings.TrimSpace(canvasCfg.Tokens.Secret)
+	var actionLimiter *ratelimit.Limiter
+	if canvasCfg.Actions.RateLimit.Enabled {
+		actionLimiter = ratelimit.NewLimiter(canvasCfg.Actions.RateLimit)
+	}
 	return &Host{
-		host:         cfg.Host,
-		port:         cfg.Port,
-		root:         cfg.Root,
-		namespace:    namespace,
-		a2uiRoot:     strings.TrimSpace(cfg.A2UIRoot),
-		liveReload:   liveReload,
-		injectClient: injectClient,
-		autoIndex:    autoIndex,
-		tokenSecret:  []byte(tokenSecret),
-		tokenTTL:     canvasCfg.Tokens.TTL,
-		logger:       logger.With("component", "canvas"),
-		clients:      make(map[*websocket.Conn]struct{}),
+		host:          cfg.Host,
+		port:          cfg.Port,
+		root:          cfg.Root,
+		namespace:     namespace,
+		a2uiRoot:      strings.TrimSpace(cfg.A2UIRoot),
+		liveReload:    liveReload,
+		injectClient:  injectClient,
+		autoIndex:     autoIndex,
+		tokenSecret:   []byte(tokenSecret),
+		tokenTTL:      canvasCfg.Tokens.TTL,
+		logger:        logger.With("component", "canvas"),
+		actionLimiter: actionLimiter,
+		clients:       make(map[*websocket.Conn]struct{}),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  8192,
 			WriteBufferSize: 8192,
@@ -364,6 +372,14 @@ func (h *Host) SetManager(manager *Manager) {
 		return
 	}
 	h.manager = manager
+}
+
+// SetActionHandler registers a handler for canvas UI actions.
+func (h *Host) SetActionHandler(handler ActionHandler) {
+	if h == nil {
+		return
+	}
+	h.actionCallback = handler
 }
 
 // Start begins serving the canvas host and optional live reload watcher.
@@ -397,6 +413,7 @@ func (h *Host) Start(ctx context.Context) error {
 		http.Redirect(w, r, canvasPrefix+"/", http.StatusFound)
 	})
 	mux.Handle(path.Join(canvasPrefix, "api/stream"), h.streamHandler())
+	mux.Handle(path.Join(canvasPrefix, "api/action"), h.actionsHandler())
 
 	if h.liveReload {
 		mux.Handle(h.liveReloadScriptPath(), h.liveReloadScriptHandler())
@@ -712,6 +729,79 @@ func (h *Host) streamHandler() http.Handler {
 				flusher.Flush()
 			}
 		}
+	})
+}
+
+func (h *Host) actionsHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			_, _ = w.Write([]byte("Method Not Allowed")) //nolint:errcheck
+			return
+		}
+		if h == nil || h.actionCallback == nil {
+			http.Error(w, "canvas action handler unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		var req struct {
+			SessionID         string          `json:"session_id"`
+			ID                string          `json:"id"`
+			Name              string          `json:"name"`
+			SourceComponentID string          `json:"source_component_id"`
+			Context           json.RawMessage `json:"context"`
+			UserID            string          `json:"user_id"`
+		}
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+		if err := decoder.Decode(&req); err != nil {
+			http.Error(w, "invalid payload", http.StatusBadRequest)
+			return
+		}
+		sessionID := strings.TrimSpace(req.SessionID)
+		if sessionID == "" {
+			http.Error(w, "session_id is required", http.StatusBadRequest)
+			return
+		}
+		if !validSessionID(sessionID) {
+			http.NotFound(w, r)
+			return
+		}
+		if strings.TrimSpace(req.Name) == "" {
+			http.Error(w, "name is required", http.StatusBadRequest)
+			return
+		}
+		if err := h.authorizeSessionRequest(r, sessionID); err != nil {
+			h.writeTokenError(w, err)
+			return
+		}
+		if h.actionLimiter != nil {
+			key := sessionID
+			if userID := strings.TrimSpace(req.UserID); userID != "" {
+				key = key + ":" + userID
+			}
+			if !h.actionLimiter.Allow(key) {
+				http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
+				return
+			}
+		}
+
+		action := Action{
+			SessionID:         sessionID,
+			ID:                strings.TrimSpace(req.ID),
+			Name:              strings.TrimSpace(req.Name),
+			SourceComponentID: strings.TrimSpace(req.SourceComponentID),
+			Context:           req.Context,
+			UserID:            strings.TrimSpace(req.UserID),
+			ReceivedAt:        time.Now(),
+		}
+		if err := h.actionCallback(r.Context(), action); err != nil {
+			h.logger.Warn("canvas action handler failed", "error", err)
+			http.Error(w, "action failed", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
 	})
 }
 

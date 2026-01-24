@@ -25,6 +25,7 @@ import (
 
 	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/haasonsaas/nexus/internal/artifacts"
+	"github.com/haasonsaas/nexus/internal/audit"
 	"github.com/haasonsaas/nexus/internal/auth"
 	"github.com/haasonsaas/nexus/internal/canvas"
 	"github.com/haasonsaas/nexus/internal/channels"
@@ -57,14 +58,15 @@ import (
 // Server is the main Nexus gateway server that handles gRPC requests, manages channels,
 // and coordinates between the agent runtime, session store, and various subsystems.
 type Server struct {
-	config     *config.Config
-	configPath string
-	grpc       *grpc.Server
-	channels   *channels.Registry
-	logger     *slog.Logger
-	wg         sync.WaitGroup
-	cancel     context.CancelFunc
-	startTime  time.Time
+	config      *config.Config
+	configPath  string
+	grpc        *grpc.Server
+	channels    *channels.Registry
+	logger      *slog.Logger
+	auditLogger *audit.Logger
+	wg          sync.WaitGroup
+	cancel      context.CancelFunc
+	startTime   time.Time
 
 	// startupCancel cancels background discovery goroutines launched during initialization
 	startupCancel context.CancelFunc
@@ -254,6 +256,14 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	canvasManager := canvas.NewManager(canvasStore, logger)
 	if canvasHost != nil {
 		canvasHost.SetManager(canvasManager)
+	}
+
+	var auditLogger *audit.Logger
+	loggerInstance, err := audit.NewLogger(cfg.Canvas.Audit)
+	if err != nil {
+		logger.Warn("audit logger init failed", "error", err)
+	} else {
+		auditLogger = loggerInstance
 	}
 
 	// Initialize vector memory manager (optional, returns nil if not enabled)
@@ -464,6 +474,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		grpc:               grpcServer,
 		channels:           channels.NewRegistry(),
 		logger:             logger,
+		auditLogger:        auditLogger,
 		startupCancel:      startupCancel,
 		channelPlugins:     newChannelPluginRegistry(),
 		runtimePlugins:     plugins.DefaultRuntimeRegistry(),
@@ -499,6 +510,9 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	}
 	if artifactSetup != nil {
 		server.artifactRepo = artifactSetup.repo
+	}
+	if server.canvasHost != nil {
+		server.canvasHost.SetActionHandler(server.handleCanvasAction)
 	}
 	grpcSvc := newGRPCService(server)
 	proto.RegisterNexusGatewayServer(grpcServer, grpcSvc)

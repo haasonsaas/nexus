@@ -8,8 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/haasonsaas/nexus/internal/audit"
 	"github.com/haasonsaas/nexus/internal/mcp"
 	"github.com/haasonsaas/nexus/internal/memory"
+	"github.com/haasonsaas/nexus/internal/ratelimit"
 	"github.com/haasonsaas/nexus/internal/skills"
 	"github.com/haasonsaas/nexus/internal/templates"
 )
@@ -103,6 +105,8 @@ type CanvasHostConfig struct {
 type CanvasConfig struct {
 	Retention CanvasRetentionConfig `yaml:"retention"`
 	Tokens    CanvasTokenConfig     `yaml:"tokens"`
+	Actions   CanvasActionConfig    `yaml:"actions"`
+	Audit     audit.Config          `yaml:"audit"`
 }
 
 // CanvasRetentionConfig controls how long canvas state and events are retained.
@@ -117,6 +121,11 @@ type CanvasRetentionConfig struct {
 type CanvasTokenConfig struct {
 	Secret string        `yaml:"secret"`
 	TTL    time.Duration `yaml:"ttl"`
+}
+
+// CanvasActionConfig configures canvas UI action handling.
+type CanvasActionConfig struct {
+	RateLimit ratelimit.Config `yaml:"rate_limit"`
 }
 
 type DatabaseConfig struct {
@@ -1125,6 +1134,52 @@ func applyCanvasDefaults(cfg *CanvasConfig) {
 	if cfg.Tokens.TTL == 0 {
 		cfg.Tokens.TTL = 30 * time.Minute
 	}
+	applyCanvasActionDefaults(&cfg.Actions)
+	applyAuditDefaults(&cfg.Audit)
+}
+
+func applyCanvasActionDefaults(cfg *CanvasActionConfig) {
+	if cfg == nil {
+		return
+	}
+	if cfg.RateLimit.RequestsPerSecond == 0 && cfg.RateLimit.BurstSize == 0 && !cfg.RateLimit.Enabled {
+		cfg.RateLimit = ratelimit.DefaultConfig()
+		return
+	}
+	defaults := ratelimit.DefaultConfig()
+	if cfg.RateLimit.RequestsPerSecond == 0 {
+		cfg.RateLimit.RequestsPerSecond = defaults.RequestsPerSecond
+	}
+	if cfg.RateLimit.BurstSize == 0 {
+		cfg.RateLimit.BurstSize = defaults.BurstSize
+	}
+}
+
+func applyAuditDefaults(cfg *audit.Config) {
+	if cfg == nil {
+		return
+	}
+	if cfg.Level == "" {
+		cfg.Level = audit.LevelInfo
+	}
+	if cfg.Format == "" {
+		cfg.Format = audit.FormatJSON
+	}
+	if cfg.Output == "" {
+		cfg.Output = "stdout"
+	}
+	if cfg.SampleRate == 0 {
+		cfg.SampleRate = 1.0
+	}
+	if cfg.BufferSize == 0 {
+		cfg.BufferSize = 1000
+	}
+	if cfg.FlushInterval == 0 {
+		cfg.FlushInterval = 5 * time.Second
+	}
+	if cfg.MaxFieldSize == 0 {
+		cfg.MaxFieldSize = 1024
+	}
 }
 
 func applyDatabaseDefaults(cfg *DatabaseConfig) {
@@ -1644,6 +1699,24 @@ func validateConfig(cfg *Config) error {
 		if len(secret) < 32 {
 			issues = append(issues, "canvas.tokens.secret must be at least 32 characters for security")
 		}
+	}
+	if cfg.Canvas.Actions.RateLimit.RequestsPerSecond < 0 {
+		issues = append(issues, "canvas.actions.rate_limit.requests_per_second must be >= 0")
+	}
+	if cfg.Canvas.Actions.RateLimit.BurstSize < 0 {
+		issues = append(issues, "canvas.actions.rate_limit.burst_size must be >= 0")
+	}
+	if cfg.Canvas.Audit.SampleRate < 0 || cfg.Canvas.Audit.SampleRate > 1 {
+		issues = append(issues, "canvas.audit.sample_rate must be between 0 and 1")
+	}
+	if cfg.Canvas.Audit.MaxFieldSize < 0 {
+		issues = append(issues, "canvas.audit.max_field_size must be >= 0")
+	}
+	if cfg.Canvas.Audit.BufferSize < 0 {
+		issues = append(issues, "canvas.audit.buffer_size must be >= 0")
+	}
+	if cfg.Canvas.Audit.FlushInterval < 0 {
+		issues = append(issues, "canvas.audit.flush_interval must be >= 0")
 	}
 
 	if strings.TrimSpace(cfg.Artifacts.MetadataBackend) != "" {

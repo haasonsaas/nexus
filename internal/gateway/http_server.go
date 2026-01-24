@@ -27,20 +27,21 @@ func (s *Server) startHTTPServer(ctx context.Context) error {
 	mux.Handle("/ws", s.newWSControlPlane())
 
 	webHandler, err := web.NewHandler(&web.Config{
-		BasePath:        "/ui",
-		AuthService:     s.authService,
-		SessionStore:    s.sessions,
-		ArtifactRepo:    s.artifactRepo,
-		ChannelRegistry: s.channels,
-		CronScheduler:   s.cronScheduler,
-		SkillsManager:   s.skillsManager,
-		EdgeManager:     s.edgeManager,
-		GatewayConfig:   s.config,
-		ConfigManager:   s,
-		ConfigPath:      s.configPath,
-		DefaultAgentID:  s.config.Session.DefaultAgentID,
-		Logger:          s.logger,
-		ServerStartTime: s.startTime,
+		BasePath:            "/ui",
+		AuthService:         s.authService,
+		SessionStore:        s.sessions,
+		ArtifactRepo:        s.artifactRepo,
+		ChannelRegistry:     s.channels,
+		CronScheduler:       s.cronScheduler,
+		SkillsManager:       s.skillsManager,
+		EdgeManager:         s.edgeManager,
+		ToolSummaryProvider: s.toolManager,
+		GatewayConfig:       s.config,
+		ConfigManager:       s,
+		ConfigPath:          s.configPath,
+		DefaultAgentID:      s.config.Session.DefaultAgentID,
+		Logger:              s.logger,
+		ServerStartTime:     s.startTime,
 	})
 	if err != nil {
 		return fmt.Errorf("web handler: %w", err)

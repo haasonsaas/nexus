@@ -25,6 +25,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/tools/sandbox/firecracker"
 	sessiontools "github.com/haasonsaas/nexus/internal/tools/sessions"
 	"github.com/haasonsaas/nexus/internal/tools/websearch"
+	"github.com/haasonsaas/nexus/pkg/models"
 )
 
 // ToolManager manages tool registration and lifecycle for the gateway.
@@ -47,6 +48,7 @@ type ToolManager struct {
 	// Registered tools tracking
 	registeredTools []string
 	mcpTools        []string
+	toolSummaries   []models.ToolSummary
 }
 
 // ToolManagerConfig configures the ToolManager.
@@ -75,6 +77,7 @@ func NewToolManager(cfg ToolManagerConfig) *ToolManager {
 		sessionStore:    cfg.Sessions,
 		registeredTools: make([]string, 0),
 		mcpTools:        make([]string, 0),
+		toolSummaries:   make([]models.ToolSummary, 0),
 	}
 }
 
@@ -208,24 +211,21 @@ func (m *ToolManager) RegisterTools(ctx context.Context, runtime *agent.Runtime)
 	cfg := m.config
 
 	fileCfg := files.Config{Workspace: cfg.Workspace.Path}
-	runtime.RegisterTool(files.NewReadTool(fileCfg))
-	runtime.RegisterTool(files.NewWriteTool(fileCfg))
-	runtime.RegisterTool(files.NewEditTool(fileCfg))
-	runtime.RegisterTool(files.NewApplyPatchTool(fileCfg))
-	m.registeredTools = append(m.registeredTools, "read", "write", "edit", "apply_patch")
+	m.registerCoreTool(runtime, files.NewReadTool(fileCfg))
+	m.registerCoreTool(runtime, files.NewWriteTool(fileCfg))
+	m.registerCoreTool(runtime, files.NewEditTool(fileCfg))
+	m.registerCoreTool(runtime, files.NewApplyPatchTool(fileCfg))
 
 	execManager := exectools.NewManager(cfg.Workspace.Path)
-	runtime.RegisterTool(exectools.NewExecTool("exec", execManager))
-	runtime.RegisterTool(exectools.NewExecTool("bash", execManager))
-	runtime.RegisterTool(exectools.NewProcessTool(execManager))
-	m.registeredTools = append(m.registeredTools, "exec", "bash", "process")
+	m.registerCoreTool(runtime, exectools.NewExecTool("exec", execManager))
+	m.registerCoreTool(runtime, exectools.NewExecTool("bash", execManager))
+	m.registerCoreTool(runtime, exectools.NewProcessTool(execManager))
 
 	if m.sessionStore != nil {
-		runtime.RegisterTool(sessiontools.NewListTool(m.sessionStore, cfg.Session.DefaultAgentID))
-		runtime.RegisterTool(sessiontools.NewHistoryTool(m.sessionStore))
-		runtime.RegisterTool(sessiontools.NewStatusTool(m.sessionStore))
-		runtime.RegisterTool(sessiontools.NewSendTool(m.sessionStore, runtime))
-		m.registeredTools = append(m.registeredTools, "sessions_list", "sessions_history", "session_status", "sessions_send")
+		m.registerCoreTool(runtime, sessiontools.NewListTool(m.sessionStore, cfg.Session.DefaultAgentID))
+		m.registerCoreTool(runtime, sessiontools.NewHistoryTool(m.sessionStore))
+		m.registerCoreTool(runtime, sessiontools.NewStatusTool(m.sessionStore))
+		m.registerCoreTool(runtime, sessiontools.NewSendTool(m.sessionStore, runtime))
 	}
 
 	// Register sandbox tool
@@ -233,7 +233,6 @@ func (m *ToolManager) RegisterTools(ctx context.Context, runtime *agent.Runtime)
 		if err := m.registerSandboxTool(ctx, runtime); err != nil {
 			return fmt.Errorf("sandbox tool: %w", err)
 		}
-		m.registeredTools = append(m.registeredTools, "sandbox")
 	}
 
 	// Register browser tool
@@ -241,23 +240,20 @@ func (m *ToolManager) RegisterTools(ctx context.Context, runtime *agent.Runtime)
 		if err := m.registerBrowserTool(runtime); err != nil {
 			return fmt.Errorf("browser tool: %w", err)
 		}
-		m.registeredTools = append(m.registeredTools, "browser")
 	}
 
 	// Register web search tool
 	if cfg.Tools.WebSearch.Enabled {
 		m.registerWebSearchTool(runtime)
-		m.registeredTools = append(m.registeredTools, "web_search")
 	}
 	if cfg.Tools.WebFetch.Enabled {
-		runtime.RegisterTool(websearch.NewWebFetchTool(&websearch.FetchConfig{MaxChars: cfg.Tools.WebFetch.MaxChars}))
-		m.registeredTools = append(m.registeredTools, "web_fetch")
+		m.registerCoreTool(runtime, websearch.NewWebFetchTool(&websearch.FetchConfig{MaxChars: cfg.Tools.WebFetch.MaxChars}))
 	}
 
 	// Register memory search tool
 	if cfg.Tools.MemorySearch.Enabled {
 		m.registerMemorySearchTool(runtime)
-		runtime.RegisterTool(memorysearch.NewMemoryGetTool(&memorysearch.Config{
+		m.registerCoreTool(runtime, memorysearch.NewMemoryGetTool(&memorysearch.Config{
 			Directory:     cfg.Tools.MemorySearch.Directory,
 			MemoryFile:    cfg.Tools.MemorySearch.MemoryFile,
 			WorkspacePath: cfg.Workspace.Path,
@@ -274,13 +270,11 @@ func (m *ToolManager) RegisterTools(ctx context.Context, runtime *agent.Runtime)
 				Timeout:  cfg.Tools.MemorySearch.Embeddings.Timeout,
 			},
 		}))
-		m.registeredTools = append(m.registeredTools, "memory_search", "memory_get")
 	}
 
 	// Register job status tool
 	if m.jobStore != nil {
-		runtime.RegisterTool(jobtools.NewStatusTool(m.jobStore))
-		m.registeredTools = append(m.registeredTools, "job_status")
+		m.registerCoreTool(runtime, jobtools.NewStatusTool(m.jobStore))
 	}
 
 	// Register MCP tools
@@ -338,7 +332,12 @@ func (m *ToolManager) registerSandboxTool(ctx context.Context, runtime *agent.Ru
 		opts = append(opts, sandbox.WithNetworkEnabled(true))
 	}
 
-	return sandbox.Register(runtime, opts...)
+	executor, err := sandbox.NewExecutor(opts...)
+	if err != nil {
+		return err
+	}
+	m.registerCoreTool(runtime, executor)
+	return nil
 }
 
 // setupFirecrackerBackend initializes the firecracker backend.
@@ -392,7 +391,7 @@ func (m *ToolManager) registerBrowserTool(runtime *agent.Runtime) error {
 	}
 
 	m.browserPool = pool
-	runtime.RegisterTool(browser.NewBrowserTool(pool))
+	m.registerCoreTool(runtime, browser.NewBrowserTool(pool))
 	return nil
 }
 
@@ -419,7 +418,7 @@ func (m *ToolManager) registerWebSearchTool(runtime *agent.Runtime) {
 		}
 	}
 
-	runtime.RegisterTool(websearch.NewWebSearchTool(searchConfig))
+	m.registerCoreTool(runtime, websearch.NewWebSearchTool(searchConfig))
 }
 
 // registerMemorySearchTool registers the memory search tool.
@@ -444,7 +443,23 @@ func (m *ToolManager) registerMemorySearchTool(runtime *agent.Runtime) {
 		},
 	}
 
-	runtime.RegisterTool(memorysearch.NewMemorySearchTool(searchConfig))
+	m.registerCoreTool(runtime, memorysearch.NewMemorySearchTool(searchConfig))
+}
+
+func (m *ToolManager) registerCoreTool(runtime *agent.Runtime, tool agent.Tool) {
+	if runtime == nil || tool == nil {
+		return
+	}
+	runtime.RegisterTool(tool)
+	name := tool.Name()
+	m.registeredTools = append(m.registeredTools, name)
+	m.toolSummaries = append(m.toolSummaries, models.ToolSummary{
+		Name:        name,
+		Description: tool.Description(),
+		Schema:      tool.Schema(),
+		Source:      "core",
+		Canonical:   "core." + name,
+	})
 }
 
 // GetBrowserPool returns the browser pool if active.
@@ -469,6 +484,21 @@ func (m *ToolManager) RegisteredTools() []string {
 	tools := make([]string, len(m.registeredTools))
 	copy(tools, m.registeredTools)
 	return tools
+}
+
+// ToolSummaries returns detailed tool metadata for display.
+func (m *ToolManager) ToolSummaries() []models.ToolSummary {
+	m.mu.RLock()
+	core := make([]models.ToolSummary, len(m.toolSummaries))
+	copy(core, m.toolSummaries)
+	mcpMgr := m.mcpManager
+	cfg := m.config
+	m.mu.RUnlock()
+
+	if mcpMgr != nil && cfg != nil && cfg.MCP.Enabled {
+		core = append(core, mcp.ToolSummaries(mcpMgr)...)
+	}
+	return core
 }
 
 // MCPTools returns the list of registered MCP tool names.

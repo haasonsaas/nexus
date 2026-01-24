@@ -329,6 +329,13 @@ tools:
       ask_fallback: true
       default_decision: pending
       request_ttl: 5m
+    result_guard:
+      enabled: false
+      max_chars: 0
+      denylist: []
+      redact_patterns: []
+      redaction_text: "[redacted]"
+      truncate_suffix: "...[truncated]"
     async: []
   elevated:
     enabled: false

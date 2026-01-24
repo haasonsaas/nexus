@@ -133,8 +133,16 @@ func (s *Server) ensureRuntime(ctx context.Context) (*agent.Runtime, error) {
 		ApprovalChecker:   s.approvalChecker,
 		ElevatedTools:     elevatedTools,
 		AsyncTools:        s.config.Tools.Execution.Async,
-		JobStore:          s.jobStore,
-		Logger:            s.logger,
+		ToolResultGuard: agent.ToolResultGuard{
+			Enabled:        s.config.Tools.Execution.ResultGuard.Enabled,
+			MaxChars:       s.config.Tools.Execution.ResultGuard.MaxChars,
+			Denylist:       s.config.Tools.Execution.ResultGuard.Denylist,
+			RedactPatterns: s.config.Tools.Execution.ResultGuard.RedactPatterns,
+			RedactionText:  s.config.Tools.Execution.ResultGuard.RedactionText,
+			TruncateSuffix: s.config.Tools.Execution.ResultGuard.TruncateSuffix,
+		},
+		JobStore: s.jobStore,
+		Logger:   s.logger,
 	})
 	if pruning := config.EffectiveContextPruningSettings(s.config.Session.ContextPruning); pruning != nil {
 		runtime.SetContextPruning(pruning)

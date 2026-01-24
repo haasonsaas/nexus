@@ -170,8 +170,16 @@ func applyRuntimeConfigUpdates(s *Server, cfg *config.Config, oldCfg *config.Con
 			ApprovalChecker:   checker,
 			ElevatedTools:     elevatedTools,
 			AsyncTools:        cfg.Tools.Execution.Async,
-			JobStore:          s.jobStore,
-			Logger:            s.logger,
+			ToolResultGuard: agent.ToolResultGuard{
+				Enabled:        cfg.Tools.Execution.ResultGuard.Enabled,
+				MaxChars:       cfg.Tools.Execution.ResultGuard.MaxChars,
+				Denylist:       cfg.Tools.Execution.ResultGuard.Denylist,
+				RedactPatterns: cfg.Tools.Execution.ResultGuard.RedactPatterns,
+				RedactionText:  cfg.Tools.Execution.ResultGuard.RedactionText,
+				TruncateSuffix: cfg.Tools.Execution.ResultGuard.TruncateSuffix,
+			},
+			JobStore: s.jobStore,
+			Logger:   s.logger,
 		})
 
 		if pruning := config.EffectiveContextPruningSettings(cfg.Session.ContextPruning); pruning != nil {

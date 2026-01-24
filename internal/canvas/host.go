@@ -2,6 +2,7 @@ package canvas
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,7 +29,8 @@ import (
 )
 
 const (
-	defaultIndexHTML = `<!doctype html>
+	dompurifyPlaceholder = "/* DOMPURIFY_PLACEHOLDER */"
+	defaultIndexHTML     = `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
@@ -278,6 +280,7 @@ const (
   </div>
 
   <script>
+    /* DOMPURIFY_PLACEHOLDER */
     (() => {
       const root = document.getElementById("canvas-root");
       const statusEl = document.getElementById("stream-status");
@@ -319,6 +322,13 @@ const (
       const sanitizeHTML = (html) => {
         if (!html || typeof html !== "string") {
           return "";
+        }
+        if (window.DOMPurify && typeof window.DOMPurify.sanitize === "function") {
+          const cleaned = window.DOMPurify.sanitize(html, {
+            USE_PROFILES: { html: true },
+            ADD_ATTR: ["target", "rel"],
+          });
+          return cleaned;
         }
         const template = document.createElement("template");
         template.innerHTML = html;
@@ -405,6 +415,13 @@ const (
         }
         if (payload.html) {
           root.innerHTML = sanitizeHTML(payload.html);
+          const links = root.querySelectorAll("a[target='_blank']");
+          for (const link of links) {
+            const rel = (link.getAttribute("rel") || "").split(/\s+/).filter(Boolean);
+            if (!rel.includes("noopener")) rel.push("noopener");
+            if (!rel.includes("noreferrer")) rel.push("noreferrer");
+            link.setAttribute("rel", rel.join(" "));
+          }
           return;
         }
         if (payload.text || payload.markdown) {
@@ -771,10 +788,20 @@ const (
       });
     });
   })();
-  </script>
+</script>
 </body>
 </html>`
 )
+
+//go:embed assets/dompurify.min.js
+var dompurifyMinJS string
+
+func renderIndexHTML() string {
+	if dompurifyMinJS == "" {
+		return defaultIndexHTML
+	}
+	return strings.Replace(defaultIndexHTML, dompurifyPlaceholder, dompurifyMinJS, 1)
+}
 
 // Host serves a canvas directory on a dedicated HTTP server with optional live reload.
 type Host struct {
@@ -1647,7 +1674,7 @@ func (h *Host) ensureIndex(dir string) {
 		h.logger.Warn("failed to create canvas directory", "path", dir, "error", err)
 		return
 	}
-	if err := os.WriteFile(indexPath, []byte(defaultIndexHTML), 0o644); err != nil {
+	if err := os.WriteFile(indexPath, []byte(renderIndexHTML()), 0o644); err != nil {
 		h.logger.Warn("failed to write canvas index", "path", indexPath, "error", err)
 	}
 }

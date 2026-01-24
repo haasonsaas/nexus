@@ -574,6 +574,10 @@ type Runtime struct {
 	contextPruning   *agentctx.ContextPruningSettings
 	cacheTouch       sync.Map
 
+	// sessionLocks ensures only one writer per session at a time
+	sessionLocksMu sync.Mutex
+	sessionLocks   map[string]*sessionLock
+
 	// summarizeConfig configures conversation summarization
 	summarizeConfig *agentctx.SummarizationConfig
 
@@ -612,12 +616,13 @@ const maxConcurrentJobs = 50
 func NewRuntimeWithOptions(provider LLMProvider, sessions sessions.Store, opts RuntimeOptions) *Runtime {
 	opts = mergeRuntimeOptions(DefaultRuntimeOptions(), opts)
 	runtime := &Runtime{
-		provider: provider,
-		tools:    NewToolRegistry(),
-		sessions: sessions,
-		opts:     opts,
-		plugins:  NewPluginRegistry(),
-		jobSem:   make(chan struct{}, maxConcurrentJobs),
+		provider:     provider,
+		tools:        NewToolRegistry(),
+		sessions:     sessions,
+		opts:         opts,
+		plugins:      NewPluginRegistry(),
+		jobSem:       make(chan struct{}, maxConcurrentJobs),
+		sessionLocks: make(map[string]*sessionLock),
 	}
 	if opts.MaxIterations > 0 {
 		runtime.maxIterations = opts.MaxIterations
@@ -947,6 +952,8 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 
 	ctx = WithSession(ctx, session)
 	runID := observability.GetRunID(ctx)
+	unlockSession := r.lockSession(session.ID)
+	defer unlockSession()
 
 	runOpts := r.opts
 	if override, ok := runtimeOptionsFromContext(ctx); ok {
@@ -981,6 +988,7 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 		emitter.RunError(ctx, err, false)
 		return err
 	}
+	history = repairTranscript(history)
 
 	appendMessage := func(message *models.Message) error {
 		if message == nil {
@@ -1123,6 +1131,22 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 	if res, pol, ok := toolPolicyFromContext(ctx); ok {
 		resolver, toolPolicy = res, pol
 		tools = filterToolsByPolicy(resolver, toolPolicy, tools)
+	}
+	persistToolResult := func(tc models.ToolCall, res models.ToolResult, assistantMsgID string) {
+		if r.toolEvents == nil {
+			return
+		}
+		guarded := guardToolResult(runOpts.ToolResultGuard, tc.Name, res, resolver)
+		if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsgID, &tc, &guarded); err != nil {
+			r.opts.Logger.Debug(
+				"failed to persist tool result event",
+				"error", err,
+				"tool", tc.Name,
+				"tool_call_id", tc.ID,
+				"session_id", session.ID,
+				"run_id", runID,
+			)
+		}
 	}
 
 	// 7) Build base request
@@ -1283,18 +1307,7 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 				emitter.ToolFinished(ctx, tc.ID, tc.Name, false, []byte("tool not allowed by policy"), 0)
 
 				// Persist (best-effort)
-				if r.toolEvents != nil {
-					if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res); err != nil {
-						r.opts.Logger.Debug(
-							"failed to persist tool result event",
-							"error", err,
-							"tool", tc.Name,
-							"tool_call_id", tc.ID,
-							"session_id", session.ID,
-							"run_id", runID,
-						)
-					}
-				}
+				persistToolResult(tc, res, assistantMsgID)
 				continue
 			}
 
@@ -1316,18 +1329,7 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 					}
 					results[i] = res
 					emitter.ToolFinished(ctx, tc.ID, tc.Name, false, []byte(res.Content), 0)
-					if r.toolEvents != nil {
-						if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res); err != nil {
-							r.opts.Logger.Debug(
-								"failed to persist tool result event",
-								"error", err,
-								"tool", tc.Name,
-								"tool_call_id", tc.ID,
-								"session_id", session.ID,
-								"run_id", runID,
-							)
-						}
-					}
+					persistToolResult(tc, res, assistantMsgID)
 					continue
 				case ApprovalPending:
 					var approvalID string
@@ -1360,18 +1362,7 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 						chunks <- &ResponseChunk{ToolResult: &res}
 					}
 
-					if r.toolEvents != nil {
-						if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res); err != nil {
-							r.opts.Logger.Debug(
-								"failed to persist tool result event",
-								"error", err,
-								"tool", tc.Name,
-								"tool_call_id", tc.ID,
-								"session_id", session.ID,
-								"run_id", runID,
-							)
-						}
-					}
+					persistToolResult(tc, res, assistantMsgID)
 					continue
 				}
 			} else if r.requiresApproval(runOpts, tc.Name, resolver) {
@@ -1399,18 +1390,7 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 						chunks <- &ResponseChunk{ToolResult: &res}
 					}
 
-					if r.toolEvents != nil {
-						if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res); err != nil {
-							r.opts.Logger.Debug(
-								"failed to persist tool result event",
-								"error", err,
-								"tool", tc.Name,
-								"tool_call_id", tc.ID,
-								"session_id", session.ID,
-								"run_id", runID,
-							)
-						}
-					}
+					persistToolResult(tc, res, assistantMsgID)
 					continue
 				}
 			}
@@ -1457,18 +1437,7 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 					chunks <- &ResponseChunk{ToolResult: &res}
 				}
 
-				if r.toolEvents != nil {
-					if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res); err != nil {
-						r.opts.Logger.Debug(
-							"failed to persist tool result event",
-							"error", err,
-							"tool", tc.Name,
-							"tool_call_id", tc.ID,
-							"session_id", session.ID,
-							"run_id", runID,
-						)
-					}
-				}
+				persistToolResult(tc, res, assistantMsgID)
 
 				// Spawn async job with semaphore to limit concurrent goroutines
 				select {
@@ -1506,20 +1475,9 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 			results[origIdx] = er.Result
 
 			// Persist tool result (best-effort)
-			if r.toolEvents != nil {
-				tc := toolCalls[origIdx]
-				res := results[origIdx]
-				if err := r.toolEvents.AddToolResult(ctx, session.ID, assistantMsg.ID, &tc, &res); err != nil {
-					r.opts.Logger.Debug(
-						"failed to persist tool result event",
-						"error", err,
-						"tool", tc.Name,
-						"tool_call_id", tc.ID,
-						"session_id", session.ID,
-						"run_id", runID,
-					)
-				}
-			}
+			tc := toolCalls[origIdx]
+			res := results[origIdx]
+			persistToolResult(tc, res, assistantMsgID)
 		}
 
 		// Ensure all ToolCallIDs are set
@@ -1529,10 +1487,11 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 			}
 		}
 
+		persistResults := guardToolResults(runOpts.ToolResultGuard, toolCalls, results, resolver)
 		// Persist tool message without inline attachments to avoid bloating storage.
-		resultsForStorage := make([]models.ToolResult, len(results))
-		for i := range results {
-			resultsForStorage[i] = results[i]
+		resultsForStorage := make([]models.ToolResult, len(persistResults))
+		for i := range persistResults {
+			resultsForStorage[i] = persistResults[i]
 			resultsForStorage[i].Attachments = nil
 		}
 		toolMsg := &models.Message{
@@ -1982,4 +1941,65 @@ func matchToolPattern(pattern, toolName string) bool {
 		return strings.HasPrefix(toolName, prefix)
 	}
 	return pattern == toolName
+}
+
+func guardToolResult(guard ToolResultGuard, toolName string, result models.ToolResult, resolver *policy.Resolver) models.ToolResult {
+	return guard.Apply(toolName, result, resolver)
+}
+
+func guardToolResults(guard ToolResultGuard, toolCalls []models.ToolCall, results []models.ToolResult, resolver *policy.Resolver) []models.ToolResult {
+	if !guard.active() {
+		return results
+	}
+	if len(results) == 0 {
+		return results
+	}
+
+	namesByID := make(map[string]string, len(toolCalls))
+	for _, tc := range toolCalls {
+		if tc.ID != "" {
+			namesByID[tc.ID] = tc.Name
+		}
+	}
+
+	guarded := make([]models.ToolResult, len(results))
+	for i, res := range results {
+		toolName := namesByID[res.ToolCallID]
+		if toolName == "" && i < len(toolCalls) {
+			toolName = toolCalls[i].Name
+		}
+		guarded[i] = guardToolResult(guard, toolName, res, resolver)
+	}
+	return guarded
+}
+
+type sessionLock struct {
+	mu   sync.Mutex
+	refs int
+}
+
+func (r *Runtime) lockSession(sessionID string) func() {
+	if strings.TrimSpace(sessionID) == "" {
+		return func() {}
+	}
+
+	r.sessionLocksMu.Lock()
+	lock := r.sessionLocks[sessionID]
+	if lock == nil {
+		lock = &sessionLock{}
+		r.sessionLocks[sessionID] = lock
+	}
+	lock.refs++
+	r.sessionLocksMu.Unlock()
+
+	lock.mu.Lock()
+	return func() {
+		lock.mu.Unlock()
+		r.sessionLocksMu.Lock()
+		lock.refs--
+		if lock.refs <= 0 {
+			delete(r.sessionLocks, sessionID)
+		}
+		r.sessionLocksMu.Unlock()
+	}
 }

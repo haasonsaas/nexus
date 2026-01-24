@@ -1,0 +1,15 @@
+{{define "tools/page.html"}}
+<div class="page-header">
+    <h1>Tools</h1>
+    <p class="subtitle">Registered tools across core, MCP, and edge</p>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Tools</h3>
+    </div>
+    <div class="card-body">
+        {{template "tools/list.html" .Tools}}
+    </div>
+</div>
+{{end}}

@@ -578,16 +578,17 @@ type ToolJobsConfig struct {
 
 // ToolExecutionConfig controls runtime tool execution behavior.
 type ToolExecutionConfig struct {
-	MaxIterations   int            `yaml:"max_iterations"`
-	Parallelism     int            `yaml:"parallelism"`
-	Timeout         time.Duration  `yaml:"timeout"`
-	MaxAttempts     int            `yaml:"max_attempts"`
-	RetryBackoff    time.Duration  `yaml:"retry_backoff"`
-	DisableEvents   bool           `yaml:"disable_events"`
-	MaxToolCalls    int            `yaml:"max_tool_calls"`
-	RequireApproval []string       `yaml:"require_approval"`
-	Async           []string       `yaml:"async"`
-	Approval        ApprovalConfig `yaml:"approval"`
+	MaxIterations   int                   `yaml:"max_iterations"`
+	Parallelism     int                   `yaml:"parallelism"`
+	Timeout         time.Duration         `yaml:"timeout"`
+	MaxAttempts     int                   `yaml:"max_attempts"`
+	RetryBackoff    time.Duration         `yaml:"retry_backoff"`
+	DisableEvents   bool                  `yaml:"disable_events"`
+	MaxToolCalls    int                   `yaml:"max_tool_calls"`
+	RequireApproval []string              `yaml:"require_approval"`
+	Async           []string              `yaml:"async"`
+	Approval        ApprovalConfig        `yaml:"approval"`
+	ResultGuard     ToolResultGuardConfig `yaml:"result_guard"`
 }
 
 // ApprovalConfig controls tool approval behavior.
@@ -620,6 +621,16 @@ type ApprovalConfig struct {
 
 	// RequestTTL is how long approval requests remain valid.
 	RequestTTL time.Duration `yaml:"request_ttl"`
+}
+
+// ToolResultGuardConfig controls redaction of tool results before persistence.
+type ToolResultGuardConfig struct {
+	Enabled        bool     `yaml:"enabled"`
+	MaxChars       int      `yaml:"max_chars"`
+	Denylist       []string `yaml:"denylist"`
+	RedactPatterns []string `yaml:"redact_patterns"`
+	RedactionText  string   `yaml:"redaction_text"`
+	TruncateSuffix string   `yaml:"truncate_suffix"`
 }
 
 // ElevatedConfig controls elevated tool execution behavior and allowlists.
@@ -1392,6 +1403,12 @@ func applyToolsDefaults(cfg *Config) {
 	if cfg.Tools.Jobs.PruneInterval == 0 {
 		cfg.Tools.Jobs.PruneInterval = 1 * time.Hour
 	}
+	if strings.TrimSpace(cfg.Tools.Execution.ResultGuard.RedactionText) == "" {
+		cfg.Tools.Execution.ResultGuard.RedactionText = "[redacted]"
+	}
+	if strings.TrimSpace(cfg.Tools.Execution.ResultGuard.TruncateSuffix) == "" {
+		cfg.Tools.Execution.ResultGuard.TruncateSuffix = "...[truncated]"
+	}
 }
 
 func applyMemorySearchEmbeddingsDefaults(cfg *MemorySearchEmbeddingsConfig) {
@@ -1911,6 +1928,9 @@ func validateConfig(cfg *Config) error {
 	}
 	if cfg.Tools.Execution.MaxToolCalls < 0 {
 		issues = append(issues, "tools.execution.max_tool_calls must be >= 0")
+	}
+	if cfg.Tools.Execution.ResultGuard.MaxChars < 0 {
+		issues = append(issues, "tools.execution.result_guard.max_chars must be >= 0")
 	}
 	if profile := strings.ToLower(strings.TrimSpace(cfg.Tools.Execution.Approval.Profile)); profile != "" {
 		switch profile {

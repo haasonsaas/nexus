@@ -94,6 +94,7 @@ type Server struct {
 	taskStore          tasks.Store
 	mcpManager         *mcp.Manager
 	firecrackerBackend *firecracker.Backend
+	toolManager        *ToolManager
 
 	toolPolicyResolver *policy.Resolver
 	llmProvider        agent.LLMProvider

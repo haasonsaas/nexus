@@ -234,6 +234,7 @@ channels:
       #     U1234567890: viewer
 
 llm:
+  # default_provider can reference a profile (e.g., "openai:fast")
   default_provider: anthropic
 
   providers:
@@ -248,6 +249,10 @@ llm:
       default_model: gpt-4o
       # Optional: for Azure OpenAI
       # base_url: https://your-resource.openai.azure.com
+      profiles:
+        fast:
+          api_key: ${OPENAI_FAST_API_KEY}
+          default_model: gpt-4o-mini
 
     google:
       api_key: ${GOOGLE_AI_API_KEY}

@@ -13,12 +13,16 @@ import (
 type Options struct {
 	Limit     int
 	Threshold float32
+	Judge     bool
+	Model     string
+	MaxTokens int
 }
 
 // Evaluator runs RAG evaluation against a test set.
 type Evaluator struct {
 	index   *index.Manager
 	options Options
+	judge   *LLMJudge
 }
 
 // NewEvaluator creates a new evaluator.
@@ -31,8 +35,17 @@ func NewEvaluator(idx *index.Manager, opts *Options) *Evaluator {
 		if opts.Threshold > 0 {
 			resolved.Threshold = opts.Threshold
 		}
+		resolved.Judge = opts.Judge
+		resolved.Model = opts.Model
+		resolved.MaxTokens = opts.MaxTokens
 	}
 	return &Evaluator{index: idx, options: resolved}
+}
+
+// WithJudge attaches an LLM judge for answer quality scoring.
+func (e *Evaluator) WithJudge(judge *LLMJudge) *Evaluator {
+	e.judge = judge
+	return e
 }
 
 // Evaluate runs the evaluation and returns a report.
@@ -87,6 +100,32 @@ func (e *Evaluator) evaluateCase(ctx context.Context, tc TestCase) (CaseResult, 
 	mrr := MRR(retrievedKeys, tc.ExpectedChunks)
 	ndcg := NDCG(retrievedKeys, tc.ExpectedChunks)
 
+	var answer string
+	var answerRelevance float64
+	var faithfulness float64
+	var contextRecall float64
+	judged := false
+	if e.judge != nil {
+		answerText, err := e.generateAnswer(ctx, tc.Query, resp.Results)
+		if err != nil {
+			return CaseResult{}, err
+		}
+		answer = answerText
+		answerRelevance, err = e.judge.JudgeRelevance(ctx, tc.Query, answer)
+		if err != nil {
+			return CaseResult{}, err
+		}
+		faithfulness, err = e.judge.JudgeFaithfulness(ctx, answer, resp.Results)
+		if err != nil {
+			return CaseResult{}, err
+		}
+		contextRecall, err = e.judge.JudgeContextRecall(ctx, answer, resp.Results)
+		if err != nil {
+			return CaseResult{}, err
+		}
+		judged = true
+	}
+
 	return CaseResult{
 		CaseID:        tc.ID,
 		Query:         tc.Query,
@@ -97,6 +136,19 @@ func (e *Evaluator) evaluateCase(ctx context.Context, tc TestCase) (CaseResult, 
 		MRR:           mrr,
 		NDCG:          ndcg,
 		QueryTime:     resp.QueryTime,
+		Answer:        answer,
+		Relevance:     answerRelevance,
+		Faithfulness:  faithfulness,
+		ContextRecall: contextRecall,
+		Judged:        judged,
 		ExpectedHints: tc.ExpectedChunks,
 	}, nil
+}
+
+func (e *Evaluator) generateAnswer(ctx context.Context, query string, results []*models.DocumentSearchResult) (string, error) {
+	if e.judge == nil {
+		return "", nil
+	}
+	context := BuildContext(results)
+	return e.judge.GenerateAnswer(ctx, query, context, e.options.Model, e.options.MaxTokens)
 }

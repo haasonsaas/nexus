@@ -94,6 +94,7 @@ func (e *Evaluator) Evaluate(ctx context.Context, set *TestSet) (*Report, error)
 
 ```bash
 nexus rag eval --test-set ./evaluations/rag_test_set.yaml --output report.json
+nexus rag eval --test-set ./evaluations/rag_test_set.yaml --judge --judge-provider anthropic --judge-model claude-sonnet-4-20250514
 nexus rag eval --query "How do I..." --expected-doc mcp_guide
 ```
 

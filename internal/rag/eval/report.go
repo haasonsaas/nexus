@@ -22,16 +22,26 @@ type CaseResult struct {
 	NDCG      float64       `json:"ndcg"`
 	QueryTime time.Duration `json:"query_time"`
 
+	Answer        string  `json:"answer"`
+	Relevance     float64 `json:"relevance"`
+	Faithfulness  float64 `json:"faithfulness"`
+	ContextRecall float64 `json:"context_recall"`
+	Judged        bool    `json:"judged"`
+
 	ExpectedHints []ExpectedChunk `json:"expected_chunks"`
 }
 
 // Summary aggregates metrics across cases.
 type Summary struct {
-	AvgPrecision float64 `json:"avg_precision"`
-	AvgRecall    float64 `json:"avg_recall"`
-	AvgMRR       float64 `json:"avg_mrr"`
-	AvgNDCG      float64 `json:"avg_ndcg"`
-	Cases        int     `json:"cases"`
+	AvgPrecision     float64 `json:"avg_precision"`
+	AvgRecall        float64 `json:"avg_recall"`
+	AvgMRR           float64 `json:"avg_mrr"`
+	AvgNDCG          float64 `json:"avg_ndcg"`
+	AvgRelevance     float64 `json:"avg_relevance"`
+	AvgFaithfulness  float64 `json:"avg_faithfulness"`
+	AvgContextRecall float64 `json:"avg_context_recall"`
+	Cases            int     `json:"cases"`
+	JudgeCases       int     `json:"judge_cases"`
 }
 
 func summarize(cases []CaseResult) Summary {
@@ -44,11 +54,23 @@ func summarize(cases []CaseResult) Summary {
 		s.AvgRecall += c.Recall
 		s.AvgMRR += c.MRR
 		s.AvgNDCG += c.NDCG
+		if c.Judged {
+			s.AvgRelevance += c.Relevance
+			s.AvgFaithfulness += c.Faithfulness
+			s.AvgContextRecall += c.ContextRecall
+			s.JudgeCases++
+		}
 	}
 	count := float64(len(cases))
 	s.AvgPrecision /= count
 	s.AvgRecall /= count
 	s.AvgMRR /= count
 	s.AvgNDCG /= count
+	if s.JudgeCases > 0 {
+		judgeCount := float64(s.JudgeCases)
+		s.AvgRelevance /= judgeCount
+		s.AvgFaithfulness /= judgeCount
+		s.AvgContextRecall /= judgeCount
+	}
 	return s
 }

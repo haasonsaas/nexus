@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/agent"
+	"github.com/haasonsaas/nexus/internal/agent/providers"
 	"github.com/haasonsaas/nexus/internal/artifacts"
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/doctor"
@@ -899,7 +900,7 @@ func runMemoryCompact(cmd *cobra.Command, configPath string) error {
 // RAG Command Handlers
 // =============================================================================
 
-func runRagEval(cmd *cobra.Command, configPath, testSetPath, output string, limit int, threshold float32) error {
+func runRagEval(cmd *cobra.Command, configPath, testSetPath, output string, limit int, threshold float32, judge bool, judgeModel, judgeProvider string, judgeMaxTokens int) error {
 	configPath = resolveConfigPath(configPath)
 	cfg, err := config.Load(configPath)
 	if err != nil {
@@ -919,10 +920,31 @@ func runRagEval(cmd *cobra.Command, configPath, testSetPath, output string, limi
 		return err
 	}
 
+	if judgeModel != "" || judgeProvider != "" {
+		judge = true
+	}
+
 	evaluator := eval.NewEvaluator(manager, &eval.Options{
 		Limit:     limit,
 		Threshold: threshold,
+		Judge:     judge,
+		Model:     judgeModel,
+		MaxTokens: judgeMaxTokens,
 	})
+	if judge {
+		provider, defaultModel, err := buildLLMProvider(cfg, judgeProvider)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(judgeModel) == "" {
+			judgeModel = defaultModel
+		}
+		judgeLLM := eval.NewLLMJudge(provider, judgeModel)
+		if judgeMaxTokens > 0 {
+			judgeLLM.SetAnswerMaxTokens(judgeMaxTokens)
+		}
+		evaluator.WithJudge(judgeLLM)
+	}
 	report, err := evaluator.Evaluate(cmd.Context(), set)
 	if err != nil {
 		return err
@@ -945,6 +967,12 @@ func runRagEval(cmd *cobra.Command, configPath, testSetPath, output string, limi
 	fmt.Fprintf(out, "Recall: %.3f\n", report.Summary.AvgRecall)
 	fmt.Fprintf(out, "MRR: %.3f\n", report.Summary.AvgMRR)
 	fmt.Fprintf(out, "NDCG: %.3f\n", report.Summary.AvgNDCG)
+	if report.Summary.JudgeCases > 0 {
+		fmt.Fprintf(out, "Judged Cases: %d\n", report.Summary.JudgeCases)
+		fmt.Fprintf(out, "Answer Relevance: %.3f\n", report.Summary.AvgRelevance)
+		fmt.Fprintf(out, "Answer Faithfulness: %.3f\n", report.Summary.AvgFaithfulness)
+		fmt.Fprintf(out, "Context Recall: %.3f\n", report.Summary.AvgContextRecall)
+	}
 	if output != "" {
 		fmt.Fprintf(out, "Report written to %s\n", output)
 	}
@@ -1021,6 +1049,138 @@ func buildRAGIndexManager(cfg *config.Config) (*index.Manager, io.Closer, error)
 		DefaultSource:      "rag_eval",
 	})
 	return idx, store, nil
+}
+
+func buildLLMProvider(cfg *config.Config, providerID string) (agent.LLMProvider, string, error) {
+	if cfg == nil {
+		return nil, "", fmt.Errorf("config is required")
+	}
+	if strings.TrimSpace(providerID) == "" {
+		providerID = cfg.LLM.DefaultProvider
+	}
+	baseID, profileID := splitProviderProfileID(providerID)
+	providerKey := strings.ToLower(strings.TrimSpace(baseID))
+	providerCfg, ok := cfg.LLM.Providers[providerKey]
+	if !ok {
+		providerCfg, ok = cfg.LLM.Providers[baseID]
+	}
+	if !ok {
+		return nil, "", fmt.Errorf("provider config missing for %q", providerID)
+	}
+	effectiveCfg, err := resolveProviderProfile(providerCfg, profileID)
+	if err != nil {
+		return nil, "", err
+	}
+
+	switch providerKey {
+	case "anthropic":
+		if effectiveCfg.APIKey == "" {
+			return nil, "", errors.New("anthropic api key is required")
+		}
+		provider, err := providers.NewAnthropicProvider(providers.AnthropicConfig{
+			APIKey:       effectiveCfg.APIKey,
+			DefaultModel: effectiveCfg.DefaultModel,
+			BaseURL:      effectiveCfg.BaseURL,
+		})
+		if err != nil {
+			return nil, "", err
+		}
+		return provider, resolveDefaultModel(effectiveCfg.DefaultModel, provider), nil
+	case "openai":
+		if effectiveCfg.APIKey == "" {
+			return nil, "", errors.New("openai api key is required")
+		}
+		provider := providers.NewOpenAIProviderWithConfig(providers.OpenAIConfig{
+			APIKey:  effectiveCfg.APIKey,
+			BaseURL: effectiveCfg.BaseURL,
+		})
+		return provider, resolveDefaultModel(effectiveCfg.DefaultModel, provider), nil
+	case "openrouter":
+		if effectiveCfg.APIKey == "" {
+			return nil, "", errors.New("openrouter api key is required")
+		}
+		provider, err := providers.NewOpenRouterProvider(providers.OpenRouterConfig{
+			APIKey:       effectiveCfg.APIKey,
+			DefaultModel: effectiveCfg.DefaultModel,
+		})
+		if err != nil {
+			return nil, "", err
+		}
+		return provider, resolveDefaultModel(effectiveCfg.DefaultModel, provider), nil
+	case "google", "gemini":
+		if effectiveCfg.APIKey == "" {
+			return nil, "", errors.New("google api key is required")
+		}
+		provider, err := providers.NewGoogleProvider(providers.GoogleConfig{
+			APIKey:       effectiveCfg.APIKey,
+			DefaultModel: effectiveCfg.DefaultModel,
+		})
+		if err != nil {
+			return nil, "", err
+		}
+		return provider, resolveDefaultModel(effectiveCfg.DefaultModel, provider), nil
+	case "ollama":
+		defaultModel := strings.TrimSpace(effectiveCfg.DefaultModel)
+		if defaultModel == "" {
+			defaultModel = "llama3"
+		}
+		provider := providers.NewOllamaProvider(providers.OllamaConfig{
+			BaseURL:      effectiveCfg.BaseURL,
+			DefaultModel: defaultModel,
+		})
+		return provider, resolveDefaultModel(defaultModel, provider), nil
+	default:
+		return nil, "", fmt.Errorf("unsupported provider %q", providerKey)
+	}
+}
+
+func resolveDefaultModel(configured string, provider agent.LLMProvider) string {
+	if strings.TrimSpace(configured) != "" {
+		return strings.TrimSpace(configured)
+	}
+	models := provider.Models()
+	if len(models) > 0 {
+		return models[0].ID
+	}
+	return ""
+}
+
+func splitProviderProfileID(value string) (string, string) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", ""
+	}
+	for _, sep := range []string{":", "@", "/"} {
+		if parts := strings.SplitN(value, sep, 2); len(parts) == 2 {
+			return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+		}
+	}
+	return value, ""
+}
+
+func resolveProviderProfile(cfg config.LLMProviderConfig, profileID string) (config.LLMProviderConfig, error) {
+	profileID = strings.TrimSpace(profileID)
+	if profileID == "" {
+		return cfg, nil
+	}
+	if cfg.Profiles == nil {
+		return cfg, fmt.Errorf("provider profile %q not configured", profileID)
+	}
+	profile, ok := cfg.Profiles[profileID]
+	if !ok {
+		return cfg, fmt.Errorf("provider profile %q not configured", profileID)
+	}
+	effective := cfg
+	if profile.APIKey != "" {
+		effective.APIKey = profile.APIKey
+	}
+	if profile.DefaultModel != "" {
+		effective.DefaultModel = profile.DefaultModel
+	}
+	if profile.BaseURL != "" {
+		effective.BaseURL = profile.BaseURL
+	}
+	return effective, nil
 }
 
 func runRagPackInstall(cmd *cobra.Command, configPath, packDir string) error {

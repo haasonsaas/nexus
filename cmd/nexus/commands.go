@@ -455,17 +455,21 @@ func buildRagCmd() *cobra.Command {
 
 func buildRagEvalCmd() *cobra.Command {
 	var (
-		configPath string
-		testSet    string
-		output     string
-		limit      int
-		threshold  float32
+		configPath  string
+		testSet     string
+		output      string
+		limit       int
+		threshold   float32
+		judge       bool
+		judgeModel  string
+		judgeProv   string
+		judgeTokens int
 	)
 	cmd := &cobra.Command{
 		Use:   "eval",
 		Short: "Run RAG evaluation against a test set",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runRagEval(cmd, configPath, testSet, output, limit, threshold)
+			return runRagEval(cmd, configPath, testSet, output, limit, threshold, judge, judgeModel, judgeProv, judgeTokens)
 		},
 	}
 	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
@@ -473,6 +477,10 @@ func buildRagEvalCmd() *cobra.Command {
 	cmd.Flags().StringVar(&output, "output", "", "Write JSON report to file (optional)")
 	cmd.Flags().IntVar(&limit, "limit", 10, "Maximum number of retrieval results per case")
 	cmd.Flags().Float32Var(&threshold, "threshold", 0.7, "Minimum similarity threshold (0-1)")
+	cmd.Flags().BoolVar(&judge, "judge", false, "Enable LLM-as-judge scoring")
+	cmd.Flags().StringVar(&judgeProv, "judge-provider", "", "Provider ID for LLM judge (defaults to llm.default_provider)")
+	cmd.Flags().StringVar(&judgeModel, "judge-model", "", "Model ID for LLM judge (defaults to provider default)")
+	cmd.Flags().IntVar(&judgeTokens, "judge-max-tokens", 1024, "Max tokens for answer generation when judging")
 	_ = cmd.MarkFlagRequired("test-set")
 	return cmd
 }

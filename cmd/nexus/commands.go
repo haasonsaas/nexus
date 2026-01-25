@@ -343,6 +343,32 @@ func buildSkillsDisableCmd() *cobra.Command {
 }
 
 // =============================================================================
+// Extensions Commands
+// =============================================================================
+
+func buildExtensionsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "extensions",
+		Short: "List configured extensions (skills, plugins, MCP)",
+	}
+	cmd.AddCommand(buildExtensionsListCmd())
+	return cmd
+}
+
+func buildExtensionsListCmd() *cobra.Command {
+	var configPath string
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List configured extensions",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runExtensionsList(cmd, configPath)
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	return cmd
+}
+
+// =============================================================================
 // Memory Commands
 // =============================================================================
 

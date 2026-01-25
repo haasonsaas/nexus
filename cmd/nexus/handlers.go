@@ -25,6 +25,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/artifacts"
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/doctor"
+	"github.com/haasonsaas/nexus/internal/extensions"
 	"github.com/haasonsaas/nexus/internal/gateway"
 	"github.com/haasonsaas/nexus/internal/marketplace"
 	"github.com/haasonsaas/nexus/internal/memory"
@@ -55,6 +56,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"gopkg.in/yaml.v3"
+	"text/tabwriter"
 )
 
 // =============================================================================
@@ -736,6 +738,41 @@ func runSkillsDisable(cmd *cobra.Command, configPath, skillName string) error {
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "Disabled skill: %s\n", skillName)
 	return nil
+}
+
+// =============================================================================
+// Extensions Command Handlers
+// =============================================================================
+
+func runExtensionsList(cmd *cobra.Command, configPath string) error {
+	configPath = resolveConfigPath(configPath)
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	var skillsMgr *skills.Manager
+	manager, err := skills.NewManager(&cfg.Skills, cfg.Workspace.Path, nil)
+	if err != nil {
+		return fmt.Errorf("init skills manager: %w", err)
+	}
+	if err := manager.Discover(cmd.Context()); err != nil {
+		return fmt.Errorf("discover skills: %w", err)
+	}
+	skillsMgr = manager
+
+	exts := extensions.List(cfg, skillsMgr)
+	if len(exts) == 0 {
+		fmt.Fprintln(cmd.OutOrStdout(), "No extensions configured.")
+		return nil
+	}
+
+	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
+	fmt.Fprintln(w, "KIND\tID\tSTATUS\tSOURCE")
+	for _, ext := range exts {
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", ext.Kind, ext.ID, ext.Status, ext.Source)
+	}
+	return w.Flush()
 }
 
 // =============================================================================

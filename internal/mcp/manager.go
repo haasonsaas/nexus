@@ -62,6 +62,48 @@ func (m *Manager) Start(ctx context.Context) error {
 	return nil
 }
 
+// Reload updates the MCP configuration and reconnects as needed.
+func (m *Manager) Reload(ctx context.Context, cfg *Config) error {
+	if cfg == nil {
+		return fmt.Errorf("mcp config is required")
+	}
+
+	// Swap config
+	m.mu.Lock()
+	m.config = cfg
+	m.mu.Unlock()
+
+	if !cfg.Enabled {
+		return m.Stop()
+	}
+
+	desired := make(map[string]*ServerConfig)
+	for _, server := range cfg.Servers {
+		if server == nil || server.ID == "" {
+			continue
+		}
+		desired[server.ID] = server
+	}
+
+	// Disconnect removed servers
+	for id := range m.Clients() {
+		if _, ok := desired[id]; !ok {
+			_ = m.Disconnect(id)
+		}
+	}
+
+	// Connect new auto-start servers
+	for id, server := range desired {
+		if server.AutoStart {
+			if err := m.Connect(ctx, id); err != nil {
+				m.logger.Warn("failed to connect MCP server on reload", "server", id, "error", err)
+			}
+		}
+	}
+
+	return nil
+}
+
 // Stop disconnects from all MCP servers.
 func (m *Manager) Stop() error {
 	m.mu.Lock()

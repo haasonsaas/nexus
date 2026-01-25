@@ -149,6 +149,64 @@ func (t *ActivityTracker) ClearChannel(channel string) {
 	}
 }
 
+// InactiveEntry represents a channel/account that has been inactive.
+type InactiveEntry struct {
+	Channel      string
+	AccountID    string
+	LastActivity *time.Time
+}
+
+// GetInactiveChannels returns all channels with no activity since the given time.
+// Returns entries where the most recent activity (inbound or outbound) is before 'since'.
+func (t *ActivityTracker) GetInactiveChannels(since time.Time) []InactiveEntry {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	var result []InactiveEntry
+	for k, entry := range t.activity {
+		if entry == nil {
+			continue
+		}
+
+		// Determine the most recent activity
+		var lastActivity *time.Time
+		if entry.InboundAt != nil && entry.OutboundAt != nil {
+			if entry.InboundAt.After(*entry.OutboundAt) {
+				lastActivity = entry.InboundAt
+			} else {
+				lastActivity = entry.OutboundAt
+			}
+		} else if entry.InboundAt != nil {
+			lastActivity = entry.InboundAt
+		} else if entry.OutboundAt != nil {
+			lastActivity = entry.OutboundAt
+		}
+
+		// If there's activity and it's before 'since', it's inactive
+		if lastActivity != nil && lastActivity.Before(since) {
+			// Parse channel and accountID from key
+			channel, accountID := parseKey(k)
+			result = append(result, InactiveEntry{
+				Channel:      channel,
+				AccountID:    accountID,
+				LastActivity: lastActivity,
+			})
+		}
+	}
+
+	return result
+}
+
+// parseKey extracts channel and accountID from a composite key.
+func parseKey(k string) (channel, accountID string) {
+	for i := 0; i < len(k); i++ {
+		if k[i] == ':' {
+			return k[:i], k[i+1:]
+		}
+	}
+	return k, ""
+}
+
 // Stats returns activity statistics.
 func (t *ActivityTracker) Stats() ActivityStats {
 	t.mu.RLock()

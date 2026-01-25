@@ -92,5 +92,5 @@ All open issues as of 2026-01-25 should receive design docs and follow-on implem
 10) Local TTS.
 
 ## Status
-- Design docs: in progress (provider routing + RAG evaluation drafted).
-- Implementation: in progress (#96 RAG evaluation phase 1; provider routing + Ollama provider + discovery started; #82 knowledge packs CLI; #95 experiment scaffolding; #91 skill tool scaffolding).
+- Design docs: provider routing, RAG evaluation, knowledge packs, prompt experiments, skills composition, adapter refactors drafted.
+- Implementation: RAG eval phase 2 (LLM judge) complete; provider routing + Ollama provider + discovery complete; knowledge packs CLI complete; prompt experiments scaffolding complete; skill tool scaffolding complete; adapter refactors in progress (BaseHealthAdapter + Reconnector + StreamManager + tool converters + BaseProvider, migrated personal/email/telegram/nostr + OpenRouter).

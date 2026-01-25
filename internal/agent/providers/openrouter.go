@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/agent"
+	"github.com/haasonsaas/nexus/internal/agent/toolconv"
 	"github.com/haasonsaas/nexus/pkg/models"
 	openai "github.com/sashabaranov/go-openai"
 )
@@ -30,8 +31,7 @@ type OpenRouterProvider struct {
 	client       *openai.Client
 	apiKey       string
 	defaultModel string
-	maxRetries   int
-	retryDelay   time.Duration
+	base         BaseProvider
 }
 
 // OpenRouterConfig holds configuration for the OpenRouter provider.
@@ -97,8 +97,7 @@ func NewOpenRouterProvider(cfg OpenRouterConfig) (*OpenRouterProvider, error) {
 		client:       openai.NewClientWithConfig(clientConfig),
 		apiKey:       cfg.APIKey,
 		defaultModel: cfg.DefaultModel,
-		maxRetries:   cfg.MaxRetries,
-		retryDelay:   cfg.RetryDelay,
+		base:         NewBaseProvider("openrouter", cfg.MaxRetries, cfg.RetryDelay),
 	}, nil
 }
 
@@ -169,29 +168,18 @@ func (p *OpenRouterProvider) Complete(ctx context.Context, req *agent.Completion
 
 	// Create stream with retries
 	var stream *openai.ChatCompletionStream
-	var lastErr error
-
-	for attempt := 0; attempt < p.maxRetries; attempt++ {
-		if attempt > 0 {
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(p.retryDelay * time.Duration(attempt)):
-			}
-		}
-
-		stream, lastErr = p.client.CreateChatCompletionStream(ctx, chatReq)
-		if lastErr == nil {
-			break
-		}
-
-		if !p.isRetryableError(lastErr) {
-			return nil, p.wrapError(lastErr, model)
-		}
-	}
+	lastErr := p.base.Retry(ctx, p.isRetryableError, func() error {
+		var err error
+		stream, err = p.client.CreateChatCompletionStream(ctx, chatReq)
+		return err
+	})
 
 	if lastErr != nil {
-		return nil, fmt.Errorf("openrouter: max retries exceeded: %w", p.wrapError(lastErr, model))
+		wrapped := p.wrapError(lastErr, model)
+		if p.isRetryableError(lastErr) {
+			return nil, fmt.Errorf("openrouter: max retries exceeded: %w", wrapped)
+		}
+		return nil, wrapped
 	}
 
 	chunks := make(chan *agent.CompletionChunk)
@@ -367,25 +355,7 @@ func (p *OpenRouterProvider) convertMessages(messages []agent.CompletionMessage,
 
 // convertTools converts internal tool definitions to OpenAI format.
 func (p *OpenRouterProvider) convertTools(tools []agent.Tool) []openai.Tool {
-	result := make([]openai.Tool, len(tools))
-
-	for i, tool := range tools {
-		var schemaMap map[string]any
-		if err := json.Unmarshal(tool.Schema(), &schemaMap); err != nil {
-			schemaMap = map[string]any{"type": "object", "properties": map[string]any{}}
-		}
-
-		result[i] = openai.Tool{
-			Type: openai.ToolTypeFunction,
-			Function: &openai.FunctionDefinition{
-				Name:        tool.Name(),
-				Description: tool.Description(),
-				Parameters:  schemaMap,
-			},
-		}
-	}
-
-	return result
+	return toolconv.ToOpenAITools(tools)
 }
 
 // isRetryableError determines if an error should trigger a retry.

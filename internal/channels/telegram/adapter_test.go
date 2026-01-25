@@ -495,8 +495,8 @@ func TestNewAdapter_ValidConfig(t *testing.T) {
 		t.Error("adapter.rateLimiter is nil")
 	}
 
-	if adapter.metrics == nil {
-		t.Error("adapter.metrics is nil")
+	if adapter.health == nil {
+		t.Error("adapter.health is nil")
 	}
 
 	if adapter.logger == nil {

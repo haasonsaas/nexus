@@ -8,7 +8,6 @@ package gateway
 import (
 	"context"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/channels"
@@ -174,15 +173,11 @@ type StreamingHandler struct {
 	streaming channels.StreamingAdapter
 	outbound  channels.OutboundAdapter
 
-	// State
-	started     atomic.Bool
-	messageID   string
-	lastUpdate  time.Time
-	lastTyping  time.Time
-	accumulated string
+	// Stream manager
+	manager *StreamManager
 
-	// Fallback flag - set when streaming fails
-	fallbackToNonStreaming atomic.Bool
+	// Typing state
+	lastTyping time.Time
 }
 
 // StreamingHandlerConfig configures a StreamingHandler.
@@ -200,6 +195,7 @@ func NewStreamingHandler(cfg StreamingHandlerConfig) *StreamingHandler {
 		behavior:  cfg.Behavior,
 		streaming: cfg.StreamingAdapter,
 		outbound:  cfg.OutboundAdapter,
+		manager:   NewStreamManager(cfg.Behavior, cfg.StreamingAdapter, cfg.OutboundAdapter),
 	}
 }
 
@@ -215,7 +211,10 @@ func (h *StreamingHandler) Mode() StreamingMode {
 
 // IsEnabled returns true if streaming is enabled for this handler.
 func (h *StreamingHandler) IsEnabled() bool {
-	return h.behavior.Mode != StreamingDisabled && h.streaming != nil
+	if h.manager == nil {
+		return false
+	}
+	return h.manager.IsEnabled()
 }
 
 // SendTypingIndicator sends a typing indicator if supported and needed.
@@ -256,78 +255,27 @@ func (h *StreamingHandler) ShouldRefreshTyping() bool {
 // OnText handles incoming text from the LLM stream.
 // Returns true if the text was handled via streaming, false if it should be buffered.
 func (h *StreamingHandler) OnText(ctx context.Context, msg *models.Message, text string) (handled bool, err error) {
-	if !h.IsEnabled() {
+	if h.manager == nil {
 		return false, nil
 	}
-
-	// TypingOnly mode doesn't stream text
-	if h.behavior.Mode == StreamingTypingOnly {
-		return false, nil
-	}
-
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	h.accumulated += text
-
-	// Start streaming on first text
-	if !h.started.Load() {
-		messageID, err := h.streaming.StartStreamingResponse(ctx, msg)
-		if err != nil {
-			// Fall back to non-streaming
-			h.fallbackToNonStreaming.Store(true)
-			return false, nil
-		}
-		h.messageID = messageID
-		h.started.Store(true)
-		h.lastUpdate = time.Now()
-		return true, nil
-	}
-
-	// Check if fallback is active
-	if h.fallbackToNonStreaming.Load() {
-		return false, nil
-	}
-
-	// Throttle updates
-	if h.behavior.UpdateInterval > 0 && time.Since(h.lastUpdate) < h.behavior.UpdateInterval {
-		return true, nil // Handled but not updated yet
-	}
-
-	// Send update
-	if err := h.streaming.UpdateStreamingResponse(ctx, msg, h.messageID, h.accumulated); err != nil {
-		// Continue accumulating, will send at end
-		return true, nil
-	}
-	h.lastUpdate = time.Now()
-	return true, nil
+	return h.manager.OnText(ctx, msg, text)
 }
 
 // Finalize completes the streaming response.
 // If streaming was active, sends final update. Otherwise sends complete message.
 func (h *StreamingHandler) Finalize(ctx context.Context, msg *models.Message, content string) error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	// Update message content
-	msg.Content = content
-
-	// If streaming was active and not in fallback, do final update
-	if h.started.Load() && !h.fallbackToNonStreaming.Load() && h.messageID != "" {
-		if err := h.streaming.UpdateStreamingResponse(ctx, msg, h.messageID, content); err != nil {
-			// Fall back to sending new message
-			return h.outbound.Send(ctx, msg)
-		}
-		return nil
+	if h.manager == nil {
+		return h.outbound.Send(ctx, msg)
 	}
-
-	// Non-streaming: send complete message
-	return h.outbound.Send(ctx, msg)
+	return h.manager.Finalize(ctx, msg, content)
 }
 
 // WasStreaming returns true if streaming was actually used for this response.
 func (h *StreamingHandler) WasStreaming() bool {
-	return h.started.Load() && !h.fallbackToNonStreaming.Load()
+	if h.manager == nil {
+		return false
+	}
+	return h.manager.WasStreaming()
 }
 
 // Reset prepares the handler for a new response.
@@ -335,12 +283,10 @@ func (h *StreamingHandler) Reset() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	h.started.Store(false)
-	h.fallbackToNonStreaming.Store(false)
-	h.messageID = ""
-	h.lastUpdate = time.Time{}
+	if h.manager != nil {
+		h.manager.Reset()
+	}
 	h.lastTyping = time.Time{}
-	h.accumulated = ""
 }
 
 // StreamingRegistry manages streaming behaviors and handlers.

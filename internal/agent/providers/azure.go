@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/agent"
+	"github.com/haasonsaas/nexus/internal/agent/toolconv"
 	"github.com/haasonsaas/nexus/pkg/models"
 	openai "github.com/sashabaranov/go-openai"
 )
@@ -365,25 +366,7 @@ func (p *AzureOpenAIProvider) convertMessages(messages []agent.CompletionMessage
 
 // convertTools converts internal tool definitions to OpenAI format.
 func (p *AzureOpenAIProvider) convertTools(tools []agent.Tool) []openai.Tool {
-	result := make([]openai.Tool, len(tools))
-
-	for i, tool := range tools {
-		var schemaMap map[string]any
-		if err := json.Unmarshal(tool.Schema(), &schemaMap); err != nil {
-			schemaMap = map[string]any{"type": "object", "properties": map[string]any{}}
-		}
-
-		result[i] = openai.Tool{
-			Type: openai.ToolTypeFunction,
-			Function: &openai.FunctionDefinition{
-				Name:        tool.Name(),
-				Description: tool.Description(),
-				Parameters:  schemaMap,
-			},
-		}
-	}
-
-	return result
+	return toolconv.ToOpenAITools(tools)
 }
 
 // isRetryableError determines if an error should trigger a retry.

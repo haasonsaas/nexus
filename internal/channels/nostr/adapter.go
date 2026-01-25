@@ -74,22 +74,18 @@ func (c *Config) Validate() error {
 
 // Adapter implements the channels.Adapter interface for Nostr.
 type Adapter struct {
-	cfg          Config
-	privateKey   string
-	publicKey    string
-	relays       []*nostr.Relay
-	messages     chan *models.Message
-	status       channels.Status
-	statusMu     sync.RWMutex
-	ctx          context.Context
-	cancel       context.CancelFunc
-	wg           sync.WaitGroup
-	seen         sync.Map // Event ID deduplication
-	rateLimiter  *channels.RateLimiter
-	metrics      *channels.Metrics
-	logger       *slog.Logger
-	degraded     bool
-	degradedMu   sync.RWMutex
+	cfg         Config
+	privateKey  string
+	publicKey   string
+	relays      []*nostr.Relay
+	messages    chan *models.Message
+	ctx         context.Context
+	cancel      context.CancelFunc
+	wg          sync.WaitGroup
+	seen        sync.Map // Event ID deduplication
+	rateLimiter *channels.RateLimiter
+	logger      *slog.Logger
+	health      *channels.BaseHealthAdapter
 }
 
 // NewAdapter creates a new Nostr adapter with the given configuration.
@@ -110,16 +106,16 @@ func NewAdapter(cfg Config) (*Adapter, error) {
 		return nil, channels.ErrConfig("failed to derive public key", err)
 	}
 
-	return &Adapter{
+	adapter := &Adapter{
 		cfg:         cfg,
 		privateKey:  privateKey,
 		publicKey:   publicKey,
 		messages:    make(chan *models.Message, 100),
-		status:      channels.Status{Connected: false},
 		rateLimiter: channels.NewRateLimiter(cfg.RateLimit, cfg.RateBurst),
-		metrics:     channels.NewMetrics(models.ChannelNostr),
 		logger:      cfg.Logger.With("adapter", "nostr", "pubkey", publicKey[:16]+"..."),
-	}, nil
+	}
+	adapter.health = channels.NewBaseHealthAdapter(models.ChannelNostr, adapter.logger)
+	return adapter, nil
 }
 
 // Start begins listening for messages from Nostr relays.
@@ -154,7 +150,7 @@ func (a *Adapter) Start(ctx context.Context) error {
 	}
 
 	a.updateStatus(true, "")
-	a.metrics.RecordConnectionOpened()
+	a.health.RecordConnectionOpened()
 
 	npub, _ := nip19.EncodePublicKey(a.publicKey)
 	a.logger.Info("nostr adapter started successfully",
@@ -252,8 +248,8 @@ func (a *Adapter) handleEvent(event *nostr.Event, relay *nostr.Relay) {
 	msg := a.convertEvent(event, plaintext)
 
 	// Record metrics
-	a.metrics.RecordMessageReceived()
-	a.metrics.RecordReceiveLatency(time.Since(startTime))
+	a.health.RecordMessageReceived()
+	a.health.RecordReceiveLatency(time.Since(startTime))
 
 	// Send to messages channel
 	select {
@@ -264,7 +260,7 @@ func (a *Adapter) handleEvent(event *nostr.Event, relay *nostr.Relay) {
 	default:
 		a.logger.Warn("messages channel full, dropping message",
 			"event_id", event.ID)
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 	}
 }
 
@@ -322,14 +318,14 @@ func (a *Adapter) Stop(ctx context.Context) error {
 	case <-done:
 		close(a.messages)
 		a.updateStatus(false, "")
-		a.metrics.RecordConnectionClosed()
+		a.health.RecordConnectionClosed()
 		a.logger.Info("nostr adapter stopped gracefully")
 		return nil
 	case <-ctx.Done():
 		close(a.messages)
 		a.updateStatus(false, "shutdown timeout")
 		a.logger.Warn("nostr adapter stop timeout")
-		a.metrics.RecordError(channels.ErrCodeTimeout)
+		a.health.RecordError(channels.ErrCodeTimeout)
 		return channels.ErrTimeout("shutdown timeout", ctx.Err())
 	}
 }
@@ -341,22 +337,22 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	// Apply rate limiting
 	if err := a.rateLimiter.Wait(ctx); err != nil {
 		a.logger.Warn("rate limit wait cancelled", "error", err)
-		a.metrics.RecordError(channels.ErrCodeTimeout)
+		a.health.RecordError(channels.ErrCodeTimeout)
 		return channels.ErrTimeout("rate limit wait cancelled", err)
 	}
 
 	// Extract recipient pubkey from message metadata
 	toPubkey, ok := msg.Metadata["nostr_pubkey"].(string)
 	if !ok || toPubkey == "" {
-		a.metrics.RecordMessageFailed()
-		a.metrics.RecordError(channels.ErrCodeInvalidInput)
+		a.health.RecordMessageFailed()
+		a.health.RecordError(channels.ErrCodeInvalidInput)
 		return channels.ErrInvalidInput("missing nostr_pubkey in message metadata", nil)
 	}
 
 	// Normalize pubkey
 	normalizedPubkey, err := normalizePubkey(toPubkey)
 	if err != nil {
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 		return channels.ErrInvalidInput("invalid recipient pubkey", err)
 	}
 
@@ -367,14 +363,14 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	// Compute shared secret for NIP-04 encryption
 	sharedSecret, err := nip04.ComputeSharedSecret(normalizedPubkey, a.privateKey)
 	if err != nil {
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 		return channels.ErrInternal("failed to compute shared secret", err)
 	}
 
 	// Encrypt the message
 	ciphertext, err := nip04.Encrypt(msg.Content, sharedSecret)
 	if err != nil {
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 		return channels.ErrInternal("failed to encrypt message", err)
 	}
 
@@ -389,7 +385,7 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 
 	// Sign event
 	if err := event.Sign(a.privateKey); err != nil {
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 		return channels.ErrInternal("failed to sign event", err)
 	}
 
@@ -413,13 +409,13 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	}
 
 	if !published {
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 		return channels.ErrConnection("failed to publish to any relay", lastErr)
 	}
 
 	// Record success metrics
-	a.metrics.RecordMessageSent()
-	a.metrics.RecordSendLatency(time.Since(startTime))
+	a.health.RecordMessageSent()
+	a.health.RecordSendLatency(time.Since(startTime))
 
 	a.logger.Debug("DM sent successfully",
 		"event_id", event.ID,
@@ -440,9 +436,10 @@ func (a *Adapter) Type() models.ChannelType {
 
 // Status returns the current connection status.
 func (a *Adapter) Status() channels.Status {
-	a.statusMu.RLock()
-	defer a.statusMu.RUnlock()
-	return a.status
+	if a.health == nil {
+		return channels.Status{}
+	}
+	return a.health.Status()
 }
 
 // HealthCheck performs a connectivity check.
@@ -479,7 +476,10 @@ func (a *Adapter) HealthCheck(ctx context.Context) channels.HealthStatus {
 
 // Metrics returns the current metrics snapshot.
 func (a *Adapter) Metrics() channels.MetricsSnapshot {
-	return a.metrics.Snapshot()
+	if a.health == nil {
+		return channels.MetricsSnapshot{ChannelType: models.ChannelNostr}
+	}
+	return a.health.Metrics()
 }
 
 // PublicKey returns the bot's public key in hex format.
@@ -513,31 +513,31 @@ func (a *Adapter) UpdateStreamingResponse(ctx context.Context, msg *models.Messa
 // Helper functions
 
 func (a *Adapter) updateStatus(connected bool, errMsg string) {
-	a.statusMu.Lock()
-	defer a.statusMu.Unlock()
-	a.status.Connected = connected
-	a.status.Error = errMsg
-	if connected {
-		a.status.LastPing = time.Now().Unix()
+	if a.health == nil {
+		return
 	}
+	a.health.SetStatus(connected, errMsg)
 }
 
 func (a *Adapter) updateLastPing() {
-	a.statusMu.Lock()
-	defer a.statusMu.Unlock()
-	a.status.LastPing = time.Now().Unix()
+	if a.health == nil {
+		return
+	}
+	a.health.UpdateLastPing()
 }
 
 func (a *Adapter) setDegraded(degraded bool) {
-	a.degradedMu.Lock()
-	defer a.degradedMu.Unlock()
-	a.degraded = degraded
+	if a.health == nil {
+		return
+	}
+	a.health.SetDegraded(degraded)
 }
 
 func (a *Adapter) isDegraded() bool {
-	a.degradedMu.RLock()
-	defer a.degradedMu.RUnlock()
-	return a.degraded
+	if a.health == nil {
+		return false
+	}
+	return a.health.IsDegraded()
 }
 
 func generateSessionID(pubkey string) string {

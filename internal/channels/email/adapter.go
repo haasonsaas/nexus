@@ -30,14 +30,12 @@ const (
 type Adapter struct {
 	config      Config
 	messages    chan *models.Message
-	status      channels.Status
-	statusMu    sync.RWMutex
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
 	rateLimiter *channels.RateLimiter
-	metrics     *channels.Metrics
 	logger      *slog.Logger
 	httpClient  *http.Client
+	health      *channels.BaseHealthAdapter
 
 	// OAuth tokens
 	accessToken  string
@@ -65,9 +63,7 @@ func NewAdapter(config Config) (*Adapter, error) {
 	a := &Adapter{
 		config:          config,
 		messages:        make(chan *models.Message, 100),
-		status:          channels.Status{Connected: false},
 		rateLimiter:     channels.NewRateLimiter(config.RateLimit, config.RateBurst),
-		metrics:         channels.NewMetrics(models.ChannelEmail),
 		logger:          config.Logger.With("adapter", "email"),
 		httpClient:      &http.Client{Timeout: 30 * time.Second},
 		accessToken:     config.AccessToken,
@@ -75,6 +71,7 @@ func NewAdapter(config Config) (*Adapter, error) {
 		lastMessageTime: time.Now(),
 		seenMessages:    make(map[string]bool),
 	}
+	a.health = channels.NewBaseHealthAdapter(models.ChannelEmail, a.logger)
 
 	return a, nil
 }
@@ -154,7 +151,7 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 		return fmt.Errorf("rate limit: %w", err)
 	}
 
-	a.metrics.RecordMessageSent()
+	a.health.RecordMessageSent()
 
 	// Parse channel ID to extract recipient
 	// Format: email:{recipient_email} or email:{message_id} (for replies)
@@ -226,7 +223,7 @@ func (a *Adapter) sendNewEmail(ctx context.Context, recipient string, msg *model
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 		return fmt.Errorf("send email: %w", err)
 	}
 	defer resp.Body.Close()
@@ -236,7 +233,7 @@ func (a *Adapter) sendNewEmail(ctx context.Context, recipient string, msg *model
 		if err != nil {
 			body = []byte("(failed to read response body)")
 		}
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 		return fmt.Errorf("graph API error %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -280,7 +277,7 @@ func (a *Adapter) sendReply(ctx context.Context, messageID, content string) erro
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 		return fmt.Errorf("send reply: %w", err)
 	}
 	defer resp.Body.Close()
@@ -290,7 +287,7 @@ func (a *Adapter) sendReply(ctx context.Context, messageID, content string) erro
 		if err != nil {
 			body = []byte("(failed to read response body)")
 		}
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 		return fmt.Errorf("graph API error %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -306,9 +303,10 @@ func (a *Adapter) Messages() <-chan *models.Message {
 
 // Status returns the current adapter status.
 func (a *Adapter) Status() channels.Status {
-	a.statusMu.RLock()
-	defer a.statusMu.RUnlock()
-	return a.status
+	if a.health == nil {
+		return channels.Status{}
+	}
+	return a.health.Status()
 }
 
 // HealthCheck performs a health check against the Graph API.
@@ -354,7 +352,10 @@ func (a *Adapter) HealthCheck(ctx context.Context) channels.HealthStatus {
 
 // Metrics returns the current metrics snapshot.
 func (a *Adapter) Metrics() channels.MetricsSnapshot {
-	return a.metrics.Snapshot()
+	if a.health == nil {
+		return channels.MetricsSnapshot{ChannelType: models.ChannelEmail}
+	}
+	return a.health.Metrics()
 }
 
 // SendTypingIndicator is a no-op for email (no typing indicators).
@@ -466,7 +467,7 @@ func (a *Adapter) pollMessages(ctx context.Context) {
 		case <-ticker.C:
 			if err := a.fetchNewMessages(ctx); err != nil {
 				a.logger.Error("failed to fetch emails", "error", err)
-				a.metrics.RecordMessageFailed()
+				a.health.RecordMessageFailed()
 			}
 		}
 	}
@@ -623,7 +624,7 @@ func (a *Adapter) processMessage(ctx context.Context, msg *EmailMessage) {
 		}
 	}
 
-	a.metrics.RecordMessageReceived()
+	a.health.RecordMessageReceived()
 
 	select {
 	case a.messages <- nexusMsg:
@@ -647,7 +648,7 @@ func (a *Adapter) processMessage(ctx context.Context, msg *EmailMessage) {
 		a.logger.Warn("message channel full, dropping email",
 			"from", msg.From.EmailAddress.Address,
 		)
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 	}
 }
 
@@ -773,14 +774,10 @@ func (a *Adapter) getAccessToken() string {
 
 // setStatus updates the adapter status.
 func (a *Adapter) setStatus(connected bool, errorMsg string) {
-	a.statusMu.Lock()
-	defer a.statusMu.Unlock()
-
-	a.status.Connected = connected
-	a.status.Error = errorMsg
-	if connected {
-		a.status.LastPing = time.Now().Unix()
+	if a.health == nil {
+		return
 	}
+	a.health.SetStatus(connected, errorMsg)
 }
 
 // stripHTMLTags removes HTML tags from a string (basic implementation).

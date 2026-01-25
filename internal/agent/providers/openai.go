@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/agent"
+	"github.com/haasonsaas/nexus/internal/agent/toolconv"
 	"github.com/haasonsaas/nexus/pkg/models"
 	openai "github.com/sashabaranov/go-openai"
 )
@@ -696,31 +697,7 @@ func (p *OpenAIProvider) convertToOpenAIMessages(messages []agent.CompletionMess
 //
 //	Converts to OpenAI function with same fields in FunctionDefinition.
 func (p *OpenAIProvider) convertToOpenAITools(tools []agent.Tool) []openai.Tool {
-	result := make([]openai.Tool, len(tools))
-
-	for i, tool := range tools {
-		// Parse JSON schema into map
-		var schemaMap map[string]any
-		if err := json.Unmarshal(tool.Schema(), &schemaMap); err != nil {
-			// Graceful degradation: use empty schema if parsing fails
-			// This allows other tools to work even if one has a bad schema
-			schemaMap = map[string]any{
-				"type":       "object",
-				"properties": map[string]any{},
-			}
-		}
-
-		result[i] = openai.Tool{
-			Type: openai.ToolTypeFunction,
-			Function: &openai.FunctionDefinition{
-				Name:        tool.Name(),
-				Description: tool.Description(),
-				Parameters:  schemaMap, // JSON Schema for parameters
-			},
-		}
-	}
-
-	return result
+	return toolconv.ToOpenAITools(tools)
 }
 
 // isRetryableError determines if an error should trigger a retry attempt.

@@ -108,16 +108,12 @@ type Adapter struct {
 	bot         *bot.Bot
 	botClient   BotClient // Interface for testability
 	messages    chan *nexusmodels.Message
-	status      channels.Status
-	statusMu    sync.RWMutex
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
 	rateLimiter *channels.RateLimiter
-	metrics     *channels.Metrics
 	logger      *slog.Logger
 	httpClient  *http.Client
-	degraded    bool
-	degradedMu  sync.RWMutex
+	health      *channels.BaseHealthAdapter
 }
 
 // NewAdapter creates a new Telegram adapter with the given configuration.
@@ -130,12 +126,11 @@ func NewAdapter(config Config) (*Adapter, error) {
 	a := &Adapter{
 		config:      config,
 		messages:    make(chan *nexusmodels.Message, 100),
-		status:      channels.Status{Connected: false},
 		rateLimiter: channels.NewRateLimiter(config.RateLimit, config.RateBurst),
-		metrics:     channels.NewMetrics(nexusmodels.ChannelTelegram),
 		logger:      config.Logger.With("adapter", "telegram"),
 		httpClient:  &http.Client{Timeout: 30 * time.Second},
 	}
+	a.health = channels.NewBaseHealthAdapter(nexusmodels.ChannelTelegram, a.logger)
 
 	return a, nil
 }
@@ -161,13 +156,13 @@ func (a *Adapter) Start(ctx context.Context) error {
 	b, err := bot.New(a.config.Token, opts...)
 	if err != nil {
 		a.updateStatus(false, fmt.Sprintf("failed to create bot: %v", err))
-		a.metrics.RecordError(channels.ErrCodeAuthentication)
+		a.health.RecordError(channels.ErrCodeAuthentication)
 		return channels.ErrAuthentication("failed to create bot", err)
 	}
 
 	a.bot = b
 	a.botClient = newRealBotClient(b)
-	a.metrics.RecordConnectionOpened()
+	a.health.RecordConnectionOpened()
 
 	// Start message handler
 	a.wg.Add(1)
@@ -183,59 +178,42 @@ func (a *Adapter) runWithReconnection(ctx context.Context) {
 	defer close(a.messages)
 
 	attempts := 0
-	maxAttempts := a.config.MaxReconnectAttempts
+	reconnector := &channels.Reconnector{
+		Config: channels.ReconnectConfig{
+			MaxAttempts:  a.config.MaxReconnectAttempts,
+			InitialDelay: a.config.ReconnectDelay,
+			MaxDelay:     30 * time.Second,
+			Factor:       2,
+			Jitter:       true,
+		},
+		Logger: a.logger,
+		Health: a.health,
+	}
 
-	for {
-		select {
-		case <-ctx.Done():
-			a.updateStatus(false, "")
-			a.logger.Info("telegram adapter stopped")
-			return
-		default:
-		}
-
-		// Try to start the bot
-		if err := a.run(ctx); err != nil {
-			if errors.Is(err, context.Canceled) {
-				a.updateStatus(false, "")
-				return
-			}
-
+	err := reconnector.Run(ctx, func(runCtx context.Context) error {
+		if err := a.run(runCtx); err != nil {
 			attempts++
-			a.metrics.RecordReconnectAttempt()
-
-			errMsg := fmt.Sprintf("bot error (attempt %d/%d)", attempts, maxAttempts)
+			errMsg := fmt.Sprintf("bot error (attempt %d/%d)", attempts, a.config.MaxReconnectAttempts)
 			a.updateStatus(false, errMsg)
 			a.logger.Error("telegram bot error",
 				"error", err,
 				"attempt", attempts,
-				"max_attempts", maxAttempts)
-
-			if attempts >= maxAttempts {
-				a.logger.Error("max reconnection attempts reached, stopping adapter")
-				a.metrics.RecordError(channels.ErrCodeConnection)
-				return
-			}
-
-			// Enter degraded mode
+				"max_attempts", a.config.MaxReconnectAttempts)
 			a.setDegraded(true)
-
-			// Wait before reconnecting
-			select {
-			case <-ctx.Done():
-				a.updateStatus(false, "")
-				return
-			case <-time.After(a.config.ReconnectDelay):
-				a.logger.Info("attempting to reconnect")
-			}
-			continue
+			return err
 		}
 
 		// Successful run, exit degraded mode
+		attempts = 0
 		a.setDegraded(false)
-		a.updateStatus(false, "")
-		return
+		return nil
+	})
+
+	if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+		a.logger.Error("telegram adapter stopped", "error", err)
+		a.health.RecordError(channels.ErrCodeConnection)
 	}
+	a.updateStatus(false, "")
 }
 
 // run handles the actual bot execution based on mode.
@@ -273,7 +251,7 @@ func (a *Adapter) runWebhook(ctx context.Context) error {
 		URL: a.config.WebhookURL,
 	})
 	if err != nil {
-		a.metrics.RecordError(channels.ErrCodeConnection)
+		a.health.RecordError(channels.ErrCodeConnection)
 		return channels.ErrConnection("failed to set webhook", err)
 	}
 
@@ -326,8 +304,8 @@ func (a *Adapter) handleMessage(ctx context.Context, b *bot.Bot, update *models.
 	msg := a.convertMessage(update.Message)
 
 	// Record metrics
-	a.metrics.RecordMessageReceived()
-	a.metrics.RecordReceiveLatency(time.Since(startTime))
+	a.health.RecordMessageReceived()
+	a.health.RecordReceiveLatency(time.Since(startTime))
 
 	select {
 	case a.messages <- msg:
@@ -337,7 +315,7 @@ func (a *Adapter) handleMessage(ctx context.Context, b *bot.Bot, update *models.
 	default:
 		a.logger.Warn("messages channel full, dropping message",
 			"chat_id", update.Message.Chat.ID)
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 	}
 }
 
@@ -364,11 +342,11 @@ func (a *Adapter) Stop(ctx context.Context) error {
 
 	select {
 	case <-done:
-		a.metrics.RecordConnectionClosed()
+		a.health.RecordConnectionClosed()
 		a.logger.Info("telegram adapter stopped gracefully")
 		return nil
 	case <-ctx.Done():
-		a.metrics.RecordError(channels.ErrCodeTimeout)
+		a.health.RecordError(channels.ErrCodeTimeout)
 		return channels.ErrTimeout("stop timeout", ctx.Err())
 	}
 }
@@ -380,14 +358,14 @@ func (a *Adapter) Send(ctx context.Context, msg *nexusmodels.Message) error {
 	// Apply rate limiting
 	if err := a.rateLimiter.Wait(ctx); err != nil {
 		a.logger.Warn("rate limit wait cancelled", "error", err)
-		a.metrics.RecordError(channels.ErrCodeTimeout)
+		a.health.RecordError(channels.ErrCodeTimeout)
 		return channels.ErrTimeout("rate limit wait cancelled", err)
 	}
 
 	// Check if bot is initialized
 	if a.botClient == nil {
-		a.metrics.RecordMessageFailed()
-		a.metrics.RecordError(channels.ErrCodeInternal)
+		a.health.RecordMessageFailed()
+		a.health.RecordError(channels.ErrCodeInternal)
 		return channels.ErrInternal("bot not initialized", nil)
 	}
 
@@ -395,8 +373,8 @@ func (a *Adapter) Send(ctx context.Context, msg *nexusmodels.Message) error {
 	chatID, err := a.extractChatID(msg)
 	if err != nil {
 		a.logger.Error("failed to extract chat ID", "error", err)
-		a.metrics.RecordMessageFailed()
-		a.metrics.RecordError(channels.ErrCodeInvalidInput)
+		a.health.RecordMessageFailed()
+		a.health.RecordError(channels.ErrCodeInvalidInput)
 		return channels.ErrInvalidInput("failed to extract chat ID", err)
 	}
 	threadID, hasThread := extractMessageThreadID(msg.Metadata)
@@ -436,15 +414,15 @@ func (a *Adapter) Send(ctx context.Context, msg *nexusmodels.Message) error {
 		a.logger.Error("failed to send message",
 			"error", err,
 			"chat_id", chatID)
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 
 		// Classify the error
 		if isRateLimitError(err) {
-			a.metrics.RecordError(channels.ErrCodeRateLimit)
+			a.health.RecordError(channels.ErrCodeRateLimit)
 			return channels.ErrRateLimit("telegram rate limit exceeded", err)
 		}
 
-		a.metrics.RecordError(channels.ErrCodeInternal)
+		a.health.RecordError(channels.ErrCodeInternal)
 		return channels.ErrInternal("failed to send message", err)
 	}
 
@@ -460,8 +438,8 @@ func (a *Adapter) Send(ctx context.Context, msg *nexusmodels.Message) error {
 	}
 
 	// Record success metrics
-	a.metrics.RecordMessageSent()
-	a.metrics.RecordSendLatency(time.Since(startTime))
+	a.health.RecordMessageSent()
+	a.health.RecordSendLatency(time.Since(startTime))
 
 	a.logger.Debug("message sent successfully",
 		"chat_id", chatID,
@@ -532,11 +510,11 @@ func (a *Adapter) StartStreamingResponse(ctx context.Context, msg *nexusmodels.M
 	sentMsg, err := a.botClient.SendMessage(ctx, params)
 	if err != nil {
 		a.logger.Error("failed to start streaming response", "error", err, "chat_id", chatID)
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 		return "", channels.ErrInternal("failed to send initial message", err)
 	}
 
-	a.metrics.RecordMessageSent()
+	a.health.RecordMessageSent()
 	return strconv.Itoa(sentMsg.ID), nil
 }
 
@@ -680,7 +658,7 @@ func (a *Adapter) sendPhoto(ctx context.Context, chatID int64, threadID int, att
 	}
 	_, err := a.botClient.SendPhoto(ctx, params)
 	if err != nil {
-		a.metrics.RecordError(channels.ErrCodeInternal)
+		a.health.RecordError(channels.ErrCodeInternal)
 	}
 	return err
 }
@@ -698,7 +676,7 @@ func (a *Adapter) sendDocument(ctx context.Context, chatID int64, threadID int, 
 	}
 	_, err := a.botClient.SendDocument(ctx, params)
 	if err != nil {
-		a.metrics.RecordError(channels.ErrCodeInternal)
+		a.health.RecordError(channels.ErrCodeInternal)
 	}
 	return err
 }
@@ -716,7 +694,7 @@ func (a *Adapter) sendAudio(ctx context.Context, chatID int64, threadID int, att
 	}
 	_, err := a.botClient.SendAudio(ctx, params)
 	if err != nil {
-		a.metrics.RecordError(channels.ErrCodeInternal)
+		a.health.RecordError(channels.ErrCodeInternal)
 	}
 	return err
 }
@@ -812,9 +790,10 @@ func (a *Adapter) Type() nexusmodels.ChannelType {
 
 // Status returns the current connection status.
 func (a *Adapter) Status() channels.Status {
-	a.statusMu.RLock()
-	defer a.statusMu.RUnlock()
-	return a.status
+	if a.health == nil {
+		return channels.Status{}
+	}
+	return a.health.Status()
 }
 
 // HealthCheck performs a connectivity check with Telegram's API.
@@ -863,36 +842,42 @@ func (a *Adapter) HealthCheck(ctx context.Context) channels.HealthStatus {
 
 // Metrics returns the current metrics snapshot.
 func (a *Adapter) Metrics() channels.MetricsSnapshot {
-	return a.metrics.Snapshot()
+	if a.health == nil {
+		return channels.MetricsSnapshot{ChannelType: nexusmodels.ChannelTelegram}
+	}
+	return a.health.Metrics()
 }
 
 // updateStatus updates the connection status thread-safely.
 func (a *Adapter) updateStatus(connected bool, errMsg string) {
-	a.statusMu.Lock()
-	defer a.statusMu.Unlock()
-	a.status.Connected = connected
-	a.status.Error = errMsg
+	if a.health == nil {
+		return
+	}
+	a.health.SetStatus(connected, errMsg)
 }
 
 // updateLastPing updates the last ping timestamp.
 func (a *Adapter) updateLastPing() {
-	a.statusMu.Lock()
-	defer a.statusMu.Unlock()
-	a.status.LastPing = time.Now().Unix()
+	if a.health == nil {
+		return
+	}
+	a.health.UpdateLastPing()
 }
 
 // setDegraded sets the degraded mode flag.
 func (a *Adapter) setDegraded(degraded bool) {
-	a.degradedMu.Lock()
-	defer a.degradedMu.Unlock()
-	a.degraded = degraded
+	if a.health == nil {
+		return
+	}
+	a.health.SetDegraded(degraded)
 }
 
 // isDegraded returns the current degraded mode status.
 func (a *Adapter) isDegraded() bool {
-	a.degradedMu.RLock()
-	defer a.degradedMu.RUnlock()
-	return a.degraded
+	if a.health == nil {
+		return false
+	}
+	return a.health.IsDegraded()
 }
 
 // isRateLimitError checks if an error is a rate limit error.

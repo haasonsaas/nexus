@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"sync"
-	"time"
 
 	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/pkg/models"
@@ -16,22 +15,10 @@ type BaseAdapter struct {
 	messages    chan *models.Message
 	config      *Config
 	logger      *slog.Logger
+	health      *channels.BaseHealthAdapter
 
 	contacts   map[string]*Contact
 	contactsMu sync.RWMutex
-
-	status   channels.Status
-	statusMu sync.RWMutex
-
-	metrics   *adapterMetrics
-	metricsMu sync.RWMutex
-}
-
-type adapterMetrics struct {
-	messagesSent     uint64
-	messagesReceived uint64
-	messagesFailed   uint64
-	lastActivity     time.Time
 }
 
 // NewBaseAdapter creates a new base personal adapter.
@@ -43,13 +30,15 @@ func NewBaseAdapter(channelType models.ChannelType, cfg *Config, logger *slog.Lo
 		cfg = &Config{}
 	}
 
+	logger = logger.With("channel", string(channelType))
+	health := channels.NewBaseHealthAdapter(channelType, logger)
 	return &BaseAdapter{
 		channelType: channelType,
 		messages:    make(chan *models.Message, 100),
 		config:      cfg,
-		logger:      logger.With("channel", string(channelType)),
+		logger:      logger,
+		health:      health,
 		contacts:    make(map[string]*Contact),
-		metrics:     &adapterMetrics{},
 	}
 }
 
@@ -65,55 +54,47 @@ func (b *BaseAdapter) Messages() <-chan *models.Message {
 
 // Status returns the current connection status.
 func (b *BaseAdapter) Status() channels.Status {
-	b.statusMu.RLock()
-	defer b.statusMu.RUnlock()
-	return b.status
+	if b.health == nil {
+		return channels.Status{}
+	}
+	return b.health.Status()
 }
 
 // SetStatus updates the connection status.
 func (b *BaseAdapter) SetStatus(connected bool, err string) {
-	b.statusMu.Lock()
-	defer b.statusMu.Unlock()
-	b.status = channels.Status{
-		Connected: connected,
-		Error:     err,
-		LastPing:  time.Now().Unix(),
+	if b.health == nil {
+		return
 	}
+	b.health.SetStatus(connected, err)
 }
 
 // Metrics returns the current metrics snapshot.
 func (b *BaseAdapter) Metrics() channels.MetricsSnapshot {
-	b.metricsMu.RLock()
-	defer b.metricsMu.RUnlock()
-	return channels.MetricsSnapshot{
-		ChannelType:      b.channelType,
-		MessagesSent:     b.metrics.messagesSent,
-		MessagesReceived: b.metrics.messagesReceived,
-		MessagesFailed:   b.metrics.messagesFailed,
+	if b.health == nil {
+		return channels.MetricsSnapshot{ChannelType: b.channelType}
 	}
+	return b.health.Metrics()
 }
 
 // IncrementSent increments the sent message counter.
 func (b *BaseAdapter) IncrementSent() {
-	b.metricsMu.Lock()
-	defer b.metricsMu.Unlock()
-	b.metrics.messagesSent++
-	b.metrics.lastActivity = time.Now()
+	if b.health != nil {
+		b.health.RecordMessageSent()
+	}
 }
 
 // IncrementReceived increments the received message counter.
 func (b *BaseAdapter) IncrementReceived() {
-	b.metricsMu.Lock()
-	defer b.metricsMu.Unlock()
-	b.metrics.messagesReceived++
-	b.metrics.lastActivity = time.Now()
+	if b.health != nil {
+		b.health.RecordMessageReceived()
+	}
 }
 
 // IncrementErrors increments the error counter.
 func (b *BaseAdapter) IncrementErrors() {
-	b.metricsMu.Lock()
-	defer b.metricsMu.Unlock()
-	b.metrics.messagesFailed++
+	if b.health != nil {
+		b.health.RecordMessageFailed()
+	}
 }
 
 // Logger returns the adapter's logger.

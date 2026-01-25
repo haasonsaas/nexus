@@ -93,4 +93,4 @@ All open issues as of 2026-01-25 should receive design docs and follow-on implem
 
 ## Status
 - Design docs: in progress (provider routing + RAG evaluation drafted).
-- Implementation: in progress (#96 RAG evaluation phase 1).
+- Implementation: in progress (#96 RAG evaluation phase 1; provider routing + Ollama provider + discovery started).

@@ -262,6 +262,40 @@ llm:
       api_key: ${OPENROUTER_API_KEY}
       default_model: anthropic/claude-3.5-sonnet
 
+    # Optional local Ollama provider
+    # ollama:
+    #   base_url: http://localhost:11434
+    #   default_model: llama3
+
+  routing:
+    enabled: false
+    classifier: heuristic
+    prefer_local: false
+    # rules:
+    #   - name: quick
+    #     match:
+    #       patterns: ["what is", "define", "quick"]
+    #     target:
+    #       provider: ollama
+    #       model: qwen2.5:1.5b
+    #   - name: reasoning
+    #     match:
+    #       tags: ["reasoning"]
+    #     target:
+    #       provider: anthropic
+    #       model: claude-sonnet-4-20250514
+    # fallback:
+    #   provider: anthropic
+
+  auto_discover:
+    ollama:
+      enabled: false
+      prefer_local: true
+      probe_locations:
+        - http://localhost:11434
+        - http://ollama:11434
+        - http://ollama.ollama.svc.cluster.local:11434
+
 tools:
   # Optional notes to include in the system prompt for tool conventions
   notes: ""

@@ -498,6 +498,52 @@ type LLMConfig struct {
 
 	// Bedrock configures AWS Bedrock model discovery.
 	Bedrock BedrockConfig `yaml:"bedrock"`
+
+	// Routing configures intelligent provider routing.
+	Routing LLMRoutingConfig `yaml:"routing"`
+
+	// AutoDiscover configures local provider discovery.
+	AutoDiscover LLMAutoDiscoverConfig `yaml:"auto_discover"`
+}
+
+// LLMRoutingConfig configures provider routing rules.
+type LLMRoutingConfig struct {
+	Enabled     bool          `yaml:"enabled"`
+	Classifier  string        `yaml:"classifier"`
+	PreferLocal bool          `yaml:"prefer_local"`
+	Rules       []RoutingRule `yaml:"rules"`
+	Fallback    RoutingTarget `yaml:"fallback"`
+}
+
+// RoutingRule defines a routing rule.
+type RoutingRule struct {
+	Name   string        `yaml:"name"`
+	Match  RoutingMatch  `yaml:"match"`
+	Target RoutingTarget `yaml:"target"`
+}
+
+// RoutingMatch defines rule matching criteria.
+type RoutingMatch struct {
+	Patterns []string `yaml:"patterns"`
+	Tags     []string `yaml:"tags"`
+}
+
+// RoutingTarget defines a routing destination.
+type RoutingTarget struct {
+	Provider string `yaml:"provider"`
+	Model    string `yaml:"model"`
+}
+
+// LLMAutoDiscoverConfig configures local provider discovery.
+type LLMAutoDiscoverConfig struct {
+	Ollama OllamaDiscoverConfig `yaml:"ollama"`
+}
+
+// OllamaDiscoverConfig configures Ollama discovery.
+type OllamaDiscoverConfig struct {
+	Enabled        bool     `yaml:"enabled"`
+	PreferLocal    bool     `yaml:"prefer_local"`
+	ProbeLocations []string `yaml:"probe_locations"`
 }
 
 // BedrockConfig configures AWS Bedrock model discovery.
@@ -1531,6 +1577,16 @@ func DefaultWorkspaceConfig() WorkspaceConfig {
 func applyLLMDefaults(cfg *LLMConfig) {
 	if cfg.DefaultProvider == "" {
 		cfg.DefaultProvider = "anthropic"
+	}
+	if cfg.Routing.Classifier == "" {
+		cfg.Routing.Classifier = "heuristic"
+	}
+	if cfg.AutoDiscover.Ollama.Enabled && len(cfg.AutoDiscover.Ollama.ProbeLocations) == 0 {
+		cfg.AutoDiscover.Ollama.ProbeLocations = []string{
+			"http://localhost:11434",
+			"http://ollama:11434",
+			"http://ollama.ollama.svc.cluster.local:11434",
+		}
 	}
 }
 

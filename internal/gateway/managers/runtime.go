@@ -10,6 +10,7 @@ import (
 
 	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/haasonsaas/nexus/internal/agent/providers"
+	"github.com/haasonsaas/nexus/internal/agent/routing"
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/memory"
 	"github.com/haasonsaas/nexus/internal/sessions"
@@ -269,7 +270,12 @@ func (m *RuntimeManager) initProvider() error {
 		return err
 	}
 
-	// Wrap with failover orchestrator if fallback chain is configured
+	// Build a provider map for routing (default provider is always present).
+	providerMap := map[string]agent.LLMProvider{
+		providerID: primary,
+	}
+
+	// Wrap with failover orchestrator if fallback chain is configured.
 	if len(m.config.LLM.FallbackChain) > 0 {
 		orchestrator := agent.NewFailoverOrchestrator(primary, agent.DefaultFailoverConfig())
 
@@ -285,11 +291,85 @@ func (m *RuntimeManager) initProvider() error {
 				continue
 			}
 			orchestrator.AddProvider(fallback)
+			if _, ok := providerMap[fallbackID]; !ok {
+				providerMap[fallbackID] = fallback
+			}
 		}
 
-		m.llmProvider = orchestrator
+		providerMap[providerID] = orchestrator
+	}
+
+	// Add routing target providers.
+	if m.config.LLM.Routing.Enabled {
+		for _, rule := range m.config.LLM.Routing.Rules {
+			targetID := normalizeProviderID(rule.Target.Provider)
+			if targetID == "" {
+				continue
+			}
+			if _, ok := providerMap[targetID]; ok {
+				continue
+			}
+			target, _, err := m.buildProvider(targetID)
+			if err != nil {
+				m.logger.Warn("failed to create routed provider", "provider", targetID, "error", err)
+				continue
+			}
+			providerMap[targetID] = target
+		}
+		fallbackID := normalizeProviderID(m.config.LLM.Routing.Fallback.Provider)
+		if fallbackID != "" {
+			if _, ok := providerMap[fallbackID]; !ok {
+				target, _, err := m.buildProvider(fallbackID)
+				if err != nil {
+					m.logger.Warn("failed to create routing fallback provider", "provider", fallbackID, "error", err)
+				} else {
+					providerMap[fallbackID] = target
+				}
+			}
+		}
+	}
+
+	localProviders := []string{}
+	if m.config.LLM.AutoDiscover.Ollama.Enabled {
+		discovered, err := discoverOllama(m.config.LLM.AutoDiscover.Ollama.ProbeLocations, m.logger)
+		if err != nil {
+			m.logger.Warn("ollama discovery failed", "error", err)
+		} else if discovered != nil {
+			provider := providers.NewOllamaProvider(providers.OllamaConfig{
+				BaseURL:      discovered.BaseURL,
+				DefaultModel: discovered.DefaultModel,
+			})
+			providerMap["ollama"] = provider
+			localProviders = append(localProviders, "ollama")
+		}
+	}
+
+	if m.config.LLM.Routing.Enabled {
+		rules := make([]routing.Rule, 0, len(m.config.LLM.Routing.Rules))
+		for _, rule := range m.config.LLM.Routing.Rules {
+			rules = append(rules, routing.Rule{
+				Name: rule.Name,
+				Match: routing.Match{
+					Patterns: rule.Match.Patterns,
+					Tags:     rule.Match.Tags,
+				},
+				Target: routing.Target{
+					Provider: rule.Target.Provider,
+					Model:    rule.Target.Model,
+				},
+			})
+		}
+
+		preferLocal := m.config.LLM.Routing.PreferLocal || m.config.LLM.AutoDiscover.Ollama.PreferLocal
+		router := routing.NewRouter(routing.Config{
+			DefaultProvider: providerID,
+			PreferLocal:     preferLocal,
+			LocalProviders:  localProviders,
+			Rules:           rules,
+		}, providerMap)
+		m.llmProvider = router
 	} else {
-		m.llmProvider = primary
+		m.llmProvider = providerMap[providerID]
 	}
 
 	m.defaultModel = model
@@ -349,6 +429,17 @@ func (m *RuntimeManager) buildProvider(providerID string) (agent.LLMProvider, st
 			return nil, "", err
 		}
 		return provider, effectiveCfg.DefaultModel, nil
+
+	case "ollama":
+		defaultModel := strings.TrimSpace(effectiveCfg.DefaultModel)
+		if defaultModel == "" {
+			defaultModel = "llama3"
+		}
+		provider := providers.NewOllamaProvider(providers.OllamaConfig{
+			BaseURL:      effectiveCfg.BaseURL,
+			DefaultModel: defaultModel,
+		})
+		return provider, defaultModel, nil
 
 	default:
 		return nil, "", fmt.Errorf("unsupported provider %q", providerKey)

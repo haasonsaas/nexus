@@ -1,0 +1,232 @@
+import AppKit
+import CoreGraphics
+import Foundation
+import OSLog
+import ScreenCaptureKit
+
+/// Enhanced screen capture service for computer use agents.
+/// Provides high-quality screen capture with annotation support.
+@MainActor
+final class ScreenCaptureService {
+    static let shared = ScreenCaptureService()
+
+    private let logger = Logger(subsystem: "com.nexus.mac", category: "screen.capture")
+
+    struct CaptureOptions {
+        var scale: CGFloat = 1.0
+        var includesCursor: Bool = true
+        var captureRect: CGRect?
+        var displayID: CGDirectDisplayID?
+        var format: ImageFormat = .png
+
+        enum ImageFormat {
+            case png
+            case jpeg(quality: CGFloat)
+        }
+    }
+
+    struct CaptureResult {
+        let image: NSImage
+        let data: Data
+        let bounds: CGRect
+        let timestamp: Date
+    }
+
+    /// Capture the entire screen or a specific region
+    func capture(options: CaptureOptions = CaptureOptions()) async throws -> CaptureResult {
+        let displayID = options.displayID ?? CGMainDisplayID()
+
+        guard let image = captureDisplay(displayID, options: options) else {
+            throw CaptureError.captureFailed
+        }
+
+        let data = try encodeImage(image, format: options.format)
+        let bounds = CGDisplayBounds(displayID)
+
+        logger.debug("screen captured size=\(Int(bounds.width))x\(Int(bounds.height))")
+
+        return CaptureResult(
+            image: image,
+            data: data,
+            bounds: bounds,
+            timestamp: Date()
+        )
+    }
+
+    /// Capture a specific window
+    func captureWindow(windowID: CGWindowID, options: CaptureOptions = CaptureOptions()) async throws -> CaptureResult {
+        let windowList = CGWindowListCopyWindowInfo([.optionIncludingWindow], windowID) as? [[String: Any]]
+        guard let windowInfo = windowList?.first,
+              let bounds = windowInfo[kCGWindowBounds as String] as? [String: CGFloat],
+              let x = bounds["X"],
+              let y = bounds["Y"],
+              let width = bounds["Width"],
+              let height = bounds["Height"] else {
+            throw CaptureError.windowNotFound
+        }
+
+        let rect = CGRect(x: x, y: y, width: width, height: height)
+
+        guard let cgImage = CGWindowListCreateImage(
+            rect,
+            .optionIncludingWindow,
+            windowID,
+            options.includesCursor ? [.boundsIgnoreFraming] : [.boundsIgnoreFraming, .nominalResolution]
+        ) else {
+            throw CaptureError.captureFailed
+        }
+
+        let image = NSImage(cgImage: cgImage, size: NSSize(width: width, height: height))
+        let data = try encodeImage(image, format: options.format)
+
+        logger.debug("window captured id=\(windowID) size=\(Int(width))x\(Int(height))")
+
+        return CaptureResult(
+            image: image,
+            data: data,
+            bounds: rect,
+            timestamp: Date()
+        )
+    }
+
+    /// List all windows suitable for capture
+    func listWindows() -> [WindowInfo] {
+        guard let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else {
+            return []
+        }
+
+        return windowList.compactMap { info -> WindowInfo? in
+            guard let windowID = info[kCGWindowNumber as String] as? CGWindowID,
+                  let ownerName = info[kCGWindowOwnerName as String] as? String,
+                  let bounds = info[kCGWindowBounds as String] as? [String: CGFloat],
+                  let width = bounds["Width"],
+                  let height = bounds["Height"],
+                  width > 10, height > 10 else {
+                return nil
+            }
+
+            return WindowInfo(
+                windowID: windowID,
+                ownerName: ownerName,
+                title: info[kCGWindowName as String] as? String,
+                bounds: CGRect(
+                    x: bounds["X"] ?? 0,
+                    y: bounds["Y"] ?? 0,
+                    width: width,
+                    height: height
+                ),
+                layer: info[kCGWindowLayer as String] as? Int ?? 0
+            )
+        }
+    }
+
+    /// List available displays
+    func listDisplays() -> [DisplayInfo] {
+        var displayCount: UInt32 = 0
+        CGGetActiveDisplayList(0, nil, &displayCount)
+
+        var displays = [CGDirectDisplayID](repeating: 0, count: Int(displayCount))
+        CGGetActiveDisplayList(displayCount, &displays, &displayCount)
+
+        return displays.enumerated().map { index, displayID in
+            let bounds = CGDisplayBounds(displayID)
+            let isMain = CGDisplayIsMain(displayID) != 0
+
+            return DisplayInfo(
+                displayID: displayID,
+                bounds: bounds,
+                isMain: isMain,
+                index: index
+            )
+        }
+    }
+
+    // MARK: - Private
+
+    private func captureDisplay(_ displayID: CGDirectDisplayID, options: CaptureOptions) -> NSImage? {
+        let bounds = options.captureRect ?? CGDisplayBounds(displayID)
+
+        guard let cgImage = CGDisplayCreateImage(displayID, rect: bounds) else {
+            return nil
+        }
+
+        var size = NSSize(width: bounds.width, height: bounds.height)
+        if options.scale != 1.0 {
+            size.width *= options.scale
+            size.height *= options.scale
+        }
+
+        return NSImage(cgImage: cgImage, size: size)
+    }
+
+    private func encodeImage(_ image: NSImage, format: CaptureOptions.ImageFormat) throws -> Data {
+        guard let tiffData = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData) else {
+            throw CaptureError.encodingFailed
+        }
+
+        let data: Data?
+        switch format {
+        case .png:
+            data = bitmap.representation(using: .png, properties: [:])
+        case .jpeg(let quality):
+            data = bitmap.representation(using: .jpeg, properties: [.compressionFactor: quality])
+        }
+
+        guard let imageData = data else {
+            throw CaptureError.encodingFailed
+        }
+
+        return imageData
+    }
+}
+
+struct WindowInfo: Identifiable {
+    let windowID: CGWindowID
+    let ownerName: String
+    let title: String?
+    let bounds: CGRect
+    let layer: Int
+
+    var id: CGWindowID { windowID }
+
+    var displayTitle: String {
+        if let title, !title.isEmpty {
+            return "\(ownerName) - \(title)"
+        }
+        return ownerName
+    }
+}
+
+struct DisplayInfo: Identifiable {
+    let displayID: CGDirectDisplayID
+    let bounds: CGRect
+    let isMain: Bool
+    let index: Int
+
+    var id: CGDirectDisplayID { displayID }
+
+    var displayName: String {
+        isMain ? "Main Display" : "Display \(index + 1)"
+    }
+}
+
+enum CaptureError: LocalizedError {
+    case captureFailed
+    case windowNotFound
+    case encodingFailed
+    case permissionDenied
+
+    var errorDescription: String? {
+        switch self {
+        case .captureFailed:
+            return "Failed to capture screen"
+        case .windowNotFound:
+            return "Window not found"
+        case .encodingFailed:
+            return "Failed to encode image"
+        case .permissionDenied:
+            return "Screen recording permission not granted"
+        }
+    }
+}

@@ -90,6 +90,27 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		"content_length", len(msg.Content),
 	)
 
+	// Per-channel rate limiting
+	if s.perChannelLimiter != nil {
+		if !s.perChannelLimiter.Allow(string(msg.Channel)) {
+			s.logger.Warn("rate limit exceeded for channel",
+				"channel", msg.Channel,
+			)
+			return
+		}
+	}
+
+	// Message deduplication
+	if s.messageDeduper != nil && msg.ID != "" {
+		if s.messageDeduper.IsDuplicate(msg.ID) {
+			s.logger.Debug("duplicate message detected, skipping",
+				"message_id", msg.ID,
+				"channel", msg.Channel,
+			)
+			return
+		}
+	}
+
 	// Track inbound activity
 	if s.integration != nil {
 		s.integration.RecordInbound(string(msg.Channel), msg.ChannelID)
@@ -158,6 +179,8 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		msg.CreatedAt = time.Now()
 	}
 
+	// Handle commands BEFORE acquiring session lock, since commands like /stop
+	// need to run even when there's an active run holding the lock
 	if s.maybeHandleCommand(ctx, session, msg) {
 		return
 	}
@@ -165,6 +188,19 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		if strings.TrimSpace(msg.Content) == "" {
 			return
 		}
+	}
+
+	// Acquire session write lock to prevent concurrent writes to the same session
+	// This is done AFTER command handling so /stop can cancel active runs
+	if s.sessionLocker != nil {
+		if err := s.sessionLocker.Lock(session.ID); err != nil {
+			s.logger.Error("failed to acquire session lock",
+				"session_id", session.ID,
+				"error", err,
+			)
+			return
+		}
+		defer s.sessionLocker.Unlock(session.ID)
 	}
 
 	s.enrichMessageWithMedia(ctx, msg)
@@ -404,15 +440,19 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		// Do final update with complete content
 		if err := streamingAdapter.UpdateStreamingResponse(runCtx, outboundMsg, finalStreamingMsgID, response.String()); err != nil {
 			s.logger.Debug("failed to send final streaming update", "error", err)
-			// Fall back to sending a new message
-			if err := outboundAdapter.Send(ctx, outboundMsg); err != nil {
+			// Fall back to sending a new message with circuit breaker protection
+			if err := s.sendWithCircuitBreaker(ctx, msg.Channel, func() error {
+				return outboundAdapter.Send(ctx, outboundMsg)
+			}); err != nil {
 				s.logger.Error("failed to send outbound message", "error", err)
 				return
 			}
 		}
 	} else {
-		// Non-streaming: send complete message
-		if err := outboundAdapter.Send(ctx, outboundMsg); err != nil {
+		// Non-streaming: send complete message with circuit breaker protection
+		if err := s.sendWithCircuitBreaker(ctx, msg.Channel, func() error {
+			return outboundAdapter.Send(ctx, outboundMsg)
+		}); err != nil {
 			s.logger.Error("failed to send outbound message", "error", err)
 			EmitMessageProcessed(string(msg.Channel), outboundMsg.ID, channelID, key, session.ID,
 				"error", "", err.Error(), time.Since(startTime).Milliseconds())
@@ -464,7 +504,9 @@ func (s *Server) sendImmediateReply(ctx context.Context, session *models.Session
 		Metadata:  s.buildReplyMetadata(inbound),
 		CreatedAt: time.Now(),
 	}
-	if err := adapter.Send(ctx, outbound); err != nil {
+	if err := s.sendWithCircuitBreaker(ctx, inbound.Channel, func() error {
+		return adapter.Send(ctx, outbound)
+	}); err != nil {
 		s.logger.Error("failed to send outbound message", "error", err)
 		return
 	}
@@ -633,7 +675,9 @@ func (s *Server) handleBroadcastMessage(ctx context.Context, peerID string, msg 
 		}
 		outbound.Metadata["broadcast_agent_id"] = result.AgentID
 
-		if err := adapter.Send(ctx, outbound); err != nil {
+		if err := s.sendWithCircuitBreaker(ctx, msg.Channel, func() error {
+			return adapter.Send(ctx, outbound)
+		}); err != nil {
 			s.logger.Error("failed to send broadcast response",
 				"agent_id", result.AgentID,
 				"error", err,
@@ -646,6 +690,19 @@ func (s *Server) handleBroadcastMessage(ctx context.Context, peerID string, msg 
 			}
 		}
 	}
+}
+
+// sendWithCircuitBreaker wraps a channel send operation with circuit breaker protection.
+// It tracks failures per channel and opens the circuit if too many failures occur.
+func (s *Server) sendWithCircuitBreaker(ctx context.Context, channel models.ChannelType, sendFn func() error) error {
+	if s.channelBreakers == nil {
+		return sendFn()
+	}
+
+	cb := s.channelBreakers.Get(string(channel))
+	return cb.Execute(ctx, func(ctx context.Context) error {
+		return sendFn()
+	})
 }
 
 // waitForProcessing waits for all in-flight message processing to complete.

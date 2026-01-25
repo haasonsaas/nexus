@@ -17,6 +17,152 @@ var (
 	ErrLockHeld = errors.New("session: lock held by another writer")
 )
 
+// DefaultLockTimeout is the default timeout for lock acquisition (5 seconds).
+const DefaultLockTimeout = 5 * time.Second
+
+// lockPollInterval is how often we check if a lock has been released.
+const lockPollInterval = 10 * time.Millisecond
+
+// sessionMutex wraps a mutex for per-session locking.
+type sessionMutex struct {
+	mu     sync.Mutex
+	locked bool
+}
+
+// SessionLocker provides per-session write locks using sync.Map.
+// It ensures that only one goroutine can hold a lock for a given session at a time.
+//
+// Thread Safety:
+// SessionLocker is safe for concurrent use from multiple goroutines.
+type SessionLocker struct {
+	locks   sync.Map // map[string]*sessionMutex
+	timeout time.Duration
+}
+
+// NewSessionLocker creates a new SessionLocker with the specified default timeout.
+// If timeout is <= 0, DefaultLockTimeout (5 seconds) is used.
+func NewSessionLocker(timeout time.Duration) *SessionLocker {
+	if timeout <= 0 {
+		timeout = DefaultLockTimeout
+	}
+	return &SessionLocker{
+		timeout: timeout,
+	}
+}
+
+// getOrCreateMutex gets or creates a mutex for the given session ID.
+func (s *SessionLocker) getOrCreateMutex(sessionID string) *sessionMutex {
+	if m, ok := s.locks.Load(sessionID); ok {
+		return m.(*sessionMutex)
+	}
+	newMu := &sessionMutex{}
+	actual, _ := s.locks.LoadOrStore(sessionID, newMu)
+	return actual.(*sessionMutex)
+}
+
+// Lock acquires a lock for the given session ID, blocking until the lock is available
+// or the default timeout expires. Returns an error if the lock cannot be acquired.
+func (s *SessionLocker) Lock(sessionID string) error {
+	return s.LockWithTimeout(sessionID, s.timeout)
+}
+
+// LockWithTimeout acquires a lock for the given session ID with a custom timeout.
+// Returns ErrLockTimeout if the lock cannot be acquired within the timeout.
+func (s *SessionLocker) LockWithTimeout(sessionID string, timeout time.Duration) error {
+	m := s.getOrCreateMutex(sessionID)
+	deadline := time.Now().Add(timeout)
+
+	for {
+		m.mu.Lock()
+		if !m.locked {
+			m.locked = true
+			m.mu.Unlock()
+			return nil
+		}
+		m.mu.Unlock()
+
+		if time.Now().After(deadline) {
+			return ErrLockTimeout
+		}
+
+		// Poll with a small interval
+		time.Sleep(lockPollInterval)
+	}
+}
+
+// Unlock releases the lock for the given session ID.
+// It is safe to call Unlock even if the lock is not held.
+func (s *SessionLocker) Unlock(sessionID string) {
+	if m, ok := s.locks.Load(sessionID); ok {
+		mu := m.(*sessionMutex)
+		mu.mu.Lock()
+		mu.locked = false
+		mu.mu.Unlock()
+	}
+}
+
+// TryLock attempts to acquire a lock for the given session ID without blocking.
+// Returns true if the lock was acquired, false otherwise.
+func (s *SessionLocker) TryLock(sessionID string) bool {
+	m := s.getOrCreateMutex(sessionID)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.locked {
+		return false
+	}
+
+	m.locked = true
+	return true
+}
+
+// IsLocked returns whether the given session ID is currently locked.
+func (s *SessionLocker) IsLocked(sessionID string) bool {
+	if m, ok := s.locks.Load(sessionID); ok {
+		mu := m.(*sessionMutex)
+		mu.mu.Lock()
+		defer mu.mu.Unlock()
+		return mu.locked
+	}
+	return false
+}
+
+// LockWithContext acquires a lock for the given session ID, respecting context cancellation.
+// Returns an error if the context is cancelled or the default timeout expires.
+func (s *SessionLocker) LockWithContext(ctx context.Context, sessionID string) error {
+	m := s.getOrCreateMutex(sessionID)
+	deadline := time.Now().Add(s.timeout)
+
+	for {
+		// Check context first
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		m.mu.Lock()
+		if !m.locked {
+			m.locked = true
+			m.mu.Unlock()
+			return nil
+		}
+		m.mu.Unlock()
+
+		if time.Now().After(deadline) {
+			return ErrLockTimeout
+		}
+
+		// Poll with a small interval, checking context
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(lockPollInterval):
+		}
+	}
+}
+
 // SessionLock represents a lock for a specific session.
 type SessionLock struct {
 	sessionID string

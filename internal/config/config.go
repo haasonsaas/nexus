@@ -632,12 +632,13 @@ type ApprovalConfig struct {
 
 // ToolResultGuardConfig controls redaction of tool results before persistence.
 type ToolResultGuardConfig struct {
-	Enabled        bool     `yaml:"enabled"`
-	MaxChars       int      `yaml:"max_chars"`
-	Denylist       []string `yaml:"denylist"`
-	RedactPatterns []string `yaml:"redact_patterns"`
-	RedactionText  string   `yaml:"redaction_text"`
-	TruncateSuffix string   `yaml:"truncate_suffix"`
+	Enabled         bool     `yaml:"enabled"`
+	MaxChars        int      `yaml:"max_chars"`
+	Denylist        []string `yaml:"denylist"`
+	RedactPatterns  []string `yaml:"redact_patterns"`
+	RedactionText   string   `yaml:"redaction_text"`
+	TruncateSuffix  string   `yaml:"truncate_suffix"`
+	SanitizeSecrets bool     `yaml:"sanitize_secrets"` // Applies builtin secret detection patterns
 }
 
 // ElevatedConfig controls elevated tool execution behavior and allowlists.

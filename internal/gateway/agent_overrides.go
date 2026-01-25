@@ -66,12 +66,13 @@ func runtimeOptionsOverrideFromExecution(execCfg config.ToolExecutionConfig) age
 		RequireApproval:   execCfg.RequireApproval,
 		AsyncTools:        execCfg.Async,
 		ToolResultGuard: agent.ToolResultGuard{
-			Enabled:        execCfg.ResultGuard.Enabled,
-			MaxChars:       execCfg.ResultGuard.MaxChars,
-			Denylist:       execCfg.ResultGuard.Denylist,
-			RedactPatterns: execCfg.ResultGuard.RedactPatterns,
-			RedactionText:  execCfg.ResultGuard.RedactionText,
-			TruncateSuffix: execCfg.ResultGuard.TruncateSuffix,
+			Enabled:         execCfg.ResultGuard.Enabled,
+			MaxChars:        execCfg.ResultGuard.MaxChars,
+			Denylist:        execCfg.ResultGuard.Denylist,
+			RedactPatterns:  execCfg.ResultGuard.RedactPatterns,
+			RedactionText:   execCfg.ResultGuard.RedactionText,
+			TruncateSuffix:  execCfg.ResultGuard.TruncateSuffix,
+			SanitizeSecrets: execCfg.ResultGuard.SanitizeSecrets,
 		},
 	}
 }

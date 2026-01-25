@@ -26,6 +26,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/haasonsaas/nexus/internal/artifacts"
 	"github.com/haasonsaas/nexus/internal/audit"
+	"github.com/haasonsaas/nexus/internal/infra"
 	"github.com/haasonsaas/nexus/internal/auth"
 	"github.com/haasonsaas/nexus/internal/canvas"
 	"github.com/haasonsaas/nexus/internal/channels"
@@ -132,6 +133,15 @@ type Server struct {
 	// messageSem limits concurrent message processing to prevent unbounded goroutine growth
 	messageSem chan struct{}
 
+	// perChannelLimiter applies per-channel rate limiting
+	perChannelLimiter *infra.PerKeyLimiter
+
+	// messageDeduper prevents duplicate message processing
+	messageDeduper *infra.MessageDeduper
+
+	// channelBreakers tracks circuit breaker state per channel
+	channelBreakers *infra.CircuitBreakerRegistry
+
 	// normalizer normalizes incoming messages to canonical format
 	normalizer *MessageNormalizer
 
@@ -154,6 +164,9 @@ type Server struct {
 
 	// integration wires up cross-cutting observability and health systems
 	integration *Integration
+
+	// sessionLocker provides per-session write locks to prevent concurrent writes
+	sessionLocker *sessions.SessionLocker
 }
 
 // NewServer creates a new gateway server with the given configuration and logger.
@@ -486,6 +499,21 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		StateDir:           cfg.Workspace.Path,
 	})
 
+	// Initialize per-channel rate limiter (10 requests/second per channel, burst of 20)
+	perChannelLimiter := infra.NewPerKeyLimiter(func(key string) infra.RateLimiter {
+		return infra.NewTokenBucket(10, 20)
+	})
+
+	// Initialize message deduper with 5 minute TTL
+	messageDeduper := infra.NewMessageDeduper(5 * time.Minute)
+
+	// Initialize circuit breaker registry for channel send operations
+	channelBreakers := infra.NewCircuitBreakerRegistry(infra.CircuitBreakerConfig{
+		FailureThreshold: 5,
+		SuccessThreshold: 2,
+		Timeout:          30 * time.Second,
+	})
+
 	// Configure provider usage fetchers from LLM provider configs
 	var anthropicKey, openaiKey, geminiKey string
 	if p, ok := cfg.LLM.Providers["anthropic"]; ok {
@@ -538,9 +566,13 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		commandParser:      commandParser,
 		activeRuns:         make(map[string]activeRun),
 		messageSem:         make(chan struct{}, 100), // Limit concurrent message handlers
+		perChannelLimiter:  perChannelLimiter,
+		messageDeduper:     messageDeduper,
+		channelBreakers:    channelBreakers,
 		normalizer:         NewMessageNormalizer(),
 		streamingRegistry:  NewStreamingRegistry(),
 		integration:        integration,
+		sessionLocker:      sessions.NewSessionLocker(sessions.DefaultLockTimeout),
 	}
 	if artifactSetup != nil {
 		server.artifactRepo = artifactSetup.repo

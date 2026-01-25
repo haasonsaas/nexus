@@ -1,0 +1,58 @@
+# Air configuration for hot reload development
+# https://github.com/air-verse/air
+
+root = "."
+tmp_dir = "tmp"
+
+[build]
+# Build command
+cmd = "go build -o ./tmp/nexus ./cmd/nexus"
+# Binary to run
+bin = "./tmp/nexus serve"
+# Watch these directories
+include_dir = ["cmd", "internal", "pkg"]
+# Watch these extensions
+include_ext = ["go", "yaml", "yml", "toml"]
+# Exclude directories
+exclude_dir = ["tmp", "vendor", "testdata", "node_modules", ".git", "bin", "coverage"]
+# Exclude files
+exclude_file = []
+# Exclude unchanged files
+exclude_unchanged = true
+# Follow symlinks
+follow_symlink = false
+# Build delay after change (in ms)
+delay = 1000
+# Stop old binary before building new one
+stop_on_error = true
+# Send interrupt before kill
+send_interrupt = true
+# Kill delay (in ms)
+kill_delay = 500
+# Rerun on startup
+rerun = false
+# Rerun delay (in ms)
+rerun_delay = 500
+
+[log]
+# Log time format
+time = true
+# Show main log (errors, build info)
+main_only = false
+
+[color]
+# Colorful output
+main = "magenta"
+watcher = "cyan"
+build = "yellow"
+runner = "green"
+
+[misc]
+# Clean on exit
+clean_on_exit = true
+
+[screen]
+# Clear screen on rebuild
+clear_on_rebuild = true
+# Keep scroll position
+keep_scroll = true

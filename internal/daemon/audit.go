@@ -110,13 +110,17 @@ func isVersionManagedPath(execPath string) bool {
 }
 
 // getMinimalServicePathParts returns the minimal required PATH entries for the service.
-func getMinimalServicePathParts(env map[string]string) []string {
+func getMinimalServicePathParts(env map[string]string, platform string) []string {
 	home := env["HOME"]
 	if home == "" {
 		home = os.Getenv("HOME")
 	}
 
-	switch runtime.GOOS {
+	if platform == "" {
+		platform = runtime.GOOS
+	}
+
+	switch platform {
 	case "darwin":
 		parts := []string{
 			"/usr/local/bin",
@@ -262,7 +266,7 @@ func auditGatewayServicePath(params AuditParams) []ServiceConfigIssue {
 	}
 
 	pathParts := filepath.SplitList(servicePath)
-	minimalParts := getMinimalServicePathParts(params.Env)
+	minimalParts := getMinimalServicePathParts(params.Env, params.Platform)
 
 	// Check for missing required directories
 	var missingDirs []string

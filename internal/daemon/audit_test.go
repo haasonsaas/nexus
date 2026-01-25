@@ -86,7 +86,7 @@ func TestGetMinimalServicePathParts(t *testing.T) {
 		"HOME": "/home/testuser",
 	}
 
-	parts := getMinimalServicePathParts(env)
+	parts := getMinimalServicePathParts(env, "linux")
 
 	if len(parts) == 0 {
 		t.Error("Expected non-empty path parts")

@@ -246,7 +246,9 @@ func (h *MemoryHooks) handleMessageReceived(ctx context.Context, event *hooks.Ev
 	if h.manager.config != nil && h.manager.config.Search.Hierarchy.Enabled {
 		agentID := ""
 		if event.Context != nil {
-			agentID, _ = event.Context["agent_id"].(string)
+			if id, ok := event.Context["agent_id"].(string); ok {
+				agentID = id
+			}
 		}
 		results, err = h.manager.SearchHierarchical(ctx, &HierarchyRequest{
 			Query:     content,

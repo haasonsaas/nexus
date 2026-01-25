@@ -53,11 +53,16 @@ func NewSessionLocker(timeout time.Duration) *SessionLocker {
 // getOrCreateMutex gets or creates a mutex for the given session ID.
 func (s *SessionLocker) getOrCreateMutex(sessionID string) *sessionMutex {
 	if m, ok := s.locks.Load(sessionID); ok {
-		return m.(*sessionMutex)
+		if mu, ok := m.(*sessionMutex); ok {
+			return mu
+		}
 	}
 	newMu := &sessionMutex{}
 	actual, _ := s.locks.LoadOrStore(sessionID, newMu)
-	return actual.(*sessionMutex)
+	if mu, ok := actual.(*sessionMutex); ok {
+		return mu
+	}
+	return newMu
 }
 
 // Lock acquires a lock for the given session ID, blocking until the lock is available
@@ -94,7 +99,10 @@ func (s *SessionLocker) LockWithTimeout(sessionID string, timeout time.Duration)
 // It is safe to call Unlock even if the lock is not held.
 func (s *SessionLocker) Unlock(sessionID string) {
 	if m, ok := s.locks.Load(sessionID); ok {
-		mu := m.(*sessionMutex)
+		mu, ok := m.(*sessionMutex)
+		if !ok {
+			return
+		}
 		mu.mu.Lock()
 		mu.locked = false
 		mu.mu.Unlock()
@@ -120,7 +128,10 @@ func (s *SessionLocker) TryLock(sessionID string) bool {
 // IsLocked returns whether the given session ID is currently locked.
 func (s *SessionLocker) IsLocked(sessionID string) bool {
 	if m, ok := s.locks.Load(sessionID); ok {
-		mu := m.(*sessionMutex)
+		mu, ok := m.(*sessionMutex)
+		if !ok {
+			return false
+		}
 		mu.mu.Lock()
 		defer mu.mu.Unlock()
 		return mu.locked

@@ -204,7 +204,7 @@ func auditChannelPolicies(cfg *config.Config) []AuditFinding {
 			findings = append(findings, AuditFinding{
 				CheckID:  fmt.Sprintf("config.channel.%s.dm_open", ch.name),
 				Severity: SeverityInfo,
-				Title:    fmt.Sprintf("%s DM policy is open", strings.Title(ch.name)),
+				Title:    fmt.Sprintf("%s DM policy is open", titleCase(ch.name)),
 				Detail:   fmt.Sprintf("channels.%s.dm.policy is 'open', allowing anyone to DM the bot.", ch.name),
 			})
 		}
@@ -215,13 +215,21 @@ func auditChannelPolicies(cfg *config.Config) []AuditFinding {
 			findings = append(findings, AuditFinding{
 				CheckID:  fmt.Sprintf("config.channel.%s.group_open", ch.name),
 				Severity: SeverityInfo,
-				Title:    fmt.Sprintf("%s group policy is open", strings.Title(ch.name)),
+				Title:    fmt.Sprintf("%s group policy is open", titleCase(ch.name)),
 				Detail:   fmt.Sprintf("channels.%s.group.policy is 'open', allowing messages from any group.", ch.name),
 			})
 		}
 	}
 
 	return findings
+}
+
+func titleCase(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 // auditEdgeConfig checks for insecure edge daemon configuration.

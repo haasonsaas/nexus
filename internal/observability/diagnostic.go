@@ -259,7 +259,11 @@ func emit(event DiagnosticEventPayload) {
 
 	for _, listener := range listeners {
 		func() {
-			defer func() { recover() }() // Ignore listener panics
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					_ = recovered
+				}
+			}() // Ignore listener panics
 			listener(event)
 		}()
 	}

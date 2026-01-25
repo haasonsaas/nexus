@@ -226,7 +226,9 @@ func (a *BlueBubblesAdapter) HandleWebhook(w http.ResponseWriter, r *http.Reques
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("ok"))
+	if _, err := w.Write([]byte("ok")); err != nil {
+		_ = err
+	}
 }
 
 // WebhookPath returns the path for webhook endpoint.
@@ -558,7 +560,10 @@ func (a *BlueBubblesAdapter) callAPI(ctx context.Context, path string, payload m
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(resp.Body)
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("API error (%d) (read body failed: %w)", resp.StatusCode, err)
+		}
 		return fmt.Errorf("API error (%d): %s", resp.StatusCode, string(respBody))
 	}
 
@@ -567,7 +572,10 @@ func (a *BlueBubblesAdapter) callAPI(ctx context.Context, path string, payload m
 
 // buildURL constructs an API URL with password.
 func (a *BlueBubblesAdapter) buildURL(path string) string {
-	u, _ := url.Parse(a.serverURL + path)
+	u, err := url.Parse(a.serverURL + path)
+	if err != nil {
+		return a.serverURL + path + "?password=" + url.QueryEscape(a.password)
+	}
 	q := u.Query()
 	q.Set("password", a.password)
 	u.RawQuery = q.Encode()

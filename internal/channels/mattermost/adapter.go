@@ -401,7 +401,10 @@ func (a *Adapter) handlePosted(event *model.WebSocketEvent) {
 	}
 
 	// Check if this is a direct message or mentions the bot
-	channelType, _ := event.GetData()["channel_type"].(string)
+	channelType, ok := event.GetData()["channel_type"].(string)
+	if !ok {
+		channelType = ""
+	}
 	isDM := channelType == "D"
 	isMention := strings.Contains(post.Message, "@"+a.getBotUserID())
 

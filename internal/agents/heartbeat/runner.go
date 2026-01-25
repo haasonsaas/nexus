@@ -285,7 +285,13 @@ func (r *Runner) scheduleNextLocked() {
 	}
 
 	r.timer = time.AfterFunc(time.Duration(delay)*time.Millisecond, func() {
-		_, _ = r.runNow(context.Background(), "interval")
+		if _, err := r.runNow(context.Background(), "interval"); err != nil {
+			r.emitEvent(&HeartbeatEvent{
+				Status:    RunStatusFailed,
+				Reason:    err.Error(),
+				Timestamp: time.Now(),
+			})
+		}
 	})
 }
 

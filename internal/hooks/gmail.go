@@ -81,7 +81,9 @@ func GenerateHookToken(bytes int) string {
 		bytes = 24
 	}
 	b := make([]byte, bytes)
-	_, _ = rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		return ""
+	}
 	return hex.EncodeToString(b)
 }
 

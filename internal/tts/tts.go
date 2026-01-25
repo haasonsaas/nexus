@@ -445,7 +445,13 @@ func openaiTTS(ctx context.Context, cfg *Config, text, channel string) (*Result,
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return &Result{
+				Success: false,
+				Error:   fmt.Sprintf("OpenAI TTS error: %s", resp.Status),
+			}, fmt.Errorf("tts: OpenAI returned %s", resp.Status)
+		}
 		return &Result{
 			Success: false,
 			Error:   fmt.Sprintf("OpenAI TTS error: %s - %s", resp.Status, string(body)),
@@ -529,7 +535,13 @@ func elevenlabsTTS(ctx context.Context, cfg *Config, text string) (*Result, erro
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return &Result{
+				Success: false,
+				Error:   fmt.Sprintf("ElevenLabs TTS error: %s", resp.Status),
+			}, fmt.Errorf("tts: ElevenLabs returned %s", resp.Status)
+		}
 		return &Result{
 			Success: false,
 			Error:   fmt.Sprintf("ElevenLabs TTS error: %s - %s", resp.Status, string(body)),

@@ -140,10 +140,13 @@ func (l *DBLocker) Unlock(sessionID string) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	_, _ = l.db.ExecContext(ctx, `
+	if _, err := l.db.ExecContext(ctx, `
 		DELETE FROM session_locks
 		WHERE session_id = $1 AND owner_id = $2
-	`, sessionID, l.config.OwnerID)
+	`, sessionID, l.config.OwnerID); err != nil {
+		// Best-effort unlock; if this fails, the lock will expire via TTL.
+		_ = err
+	}
 }
 
 // Close stops all renew loops.

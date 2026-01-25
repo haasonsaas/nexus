@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -459,7 +460,11 @@ func FindTailscalePath() string {
 	}
 
 	for _, pattern := range macPaths {
-		if matches, _ := findGlobMatches(pattern); len(matches) > 0 {
+		matches, err := findGlobMatches(pattern)
+		if err != nil {
+			continue
+		}
+		if len(matches) > 0 {
 			return matches[0]
 		}
 	}
@@ -523,12 +528,7 @@ func fileExists(path string) bool {
 
 // findGlobMatches finds files matching a glob pattern.
 func findGlobMatches(pattern string) ([]string, error) {
-	// Simple glob expansion using filepath.Glob would be better,
-	// but for now just check if the literal path exists
-	if fileExists(pattern) {
-		return []string{pattern}, nil
-	}
-	return nil, nil
+	return filepath.Glob(pattern)
 }
 
 // IsFunnelEnabled checks if funnel is enabled for the account.

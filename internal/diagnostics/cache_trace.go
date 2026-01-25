@@ -282,7 +282,9 @@ func (ct *CacheTrace) RecordStage(stage CacheTraceStage, payload *CacheTraceEven
 	if line == "" {
 		return
 	}
-	_ = ct.writer.Write(line + "\n")
+	if err := ct.writer.Write(line + "\n"); err != nil {
+		_ = err
+	}
 }
 
 // FilePath returns the file path being written to
@@ -375,7 +377,10 @@ func stableStringify(value interface{}) string {
 
 // jsonEscape escapes a string for JSON
 func jsonEscape(s string) string {
-	data, _ := json.Marshal(s)
+	data, err := json.Marshal(s)
+	if err != nil {
+		return `""`
+	}
 	return string(data)
 }
 

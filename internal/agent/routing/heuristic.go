@@ -8,9 +8,9 @@ import (
 )
 
 var (
-	codeRegex    = regexp.MustCompile("(?i)\\b(func|class|def|package|import|SELECT|INSERT|UPDATE|DELETE)\\b")
-	reasonRegex  = regexp.MustCompile("(?i)\\b(analyze|reason|think through|derive|prove|why|tradeoff)\\b")
-	quickRegex   = regexp.MustCompile("(?i)\\b(what is|define|quick|brief|summary)\\b")
+	codeRegex    = regexp.MustCompile(`(?i)\b(func|class|def|package|import|SELECT|INSERT|UPDATE|DELETE)\b`)
+	reasonRegex  = regexp.MustCompile(`(?i)\b(analyze|reason|think through|derive|prove|why|tradeoff)\b`)
+	quickRegex   = regexp.MustCompile(`(?i)\b(what is|define|quick|brief|summary)\b`)
 	markdownCode = regexp.MustCompile("```")
 )
 

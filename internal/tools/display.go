@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
-	"unicode"
 )
 
 // ToolDisplay contains formatted display info for a tool
@@ -383,28 +381,6 @@ func lookupValueByPath(args interface{}, path string) interface{} {
 	return current
 }
 
-// formatDetailKey formats a detail key for display
-func formatDetailKey(key string) string {
-	// Check for override
-	if override, ok := DetailLabelOverrides[key]; ok {
-		return override
-	}
-
-	// Convert camelCase to words
-	var result []rune
-	for i, r := range key {
-		if unicode.IsUpper(r) && i > 0 {
-			result = append(result, ' ')
-			result = append(result, unicode.ToLower(r))
-		} else {
-			result = append(result, unicode.ToLower(r))
-		}
-	}
-
-	// Replace underscores with spaces
-	return strings.ReplaceAll(string(result), "_", " ")
-}
-
 // resolveDetailFromKeys extracts details from args using specified keys
 func resolveDetailFromKeys(args interface{}, keys []string) string {
 	if args == nil || len(keys) == 0 {
@@ -559,22 +535,4 @@ func resolveDetail(name string, args interface{}, detailKeys []string) string {
 	}
 
 	return ""
-}
-
-// trimToMaxLength truncates a string with ellipsis if too long
-func trimToMaxLength(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	if maxLen <= 3 {
-		return s[:maxLen]
-	}
-	return s[:maxLen-3] + "..."
-}
-
-// stripANSI removes ANSI escape codes from a string
-var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*m`)
-
-func stripANSI(s string) string {
-	return ansiRegex.ReplaceAllString(s, "")
 }

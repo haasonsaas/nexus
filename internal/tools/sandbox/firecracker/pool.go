@@ -374,7 +374,10 @@ func (p *VMPool) maybeRefreshSnapshot(ctx context.Context, language string, lang
 	select {
 	case vm := <-langPool.available:
 		atomic.AddInt64(&p.stats.IdleVMs, -1)
-		_, _ = p.snapshotManager.CreateSnapshot(ctx, vm, SnapshotTypeFull)
+		if _, err := p.snapshotManager.CreateSnapshot(ctx, vm, SnapshotTypeFull); err != nil {
+			// Best-effort snapshot refresh; keep serving from existing VMs/snapshots.
+			_ = err
+		}
 		langPool.available <- vm
 		atomic.AddInt64(&p.stats.IdleVMs, 1)
 		p.snapshotMu.Lock()

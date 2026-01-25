@@ -427,7 +427,9 @@ func (r *SubagentRegistry) persist() {
 	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
 		return
 	}
-	_ = os.Rename(tmpPath, r.config.PersistPath)
+	if err := os.Rename(tmpPath, r.config.PersistPath); err != nil {
+		return
+	}
 }
 
 // restore loads the registry from disk.

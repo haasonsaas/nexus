@@ -152,7 +152,13 @@ func (a *Adapter) Start(ctx context.Context) error {
 	a.updateStatus(true, "")
 	a.health.RecordConnectionOpened()
 
-	npub, _ := nip19.EncodePublicKey(a.publicKey)
+	a.setDegraded(false)
+
+	npub, err := nip19.EncodePublicKey(a.publicKey)
+	if err != nil {
+		npub = a.publicKey
+		a.logger.Debug("failed to encode npub", "error", err)
+	}
 	a.logger.Info("nostr adapter started successfully",
 		"connected_relays", len(a.relays),
 		"npub", npub)
@@ -255,12 +261,14 @@ func (a *Adapter) handleEvent(event *nostr.Event, relay *nostr.Relay) {
 	select {
 	case a.messages <- msg:
 		a.updateLastPing()
+		a.setDegraded(false)
 	case <-a.ctx.Done():
 		return
 	default:
 		a.logger.Warn("messages channel full, dropping message",
 			"event_id", event.ID)
 		a.health.RecordMessageFailed()
+		a.setDegraded(true)
 	}
 }
 
@@ -270,7 +278,11 @@ func (a *Adapter) convertEvent(event *nostr.Event, plaintext string) *models.Mes
 	sessionID := generateSessionID(event.PubKey)
 
 	// Format sender as npub for readability
-	npub, _ := nip19.EncodePublicKey(event.PubKey)
+	npub, err := nip19.EncodePublicKey(event.PubKey)
+	if err != nil {
+		npub = event.PubKey
+		a.logger.Debug("failed to encode npub", "error", err)
+	}
 
 	msg := &models.Message{
 		ID:        event.ID,
@@ -489,7 +501,11 @@ func (a *Adapter) PublicKey() string {
 
 // Npub returns the bot's public key in npub format.
 func (a *Adapter) Npub() string {
-	npub, _ := nip19.EncodePublicKey(a.publicKey)
+	npub, err := nip19.EncodePublicKey(a.publicKey)
+	if err != nil {
+		a.logger.Debug("failed to encode npub", "error", err)
+		return a.publicKey
+	}
 	return npub
 }
 
@@ -559,8 +575,11 @@ func parsePrivateKey(key string) (string, error) {
 		if prefix != "nsec" {
 			return "", fmt.Errorf("invalid key type: expected nsec, got %s", prefix)
 		}
-		// data is already the hex string
-		return data.(string), nil
+		hexKey, ok := data.(string)
+		if !ok {
+			return "", fmt.Errorf("invalid nsec key type: %T", data)
+		}
+		return hexKey, nil
 	}
 
 	// Handle hex format
@@ -587,7 +606,11 @@ func normalizePubkey(input string) (string, error) {
 		if prefix != "npub" {
 			return "", fmt.Errorf("invalid key type: expected npub, got %s", prefix)
 		}
-		return data.(string), nil
+		pubkey, ok := data.(string)
+		if !ok {
+			return "", fmt.Errorf("invalid npub key type: %T", data)
+		}
+		return pubkey, nil
 	}
 
 	// Handle hex format

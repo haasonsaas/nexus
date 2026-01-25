@@ -115,11 +115,17 @@ func expandHome(path string) string {
 		return path
 	}
 	if path == "~" {
-		home, _ := os.UserHomeDir()
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return path
+		}
 		return home
 	}
 	if strings.HasPrefix(path, "~/") {
-		home, _ := os.UserHomeDir()
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return path
+		}
 		return filepath.Join(home, path[2:])
 	}
 	return path
@@ -502,7 +508,11 @@ func resolveCommandExecutable(rawExec, cwd string) *CommandResolution {
 		} else {
 			base := cwd
 			if base == "" {
-				base, _ = os.Getwd()
+				wd, err := os.Getwd()
+				if err != nil {
+					wd = "."
+				}
+				base = wd
 			}
 			resolved = filepath.Join(base, expanded)
 		}
@@ -612,8 +622,7 @@ func globToRegexp(pattern string) *regexp.Regexp {
 	}
 
 	result.WriteString("$")
-	re, _ := regexp.Compile(result.String())
-	return re
+	return regexp.MustCompile(result.String())
 }
 
 // NormalizeSafeBins returns a normalized set of safe binary names.
@@ -645,7 +654,11 @@ func IsSafeBinUsage(argv []string, resolution *CommandResolution, safeBins map[s
 
 	// Check that no arguments look like file paths
 	if cwd == "" {
-		cwd, _ = os.Getwd()
+		wd, err := os.Getwd()
+		if err != nil {
+			wd = "."
+		}
+		cwd = wd
 	}
 
 	for _, arg := range argv[1:] {
@@ -787,7 +800,9 @@ func RecordAllowlistUse(file *ExecApprovalsFile, agentID string, entry *Allowlis
 			agent.Allowlist[i].LastUsedAt = time.Now().UnixMilli()
 			agent.Allowlist[i].LastUsedCommand = command
 			agent.Allowlist[i].LastResolvedPath = resolvedPath
-			_ = SaveExecApprovals(file)
+			if err := SaveExecApprovals(file); err != nil {
+				_ = err
+			}
 			return
 		}
 	}

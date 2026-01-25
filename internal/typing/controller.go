@@ -152,31 +152,42 @@ func (c *TypingController) StartTypingLoop() {
 
 	c.ensureStartLocked()
 
-	c.stopCh = make(chan struct{})
-	c.doneCh = make(chan struct{})
-	c.typingTimer = time.NewTicker(c.typingIntervalMs)
+	stopCh := make(chan struct{})
+	doneCh := make(chan struct{})
+	typingTimer := time.NewTicker(c.typingIntervalMs)
+
+	c.stopCh = stopCh
+	c.doneCh = doneCh
+	c.typingTimer = typingTimer
 	c.mu.Unlock()
 
-	go c.runTypingLoop()
+	go c.runTypingLoop(stopCh, doneCh, typingTimer)
 }
 
 // runTypingLoop is the goroutine that refreshes typing at intervals.
-func (c *TypingController) runTypingLoop() {
+func (c *TypingController) runTypingLoop(stopCh chan struct{}, doneCh chan struct{}, typingTimer *time.Ticker) {
 	defer func() {
+		typingTimer.Stop()
+		close(doneCh)
+
 		c.mu.Lock()
-		if c.typingTimer != nil {
-			c.typingTimer.Stop()
+		if c.typingTimer == typingTimer {
 			c.typingTimer = nil
 		}
-		close(c.doneCh)
+		if c.stopCh == stopCh {
+			c.stopCh = nil
+		}
+		if c.doneCh == doneCh {
+			c.doneCh = nil
+		}
 		c.mu.Unlock()
 	}()
 
 	for {
 		select {
-		case <-c.stopCh:
+		case <-stopCh:
 			return
-		case <-c.typingTimer.C:
+		case <-typingTimer.C:
 			c.triggerTyping()
 		}
 	}

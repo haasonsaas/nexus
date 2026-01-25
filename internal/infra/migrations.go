@@ -87,7 +87,10 @@ func NewMigrationManager(config *MigrationManagerConfig) *MigrationManager {
 
 	stateDir := config.StateDir
 	if stateDir == "" {
-		home, _ := os.UserHomeDir()
+		home, err := os.UserHomeDir()
+		if err != nil {
+			home = "."
+		}
 		stateDir = filepath.Join(home, ".nexus")
 	}
 

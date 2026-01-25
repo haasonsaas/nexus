@@ -4,6 +4,7 @@ package process
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -252,7 +253,11 @@ func EnqueueInLane[T any](cq *CommandQueue, lane CommandLane, task func(ctx cont
 		if result == nil {
 			return zero, nil
 		}
-		return result.(T), nil
+		typed, ok := result.(T)
+		if !ok {
+			return zero, fmt.Errorf("unexpected task result type %T", result)
+		}
+		return typed, nil
 	case err := <-errCh:
 		return zero, err
 	case <-ctx.Done():

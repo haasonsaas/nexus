@@ -107,8 +107,20 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 			ProbeChannels: &probeChannels,
 		})
 		if err != nil {
+			payload := map[string]any{
+				"status": "error",
+				"error":  err.Error(),
+			}
+			data, marshalErr := json.Marshal(payload)
+			if marshalErr != nil {
+				http.Error(w, "internal error", http.StatusInternalServerError)
+				return
+			}
+
 			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte(`{"status":"error","error":"` + err.Error() + `"}`))
+			if _, writeErr := w.Write(data); writeErr != nil && s.logger != nil {
+				s.logger.Debug("healthz write failed", "error", writeErr)
+			}
 			return
 		}
 
@@ -147,9 +159,19 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		data, err := json.Marshal(response)
+		if err != nil {
+			if s.logger != nil {
+				s.logger.Error("healthz marshal failed", "error", err)
+			}
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
 		w.WriteHeader(statusCode)
-		data, _ := json.Marshal(response)
-		_, _ = w.Write(data)
+		if _, err := w.Write(data); err != nil && s.logger != nil {
+			s.logger.Debug("healthz write failed", "error", err)
+		}
 		return
 	}
 
@@ -159,6 +181,15 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	if s.nodeID != "" {
 		response["node_id"] = s.nodeID
 	}
-	data, _ := json.Marshal(response)
-	_, _ = w.Write(data)
+	data, err := json.Marshal(response)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Error("healthz marshal failed", "error", err)
+		}
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if _, err := w.Write(data); err != nil && s.logger != nil {
+		s.logger.Debug("healthz write failed", "error", err)
+	}
 }

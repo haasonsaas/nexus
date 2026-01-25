@@ -84,7 +84,7 @@ func expectedKeySet(expected []ExpectedChunk) expectedSet {
 		docOnly: make(map[string]struct{}),
 	}
 	for _, exp := range expected {
-		key := ResultKey{DocID: exp.DocID, Section: exp.Section}
+		key := ResultKey(exp)
 		if exp.Section != "" {
 			set.keys[key] = struct{}{}
 			continue

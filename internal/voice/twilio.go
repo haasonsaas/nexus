@@ -341,7 +341,9 @@ func (p *TwilioProvider) normalizeEvent(params url.Values, callID, callSID strin
 		baseEvent.Transcript = speechResult
 		baseEvent.IsFinal = true
 		if conf := params.Get("Confidence"); conf != "" {
-			fmt.Sscanf(conf, "%f", &baseEvent.Confidence)
+			if _, err := fmt.Sscanf(conf, "%f", &baseEvent.Confidence); err != nil {
+				baseEvent.Confidence = 0
+			}
 		}
 		return baseEvent
 	}

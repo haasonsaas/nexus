@@ -507,7 +507,9 @@ func buildRagEvalCmd() *cobra.Command {
 	cmd.Flags().StringVar(&judgeProv, "judge-provider", "", "Provider ID for LLM judge (defaults to llm.default_provider)")
 	cmd.Flags().StringVar(&judgeModel, "judge-model", "", "Model ID for LLM judge (defaults to provider default)")
 	cmd.Flags().IntVar(&judgeTokens, "judge-max-tokens", 1024, "Max tokens for answer generation when judging")
-	_ = cmd.MarkFlagRequired("test-set")
+	if err := cmd.MarkFlagRequired("test-set"); err != nil {
+		panic(err)
+	}
 	return cmd
 }
 
@@ -534,7 +536,9 @@ func buildRagPackInstallCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
 	cmd.Flags().StringVar(&packDir, "path", "", "Path to knowledge pack directory")
-	_ = cmd.MarkFlagRequired("path")
+	if err := cmd.MarkFlagRequired("path"); err != nil {
+		panic(err)
+	}
 	return cmd
 }
 

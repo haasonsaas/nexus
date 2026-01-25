@@ -162,7 +162,7 @@ func ConsumeSentinel(stateDir string) (*Sentinel, error) {
 func FormatMessage(payload SentinelPayload) string {
 	data, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
-		return fmt.Sprintf("GatewayRestart:\n{\"error\": \"marshal failed\"}")
+		return "GatewayRestart:\n{\"error\": \"marshal failed\"}"
 	}
 	return fmt.Sprintf("GatewayRestart:\n%s", string(data))
 }

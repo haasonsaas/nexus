@@ -88,7 +88,9 @@ func (m *Manager) Reload(ctx context.Context, cfg *Config) error {
 	// Disconnect removed servers
 	for id := range m.Clients() {
 		if _, ok := desired[id]; !ok {
-			_ = m.Disconnect(id)
+			if err := m.Disconnect(id); err != nil {
+				m.logger.Warn("failed to disconnect MCP server on reload", "server", id, "error", err)
+			}
 		}
 	}
 

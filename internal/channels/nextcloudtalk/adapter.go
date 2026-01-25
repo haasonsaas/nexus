@@ -161,7 +161,9 @@ func (a *Adapter) Start(ctx context.Context) error {
 	mux.HandleFunc(a.cfg.WebhookPath, a.handleWebhook)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
+		if _, err := w.Write([]byte("ok")); err != nil {
+			a.logger.Debug("healthz write failed", "error", err)
+		}
 	})
 
 	addr := fmt.Sprintf("%s:%d", a.cfg.WebhookHost, a.cfg.WebhookPort)
@@ -392,6 +394,7 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
+		a.setDegraded(true)
 		a.metrics.RecordMessageFailed()
 		return channels.ErrInternal("failed to marshal request body", err)
 	}
@@ -399,6 +402,7 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	// Create and send request
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, strings.NewReader(string(bodyBytes)))
 	if err != nil {
+		a.setDegraded(true)
 		a.metrics.RecordMessageFailed()
 		return channels.ErrInternal("failed to create request", err)
 	}
@@ -410,6 +414,7 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
+		a.setDegraded(true)
 		a.metrics.RecordMessageFailed()
 		a.logger.Error("failed to send message", "error", err, "room_token", roomToken)
 		return channels.ErrConnection("failed to send message", err)
@@ -417,8 +422,15 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		a.setDegraded(true)
 		a.metrics.RecordMessageFailed()
-		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			a.logger.Error("message send failed",
+				"status", resp.StatusCode,
+				"read_error", err)
+			return channels.ErrInternal(fmt.Sprintf("API error: %d", resp.StatusCode), err)
+		}
 		a.logger.Error("message send failed",
 			"status", resp.StatusCode,
 			"body", string(bodyBytes))
@@ -426,6 +438,7 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	}
 
 	// Record success metrics
+	a.setDegraded(false)
 	a.metrics.RecordMessageSent()
 	a.metrics.RecordSendLatency(time.Since(startTime))
 

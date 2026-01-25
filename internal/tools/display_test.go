@@ -3,8 +3,48 @@ package tools
 import (
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
+	"unicode"
 )
+
+func formatDetailKey(key string) string {
+	// Check for override
+	if override, ok := DetailLabelOverrides[key]; ok {
+		return override
+	}
+
+	// Convert camelCase to words
+	var result []rune
+	for i, r := range key {
+		if unicode.IsUpper(r) && i > 0 {
+			result = append(result, ' ')
+			result = append(result, unicode.ToLower(r))
+		} else {
+			result = append(result, unicode.ToLower(r))
+		}
+	}
+
+	// Replace underscores with spaces
+	return strings.ReplaceAll(string(result), "_", " ")
+}
+
+func trimToMaxLength(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	if maxLen <= 3 {
+		return s[:maxLen]
+	}
+	return s[:maxLen-3] + "..."
+}
+
+var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+func stripANSI(s string) string {
+	return ansiRegex.ReplaceAllString(s, "")
+}
 
 func TestNormalizeToolName(t *testing.T) {
 	tests := []struct {

@@ -62,11 +62,6 @@ func (f *AnthropicUsageFetcher) Fetch(ctx context.Context) (*ProviderUsage, erro
 		return usage, nil
 	}
 
-	client := f.HTTPClient
-	if client == nil {
-		client = &http.Client{Timeout: 30 * time.Second}
-	}
-
 	// Anthropic doesn't have a public usage API endpoint yet
 	// This is a placeholder for when it becomes available
 	usage.Error = "Anthropic usage API not yet available"
@@ -130,7 +125,11 @@ func (f *OpenAIUsageFetcher) Fetch(ctx context.Context) (*ProviderUsage, error) 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			usage.Error = fmt.Sprintf("API error %d (read body failed: %v)", resp.StatusCode, err)
+			return usage, nil
+		}
 		usage.Error = fmt.Sprintf("API error %d: %s", resp.StatusCode, string(body))
 		return usage, nil
 	}
@@ -246,7 +245,21 @@ func (r *UsageFetcherRegistry) Fetch(ctx context.Context, provider string) (*Pro
 func (r *UsageFetcherRegistry) FetchAll(ctx context.Context) []*ProviderUsage {
 	results := make([]*ProviderUsage, 0, len(r.fetchers))
 	for _, fetcher := range r.fetchers {
-		usage, _ := fetcher.Fetch(ctx)
+		usage, err := fetcher.Fetch(ctx)
+		if err != nil {
+			usage = &ProviderUsage{
+				Provider:  fetcher.Provider(),
+				FetchedAt: time.Now().UnixMilli(),
+				Error:     err.Error(),
+			}
+		}
+		if usage == nil {
+			usage = &ProviderUsage{
+				Provider:  fetcher.Provider(),
+				FetchedAt: time.Now().UnixMilli(),
+				Error:     "no usage data",
+			}
+		}
 		results = append(results, usage)
 	}
 	return results
@@ -310,7 +323,15 @@ func (c *UsageCache) Get(ctx context.Context, provider string) (*ProviderUsage, 
 func (c *UsageCache) GetAll(ctx context.Context) []*ProviderUsage {
 	results := make([]*ProviderUsage, 0)
 	for _, provider := range c.registry.Providers() {
-		usage, _ := c.Get(ctx, provider)
+		usage, err := c.Get(ctx, provider)
+		if err != nil {
+			results = append(results, &ProviderUsage{
+				Provider:  provider,
+				FetchedAt: time.Now().UnixMilli(),
+				Error:     err.Error(),
+			})
+			continue
+		}
 		if usage != nil {
 			results = append(results, usage)
 		}

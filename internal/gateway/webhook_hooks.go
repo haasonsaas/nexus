@@ -339,7 +339,9 @@ func (h *WebhookHooks) respondError(w http.ResponseWriter, status int, message s
 func (h *WebhookHooks) respondJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(data)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		_ = err
+	}
 }
 
 // Stats returns webhook usage statistics.

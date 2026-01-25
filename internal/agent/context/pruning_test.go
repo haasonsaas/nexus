@@ -112,7 +112,7 @@ func TestPruneContextMessages_UnknownToolNameDefaultAllowed(t *testing.T) {
 
 	history := []*models.Message{
 		newMessage(models.RoleUser, "hello"),
-		&models.Message{Role: models.RoleTool, ToolResults: []models.ToolResult{{ToolCallID: "missing", Content: strings.Repeat("x", 40)}}},
+		{Role: models.RoleTool, ToolResults: []models.ToolResult{{ToolCallID: "missing", Content: strings.Repeat("x", 40)}}},
 		newMessage(models.RoleAssistant, "done"),
 	}
 

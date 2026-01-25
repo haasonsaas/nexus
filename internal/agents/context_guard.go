@@ -110,7 +110,7 @@ func ResolveContextWindowInfo(
 
 	// Priority 4: Default
 	return ContextWindowInfo{
-		Tokens: int(math.Floor(float64(defaultTokens))),
+		Tokens: defaultTokens,
 		Source: ContextWindowSourceDefault,
 	}
 }

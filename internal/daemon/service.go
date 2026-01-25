@@ -250,8 +250,3 @@ func toLower(s string) string {
 	}
 	return string(b)
 }
-
-// contains checks if s contains substr.
-func contains(s, substr string) bool {
-	return indexOf(s, substr) >= 0
-}

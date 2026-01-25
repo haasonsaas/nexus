@@ -192,7 +192,10 @@ func (c *ActiveHoursConfig) NextActiveTime(t time.Time, userTimezone string) (ti
 
 		// If we're on the same day and past start time, check if we're in active window
 		if dayOffset == 0 {
-			active, _ := c.IsActiveAt(checkTime, userTimezone)
+			active, err := c.IsActiveAt(checkTime, userTimezone)
+			if err != nil {
+				return time.Time{}, err
+			}
 			if active {
 				return t, nil // Already active
 			}

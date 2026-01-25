@@ -296,7 +296,8 @@ func (m *DefaultCallManager) HandleWebhook(ctx context.Context, webhookCtx *Webh
 	// Process events
 	for _, event := range result.Events {
 		if err := m.HandleEvent(ctx, &event); err != nil {
-			// Log but don't fail
+			// Best effort: webhook responses should still acknowledge receipt.
+			_ = err
 		}
 	}
 

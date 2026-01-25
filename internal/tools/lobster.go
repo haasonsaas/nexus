@@ -104,7 +104,11 @@ func NewLobsterTool(cfg LobsterConfig) *LobsterTool {
 
 	workDir := cfg.WorkDir
 	if workDir == "" {
-		workDir, _ = os.Getwd()
+		wd, err := os.Getwd()
+		if err != nil {
+			wd = "."
+		}
+		workDir = wd
 	}
 
 	timeoutMs := cfg.TimeoutMs
@@ -177,7 +181,10 @@ func (t *LobsterTool) Schema() json.RawMessage {
 		"required": []string{"action"},
 	}
 
-	data, _ := json.Marshal(schema)
+	data, err := json.Marshal(schema)
+	if err != nil {
+		return []byte("{}")
+	}
 	return data
 }
 
@@ -260,7 +267,10 @@ func (t *LobsterTool) Execute(ctx context.Context, id string, params json.RawMes
 		Envelope: envelope,
 	}
 
-	formatted, _ := json.MarshalIndent(result, "", "  ")
+	formatted, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("lobster: failed to format result: %w", err)
+	}
 	return string(formatted), nil
 }
 
@@ -307,7 +317,11 @@ func (t *LobsterTool) runSubprocess(ctx context.Context, execPath string, args [
 	// Wait for completion or timeout
 	select {
 	case <-ctx.Done():
-		cmd.Process.Kill()
+		if cmd.Process != nil {
+			if err := cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+				return nil, fmt.Errorf("lobster: subprocess timed out (kill failed: %w)", err)
+			}
+		}
 		return nil, fmt.Errorf("lobster: subprocess timed out")
 	case err := <-done:
 		if stdout.Len() > maxStdoutBytes {

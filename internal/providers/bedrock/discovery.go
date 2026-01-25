@@ -96,10 +96,13 @@ func init() {
 //   - []ModelDefinition: List of available models matching the filter criteria
 //   - error: Any error encountered during discovery
 func DiscoverModels(ctx context.Context, cfg *DiscoveryConfig) ([]ModelDefinition, error) {
-	if cfg == nil {
-		cfg = &DiscoveryConfig{}
+	localCfg := DiscoveryConfig{}
+	if cfg != nil {
+		localCfg = *cfg
 	}
-	applyDefaults(cfg)
+	localCfg.ProviderFilter = append([]string(nil), localCfg.ProviderFilter...)
+	applyDefaults(&localCfg)
+	cfg = &localCfg
 
 	// Check cache first
 	globalCache.mu.RLock()

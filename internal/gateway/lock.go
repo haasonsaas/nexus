@@ -298,7 +298,11 @@ func AcquireEnhancedGatewayLock(opts LockOptions) (*LockHandle, error) {
 		}
 
 		// Lock file exists, check if owner is still alive
-		lastPayload, _ = readEnhancedLockPayload(lockPath)
+		if payload, err := readEnhancedLockPayload(lockPath); err == nil {
+			lastPayload = payload
+		} else {
+			lastPayload = nil
+		}
 		ownerPID := 0
 		if lastPayload != nil {
 			ownerPID = lastPayload.PID

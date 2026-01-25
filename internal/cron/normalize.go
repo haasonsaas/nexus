@@ -187,22 +187,6 @@ func isNumeric(s string) bool {
 	return len(s) > 0
 }
 
-// parseRelativeTime parses "in 5m" style expressions
-func parseRelativeTime(raw string) (int64, bool) {
-	raw = strings.TrimSpace(strings.ToLower(raw))
-	if !strings.HasPrefix(raw, "in ") {
-		return 0, false
-	}
-
-	durationStr := strings.TrimPrefix(raw, "in ")
-	d, err := time.ParseDuration(durationStr)
-	if err != nil {
-		return 0, false
-	}
-
-	return time.Now().Add(d).UnixMilli(), true
-}
-
 // coerceSchedule normalizes schedule input
 func coerceSchedule(input map[string]interface{}) *NormalizedSchedule {
 	schedule := &NormalizedSchedule{}

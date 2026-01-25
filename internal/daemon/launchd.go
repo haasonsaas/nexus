@@ -311,15 +311,22 @@ func UninstallLaunchAgent(env map[string]string) error {
 		home := resolveHomeDir(env)
 		if home != "" {
 			trashDir := filepath.Join(home, ".Trash")
-			os.MkdirAll(trashDir, 0o755)
 			label := resolveLaunchdLabel(env)
 			destPath := filepath.Join(trashDir, label+".plist")
-			if err := os.Rename(plistPath, destPath); err != nil {
-				// Fall back to deletion
-				os.Remove(plistPath)
+			if err := os.MkdirAll(trashDir, 0o755); err == nil {
+				if err := os.Rename(plistPath, destPath); err == nil {
+					return nil
+				}
+			}
+
+			// Fall back to deletion
+			if err := os.Remove(plistPath); err != nil && !os.IsNotExist(err) {
+				return err
 			}
 		} else {
-			os.Remove(plistPath)
+			if err := os.Remove(plistPath); err != nil && !os.IsNotExist(err) {
+				return err
+			}
 		}
 	}
 
@@ -536,9 +543,12 @@ func UninstallLegacyLaunchAgents(env map[string]string) ([]LegacyLaunchAgent, er
 	trashDir := ""
 	if home != "" {
 		trashDir = filepath.Join(home, ".Trash")
-		os.MkdirAll(trashDir, 0o755)
+		if err := os.MkdirAll(trashDir, 0o755); err != nil {
+			trashDir = ""
+		}
 	}
 
+	var firstErr error
 	for _, agent := range agents {
 		execLaunchctl([]string{"bootout", domain, agent.PlistPath})
 		execLaunchctl([]string{"unload", agent.PlistPath})
@@ -547,15 +557,19 @@ func UninstallLegacyLaunchAgents(env map[string]string) ([]LegacyLaunchAgent, er
 			if trashDir != "" {
 				destPath := filepath.Join(trashDir, agent.Label+".plist")
 				if err := os.Rename(agent.PlistPath, destPath); err != nil {
-					os.Remove(agent.PlistPath)
+					if err := os.Remove(agent.PlistPath); err != nil && !os.IsNotExist(err) && firstErr == nil {
+						firstErr = err
+					}
 				}
 			} else {
-				os.Remove(agent.PlistPath)
+				if err := os.Remove(agent.PlistPath); err != nil && !os.IsNotExist(err) && firstErr == nil {
+					firstErr = err
+				}
 			}
 		}
 	}
 
-	return agents, nil
+	return agents, firstErr
 }
 
 // RepairLaunchAgentBootstrap attempts to repair a LaunchAgent bootstrap.

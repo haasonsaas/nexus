@@ -12,7 +12,7 @@ struct SettingsRootView: View {
                     Label("General", systemImage: "gear")
                 }
 
-            GatewaySettingsView(appState: appState)
+            GatewaySettingsView()
                 .tabItem {
                     Label("Gateway", systemImage: "server.rack")
                 }
@@ -70,8 +70,8 @@ struct GeneralSettingsView: View {
 
             Section("Connection") {
                 Picker("Mode", selection: $appState.connectionMode) {
-                    Text("Local").tag(AppStateStore.ConnectionMode.local)
-                    Text("Remote").tag(AppStateStore.ConnectionMode.remote)
+                    Text("Local").tag(ConnectionMode.local)
+                    Text("Remote").tag(ConnectionMode.remote)
                 }
                 .pickerStyle(.segmented)
             }
@@ -87,7 +87,7 @@ struct GeneralSettingsView: View {
     }
 }
 
-struct GatewaySettingsView: View {
+struct BasicGatewaySettingsView: View {
     @Bindable var appState: AppStateStore
 
     var body: some View {

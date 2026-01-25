@@ -110,8 +110,20 @@ final class QuickActionManager {
                 NSPasteboard.general.writeObjects([result.image])
 
             case .screenshotRegion:
-                // TODO: Implement region selection UI
-                break
+                // Open region selection overlay
+                ScreenRegionSelector.shared.startSelection { rect in
+                    Task {
+                        if let rect {
+                            do {
+                                let result = try await ScreenCaptureService.shared.captureRegion(rect: rect)
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.writeObjects([result.image])
+                            } catch {
+                                self.logger.error("region capture failed: \(error.localizedDescription)")
+                            }
+                        }
+                    }
+                }
 
             case .screenshotWindow:
                 let windows = ScreenCaptureService.shared.listWindows()
@@ -128,16 +140,16 @@ final class QuickActionManager {
                 NSPasteboard.general.setString(markdown, forType: .string)
 
             case .pasteHistory:
-                // TODO: Show clipboard history UI
-                break
+                // Show clipboard history panel
+                ClipboardHistoryPanel.shared.show()
 
             case .newChat:
                 let session = SessionBridge.shared.createSession(type: .chat)
                 WebChatManager.shared.openChat(for: session.id)
 
             case .voiceInput:
-                // TODO: Trigger voice input
-                break
+                // Show voice input overlay
+                VoiceWakeOverlayController.shared.show(source: .pushToTalk)
 
             case .computerUse:
                 // Create computer use agent session

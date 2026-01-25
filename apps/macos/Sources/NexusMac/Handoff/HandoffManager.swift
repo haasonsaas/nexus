@@ -134,10 +134,22 @@ final class HandoffManager {
 
         // Open the conversation
         Task {
-            let session = SessionBridge.shared.createSession(type: .chat)
-            WebChatManager.shared.openChat(for: session.id)
+            // Try to find existing session or create new one
+            if let existingSession = SessionBridge.shared.activeSessions.first(where: { $0.id == conversationId }) {
+                WebChatManager.shared.openChat(for: existingSession.id)
+            } else {
+                // Create new session and load conversation history from memory
+                let session = SessionBridge.shared.createSession(type: .chat)
 
-            // TODO: Load conversation from memory/sync
+                // Load any saved memory context for this conversation
+                if let memory = ConversationMemory.shared.searchMemories(query: conversationId).first {
+                    WebChatManager.shared.openChat(for: session.id, withMessage: "Continue our previous conversation about: \(memory.content)")
+                } else {
+                    WebChatManager.shared.openChat(for: session.id)
+                }
+            }
+
+            logger.info("handoff: opened conversation id=\(conversationId)")
         }
 
         return true
@@ -149,12 +161,17 @@ final class HandoffManager {
             return false
         }
 
-        // Open chat with prompt
+        // Open chat with prompt pre-filled
         Task {
             let session = SessionBridge.shared.createSession(type: .chat)
-            WebChatManager.shared.openChat(for: session.id)
 
-            // TODO: Pre-fill prompt in chat
+            // Expand prompt with no variables
+            let content = PromptLibrary.shared.expand(prompt, variables: [:])
+
+            // Open chat with prompt content as initial message
+            WebChatManager.shared.openChat(for: session.id, withMessage: content)
+
+            logger.info("handoff: opened prompt id=\(promptId) name=\(prompt.name)")
         }
 
         return true

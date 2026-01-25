@@ -84,12 +84,11 @@ final class ApplicationCoordinator {
         FileSystemWatcher.shared.unwatchAll()
         SystemIntegration.shared.stopMonitoring()
         SystemIntegration.shared.allowSleep()
+        TailscaleService.shared.stopMonitoring()
+        GatewayDiscovery.shared.stopScan()
 
-        // Disconnect tunnel
-        await RemoteTunnelManager.shared.disconnect()
-
-        // Stop gateway
-        GatewayProcessManager.shared.stopGateway()
+        // Disconnect using coordinator (handles tunnel and gateway)
+        await ConnectionModeCoordinator.shared.disconnect()
 
         logger.info("application shutdown complete")
     }
@@ -134,6 +133,12 @@ final class ApplicationCoordinator {
         SystemIntegration.shared.startMonitoring()
         NotificationBridge.shared.startCapturing()
 
+        // Start Tailscale monitoring
+        TailscaleService.shared.startMonitoring()
+
+        // Start gateway discovery
+        GatewayDiscovery.shared.startScan()
+
         // Register agent handlers
         AgentOrchestrator.shared.registerHandlers()
 
@@ -148,20 +153,16 @@ final class ApplicationCoordinator {
     }
 
     private func connectGateway() async {
-        // Check if we should use local or remote gateway
-        let endpoint = GatewayEndpointStore.shared.currentEndpoint
+        // Use ConnectionModeCoordinator for unified connection management
+        let mode = AppStateStore.shared.connectionMode
+        let paused = AppStateStore.shared.isPaused
 
-        if endpoint?.id == "local" {
-            // Start local gateway
-            await GatewayProcessManager.shared.ensureRunning()
-        }
+        await ConnectionModeCoordinator.shared.apply(mode: mode, paused: paused)
 
-        // Connect control channel
-        do {
-            try await ControlChannel.shared.connect()
-            logger.info("gateway connected")
-        } catch {
-            logger.error("gateway connection failed: \(error.localizedDescription)")
+        if ConnectionModeCoordinator.shared.isConnected {
+            logger.info("gateway connected via \(mode.rawValue) mode")
+        } else if let error = ConnectionModeCoordinator.shared.errorMessage {
+            logger.error("gateway connection failed: \(error)")
             // Don't throw - app can work partially without gateway
         }
     }

@@ -53,6 +53,31 @@ final class ScreenCaptureService {
         )
     }
 
+    /// Capture a specific region of the screen
+    func captureRegion(rect: CGRect, options: CaptureOptions = CaptureOptions()) async throws -> CaptureResult {
+        var regionOptions = options
+        regionOptions.captureRect = rect
+
+        let displayID = regionOptions.displayID ?? CGMainDisplayID()
+
+        guard let cgImage = CGDisplayCreateImage(displayID, rect: rect) else {
+            throw CaptureError.captureFailed
+        }
+
+        let size = NSSize(width: rect.width, height: rect.height)
+        let image = NSImage(cgImage: cgImage, size: size)
+        let data = try encodeImage(image, format: regionOptions.format)
+
+        logger.debug("region captured at (\(Int(rect.origin.x)),\(Int(rect.origin.y))) size=\(Int(rect.width))x\(Int(rect.height))")
+
+        return CaptureResult(
+            image: image,
+            data: data,
+            bounds: rect,
+            timestamp: Date()
+        )
+    }
+
     /// Capture a specific window
     func captureWindow(windowID: CGWindowID, options: CaptureOptions = CaptureOptions()) async throws -> CaptureResult {
         let windowList = CGWindowListCopyWindowInfo([.optionIncludingWindow], windowID) as? [[String: Any]]

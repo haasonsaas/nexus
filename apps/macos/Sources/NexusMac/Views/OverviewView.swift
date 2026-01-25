@@ -2,144 +2,229 @@ import SwiftUI
 
 struct OverviewView: View {
     @EnvironmentObject var model: AppModel
+    @State private var isRefreshing = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("System Status")
-                    .font(.title2)
-                Spacer()
+            // Header
+            headerSection
 
-                // Real-time connection indicator
-                ConnectionStatusBadge(isConnected: model.isWebSocketConnected)
+            // Error banner
+            if let error = model.lastError {
+                ErrorBanner(message: error, severity: .error) {
+                    model.lastError = nil
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
 
-                Button("Refresh") {
-                    Task { await model.refreshStatus() }
+            if let wsError = model.webSocketError {
+                ErrorBanner(message: "WebSocket: \(wsError)", severity: .warning)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+
+            // Main content
+            if isRefreshing && model.status == nil {
+                LoadingStateView(message: "Loading system status...", showSkeleton: true)
+            } else if let status = model.status {
+                statusContent(status)
+            } else {
+                EmptyStateView(
+                    icon: "server.rack",
+                    title: "Not Connected",
+                    description: "Configure gateway connection in Settings to view system status.",
+                    actionTitle: "Open Settings"
+                ) {
+                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
                 }
             }
 
-            // Real-time server info from WebSocket
-            if model.isWebSocketConnected {
-                HStack(spacing: 12) {
-                    Label("Live", systemImage: "bolt.fill")
+            Spacer()
+        }
+        .padding()
+        .animation(.easeInOut(duration: 0.2), value: model.lastError)
+        .animation(.easeInOut(duration: 0.2), value: model.webSocketError)
+    }
+
+    // MARK: - Header Section
+
+    private var headerSection: some View {
+        HStack {
+            Text("System Status")
+                .font(.title2)
+            Spacer()
+
+            StatusBadge(
+                status: model.isWebSocketConnected ? .online : .offline,
+                variant: .animated
+            )
+
+            Button {
+                refreshStatus()
+            } label: {
+                Image(systemName: "arrow.clockwise")
+            }
+            .disabled(isRefreshing)
+        }
+    }
+
+    // MARK: - Status Content
+
+    @ViewBuilder
+    private func statusContent(_ status: GatewayStatus) -> some View {
+        // Live indicator
+        if model.isWebSocketConnected {
+            HStack(spacing: 8) {
+                Image(systemName: "bolt.fill")
+                    .foregroundStyle(.green)
+                    .symbolEffect(.pulse, isActive: true)
+                Text("Live")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.green)
+                Text("\u{2022}")
+                    .foregroundStyle(.tertiary)
+                Text("Server uptime: \(formatUptime(model.serverUptimeMs))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.green.opacity(0.1))
+            )
+        }
+
+        // Stats cards
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 12) {
+            ImprovedStatCard(title: "Uptime", value: status.uptimeString, icon: "clock")
+            ImprovedStatCard(title: "Sessions", value: "\(status.sessionCount)", icon: "bubble.left.and.bubble.right")
+            ImprovedStatCard(title: "Go", value: status.goVersion, icon: "chevron.left.forwardslash.chevron.right")
+            ImprovedStatCard(title: "Memory", value: String(format: "%.0f MB", status.memAllocMb), icon: "memorychip")
+            ImprovedStatCard(title: "Database", value: status.databaseStatus, icon: "cylinder")
+        }
+        .padding(.bottom, 8)
+
+        // Active tool calls
+        if !model.activeToolCalls.isEmpty {
+            activeToolCallsSection
+        }
+
+        // Recent activity
+        if !model.recentSessionEvents.isEmpty {
+            recentActivitySection
+        }
+
+        // Channels
+        channelsSection(status.channels)
+    }
+
+    // MARK: - Active Tool Calls
+
+    private var activeToolCallsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Active Tool Calls")
+                .font(.headline)
+
+            ForEach(model.activeToolCalls.indices, id: \.self) { index in
+                let toolCall = model.activeToolCalls[index]
+                HStack(spacing: 10) {
+                    Image(systemName: "gearshape.2.fill")
+                        .foregroundStyle(.orange)
+                        .symbolEffect(.rotate, isActive: true)
+                    Text(toolCall.toolName ?? "Unknown Tool")
+                        .font(.subheadline)
+                    Spacer()
+                    ProgressView()
+                        .controlSize(.small)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.orange.opacity(0.1))
+                )
+            }
+        }
+        .padding(.bottom, 8)
+    }
+
+    // MARK: - Recent Activity
+
+    private var recentActivitySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Recent Activity")
+                .font(.headline)
+
+            ForEach(Array(model.recentSessionEvents.suffix(5).enumerated()), id: \.offset) { _, event in
+                HStack(spacing: 10) {
+                    Image(systemName: "bubble.left.fill")
+                        .foregroundStyle(.blue)
+                    Text(event.eventType)
+                        .font(.subheadline)
+                    Spacer()
+                    Text(String(event.sessionId.prefix(8)) + "...")
                         .font(.caption)
-                        .foregroundColor(.green)
-                    Text("Server uptime: \(formatUptime(model.serverUptimeMs))")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.tertiary)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(Color.green.opacity(0.1))
-                .cornerRadius(6)
             }
+        }
+        .padding(.bottom, 8)
+    }
 
-            if let status = model.status {
-                HStack(spacing: 24) {
-                    StatCard(title: "Uptime", value: status.uptimeString)
-                    StatCard(title: "Sessions", value: "\(status.sessionCount)")
-                    StatCard(title: "Go", value: status.goVersion)
-                    StatCard(title: "Memory", value: String(format: "%.0f MB", status.memAllocMb))
-                    StatCard(title: "DB", value: status.databaseStatus)
+    // MARK: - Channels Section
+
+    @ViewBuilder
+    private func channelsSection(_ channels: [ChannelStatus]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Channels")
+                .font(.headline)
+
+            if channels.isEmpty {
+                HStack {
+                    Image(systemName: "antenna.radiowaves.left.and.right.slash")
+                        .foregroundStyle(.tertiary)
+                    Text("No channels configured")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .padding(.bottom, 8)
-
-                // Active tool calls from WebSocket
-                if !model.activeToolCalls.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Active Tool Calls")
-                            .font(.headline)
-
-                        ForEach(model.activeToolCalls.indices, id: \.self) { index in
-                            let toolCall = model.activeToolCalls[index]
-                            HStack {
-                                Image(systemName: "gear.badge.checkmark")
-                                    .foregroundColor(.orange)
-                                Text(toolCall.toolName ?? "Unknown Tool")
-                                    .font(.subheadline)
-                                Spacer()
-                                ProgressView()
-                                    .scaleEffect(0.7)
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color.orange.opacity(0.1))
-                            .cornerRadius(6)
-                        }
-                    }
-                    .padding(.bottom, 8)
-                }
-
-                // Recent session events from WebSocket
-                if !model.recentSessionEvents.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Recent Activity")
-                            .font(.headline)
-
-                        ForEach(model.recentSessionEvents.suffix(5).indices, id: \.self) { index in
-                            let event = model.recentSessionEvents[index]
-                            HStack {
-                                Image(systemName: "bubble.left.fill")
-                                    .foregroundColor(.blue)
-                                Text(event.eventType)
-                                    .font(.subheadline)
-                                Spacer()
-                                Text(event.sessionId.prefix(8) + "...")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                        }
-                    }
-                    .padding(.bottom, 8)
-                }
-
-                Text("Channels")
-                    .font(.headline)
-
-                Table(status.channels) {
+                .padding(.vertical, 8)
+            } else {
+                Table(channels) {
                     TableColumn("Name") { Text($0.name) }
                     TableColumn("Status") { channel in
                         HStack(spacing: 6) {
-                            Circle()
-                                .fill(channel.status == "connected" ? Color.green : Color.red)
-                                .frame(width: 8, height: 8)
+                            StatusBadge(
+                                status: channel.status == "connected" ? .online : .error,
+                                variant: .minimal
+                            )
                             Text(channel.status)
                         }
                     }
                     TableColumn("Enabled") { Text($0.enabled ? "Yes" : "No") }
                     TableColumn("Healthy") { channel in
                         HStack(spacing: 6) {
-                            Circle()
-                                .fill((channel.healthy ?? false) ? Color.green : Color.orange)
-                                .frame(width: 8, height: 8)
+                            StatusBadge(
+                                status: (channel.healthy ?? false) ? .online : .warning,
+                                variant: .minimal
+                            )
                             Text((channel.healthy ?? false) ? "Yes" : "No")
                         }
                     }
                 }
-            } else {
-                Text("No status loaded. Configure base URL and API key in Settings.")
-                    .foregroundColor(.secondary)
             }
-
-            if let error = model.lastError {
-                Text(error)
-                    .foregroundColor(.red)
-            }
-
-            if let wsError = model.webSocketError {
-                HStack {
-                    Image(systemName: "exclamationmark.triangle")
-                    Text("WebSocket: \(wsError)")
-                }
-                .foregroundColor(.orange)
-                .font(.caption)
-            }
-
-            Spacer()
         }
-        .padding()
+    }
+
+    // MARK: - Actions
+
+    private func refreshStatus() {
+        isRefreshing = true
+        Task {
+            await model.refreshStatus()
+            isRefreshing = false
+        }
     }
 
     private func formatUptime(_ ms: Int64) -> String {
@@ -200,5 +285,47 @@ struct StatCard: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(Color.gray.opacity(0.2))
         )
+    }
+}
+
+struct ImprovedStatCard: View {
+    let title: String
+    let value: String
+    var icon: String? = nil
+
+    @State private var isHovered = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(value)
+                .font(.system(.headline, design: .rounded))
+                .fontWeight(.semibold)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color(NSColor.controlBackgroundColor))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(isHovered ? Color.accentColor.opacity(0.3) : Color.gray.opacity(0.15), lineWidth: 1)
+        )
+        .scaleEffect(isHovered ? 1.02 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHovered)
+        .onHover { hovering in
+            isHovered = hovering
+        }
     }
 }

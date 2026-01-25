@@ -1,10 +1,9 @@
 import SwiftUI
 
-/// Content view for the menu bar dropdown.
-/// Provides quick access to chat, settings, and status.
-struct MenuContentView: View {
+/// Improved menu content view with better states and visual polish.
+struct ImprovedMenuContentView: View {
     @Bindable var appState: AppStateStore
-    @State private var coordinator = ConnectionModeCoordinator.shared
+    @State private var connectionCoordinator = ConnectionModeCoordinator.shared
     @State private var permissions = PermissionManager.shared
 
     var onOpenChat: () -> Void
@@ -13,40 +12,43 @@ struct MenuContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Status header
+            // Status header with connection info
             statusHeader
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
 
             Divider()
 
             // Quick actions
-            quickActions
+            quickActionsSection
 
             Divider()
 
-            // Recent sessions (if any)
-            recentSessions
+            // Active sessions
+            sessionsSection
 
             Divider()
 
             // Bottom actions
-            bottomActions
+            bottomActionsSection
         }
-        .frame(width: 280)
+        .frame(width: 320)
     }
 
-    @ViewBuilder
+    // MARK: - Status Header
+
     private var statusHeader: some View {
         HStack(spacing: 12) {
-            // Status icon
+            // Status icon with animation
             ZStack {
                 Circle()
                     .fill(statusColor.opacity(0.2))
-                    .frame(width: 36, height: 36)
+                    .frame(width: 40, height: 40)
 
                 Image(systemName: statusIcon)
-                    .font(.system(size: 16))
+                    .font(.system(size: 18))
                     .foregroundStyle(statusColor)
-                    .symbolEffect(.pulse, isActive: coordinator.isConnecting)
+                    .symbolEffect(.pulse, isActive: connectionCoordinator.isConnecting)
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -54,9 +56,9 @@ struct MenuContentView: View {
                     .font(.headline)
 
                 HStack(spacing: 6) {
-                    StatusBadge(status: badgeStatus, variant: .animated)
+                    StatusBadge(status: connectionStatus, variant: .animated)
 
-                    Text(coordinator.statusDescription)
+                    Text(connectionCoordinator.statusDescription)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -65,16 +67,16 @@ struct MenuContentView: View {
 
             Spacer()
 
-            // Pause button
+            // Pause/Resume button
             Button {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                     onTogglePause()
                 }
             } label: {
                 Image(systemName: appState.isPaused ? "play.fill" : "pause.fill")
-                    .font(.system(size: 12))
+                    .font(.system(size: 14))
                     .foregroundStyle(appState.isPaused ? .green : .secondary)
-                    .frame(width: 26, height: 26)
+                    .frame(width: 28, height: 28)
                     .background(
                         Circle()
                             .fill(Color(NSColor.controlBackgroundColor))
@@ -83,43 +85,93 @@ struct MenuContentView: View {
             .buttonStyle(.plain)
             .help(appState.isPaused ? "Resume" : "Pause")
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
     }
 
-    @ViewBuilder
-    private var quickActions: some View {
+    private var statusIcon: String {
+        if appState.isPaused {
+            return "pause.circle.fill"
+        }
+        switch connectionCoordinator.state {
+        case .connected:
+            return "checkmark.circle.fill"
+        case .connecting, .reconnecting:
+            return "arrow.triangle.2.circlepath"
+        case .error:
+            return "exclamationmark.triangle.fill"
+        case .disconnected:
+            return "circle.slash"
+        }
+    }
+
+    private var statusColor: Color {
+        if appState.isPaused {
+            return .secondary
+        }
+        switch connectionCoordinator.state {
+        case .connected:
+            return .green
+        case .connecting, .reconnecting:
+            return .blue
+        case .error:
+            return .red
+        case .disconnected:
+            return .secondary
+        }
+    }
+
+    private var connectionStatus: StatusBadge.Status {
+        if appState.isPaused {
+            return .offline
+        }
+        switch connectionCoordinator.state {
+        case .connected:
+            return .online
+        case .connecting, .reconnecting:
+            return .connecting
+        case .error:
+            return .error
+        case .disconnected:
+            return .offline
+        }
+    }
+
+    // MARK: - Quick Actions
+
+    private var quickActionsSection: some View {
         VStack(spacing: 0) {
-            MenuActionRow(
+            MenuActionButton(
                 title: "New Chat",
                 icon: "message",
                 shortcut: "N",
                 action: onOpenChat
             )
 
-            MenuActionRow(
+            MenuActionButton(
                 title: "Voice Input",
                 icon: "mic",
                 shortcut: nil,
-                isDisabled: !appState.voiceWakeEnabled || !permissions.voiceWakePermissionsGranted
-            ) {
-                VoiceWakeOverlayController.shared.show(source: .pushToTalk)
-            }
+                isDisabled: !appState.voiceWakeEnabled || !permissions.voiceWakePermissionsGranted,
+                action: {
+                    VoiceWakeOverlayController.shared.show(source: .pushToTalk)
+                }
+            )
 
-            MenuActionRow(
+            MenuActionButton(
                 title: "Screenshot",
                 icon: "camera.viewfinder",
-                shortcut: nil
-            ) {
-                Task {
-                    _ = try? await ScreenCaptureService.shared.capture()
+                shortcut: nil,
+                action: {
+                    Task {
+                        _ = try? await ScreenCaptureService.shared.capture()
+                    }
                 }
-            }
+            )
         }
     }
 
-    @ViewBuilder
-    private var recentSessions: some View {
+    // MARK: - Sessions
+
+    private var sessionsSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Section header
             HStack {
@@ -132,12 +184,12 @@ struct MenuContentView: View {
                     .foregroundStyle(.tertiary)
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 6)
+            .padding(.vertical, 8)
 
-            let sessions = Array(SessionBridge.shared.activeSessions.prefix(4))
+            let sessions = Array(SessionBridge.shared.activeSessions.prefix(5))
 
             if sessions.isEmpty {
-                HStack(spacing: 8) {
+                HStack {
                     Image(systemName: "tray")
                         .foregroundStyle(.tertiary)
                     Text("No active sessions")
@@ -154,10 +206,11 @@ struct MenuContentView: View {
         }
     }
 
-    @ViewBuilder
-    private var bottomActions: some View {
+    // MARK: - Bottom Actions
+
+    private var bottomActionsSection: some View {
         VStack(spacing: 0) {
-            MenuActionRow(
+            MenuActionButton(
                 title: "Settings...",
                 icon: "gear",
                 shortcut: ",",
@@ -167,74 +220,25 @@ struct MenuContentView: View {
             Divider()
                 .padding(.vertical, 4)
 
-            MenuActionRow(
+            MenuActionButton(
                 title: "Quit Nexus",
                 icon: "power",
                 shortcut: "Q",
-                isDestructive: true
-            ) {
-                NSApp.terminate(nil)
-            }
-        }
-    }
-
-    // MARK: - Computed Properties
-
-    private var statusIcon: String {
-        if appState.isPaused {
-            return "pause.circle.fill"
-        }
-        switch coordinator.state {
-        case .connected:
-            return "checkmark.circle.fill"
-        case .connecting, .reconnecting:
-            return "arrow.triangle.2.circlepath"
-        case .error:
-            return "exclamationmark.triangle.fill"
-        case .disconnected:
-            return "circle.slash"
-        }
-    }
-
-    private var statusColor: Color {
-        if appState.isPaused {
-            return .secondary
-        }
-        switch coordinator.state {
-        case .connected:
-            return .green
-        case .connecting, .reconnecting:
-            return .blue
-        case .error:
-            return .red
-        case .disconnected:
-            return .secondary
-        }
-    }
-
-    private var badgeStatus: StatusBadge.Status {
-        if appState.isPaused {
-            return .offline
-        }
-        switch coordinator.state {
-        case .connected:
-            return .online
-        case .connecting, .reconnecting:
-            return .connecting
-        case .error:
-            return .error
-        case .disconnected:
-            return .offline
+                isDestructive: true,
+                action: {
+                    NSApp.terminate(nil)
+                }
+            )
         }
     }
 }
 
-// MARK: - Menu Action Row
+// MARK: - Menu Action Button
 
-struct MenuActionRow: View {
+struct MenuActionButton: View {
     let title: String
     let icon: String
-    var shortcut: String? = nil
+    var shortcut: String?
     var isDisabled: Bool = false
     var isDestructive: Bool = false
     let action: () -> Void
@@ -245,9 +249,9 @@ struct MenuActionRow: View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: icon)
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundStyle(foregroundColor)
-                    .frame(width: 18)
+                    .frame(width: 20)
 
                 Text(title)
                     .font(.system(size: 13))
@@ -256,13 +260,13 @@ struct MenuActionRow: View {
                 Spacer()
 
                 if let shortcut {
-                    Text("\u{2318}\(shortcut)")
+                    Text("⌘\(shortcut)")
                         .font(.system(size: 11))
                         .foregroundStyle(.tertiary)
                 }
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 7)
+            .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(isHovered ? Color.accentColor.opacity(0.15) : Color.clear)
@@ -273,22 +277,26 @@ struct MenuActionRow: View {
         .disabled(isDisabled)
         .opacity(isDisabled ? 0.5 : 1)
         .onHover { hovering in
-            withAnimation(.easeOut(duration: 0.12)) {
+            withAnimation(.easeOut(duration: 0.15)) {
                 isHovered = hovering
             }
         }
     }
 
     private var foregroundColor: Color {
-        if isDisabled { return .secondary }
-        if isDestructive { return .red }
+        if isDisabled {
+            return .secondary
+        }
+        if isDestructive {
+            return .red
+        }
         return .primary
     }
 }
 
-// MARK: - Menu Session Row (Reused)
+// MARK: - Menu Session Row
 
-struct MenuSessionRowView: View {
+struct MenuSessionRow: View {
     let session: SessionBridge.Session
 
     @State private var isHovered = false
@@ -299,13 +307,13 @@ struct MenuSessionRowView: View {
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: sessionIcon)
-                    .font(.system(size: 11))
+                    .font(.system(size: 12))
                     .foregroundStyle(.secondary)
-                    .frame(width: 18)
+                    .frame(width: 20)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(session.metadata.title ?? "Session")
-                        .font(.system(size: 12))
+                        .font(.system(size: 13))
                         .lineLimit(1)
 
                     Text(session.lastActiveAt, style: .relative)
@@ -327,7 +335,7 @@ struct MenuSessionRowView: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            withAnimation(.easeOut(duration: 0.12)) {
+            withAnimation(.easeOut(duration: 0.15)) {
                 isHovered = hovering
             }
         }
@@ -363,14 +371,11 @@ struct MenuSessionRowView: View {
     }
 }
 
-/// Custom button style for menu items
-struct MenuButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(configuration.isPressed ? Color.accentColor.opacity(0.2) : Color.clear)
-            .contentShape(Rectangle())
-    }
+#Preview {
+    ImprovedMenuContentView(
+        appState: AppStateStore.shared,
+        onOpenChat: {},
+        onOpenSettings: {},
+        onTogglePause: {}
+    )
 }

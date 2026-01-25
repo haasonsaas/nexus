@@ -144,12 +144,64 @@ final class ControlChannel {
             if let p = evt.payload, let hb = try? JSONDecoder().decode(ControlHeartbeatEvent.self, from: p) {
                 NotificationCenter.default.post(name: .controlHeartbeat, object: hb)
             }
+        case .event(let evt) where evt.event == "canvas.open":
+            handleCanvasOpen(evt.payload)
+        case .event(let evt) where evt.event == "canvas.update":
+            handleCanvasUpdate(evt.payload)
+        case .event(let evt) where evt.event == "canvas.close":
+            handleCanvasClose(evt.payload)
         case .event(let evt) where evt.event == "shutdown":
             state = .degraded("gateway shutdown")
         case .snapshot:
             state = .connected
         default: break
         }
+    }
+
+    // MARK: - Canvas Event Handlers
+
+    private func handleCanvasOpen(_ payload: Data?) {
+        guard let payload,
+              let json = try? JSONSerialization.jsonObject(with: payload) as? [String: Any],
+              let canvasId = json["canvasId"] as? String else { return }
+
+        let title = json["title"] as? String
+        let html = json["html"] as? String
+        let urlString = json["url"] as? String
+        let width = json["width"] as? CGFloat ?? 800
+        let height = json["height"] as? CGFloat ?? 600
+        let size = CGSize(width: width, height: height)
+
+        if let html {
+            CanvasManager.shared.open(canvasId: canvasId, html: html, title: title, size: size)
+        } else if let urlString, let url = URL(string: urlString) {
+            CanvasManager.shared.openURL(canvasId: canvasId, url: url, title: title, size: size)
+        }
+    }
+
+    private func handleCanvasUpdate(_ payload: Data?) {
+        guard let payload,
+              let json = try? JSONSerialization.jsonObject(with: payload) as? [String: Any],
+              let canvasId = json["canvasId"] as? String else { return }
+
+        if let message = json["message"] as? String {
+            let data = json["data"] as? [String: Any]
+            Task {
+                await CanvasManager.shared.sendMessage(canvasId: canvasId, message: message, data: data)
+            }
+        } else if let script = json["script"] as? String {
+            Task {
+                _ = try? await CanvasManager.shared.executeJS(canvasId: canvasId, script: script)
+            }
+        }
+    }
+
+    private func handleCanvasClose(_ payload: Data?) {
+        guard let payload,
+              let json = try? JSONSerialization.jsonObject(with: payload) as? [String: Any],
+              let canvasId = json["canvasId"] as? String else { return }
+
+        CanvasManager.shared.close(canvasId: canvasId)
     }
 
     private func friendlyMessage(_ error: Error) -> String {

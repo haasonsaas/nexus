@@ -69,10 +69,10 @@ func FormatMediaAttachedLine(path, mediaType, url string, index, total int) stri
 
 // attachmentEntry holds processed attachment data for internal use.
 type attachmentEntry struct {
-	path       string
-	mediaType  string
-	url        string
-	origIndex  int
+	path      string
+	mediaType string
+	url       string
+	origIndex int
 }
 
 // BuildMediaNote constructs a media note from the given context.

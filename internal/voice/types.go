@@ -12,10 +12,10 @@ import (
 type ProviderName string
 
 const (
-	ProviderTwilio  ProviderName = "twilio"
-	ProviderPlivo   ProviderName = "plivo"
-	ProviderTelnyx  ProviderName = "telnyx"
-	ProviderMock    ProviderName = "mock"
+	ProviderTwilio ProviderName = "twilio"
+	ProviderPlivo  ProviderName = "plivo"
+	ProviderTelnyx ProviderName = "telnyx"
+	ProviderMock   ProviderName = "mock"
 )
 
 // CallState represents the current state of a call.
@@ -31,7 +31,7 @@ const (
 	StateListening CallState = "listening"
 
 	// Terminal states
-	StateCompleted CallState = "completed"
+	StateCompleted  CallState = "completed"
 	StateHangupUser CallState = "hangup-user"
 	StateHangupBot  CallState = "hangup-bot"
 	StateTimeout    CallState = "timeout"
@@ -87,15 +87,15 @@ type CallEvent struct {
 	To             string        `json:"to,omitempty"`
 
 	// Event-specific fields
-	Text       string    `json:"text,omitempty"`       // For speaking events
-	Transcript string    `json:"transcript,omitempty"` // For speech events
-	IsFinal    bool      `json:"is_final,omitempty"`   // For speech events
-	Confidence float64   `json:"confidence,omitempty"` // For speech events
-	Digits     string    `json:"digits,omitempty"`     // For DTMF events
+	Text       string    `json:"text,omitempty"`        // For speaking events
+	Transcript string    `json:"transcript,omitempty"`  // For speech events
+	IsFinal    bool      `json:"is_final,omitempty"`    // For speech events
+	Confidence float64   `json:"confidence,omitempty"`  // For speech events
+	Digits     string    `json:"digits,omitempty"`      // For DTMF events
 	DurationMs int       `json:"duration_ms,omitempty"` // For silence events
-	Reason     EndReason `json:"reason,omitempty"`     // For ended events
-	Error      string    `json:"error,omitempty"`      // For error events
-	Retryable  bool      `json:"retryable,omitempty"`  // For error events
+	Reason     EndReason `json:"reason,omitempty"`      // For ended events
+	Error      string    `json:"error,omitempty"`       // For error events
+	Retryable  bool      `json:"retryable,omitempty"`   // For error events
 }
 
 // EventType categorizes call events.

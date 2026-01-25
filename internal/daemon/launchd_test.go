@@ -95,8 +95,8 @@ func TestResolveLaunchdPlistPath(t *testing.T) {
 			wantContain: "com.haasonsaas.nexus.dev.plist",
 		},
 		{
-			name: "no home uses dot",
-			env:  map[string]string{},
+			name:        "no home uses dot",
+			env:         map[string]string{},
 			wantContain: "Library/LaunchAgents",
 		},
 	}
@@ -116,8 +116,8 @@ func TestResolveLaunchdPlistPath(t *testing.T) {
 
 func TestBuildLaunchAgentPlist(t *testing.T) {
 	tests := []struct {
-		name          string
-		opts          struct {
+		name string
+		opts struct {
 			Label            string
 			Comment          string
 			ProgramArguments []string

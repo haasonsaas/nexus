@@ -27,11 +27,11 @@ type Migration struct {
 
 // MigrationContext provides context for migration execution.
 type MigrationContext struct {
-	StateDir    string
-	ConfigPath  string
-	Logger      MigrationLogger
-	DryRun      bool
-	Data        map[string]any
+	StateDir   string
+	ConfigPath string
+	Logger     MigrationLogger
+	DryRun     bool
+	Data       map[string]any
 }
 
 // MigrationLogger logs migration progress.
@@ -43,17 +43,17 @@ type MigrationLogger interface {
 
 // MigrationState tracks applied migrations.
 type MigrationState struct {
-	Version          MigrationVersion  `json:"version"`
+	Version           MigrationVersion   `json:"version"`
 	AppliedMigrations []AppliedMigration `json:"applied_migrations"`
-	LastMigratedAt   int64             `json:"last_migrated_at,omitempty"`
+	LastMigratedAt    int64              `json:"last_migrated_at,omitempty"`
 }
 
 // AppliedMigration records a completed migration.
 type AppliedMigration struct {
-	Version   MigrationVersion `json:"version"`
-	Name      string           `json:"name"`
-	AppliedAt int64            `json:"applied_at"`
-	DurationMs int64           `json:"duration_ms,omitempty"`
+	Version    MigrationVersion `json:"version"`
+	Name       string           `json:"name"`
+	AppliedAt  int64            `json:"applied_at"`
+	DurationMs int64            `json:"duration_ms,omitempty"`
 }
 
 // MigrationManager manages state migrations.
@@ -126,7 +126,7 @@ func (m *MigrationManager) LoadState() (*MigrationState, error) {
 	data, err := os.ReadFile(m.statePath)
 	if errors.Is(err, fs.ErrNotExist) {
 		return &MigrationState{
-			Version:          0,
+			Version:           0,
 			AppliedMigrations: make([]AppliedMigration, 0),
 		}, nil
 	}

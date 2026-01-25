@@ -15,9 +15,9 @@ func TestEstimateTokens(t *testing.T) {
 	}{
 		{"nil message", nil, 0},
 		{"empty message", &Message{}, 0},
-		{"short content", &Message{Content: "Hello"}, 2},          // 5 chars / 4 = 1.25 -> 2
-		{"exact multiple", &Message{Content: "12345678"}, 2},      // 8 chars / 4 = 2
-		{"with tool calls", &Message{Content: "Hi", ToolCalls: "call"}, 2}, // 6 chars / 4 = 1.5 -> 2
+		{"short content", &Message{Content: "Hello"}, 2},                         // 5 chars / 4 = 1.25 -> 2
+		{"exact multiple", &Message{Content: "12345678"}, 2},                     // 8 chars / 4 = 2
+		{"with tool calls", &Message{Content: "Hi", ToolCalls: "call"}, 2},       // 6 chars / 4 = 1.5 -> 2
 		{"with tool results", &Message{Content: "Hi", ToolResults: "result"}, 2}, // 8 chars / 4 = 2
 	}
 
@@ -483,10 +483,10 @@ func TestPruneHistoryForContextShare(t *testing.T) {
 
 func TestResolveContextWindowTokens(t *testing.T) {
 	tests := []struct {
-		name          string
-		model         int
-		defaultVal    int
-		expected      int
+		name       string
+		model      int
+		defaultVal int
+		expected   int
 	}{
 		{"model value", 50000, 100000, 50000},
 		{"default value", 0, 80000, 80000},

@@ -71,22 +71,22 @@ func (c *Config) Validate() error {
 
 // Adapter implements the channels.Adapter interface for Mattermost.
 type Adapter struct {
-	cfg          Config
-	client       *model.Client4
-	wsClient     *model.WebSocketClient
-	messages     chan *models.Message
-	status       channels.Status
-	statusMu     sync.RWMutex
-	ctx          context.Context
-	cancel       context.CancelFunc
-	wg           sync.WaitGroup
-	botUserID    string
-	botUserIDMu  sync.RWMutex
-	rateLimiter  *channels.RateLimiter
-	metrics      *channels.Metrics
-	logger       *slog.Logger
-	degraded     bool
-	degradedMu   sync.RWMutex
+	cfg         Config
+	client      *model.Client4
+	wsClient    *model.WebSocketClient
+	messages    chan *models.Message
+	status      channels.Status
+	statusMu    sync.RWMutex
+	ctx         context.Context
+	cancel      context.CancelFunc
+	wg          sync.WaitGroup
+	botUserID   string
+	botUserIDMu sync.RWMutex
+	rateLimiter *channels.RateLimiter
+	metrics     *channels.Metrics
+	logger      *slog.Logger
+	degraded    bool
+	degradedMu  sync.RWMutex
 }
 
 // NewAdapter creates a new Mattermost adapter with the given configuration.
@@ -453,11 +453,11 @@ func (a *Adapter) convertPost(post *model.Post, eventData map[string]any) *model
 		Role:      models.RoleUser,
 		Content:   post.Message,
 		Metadata: map[string]any{
-			"mattermost_channel":  post.ChannelId,
-			"mattermost_root_id":  post.RootId,
-			"mattermost_user_id":  post.UserId,
-			"sender_id":           post.UserId,
-			"conversation_type":   "group",
+			"mattermost_channel": post.ChannelId,
+			"mattermost_root_id": post.RootId,
+			"mattermost_user_id": post.UserId,
+			"sender_id":          post.UserId,
+			"conversation_type":  "group",
 		},
 		CreatedAt: time.Unix(post.CreateAt/1000, 0),
 	}

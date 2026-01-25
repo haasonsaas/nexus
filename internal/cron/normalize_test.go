@@ -7,10 +7,10 @@ import (
 
 func TestParseAbsoluteTimeMs(t *testing.T) {
 	tests := []struct {
-		name    string
-		input   string
-		want    int64
-		wantOk  bool
+		name   string
+		input  string
+		want   int64
+		wantOk bool
 	}{
 		{
 			name:   "empty string",
@@ -181,9 +181,9 @@ func TestNormalizeCronJobCreate(t *testing.T) {
 			"sessionTarget": "isolated",
 			"wakeMode":      "immediate",
 			"payload": map[string]interface{}{
-				"kind":    "agentTurn",
-				"message": "hi",
-				"deliver": true,
+				"kind":     "agentTurn",
+				"message":  "hi",
+				"deliver":  true,
 				"provider": " TeLeGrAm ",
 				"to":       "7200373102",
 			},

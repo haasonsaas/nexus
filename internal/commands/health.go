@@ -10,34 +10,34 @@ import (
 
 // HealthSummary contains the overall health status.
 type HealthSummary struct {
-	OK             bool                          `json:"ok"`
-	Ts             int64                         `json:"ts"`
-	DurationMs     int64                         `json:"duration_ms"`
-	Channels       map[string]*ChannelHealth     `json:"channels"`
-	ChannelOrder   []string                      `json:"channel_order"`
-	ChannelLabels  map[string]string             `json:"channel_labels"`
-	DefaultAgentID string                        `json:"default_agent_id"`
-	Agents         []*AgentHealth                `json:"agents"`
-	Sessions       *SessionsHealth               `json:"sessions"`
+	OK             bool                      `json:"ok"`
+	Ts             int64                     `json:"ts"`
+	DurationMs     int64                     `json:"duration_ms"`
+	Channels       map[string]*ChannelHealth `json:"channels"`
+	ChannelOrder   []string                  `json:"channel_order"`
+	ChannelLabels  map[string]string         `json:"channel_labels"`
+	DefaultAgentID string                    `json:"default_agent_id"`
+	Agents         []*AgentHealth            `json:"agents"`
+	Sessions       *SessionsHealth           `json:"sessions"`
 }
 
 // ChannelHealth contains health status for a channel.
 type ChannelHealth struct {
-	AccountID   string                       `json:"account_id"`
-	Configured  bool                         `json:"configured"`
-	Linked      bool                         `json:"linked"`
-	AuthAgeMs   *int64                       `json:"auth_age_ms,omitempty"`
-	Probe       *ChannelProbe                `json:"probe,omitempty"`
-	LastProbeAt *int64                       `json:"last_probe_at,omitempty"`
-	Accounts    map[string]*ChannelHealth    `json:"accounts,omitempty"`
+	AccountID   string                    `json:"account_id"`
+	Configured  bool                      `json:"configured"`
+	Linked      bool                      `json:"linked"`
+	AuthAgeMs   *int64                    `json:"auth_age_ms,omitempty"`
+	Probe       *ChannelProbe             `json:"probe,omitempty"`
+	LastProbeAt *int64                    `json:"last_probe_at,omitempty"`
+	Accounts    map[string]*ChannelHealth `json:"accounts,omitempty"`
 }
 
 // ChannelProbe contains probe results for a channel.
 type ChannelProbe struct {
-	OK        bool   `json:"ok"`
-	ElapsedMs int64  `json:"elapsed_ms,omitempty"`
-	Status    int    `json:"status,omitempty"`
-	Error     string `json:"error,omitempty"`
+	OK        bool     `json:"ok"`
+	ElapsedMs int64    `json:"elapsed_ms,omitempty"`
+	Status    int      `json:"status,omitempty"`
+	Error     string   `json:"error,omitempty"`
 	Bot       *BotInfo `json:"bot,omitempty"`
 }
 
@@ -70,8 +70,8 @@ type HeartbeatHealth struct {
 
 // SessionsHealth contains session store status.
 type SessionsHealth struct {
-	Path   string          `json:"path"`
-	Count  int             `json:"count"`
+	Path   string           `json:"path"`
+	Count  int              `json:"count"`
 	Recent []*RecentSession `json:"recent"`
 }
 
@@ -84,9 +84,9 @@ type RecentSession struct {
 
 // HealthChecker performs health checks on the system.
 type HealthChecker struct {
-	mu       sync.RWMutex
-	probers  map[string]ChannelProber
-	config   *HealthCheckerConfig
+	mu      sync.RWMutex
+	probers map[string]ChannelProber
+	config  *HealthCheckerConfig
 }
 
 // HealthCheckerConfig configures the health checker.

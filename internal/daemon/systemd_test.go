@@ -95,8 +95,8 @@ func TestResolveSystemdUnitPath(t *testing.T) {
 			wantContain: "nexus-gateway-dev.service",
 		},
 		{
-			name: "no home uses dot",
-			env:  map[string]string{},
+			name:        "no home uses dot",
+			env:         map[string]string{},
 			wantContain: ".config/systemd/user",
 		},
 	}
@@ -116,8 +116,8 @@ func TestResolveSystemdUnitPath(t *testing.T) {
 
 func TestBuildSystemdUnit(t *testing.T) {
 	tests := []struct {
-		name         string
-		opts         struct {
+		name string
+		opts struct {
 			Description      string
 			ProgramArguments []string
 			WorkingDirectory string

@@ -81,7 +81,7 @@ func TestResolveTaskScriptPath(t *testing.T) {
 		{
 			name: "custom script name",
 			env: map[string]string{
-				"HOME":                    "C:\\Users\\test",
+				"HOME":                   "C:\\Users\\test",
 				"NEXUS_TASK_SCRIPT_NAME": "custom.cmd",
 			},
 			wantSuffix: "custom.cmd",
@@ -192,8 +192,8 @@ func TestQuoteCmdArg(t *testing.T) {
 
 func TestBuildTaskScript(t *testing.T) {
 	tests := []struct {
-		name         string
-		opts         struct {
+		name string
+		opts struct {
 			Description      string
 			ProgramArguments []string
 			WorkingDirectory string

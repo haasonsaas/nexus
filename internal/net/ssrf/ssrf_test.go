@@ -52,12 +52,12 @@ func TestParseIPv4(t *testing.T) {
 		{"255.255.255.255", [4]byte{255, 255, 255, 255}, false},
 		{"10.0.0.1", [4]byte{10, 0, 0, 1}, false},
 		{"127.0.0.1", [4]byte{127, 0, 0, 1}, false},
-		{"256.1.1.1", [4]byte{}, true},          // out of range
-		{"1.1.1", [4]byte{}, true},              // too few octets
-		{"1.1.1.1.1", [4]byte{}, true},          // too many octets
-		{"a.b.c.d", [4]byte{}, true},            // invalid chars
-		{"-1.1.1.1", [4]byte{}, true},           // negative
-		{"1.1.1.1.extra", [4]byte{}, true},      // extra content
+		{"256.1.1.1", [4]byte{}, true},     // out of range
+		{"1.1.1", [4]byte{}, true},         // too few octets
+		{"1.1.1.1.1", [4]byte{}, true},     // too many octets
+		{"a.b.c.d", [4]byte{}, true},       // invalid chars
+		{"-1.1.1.1", [4]byte{}, true},      // negative
+		{"1.1.1.1.extra", [4]byte{}, true}, // extra content
 	}
 
 	for _, tc := range tests {
@@ -280,10 +280,10 @@ func TestIsBlockedHostname(t *testing.T) {
 
 func TestValidatePublicHostname(t *testing.T) {
 	tests := []struct {
-		input        string
-		expectError  bool
-		expectSSRF   bool
-		name         string
+		input       string
+		expectError bool
+		expectSSRF  bool
+		name        string
 	}{
 		// Blocked hostnames
 		{"localhost", true, true, "localhost blocked"},

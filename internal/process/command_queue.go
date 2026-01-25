@@ -46,12 +46,12 @@ type QueueEntry struct {
 
 // LaneState manages the state of a single command lane.
 type LaneState struct {
-	Lane         CommandLane
-	queue        []*QueueEntry
-	active       int
+	Lane          CommandLane
+	queue         []*QueueEntry
+	active        int
 	maxConcurrent int
-	draining     bool
-	mu           sync.Mutex
+	draining      bool
+	mu            sync.Mutex
 }
 
 // EnqueueOptions configures how a task is enqueued.

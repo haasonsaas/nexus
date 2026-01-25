@@ -783,8 +783,8 @@ func TestEnqueue_StringResult(t *testing.T) {
 
 func TestEnqueue_StructResult(t *testing.T) {
 	type Response struct {
-		ID    int
-		Name  string
+		ID   int
+		Name string
 	}
 
 	cq := NewCommandQueue()

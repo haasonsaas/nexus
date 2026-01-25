@@ -20,17 +20,17 @@ const (
 type DiagnosticEventType string
 
 const (
-	EventTypeModelUsage        DiagnosticEventType = "model.usage"
-	EventTypeWebhookReceived   DiagnosticEventType = "webhook.received"
-	EventTypeWebhookProcessed  DiagnosticEventType = "webhook.processed"
-	EventTypeWebhookError      DiagnosticEventType = "webhook.error"
-	EventTypeMessageQueued     DiagnosticEventType = "message.queued"
-	EventTypeMessageProcessed  DiagnosticEventType = "message.processed"
-	EventTypeSessionState      DiagnosticEventType = "session.state"
-	EventTypeSessionStuck      DiagnosticEventType = "session.stuck"
-	EventTypeLaneEnqueue       DiagnosticEventType = "queue.lane.enqueue"
-	EventTypeLaneDequeue       DiagnosticEventType = "queue.lane.dequeue"
-	EventTypeRunAttempt        DiagnosticEventType = "run.attempt"
+	EventTypeModelUsage          DiagnosticEventType = "model.usage"
+	EventTypeWebhookReceived     DiagnosticEventType = "webhook.received"
+	EventTypeWebhookProcessed    DiagnosticEventType = "webhook.processed"
+	EventTypeWebhookError        DiagnosticEventType = "webhook.error"
+	EventTypeMessageQueued       DiagnosticEventType = "message.queued"
+	EventTypeMessageProcessed    DiagnosticEventType = "message.processed"
+	EventTypeSessionState        DiagnosticEventType = "session.state"
+	EventTypeSessionStuck        DiagnosticEventType = "session.stuck"
+	EventTypeLaneEnqueue         DiagnosticEventType = "queue.lane.enqueue"
+	EventTypeLaneDequeue         DiagnosticEventType = "queue.lane.dequeue"
+	EventTypeRunAttempt          DiagnosticEventType = "run.attempt"
 	EventTypeDiagnosticHeartbeat DiagnosticEventType = "diagnostic.heartbeat"
 )
 
@@ -44,15 +44,15 @@ type DiagnosticEvent struct {
 // ModelUsageEvent tracks token usage for a model request.
 type ModelUsageEvent struct {
 	DiagnosticEvent
-	SessionKey string            `json:"session_key,omitempty"`
-	SessionID  string            `json:"session_id,omitempty"`
-	Channel    string            `json:"channel,omitempty"`
-	Provider   string            `json:"provider,omitempty"`
-	Model      string            `json:"model,omitempty"`
-	Usage      UsageDetails      `json:"usage"`
-	Context    *ContextDetails   `json:"context,omitempty"`
-	CostUSD    float64           `json:"cost_usd,omitempty"`
-	DurationMs int64             `json:"duration_ms,omitempty"`
+	SessionKey string          `json:"session_key,omitempty"`
+	SessionID  string          `json:"session_id,omitempty"`
+	Channel    string          `json:"channel,omitempty"`
+	Provider   string          `json:"provider,omitempty"`
+	Model      string          `json:"model,omitempty"`
+	Usage      UsageDetails    `json:"usage"`
+	Context    *ContextDetails `json:"context,omitempty"`
+	CostUSD    float64         `json:"cost_usd,omitempty"`
+	DurationMs int64           `json:"duration_ms,omitempty"`
 }
 
 // UsageDetails contains token usage breakdown.
@@ -191,8 +191,8 @@ type DiagnosticEventPayload interface {
 
 // Implement DiagnosticEventPayload for all event types
 func (e *DiagnosticEvent) EventType() DiagnosticEventType { return e.Type }
-func (e *DiagnosticEvent) Sequence() int64               { return e.Seq }
-func (e *DiagnosticEvent) Timestamp() int64              { return e.Ts }
+func (e *DiagnosticEvent) Sequence() int64                { return e.Seq }
+func (e *DiagnosticEvent) Timestamp() int64               { return e.Ts }
 
 // DiagnosticListener receives diagnostic events.
 type DiagnosticListener func(event DiagnosticEventPayload)

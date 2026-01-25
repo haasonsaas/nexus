@@ -685,8 +685,8 @@ type WebhookHandle struct {
 
 // WebhookChat represents chat info.
 type WebhookChat struct {
-	GUID        string            `json:"guid"`
-	DisplayName string            `json:"displayName"`
+	GUID         string          `json:"guid"`
+	DisplayName  string          `json:"displayName"`
 	Participants []WebhookHandle `json:"participants"`
 }
 

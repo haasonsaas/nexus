@@ -49,11 +49,11 @@ type ZaloAdapter struct {
 	messages chan *models.Message
 	client   *http.Client
 
-	mu       sync.RWMutex
-	running  bool
-	cancel   context.CancelFunc
-	botID    string
-	botName  string
+	mu      sync.RWMutex
+	running bool
+	cancel  context.CancelFunc
+	botID   string
+	botName string
 }
 
 // ZaloConfig holds configuration for the Zalo adapter.

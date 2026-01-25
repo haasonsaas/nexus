@@ -84,8 +84,8 @@ func (c *Config) Validate() error {
 
 // WebhookPayload represents the Nextcloud Talk webhook payload structure.
 type WebhookPayload struct {
-	Type   string       `json:"type"`
-	Actor  PayloadActor `json:"actor"`
+	Type   string        `json:"type"`
+	Actor  PayloadActor  `json:"actor"`
 	Object PayloadObject `json:"object"`
 	Target PayloadTarget `json:"target"`
 }
@@ -115,20 +115,20 @@ type PayloadTarget struct {
 
 // Adapter implements the channels.Adapter interface for Nextcloud Talk.
 type Adapter struct {
-	cfg          Config
-	httpClient   *http.Client
-	server       *http.Server
-	messages     chan *models.Message
-	status       channels.Status
-	statusMu     sync.RWMutex
-	ctx          context.Context
-	cancel       context.CancelFunc
-	wg           sync.WaitGroup
-	rateLimiter  *channels.RateLimiter
-	metrics      *channels.Metrics
-	logger       *slog.Logger
-	degraded     bool
-	degradedMu   sync.RWMutex
+	cfg         Config
+	httpClient  *http.Client
+	server      *http.Server
+	messages    chan *models.Message
+	status      channels.Status
+	statusMu    sync.RWMutex
+	ctx         context.Context
+	cancel      context.CancelFunc
+	wg          sync.WaitGroup
+	rateLimiter *channels.RateLimiter
+	metrics     *channels.Metrics
+	logger      *slog.Logger
+	degraded    bool
+	degradedMu  sync.RWMutex
 }
 
 // NewAdapter creates a new Nextcloud Talk adapter with the given configuration.

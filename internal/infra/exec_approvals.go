@@ -55,10 +55,10 @@ const (
 
 // AllowlistEntry represents a permitted command pattern.
 type AllowlistEntry struct {
-	ID              string `json:"id,omitempty"`
-	Pattern         string `json:"pattern"`
-	LastUsedAt      int64  `json:"last_used_at,omitempty"`
-	LastUsedCommand string `json:"last_used_command,omitempty"`
+	ID               string `json:"id,omitempty"`
+	Pattern          string `json:"pattern"`
+	LastUsedAt       int64  `json:"last_used_at,omitempty"`
+	LastUsedCommand  string `json:"last_used_command,omitempty"`
 	LastResolvedPath string `json:"last_resolved_path,omitempty"`
 }
 
@@ -78,9 +78,9 @@ type ExecApprovalsAgent struct {
 
 // ExecApprovalsFile is the persisted exec approvals configuration.
 type ExecApprovalsFile struct {
-	Version  int                           `json:"version"`
-	Socket   *ExecApprovalsSocket          `json:"socket,omitempty"`
-	Defaults *ExecApprovalsDefaults        `json:"defaults,omitempty"`
+	Version  int                            `json:"version"`
+	Socket   *ExecApprovalsSocket           `json:"socket,omitempty"`
+	Defaults *ExecApprovalsDefaults         `json:"defaults,omitempty"`
 	Agents   map[string]*ExecApprovalsAgent `json:"agents,omitempty"`
 }
 
@@ -795,17 +795,17 @@ func RecordAllowlistUse(file *ExecApprovalsFile, agentID string, entry *Allowlis
 
 // ApprovalRequest represents a pending exec approval request.
 type ApprovalRequest struct {
-	ID            string            `json:"id"`
-	Command       string            `json:"command"`
-	Cwd           string            `json:"cwd,omitempty"`
-	AgentID       string            `json:"agent_id,omitempty"`
-	SessionKey    string            `json:"session_key,omitempty"`
-	ResolvedPath  string            `json:"resolved_path,omitempty"`
-	Security      ExecSecurity      `json:"security,omitempty"`
-	Ask           ExecAsk           `json:"ask,omitempty"`
-	CreatedAtMs   int64             `json:"created_at_ms"`
-	ExpiresAtMs   int64             `json:"expires_at_ms"`
-	Metadata      map[string]string `json:"metadata,omitempty"`
+	ID           string            `json:"id"`
+	Command      string            `json:"command"`
+	Cwd          string            `json:"cwd,omitempty"`
+	AgentID      string            `json:"agent_id,omitempty"`
+	SessionKey   string            `json:"session_key,omitempty"`
+	ResolvedPath string            `json:"resolved_path,omitempty"`
+	Security     ExecSecurity      `json:"security,omitempty"`
+	Ask          ExecAsk           `json:"ask,omitempty"`
+	CreatedAtMs  int64             `json:"created_at_ms"`
+	ExpiresAtMs  int64             `json:"expires_at_ms"`
+	Metadata     map[string]string `json:"metadata,omitempty"`
 }
 
 // ApprovalResponse contains the decision for an approval request.

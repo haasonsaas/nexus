@@ -101,7 +101,7 @@ func TestIsSafeExecutableValue(t *testing.T) {
 		{"tabs only", "\t\t", false},
 
 		// Edge cases
-		{"path starting with dash", "./-rf", true},  // This is a path, not option injection
+		{"path starting with dash", "./-rf", true}, // This is a path, not option injection
 		{"complex valid name", "x86_64-linux-gnu-gcc-11", true},
 		{"just a dot", ".", true}, // Could be a valid path
 	}

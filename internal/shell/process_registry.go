@@ -29,13 +29,13 @@ const (
 
 // ProcessSession represents an active shell process.
 type ProcessSession struct {
-	ID        string
-	Command   string
-	ScopeKey  string
+	ID         string
+	Command    string
+	ScopeKey   string
 	SessionKey string
-	PID       int
-	StartedAt time.Time
-	CWD       string
+	PID        int
+	StartedAt  time.Time
+	CWD        string
 
 	// Output configuration
 	MaxOutputChars        int
@@ -59,9 +59,9 @@ type ProcessSession struct {
 	Truncated  bool
 
 	// Background handling
-	Backgrounded  bool
-	NotifyOnExit  bool
-	ExitNotified  bool
+	Backgrounded bool
+	NotifyOnExit bool
+	ExitNotified bool
 }
 
 // FinishedSession represents a completed shell process.

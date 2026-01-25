@@ -490,9 +490,9 @@ func (r *Runner) Stats() *RunnerStats {
 
 // RunnerStats contains heartbeat runner statistics.
 type RunnerStats struct {
-	TotalAgents   int                   `json:"total_agents"`
-	EnabledAgents int                   `json:"enabled_agents"`
-	Stopped       bool                  `json:"stopped"`
+	TotalAgents   int                    `json:"total_agents"`
+	EnabledAgents int                    `json:"enabled_agents"`
+	Stopped       bool                   `json:"stopped"`
 	AgentStats    map[string]*AgentStats `json:"agent_stats"`
 }
 

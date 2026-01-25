@@ -205,10 +205,10 @@ func TestDetectSecrets(t *testing.T) {
 
 func TestSanitizeToolResult(t *testing.T) {
 	tests := []struct {
-		name        string
-		input       string
-		wantTrunc   bool
-		wantRedact  bool
+		name       string
+		input      string
+		wantTrunc  bool
+		wantRedact bool
 	}{
 		{
 			name:       "normal content",

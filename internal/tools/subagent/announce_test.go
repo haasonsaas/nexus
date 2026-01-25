@@ -172,12 +172,12 @@ func TestBuildStatsLine(t *testing.T) {
 	t.Run("full stats", func(t *testing.T) {
 		stats := &StatsLine{
 			Runtime:        "10m5s",
-			InputTokens:   25000,
-			OutputTokens:  8000,
-			TotalTokens:   33000,
-			Cost:          1.25,
-			SessionKey:    "session-full",
-			SessionID:     "sid-full",
+			InputTokens:    25000,
+			OutputTokens:   8000,
+			TotalTokens:    33000,
+			Cost:           1.25,
+			SessionKey:     "session-full",
+			SessionID:      "sid-full",
 			TranscriptPath: "/path/to/transcript",
 		}
 		result := BuildStatsLine(stats)

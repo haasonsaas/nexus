@@ -169,3 +169,9 @@ func IsRetryable(err error) bool {
 
 	return false
 }
+
+// Sentinel errors for common validation failures
+var (
+	// ErrInvalidReactionEmoji indicates the reaction emoji is empty or invalid
+	ErrInvalidReactionEmoji = errors.New("reaction emoji is required when reactions are enabled")
+)

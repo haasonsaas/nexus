@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/haasonsaas/nexus/internal/config"
 )
 
 func TestPermissionChecks(t *testing.T) {
@@ -79,7 +81,7 @@ func TestIsSensitiveFile(t *testing.T) {
 	}
 }
 
-func TestAuditor_WorldWritableDir(t *testing.T) {
+func TestRunAudit_WorldWritableStateDir(t *testing.T) {
 	dir := t.TempDir()
 	testDir := filepath.Join(dir, "test")
 
@@ -91,70 +93,66 @@ func TestAuditor_WorldWritableDir(t *testing.T) {
 		t.Fatalf("failed to chmod test dir: %v", err)
 	}
 
-	auditor := NewAuditor(AuditConfig{
-		StateDir: testDir,
+	report, err := RunAudit(AuditOptions{
+		StateDir:          testDir,
+		IncludeFilesystem: true,
 	})
-
-	result, err := auditor.Run()
 	if err != nil {
 		t.Fatalf("audit failed: %v", err)
 	}
 
-	if !result.HasCritical() {
+	if !report.HasCritical() {
 		t.Error("expected critical finding for world-writable directory")
 	}
 
 	found := false
-	for _, f := range result.Findings {
-		if f.CheckID == "FS-002" {
+	for _, f := range report.Findings {
+		if f.CheckID == "fs.state_dir_world_writable" {
 			found = true
 			if f.Severity != SeverityCritical {
-				t.Errorf("FS-002 severity = %v, want critical", f.Severity)
+				t.Errorf("severity = %v, want critical", f.Severity)
 			}
 		}
 	}
 	if !found {
-		t.Error("expected FS-002 finding for world-writable directory")
+		t.Error("expected fs.state_dir_world_writable finding")
 	}
 }
 
-func TestAuditor_GroupWritableDir(t *testing.T) {
+func TestRunAudit_GroupWritableStateDir(t *testing.T) {
 	dir := t.TempDir()
 	testDir := filepath.Join(dir, "test")
 
 	if err := os.Mkdir(testDir, 0700); err != nil {
 		t.Fatalf("failed to create test dir: %v", err)
 	}
-	// Chmod to bypass umask
 	if err := os.Chmod(testDir, 0775); err != nil {
 		t.Fatalf("failed to chmod test dir: %v", err)
 	}
 
-	auditor := NewAuditor(AuditConfig{
-		StateDir: testDir,
+	report, err := RunAudit(AuditOptions{
+		StateDir:          testDir,
+		IncludeFilesystem: true,
 	})
-
-	result, err := auditor.Run()
 	if err != nil {
 		t.Fatalf("audit failed: %v", err)
 	}
 
-	if !result.HasHighOrAbove() {
-		t.Error("expected high severity finding for group-writable directory")
-	}
-
 	found := false
-	for _, f := range result.Findings {
-		if f.CheckID == "FS-003" {
+	for _, f := range report.Findings {
+		if f.CheckID == "fs.state_dir_group_writable" {
 			found = true
+			if f.Severity != SeverityWarn {
+				t.Errorf("severity = %v, want warn", f.Severity)
+			}
 		}
 	}
 	if !found {
-		t.Error("expected FS-003 finding for group-writable directory")
+		t.Error("expected fs.state_dir_group_writable finding")
 	}
 }
 
-func TestAuditor_SecureDir(t *testing.T) {
+func TestRunAudit_SecureStateDir(t *testing.T) {
 	dir := t.TempDir()
 	testDir := filepath.Join(dir, "test")
 
@@ -162,60 +160,57 @@ func TestAuditor_SecureDir(t *testing.T) {
 		t.Fatalf("failed to create test dir: %v", err)
 	}
 
-	auditor := NewAuditor(AuditConfig{
-		StateDir: testDir,
+	report, err := RunAudit(AuditOptions{
+		StateDir:          testDir,
+		IncludeFilesystem: true,
 	})
-
-	result, err := auditor.Run()
 	if err != nil {
 		t.Fatalf("audit failed: %v", err)
 	}
 
-	if len(result.Findings) != 0 {
-		t.Errorf("expected no findings for secure directory, got %d", len(result.Findings))
-		for _, f := range result.Findings {
+	if len(report.Findings) != 0 {
+		t.Errorf("expected no findings for secure directory, got %d", len(report.Findings))
+		for _, f := range report.Findings {
 			t.Logf("  - %s: %s", f.CheckID, f.Title)
 		}
 	}
 }
 
-func TestAuditor_WorldWritableConfigFile(t *testing.T) {
+func TestRunAudit_WorldWritableConfigFile(t *testing.T) {
 	dir := t.TempDir()
 	configFile := filepath.Join(dir, "config.yaml")
 
 	if err := os.WriteFile(configFile, []byte("test: true"), 0600); err != nil {
 		t.Fatalf("failed to create config file: %v", err)
 	}
-	// Chmod to bypass umask
 	if err := os.Chmod(configFile, 0666); err != nil {
 		t.Fatalf("failed to chmod config file: %v", err)
 	}
 
-	auditor := NewAuditor(AuditConfig{
-		ConfigFile: configFile,
+	report, err := RunAudit(AuditOptions{
+		ConfigPath:        configFile,
+		IncludeFilesystem: true,
 	})
-
-	result, err := auditor.Run()
 	if err != nil {
 		t.Fatalf("audit failed: %v", err)
 	}
 
-	if !result.HasCritical() {
+	if !report.HasCritical() {
 		t.Error("expected critical finding for world-writable config file")
 	}
 
 	found := false
-	for _, f := range result.Findings {
-		if f.CheckID == "FS-011" {
+	for _, f := range report.Findings {
+		if f.CheckID == "fs.config_world_writable" {
 			found = true
 		}
 	}
 	if !found {
-		t.Error("expected FS-011 finding for world-writable config file")
+		t.Error("expected fs.config_world_writable finding")
 	}
 }
 
-func TestAuditor_WorldReadableConfigFile(t *testing.T) {
+func TestRunAudit_WorldReadableConfigFile(t *testing.T) {
 	dir := t.TempDir()
 	configFile := filepath.Join(dir, "config.yaml")
 
@@ -223,31 +218,30 @@ func TestAuditor_WorldReadableConfigFile(t *testing.T) {
 		t.Fatalf("failed to create config file: %v", err)
 	}
 
-	auditor := NewAuditor(AuditConfig{
-		ConfigFile: configFile,
+	report, err := RunAudit(AuditOptions{
+		ConfigPath:        configFile,
+		IncludeFilesystem: true,
 	})
-
-	result, err := auditor.Run()
 	if err != nil {
 		t.Fatalf("audit failed: %v", err)
 	}
 
-	if !result.HasHighOrAbove() {
-		t.Error("expected high severity finding for world-readable config file")
+	if !report.HasCritical() {
+		t.Error("expected critical finding for world-readable config file")
 	}
 
 	found := false
-	for _, f := range result.Findings {
-		if f.CheckID == "FS-013" {
+	for _, f := range report.Findings {
+		if f.CheckID == "fs.config_world_readable" {
 			found = true
 		}
 	}
 	if !found {
-		t.Error("expected FS-013 finding for world-readable config file")
+		t.Error("expected fs.config_world_readable finding")
 	}
 }
 
-func TestAuditor_SecureConfigFile(t *testing.T) {
+func TestRunAudit_SecureConfigFile(t *testing.T) {
 	dir := t.TempDir()
 	configFile := filepath.Join(dir, "config.yaml")
 
@@ -255,24 +249,23 @@ func TestAuditor_SecureConfigFile(t *testing.T) {
 		t.Fatalf("failed to create config file: %v", err)
 	}
 
-	auditor := NewAuditor(AuditConfig{
-		ConfigFile: configFile,
+	report, err := RunAudit(AuditOptions{
+		ConfigPath:        configFile,
+		IncludeFilesystem: true,
 	})
-
-	result, err := auditor.Run()
 	if err != nil {
 		t.Fatalf("audit failed: %v", err)
 	}
 
-	if len(result.Findings) != 0 {
-		t.Errorf("expected no findings for secure config file, got %d", len(result.Findings))
-		for _, f := range result.Findings {
+	if len(report.Findings) != 0 {
+		t.Errorf("expected no findings for secure config file, got %d", len(report.Findings))
+		for _, f := range report.Findings {
 			t.Logf("  - %s: %s", f.CheckID, f.Title)
 		}
 	}
 }
 
-func TestAuditor_SymlinkDetection(t *testing.T) {
+func TestRunAudit_SymlinkDetection(t *testing.T) {
 	dir := t.TempDir()
 	realDir := filepath.Join(dir, "real")
 	linkDir := filepath.Join(dir, "link")
@@ -285,28 +278,27 @@ func TestAuditor_SymlinkDetection(t *testing.T) {
 		t.Fatalf("failed to create symlink: %v", err)
 	}
 
-	auditor := NewAuditor(AuditConfig{
-		StateDir:      linkDir,
-		CheckSymlinks: true,
+	report, err := RunAudit(AuditOptions{
+		StateDir:          linkDir,
+		IncludeFilesystem: true,
+		CheckSymlinks:     true,
 	})
-
-	result, err := auditor.Run()
 	if err != nil {
 		t.Fatalf("audit failed: %v", err)
 	}
 
 	found := false
-	for _, f := range result.Findings {
-		if f.CheckID == "FS-001" {
+	for _, f := range report.Findings {
+		if f.CheckID == "fs.symlink_state_dir" {
 			found = true
 		}
 	}
 	if !found {
-		t.Error("expected FS-001 finding for symlink directory")
+		t.Error("expected fs.symlink_state_dir finding")
 	}
 }
 
-func TestAuditor_SensitiveFileInDir(t *testing.T) {
+func TestRunAudit_SensitiveFileInStateDir(t *testing.T) {
 	dir := t.TempDir()
 	stateDir := filepath.Join(dir, "state")
 
@@ -320,45 +312,141 @@ func TestAuditor_SensitiveFileInDir(t *testing.T) {
 		t.Fatalf("failed to create secret file: %v", err)
 	}
 
-	auditor := NewAuditor(AuditConfig{
-		StateDir: stateDir,
+	report, err := RunAudit(AuditOptions{
+		StateDir:          stateDir,
+		IncludeFilesystem: true,
 	})
-
-	result, err := auditor.Run()
 	if err != nil {
 		t.Fatalf("audit failed: %v", err)
 	}
 
 	found := false
-	for _, f := range result.Findings {
-		if f.CheckID == "FS-005" {
+	for _, f := range report.Findings {
+		if f.CheckID == "fs.sensitive_file_world_readable" {
 			found = true
 		}
 	}
 	if !found {
-		t.Error("expected FS-005 finding for world-readable sensitive file")
+		t.Error("expected fs.sensitive_file_world_readable finding")
 	}
 }
 
-func TestAuditor_NonexistentPaths(t *testing.T) {
-	auditor := NewAuditor(AuditConfig{
-		StateDir:   "/nonexistent/path/to/dir",
-		ConfigFile: "/nonexistent/path/to/config.yaml",
+func TestRunAudit_NonexistentPaths(t *testing.T) {
+	report, err := RunAudit(AuditOptions{
+		StateDir:          "/nonexistent/path/to/dir",
+		ConfigPath:        "/nonexistent/path/to/config.yaml",
+		IncludeFilesystem: true,
 	})
-
-	result, err := auditor.Run()
 	if err != nil {
 		t.Fatalf("audit should not fail for nonexistent paths: %v", err)
 	}
 
-	if len(result.Findings) != 0 {
-		t.Errorf("expected no findings for nonexistent paths, got %d", len(result.Findings))
+	if len(report.Findings) != 0 {
+		t.Errorf("expected no findings for nonexistent paths, got %d", len(report.Findings))
 	}
 }
 
-func TestAuditResult_CountBySeverity(t *testing.T) {
-	result := &AuditResult{
-		Findings: []Finding{
+func TestRunAudit_GatewayBindNoAuth(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Host: "0.0.0.0",
+		},
+		Auth: config.AuthConfig{},
+	}
+
+	report, err := RunAudit(AuditOptions{
+		Config:         cfg,
+		IncludeGateway: true,
+	})
+	if err != nil {
+		t.Fatalf("audit failed: %v", err)
+	}
+
+	found := false
+	for _, f := range report.Findings {
+		if f.CheckID == "server.bind_no_auth" {
+			found = true
+			if f.Severity != SeverityCritical {
+				t.Errorf("severity = %v, want critical", f.Severity)
+			}
+		}
+	}
+	if !found {
+		t.Error("expected server.bind_no_auth finding")
+	}
+}
+
+func TestRunAudit_GatewayBindWithAuth(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Host: "0.0.0.0",
+		},
+		Auth: config.AuthConfig{
+			APIKeys: []config.APIKeyConfig{
+				{Key: "a-secure-api-key-that-is-long-enough"},
+			},
+		},
+	}
+
+	report, err := RunAudit(AuditOptions{
+		Config:         cfg,
+		IncludeGateway: true,
+	})
+	if err != nil {
+		t.Fatalf("audit failed: %v", err)
+	}
+
+	found := false
+	for _, f := range report.Findings {
+		if f.CheckID == "server.bind_public" {
+			found = true
+			if f.Severity != SeverityWarn {
+				t.Errorf("severity = %v, want warn", f.Severity)
+			}
+		}
+	}
+	if !found {
+		t.Error("expected server.bind_public finding")
+	}
+}
+
+func TestRunAudit_MissingAPIKeyAuth(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Host: "127.0.0.1",
+		},
+		Auth: config.AuthConfig{
+			APIKeys: []config.APIKeyConfig{
+				{Key: "short"}, // Less than 24 chars
+			},
+		},
+	}
+
+	report, err := RunAudit(AuditOptions{
+		Config:         cfg,
+		IncludeGateway: true,
+	})
+	if err != nil {
+		t.Fatalf("audit failed: %v", err)
+	}
+
+	found := false
+	for _, f := range report.Findings {
+		if f.CheckID == "auth.weak_api_key" {
+			found = true
+			if f.Severity != SeverityWarn {
+				t.Errorf("severity = %v, want warn", f.Severity)
+			}
+		}
+	}
+	if !found {
+		t.Error("expected auth.weak_api_key finding")
+	}
+}
+
+func TestAuditReport_CountBySeverity(t *testing.T) {
+	report := &AuditReport{
+		Findings: []AuditFinding{
 			{CheckID: "1", Severity: SeverityCritical},
 			{CheckID: "2", Severity: SeverityHigh},
 			{CheckID: "3", Severity: SeverityHigh},
@@ -369,7 +457,7 @@ func TestAuditResult_CountBySeverity(t *testing.T) {
 		},
 	}
 
-	counts := result.CountBySeverity()
+	counts := report.CountBySeverity()
 
 	if counts[SeverityCritical] != 1 {
 		t.Errorf("critical count = %d, want 1", counts[SeverityCritical])
@@ -382,6 +470,16 @@ func TestAuditResult_CountBySeverity(t *testing.T) {
 	}
 	if counts[SeverityLow] != 3 {
 		t.Errorf("low count = %d, want 3", counts[SeverityLow])
+	}
+}
+
+func TestAuditReport_Summary(t *testing.T) {
+	report, _ := RunAudit(AuditOptions{})
+
+	// Empty report should have zero summary
+	if report.Summary.Critical != 0 || report.Summary.Warn != 0 || report.Summary.Info != 0 {
+		t.Errorf("expected zero summary for empty audit, got critical=%d warn=%d info=%d",
+			report.Summary.Critical, report.Summary.Warn, report.Summary.Info)
 	}
 }
 
@@ -440,5 +538,176 @@ func TestCheckPath(t *testing.T) {
 
 	if len(findings) != 0 {
 		t.Errorf("expected no findings for secure file, got %d", len(findings))
+	}
+}
+
+func TestAuditor_Run(t *testing.T) {
+	dir := t.TempDir()
+	testDir := filepath.Join(dir, "state")
+
+	if err := os.Mkdir(testDir, 0700); err != nil {
+		t.Fatalf("failed to create test dir: %v", err)
+	}
+	// Chmod to bypass umask
+	if err := os.Chmod(testDir, 0777); err != nil {
+		t.Fatalf("failed to chmod test dir: %v", err)
+	}
+
+	auditor := NewAuditor(AuditOptions{
+		StateDir: testDir,
+	})
+
+	report, err := auditor.Run()
+	if err != nil {
+		t.Fatalf("auditor.Run failed: %v", err)
+	}
+
+	if !report.HasCritical() {
+		t.Error("expected critical finding for world-writable directory")
+	}
+}
+
+func TestRunAudit_EdgeDevMode(t *testing.T) {
+	cfg := &config.Config{
+		Edge: config.EdgeConfig{
+			Enabled:  true,
+			AuthMode: "dev",
+		},
+	}
+
+	report, err := RunAudit(AuditOptions{
+		Config:        cfg,
+		IncludeConfig: true,
+	})
+	if err != nil {
+		t.Fatalf("audit failed: %v", err)
+	}
+
+	found := false
+	for _, f := range report.Findings {
+		if f.CheckID == "config.edge_dev_mode" {
+			found = true
+			if f.Severity != SeverityCritical {
+				t.Errorf("severity = %v, want critical", f.Severity)
+			}
+		}
+	}
+	if !found {
+		t.Error("expected config.edge_dev_mode finding")
+	}
+}
+
+func TestRunAudit_EdgeTokenNoTokens(t *testing.T) {
+	cfg := &config.Config{
+		Edge: config.EdgeConfig{
+			Enabled:  true,
+			AuthMode: "token",
+			Tokens:   map[string]string{},
+		},
+	}
+
+	report, err := RunAudit(AuditOptions{
+		Config:        cfg,
+		IncludeConfig: true,
+	})
+	if err != nil {
+		t.Fatalf("audit failed: %v", err)
+	}
+
+	found := false
+	for _, f := range report.Findings {
+		if f.CheckID == "config.edge_no_tokens" {
+			found = true
+			if f.Severity != SeverityWarn {
+				t.Errorf("severity = %v, want warn", f.Severity)
+			}
+		}
+	}
+	if !found {
+		t.Error("expected config.edge_no_tokens finding")
+	}
+}
+
+func TestRunAudit_OpenChannelPolicy(t *testing.T) {
+	cfg := &config.Config{
+		Channels: config.ChannelsConfig{
+			Telegram: config.TelegramConfig{
+				Enabled: true,
+				DM: config.ChannelPolicyConfig{
+					Policy: "open",
+				},
+			},
+		},
+	}
+
+	report, err := RunAudit(AuditOptions{
+		Config:        cfg,
+		IncludeConfig: true,
+	})
+	if err != nil {
+		t.Fatalf("audit failed: %v", err)
+	}
+
+	found := false
+	for _, f := range report.Findings {
+		if f.CheckID == "config.channel.telegram.dm_open" {
+			found = true
+			if f.Severity != SeverityInfo {
+				t.Errorf("severity = %v, want info", f.Severity)
+			}
+		}
+	}
+	if !found {
+		t.Error("expected config.channel.telegram.dm_open finding")
+	}
+}
+
+func TestComputeSummary(t *testing.T) {
+	findings := []AuditFinding{
+		{Severity: SeverityCritical},
+		{Severity: SeverityHigh},
+		{Severity: SeverityWarn},
+		{Severity: SeverityMedium},
+		{Severity: SeverityInfo},
+		{Severity: SeverityLow},
+	}
+
+	summary := computeSummary(findings)
+
+	// Critical + High = 2
+	if summary.Critical != 2 {
+		t.Errorf("Critical = %d, want 2", summary.Critical)
+	}
+	// Warn + Medium = 2
+	if summary.Warn != 2 {
+		t.Errorf("Warn = %d, want 2", summary.Warn)
+	}
+	// Info + Low = 2
+	if summary.Info != 2 {
+		t.Errorf("Info = %d, want 2", summary.Info)
+	}
+}
+
+func TestContainsEmbeddedPassword(t *testing.T) {
+	tests := []struct {
+		url  string
+		want bool
+	}{
+		{"postgres://user:password@localhost/db", true},
+		{"mysql://root:secret123@host:3306/mydb", true},
+		{"postgres://user@localhost/db", false},
+		{"postgres://localhost/db", false},
+		{"postgres://user:${DB_PASS}@localhost/db", false},
+		{"file:///path/to/file", false},
+		{"", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.url, func(t *testing.T) {
+			got := containsEmbeddedPassword(tt.url)
+			if got != tt.want {
+				t.Errorf("containsEmbeddedPassword(%q) = %v, want %v", tt.url, got, tt.want)
+			}
+		})
 	}
 }

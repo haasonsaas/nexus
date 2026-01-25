@@ -407,3 +407,36 @@ func MarshalToolInput(input json.RawMessage) string {
 	}
 	return string(input)
 }
+
+// RepairTranscript fixes malformed session transcripts to ensure tool call/result pairing.
+// This is an alias for RepairToolCallPairing that matches the clawdbot pattern.
+//
+// The function:
+// - Moves tool results directly after their corresponding assistant tool calls
+// - Inserts synthetic error results for tool calls with missing results
+// - Drops duplicate tool results for the same tool call ID
+// - Drops orphan tool results that don't match any tool call
+func RepairTranscript(messages []*models.Message) TranscriptRepairReport {
+	return RepairToolCallPairing(messages)
+}
+
+// AddedSyntheticResults returns the count of synthetic results added during repair.
+func (r TranscriptRepairReport) AddedSyntheticResults() int {
+	return len(r.Added)
+}
+
+// DroppedDuplicates returns the count of duplicate tool results dropped.
+func (r TranscriptRepairReport) DroppedDuplicates() int {
+	return r.DroppedDuplicateCount
+}
+
+// DroppedOrphans returns the count of orphan tool results dropped.
+func (r TranscriptRepairReport) DroppedOrphans() int {
+	return r.DroppedOrphanCount
+}
+
+// SanitizeToolUseResultPairing is a convenience wrapper that returns just the repaired messages.
+// This matches the clawdbot pattern for transcript sanitization.
+func SanitizeToolUseResultPairing(messages []*models.Message) []*models.Message {
+	return RepairTranscript(messages).Messages
+}

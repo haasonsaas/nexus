@@ -17,7 +17,7 @@ struct SettingsRootView: View {
                     Label("Gateway", systemImage: "server.rack")
                 }
 
-            VoiceSettingsView(appState: appState)
+            VoiceWakeSettingsView(appState: appState)
                 .tabItem {
                     Label("Voice", systemImage: "mic")
                 }
@@ -30,6 +30,11 @@ struct SettingsRootView: View {
             CronSettingsView()
                 .tabItem {
                     Label("Cron", systemImage: "clock")
+                }
+
+            SkillsSettingsView()
+                .tabItem {
+                    Label("Skills", systemImage: "puzzlepiece.extension")
                 }
 
             PermissionsSettingsView()
@@ -109,31 +114,6 @@ struct GatewaySettingsView: View {
     }
 }
 
-struct VoiceSettingsView: View {
-    @Bindable var appState: AppStateStore
-
-    var body: some View {
-        Form {
-            Section("Voice Wake") {
-                Toggle("Enable Voice Wake", isOn: $appState.voiceWakeEnabled)
-
-                if appState.voiceWakeEnabled {
-                    ForEach(appState.voiceWakeTriggers, id: \.self) { trigger in
-                        Text(trigger)
-                    }
-                }
-            }
-
-            Section("Audio Input") {
-                // Microphone picker would go here
-                Text("Default Microphone")
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .formStyle(.grouped)
-        .padding()
-    }
-}
 
 struct ChannelsSettingsView: View {
     @State private var channels = ChannelsStore.shared
@@ -238,32 +218,51 @@ struct CronSettingsView: View {
 }
 
 struct PermissionsSettingsView: View {
+    @State private var permissions = PermissionManager.shared
+
     var body: some View {
         Form {
             Section("System Permissions") {
-                PermissionRow(
+                PermissionRowView(
+                    type: .accessibility,
                     name: "Accessibility",
                     description: "Control other applications",
-                    isGranted: AccessibilityBridge.shared.hasPermission
+                    permissions: permissions
                 )
 
-                PermissionRow(
+                PermissionRowView(
+                    type: .screenRecording,
                     name: "Screen Recording",
                     description: "Capture screen content",
-                    isGranted: true // Check actual permission
+                    permissions: permissions
                 )
 
-                PermissionRow(
+                PermissionRowView(
+                    type: .microphone,
                     name: "Microphone",
                     description: "Voice input and wake words",
-                    isGranted: true // Check actual permission
+                    permissions: permissions
                 )
 
-                PermissionRow(
+                PermissionRowView(
+                    type: .speechRecognition,
+                    name: "Speech Recognition",
+                    description: "Voice command recognition",
+                    permissions: permissions
+                )
+
+                PermissionRowView(
+                    type: .camera,
                     name: "Camera",
                     description: "Visual context for agents",
-                    isGranted: CameraCaptureService.shared.hasPermission
+                    permissions: permissions
                 )
+            }
+
+            Section {
+                Button("Refresh Permissions") {
+                    permissions.refreshAllStatuses()
+                }
             }
         }
         .formStyle(.grouped)
@@ -271,10 +270,15 @@ struct PermissionsSettingsView: View {
     }
 }
 
-struct PermissionRow: View {
+struct PermissionRowView: View {
+    let type: PermissionType
     let name: String
     let description: String
-    let isGranted: Bool
+    @Bindable var permissions: PermissionManager
+
+    private var isGranted: Bool {
+        permissions.status(for: type)
+    }
 
     var body: some View {
         HStack {
@@ -285,8 +289,34 @@ struct PermissionRow: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Image(systemName: isGranted ? "checkmark.circle.fill" : "xmark.circle.fill")
-                .foregroundStyle(isGranted ? .green : .red)
+
+            if isGranted {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+            } else {
+                Button("Grant") {
+                    Task {
+                        await requestPermission()
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+    }
+
+    private func requestPermission() async {
+        switch type {
+        case .microphone:
+            _ = await permissions.requestMicrophoneAccess()
+        case .speechRecognition:
+            _ = await permissions.requestSpeechRecognitionAccess()
+        case .camera:
+            _ = await permissions.requestCameraAccess()
+        case .accessibility:
+            permissions.promptAccessibilityPermission()
+        case .screenRecording:
+            permissions.openSystemSettings(for: .screenRecording)
         }
     }
 }

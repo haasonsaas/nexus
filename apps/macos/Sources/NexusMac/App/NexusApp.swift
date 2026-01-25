@@ -29,7 +29,7 @@ struct NexusApp: App {
                 onTogglePause: { togglePause() }
             )
         } label: {
-            StatusItemLabel(appState: appState)
+            AnimatedStatusIcon(appState: appState)
         }
         .menuBarExtraStyle(.menu)
 
@@ -135,6 +135,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Load MCP servers
         await MCPServerRegistry.shared.loadFromConfig()
 
+        // Start voice wake if enabled
+        if AppStateStore.shared.voiceWakeEnabled {
+            VoiceWakeRuntime.shared.startListening()
+        }
+
+        // Wire up global hotkey manager
+        GlobalHotkeyManager.shared.start()
+
+        // Start mic level monitor for voice features
+        if AppStateStore.shared.voiceWakeEnabled {
+            try? await MicLevelMonitor.shared.start { _ in }
+        }
+
         // Check for updates in background
         Task {
             await UpdateChecker.shared.checkForUpdates()
@@ -144,6 +157,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func shutdownServices() async {
+        // Stop voice wake
+        VoiceWakeRuntime.shared.stopListening()
+
+        // Stop global hotkeys
+        GlobalHotkeyManager.shared.stop()
+
+        // Stop mic monitor
+        await MicLevelMonitor.shared.stop()
+
         // Stop node mode
         NodeModeCoordinator.shared.stop()
 

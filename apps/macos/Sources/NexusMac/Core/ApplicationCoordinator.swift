@@ -173,6 +173,11 @@ final class ApplicationCoordinator {
         // Check for updates
         await UpdateChecker.shared.checkIfNeeded()
 
+        // Show onboarding if needed
+        if !AppStateStore.shared.hasCompletedOnboarding {
+            OnboardingController.shared.show()
+        }
+
         logger.debug("UI initialized")
     }
 

@@ -270,6 +270,9 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 	if systemPrompt := s.systemPromptForMessage(ctx, session, msg); systemPrompt != "" {
 		promptCtx = agent.WithSystemPrompt(promptCtx, systemPrompt)
 	}
+	if overrides := s.experimentOverrides(session, msg); overrides.Model != "" {
+		promptCtx = agent.WithModel(promptCtx, overrides.Model)
+	}
 	if model := sessionModelOverride(session); model != "" {
 		promptCtx = agent.WithModel(promptCtx, model)
 	}

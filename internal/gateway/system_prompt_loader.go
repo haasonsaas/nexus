@@ -26,6 +26,10 @@ func (s *Server) systemPromptForMessage(ctx context.Context, session *models.Ses
 		SkillContent:      s.loadSkillSections(ctx),
 	}
 
+	if overrides := s.experimentOverrides(session, msg); overrides.SystemPrompt != "" {
+		opts.ExperimentPrompt = overrides.SystemPrompt
+	}
+
 	if s.config.Session.Memory.Enabled && s.memoryLogger != nil {
 		channelID := msg.Channel
 		sessionID := session.ID

@@ -128,6 +128,12 @@ func (g *grpcService) handleSendMessage(ctx context.Context, stream proto.NexusG
 	if systemPrompt := g.server.systemPromptForMessage(ctx, session, msg); systemPrompt != "" {
 		promptCtx = agent.WithSystemPrompt(promptCtx, systemPrompt)
 	}
+	if overrides := g.server.experimentOverrides(session, msg); overrides.Model != "" {
+		promptCtx = agent.WithModel(promptCtx, overrides.Model)
+	}
+	if model := sessionModelOverride(session); model != "" {
+		promptCtx = agent.WithModel(promptCtx, model)
+	}
 
 	runCtx, cancel := context.WithCancel(promptCtx)
 	runToken := g.server.registerActiveRun(session.ID, cancel)

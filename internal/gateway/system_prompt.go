@@ -9,6 +9,7 @@ import (
 
 // SystemPromptOptions holds dynamic prompt sections that vary per request.
 type SystemPromptOptions struct {
+	ExperimentPrompt    string
 	ToolNotes           string
 	MemoryLines         []string
 	VectorMemoryResults []VectorMemoryResult // Results from semantic memory search
@@ -43,6 +44,10 @@ func buildSystemPrompt(cfg *config.Config, opts SystemPromptOptions) string {
 	}
 
 	lines := make([]string, 0, 10)
+
+	if experimentPrompt := strings.TrimSpace(opts.ExperimentPrompt); experimentPrompt != "" {
+		lines = append(lines, experimentPrompt)
+	}
 
 	missingIdentity := cfg.Identity.Name == "" && cfg.Identity.Creature == "" && cfg.Identity.Vibe == "" && cfg.Identity.Emoji == ""
 	missingUser := cfg.User.Name == "" && cfg.User.PreferredAddress == "" && cfg.User.Pronouns == "" && cfg.User.Timezone == "" && cfg.User.Notes == ""

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/audit"
+	"github.com/haasonsaas/nexus/internal/experiments"
 	"github.com/haasonsaas/nexus/internal/mcp"
 	"github.com/haasonsaas/nexus/internal/memory"
 	"github.com/haasonsaas/nexus/internal/ratelimit"
@@ -34,6 +35,7 @@ type Config struct {
 	Marketplace   MarketplaceConfig         `yaml:"marketplace"`
 	Skills        skills.SkillsConfig       `yaml:"skills"`
 	Templates     templates.TemplatesConfig `yaml:"templates"`
+	Experiments   experiments.Config        `yaml:"experiments"`
 	VectorMemory  memory.Config             `yaml:"vector_memory"`
 	RAG           RAGConfig                 `yaml:"rag"`
 	MCP           mcp.Config                `yaml:"mcp"`

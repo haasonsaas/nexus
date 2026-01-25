@@ -296,6 +296,25 @@ llm:
         - http://ollama:11434
         - http://ollama.ollama.svc.cluster.local:11434
 
+experiments:
+  # Optional prompt/model experiments (A/B testing)
+  experiments: []
+  # Example:
+  # experiments:
+  #   - id: system-prompt-v2
+  #     description: "Test new system prompt"
+  #     status: active
+  #     allocation: 20
+  #     variants:
+  #       - id: control
+  #         weight: 50
+  #         config:
+  #           system_prompt: "You are a helpful assistant."
+  #       - id: treatment
+  #         weight: 50
+  #         config:
+  #           system_prompt: "You are concise and direct."
+
 tools:
   # Optional notes to include in the system prompt for tool conventions
   notes: ""

@@ -26,7 +26,6 @@ import (
 	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/haasonsaas/nexus/internal/artifacts"
 	"github.com/haasonsaas/nexus/internal/audit"
-	"github.com/haasonsaas/nexus/internal/infra"
 	"github.com/haasonsaas/nexus/internal/auth"
 	"github.com/haasonsaas/nexus/internal/canvas"
 	"github.com/haasonsaas/nexus/internal/channels"
@@ -34,9 +33,11 @@ import (
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/cron"
 	"github.com/haasonsaas/nexus/internal/edge"
+	"github.com/haasonsaas/nexus/internal/experiments"
 	"github.com/haasonsaas/nexus/internal/hooks"
 	"github.com/haasonsaas/nexus/internal/hooks/bundled"
 	"github.com/haasonsaas/nexus/internal/identity"
+	"github.com/haasonsaas/nexus/internal/infra"
 	"github.com/haasonsaas/nexus/internal/jobs"
 	"github.com/haasonsaas/nexus/internal/mcp"
 	"github.com/haasonsaas/nexus/internal/media"
@@ -86,6 +87,7 @@ type Server struct {
 	vectorMemory    *memory.Manager
 	mediaProcessor  media.Processor
 	mediaAggregator *media.Aggregator
+	experimentsMgr  *experiments.Manager
 
 	channelPlugins     *channelPluginRegistry
 	runtimePlugins     *plugins.RuntimeRegistry
@@ -529,6 +531,8 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	}
 	integration.ConfigureProviderUsage(anthropicKey, openaiKey, geminiKey)
 
+	experimentsMgr := experiments.NewManager(cfg.Experiments)
+
 	startupCancelUsed = true
 	server := &Server{
 		config:             cfg,
@@ -543,6 +547,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		vectorMemory:       vectorMem,
 		mediaProcessor:     mediaProcessor,
 		mediaAggregator:    mediaAggregator,
+		experimentsMgr:     experimentsMgr,
 		stores:             stores,
 		authService:        authService,
 		cronScheduler:      cronScheduler,

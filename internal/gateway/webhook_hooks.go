@@ -50,11 +50,11 @@ type WebhookMapping struct {
 }
 
 const (
-	defaultWebhookPath     = "/hooks"
-	defaultMaxBodyBytes    = 256 * 1024
-	webhookHandlerAgent    = "agent"
-	webhookHandlerWake     = "wake"
-	webhookHandlerCustom   = "custom"
+	defaultWebhookPath   = "/hooks"
+	defaultMaxBodyBytes  = 256 * 1024
+	webhookHandlerAgent  = "agent"
+	webhookHandlerWake   = "wake"
+	webhookHandlerCustom = "custom"
 )
 
 // WebhookPayload represents the standard webhook request body.

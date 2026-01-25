@@ -122,7 +122,9 @@ func (s *Server) runSecurityPosture(ctx context.Context) {
 			"remediation_applied": remediationApplied,
 			"top_findings":        summarizeFindings(report.Findings, 5),
 		}
-		_ = s.eventRecorder.Record(ctx, observability.EventTypeCustom, "security.posture", data)
+		if err := s.eventRecorder.Record(ctx, observability.EventTypeCustom, "security.posture", data); err != nil {
+			s.logger.Debug("failed to record security posture event", "error", err)
+		}
 	}
 }
 

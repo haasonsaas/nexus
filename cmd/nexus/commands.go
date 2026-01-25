@@ -440,6 +440,44 @@ func buildMemoryCompactCmd() *cobra.Command {
 }
 
 // =============================================================================
+// RAG Commands
+// =============================================================================
+
+// buildRagCmd creates the "rag" command group.
+func buildRagCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "rag",
+		Short: "Evaluate and inspect RAG retrieval quality",
+	}
+	cmd.AddCommand(buildRagEvalCmd())
+	return cmd
+}
+
+func buildRagEvalCmd() *cobra.Command {
+	var (
+		configPath string
+		testSet    string
+		output     string
+		limit      int
+		threshold  float32
+	)
+	cmd := &cobra.Command{
+		Use:   "eval",
+		Short: "Run RAG evaluation against a test set",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runRagEval(cmd, configPath, testSet, output, limit, threshold)
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	cmd.Flags().StringVar(&testSet, "test-set", "", "Path to RAG evaluation test set (YAML)")
+	cmd.Flags().StringVar(&output, "output", "", "Write JSON report to file (optional)")
+	cmd.Flags().IntVar(&limit, "limit", 10, "Maximum number of retrieval results per case")
+	cmd.Flags().Float32Var(&threshold, "threshold", 0.7, "Minimum similarity threshold (0-1)")
+	_ = cmd.MarkFlagRequired("test-set")
+	return cmd
+}
+
+// =============================================================================
 // MCP Commands
 // =============================================================================
 

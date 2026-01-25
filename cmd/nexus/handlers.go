@@ -27,6 +27,9 @@ import (
 	"github.com/haasonsaas/nexus/internal/gateway"
 	"github.com/haasonsaas/nexus/internal/marketplace"
 	"github.com/haasonsaas/nexus/internal/memory"
+	"github.com/haasonsaas/nexus/internal/memory/embeddings"
+	"github.com/haasonsaas/nexus/internal/memory/embeddings/ollama"
+	"github.com/haasonsaas/nexus/internal/memory/embeddings/openai"
 	"github.com/haasonsaas/nexus/internal/multiagent"
 	"github.com/haasonsaas/nexus/internal/observability"
 	"github.com/haasonsaas/nexus/internal/onboard"
@@ -34,6 +37,9 @@ import (
 	"github.com/haasonsaas/nexus/internal/plugins"
 	"github.com/haasonsaas/nexus/internal/profile"
 	"github.com/haasonsaas/nexus/internal/provisioning"
+	"github.com/haasonsaas/nexus/internal/rag/eval"
+	"github.com/haasonsaas/nexus/internal/rag/index"
+	"github.com/haasonsaas/nexus/internal/rag/store/pgvector"
 	"github.com/haasonsaas/nexus/internal/service"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/skills"
@@ -886,6 +892,134 @@ func runMemoryCompact(cmd *cobra.Command, configPath string) error {
 
 	fmt.Fprintln(cmd.OutOrStdout(), "Memory compacted successfully.")
 	return nil
+}
+
+// =============================================================================
+// RAG Command Handlers
+// =============================================================================
+
+func runRagEval(cmd *cobra.Command, configPath, testSetPath, output string, limit int, threshold float32) error {
+	configPath = resolveConfigPath(configPath)
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	manager, closer, err := buildRAGIndexManager(cfg)
+	if err != nil {
+		return err
+	}
+	if closer != nil {
+		defer closer.Close()
+	}
+
+	set, err := eval.LoadTestSet(testSetPath)
+	if err != nil {
+		return err
+	}
+
+	evaluator := eval.NewEvaluator(manager, &eval.Options{
+		Limit:     limit,
+		Threshold: threshold,
+	})
+	report, err := evaluator.Evaluate(cmd.Context(), set)
+	if err != nil {
+		return err
+	}
+
+	if output != "" {
+		payload, err := json.MarshalIndent(report, "", "  ")
+		if err != nil {
+			return fmt.Errorf("marshal report: %w", err)
+		}
+		if err := os.WriteFile(output, payload, 0o644); err != nil {
+			return fmt.Errorf("write report: %w", err)
+		}
+	}
+
+	out := cmd.OutOrStdout()
+	fmt.Fprintf(out, "RAG Evaluation: %s\n", report.TestSetName)
+	fmt.Fprintf(out, "Cases: %d\n", report.Summary.Cases)
+	fmt.Fprintf(out, "Precision: %.3f\n", report.Summary.AvgPrecision)
+	fmt.Fprintf(out, "Recall: %.3f\n", report.Summary.AvgRecall)
+	fmt.Fprintf(out, "MRR: %.3f\n", report.Summary.AvgMRR)
+	fmt.Fprintf(out, "NDCG: %.3f\n", report.Summary.AvgNDCG)
+	if output != "" {
+		fmt.Fprintf(out, "Report written to %s\n", output)
+	}
+	return nil
+}
+
+func buildRAGIndexManager(cfg *config.Config) (*index.Manager, io.Closer, error) {
+	if cfg == nil {
+		return nil, nil, fmt.Errorf("config is required")
+	}
+	storeCfg := cfg.RAG.Store
+	backend := strings.ToLower(strings.TrimSpace(storeCfg.Backend))
+	if backend == "" {
+		backend = "pgvector"
+	}
+	if backend != "pgvector" && backend != "postgres" && backend != "postgresql" {
+		return nil, nil, fmt.Errorf("unsupported RAG backend %q", backend)
+	}
+
+	var embProvider embeddings.Provider
+	var err error
+	switch strings.ToLower(strings.TrimSpace(cfg.RAG.Embeddings.Provider)) {
+	case "openai", "":
+		embProvider, err = openai.New(openai.Config{
+			APIKey:  cfg.RAG.Embeddings.APIKey,
+			BaseURL: cfg.RAG.Embeddings.BaseURL,
+			Model:   cfg.RAG.Embeddings.Model,
+		})
+	case "ollama":
+		embProvider, err = ollama.New(ollama.Config{
+			BaseURL: cfg.RAG.Embeddings.BaseURL,
+			Model:   cfg.RAG.Embeddings.Model,
+		})
+	default:
+		return nil, nil, fmt.Errorf("unknown RAG embedding provider %q", cfg.RAG.Embeddings.Provider)
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("init embedder: %w", err)
+	}
+
+	dimension := storeCfg.Dimension
+	if dimension == 0 {
+		dimension = embProvider.Dimension()
+	}
+	if embProvider.Dimension() != dimension {
+		return nil, nil, fmt.Errorf("embedding dimension mismatch: store=%d embedder=%d", dimension, embProvider.Dimension())
+	}
+
+	dsn := strings.TrimSpace(storeCfg.DSN)
+	if dsn == "" && storeCfg.UseDatabaseURL {
+		dsn = strings.TrimSpace(cfg.Database.URL)
+	}
+	if dsn == "" {
+		return nil, nil, fmt.Errorf("rag.store.dsn is required or set rag.store.use_database_url with database.url")
+	}
+
+	runMigrations := true
+	if storeCfg.RunMigrations != nil {
+		runMigrations = *storeCfg.RunMigrations
+	}
+	store, err := pgvector.New(pgvector.Config{
+		DSN:           dsn,
+		Dimension:     dimension,
+		RunMigrations: runMigrations,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("init rag store: %w", err)
+	}
+
+	idx := index.NewManager(store, embProvider, &index.Config{
+		ChunkSize:          cfg.RAG.Chunking.ChunkSize,
+		ChunkOverlap:       cfg.RAG.Chunking.ChunkOverlap,
+		EmbeddingBatchSize: cfg.RAG.Embeddings.BatchSize,
+		DefaultSource:      "rag_eval",
+	})
+	return idx, store, nil
 }
 
 // =============================================================================

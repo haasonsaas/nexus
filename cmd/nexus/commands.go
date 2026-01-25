@@ -449,7 +449,7 @@ func buildRagCmd() *cobra.Command {
 		Use:   "rag",
 		Short: "Evaluate and inspect RAG retrieval quality",
 	}
-	cmd.AddCommand(buildRagEvalCmd())
+	cmd.AddCommand(buildRagEvalCmd(), buildRagPackCmd())
 	return cmd
 }
 
@@ -474,6 +474,33 @@ func buildRagEvalCmd() *cobra.Command {
 	cmd.Flags().IntVar(&limit, "limit", 10, "Maximum number of retrieval results per case")
 	cmd.Flags().Float32Var(&threshold, "threshold", 0.7, "Minimum similarity threshold (0-1)")
 	_ = cmd.MarkFlagRequired("test-set")
+	return cmd
+}
+
+func buildRagPackCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "pack",
+		Short: "Manage RAG knowledge packs",
+	}
+	cmd.AddCommand(buildRagPackInstallCmd())
+	return cmd
+}
+
+func buildRagPackInstallCmd() *cobra.Command {
+	var (
+		configPath string
+		packDir    string
+	)
+	cmd := &cobra.Command{
+		Use:   "install",
+		Short: "Install a knowledge pack into RAG storage",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runRagPackInstall(cmd, configPath, packDir)
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	cmd.Flags().StringVar(&packDir, "path", "", "Path to knowledge pack directory")
+	_ = cmd.MarkFlagRequired("path")
 	return cmd
 }
 

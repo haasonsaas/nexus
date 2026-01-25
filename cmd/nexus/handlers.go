@@ -39,6 +39,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/provisioning"
 	"github.com/haasonsaas/nexus/internal/rag/eval"
 	"github.com/haasonsaas/nexus/internal/rag/index"
+	"github.com/haasonsaas/nexus/internal/rag/packs"
 	"github.com/haasonsaas/nexus/internal/rag/store/pgvector"
 	"github.com/haasonsaas/nexus/internal/service"
 	"github.com/haasonsaas/nexus/internal/sessions"
@@ -1020,6 +1021,40 @@ func buildRAGIndexManager(cfg *config.Config) (*index.Manager, io.Closer, error)
 		DefaultSource:      "rag_eval",
 	})
 	return idx, store, nil
+}
+
+func runRagPackInstall(cmd *cobra.Command, configPath, packDir string) error {
+	configPath = resolveConfigPath(configPath)
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	manager, closer, err := buildRAGIndexManager(cfg)
+	if err != nil {
+		return err
+	}
+	if closer != nil {
+		defer closer.Close()
+	}
+
+	report, err := packs.Install(cmd.Context(), packDir, manager)
+	if err != nil {
+		return err
+	}
+
+	out := cmd.OutOrStdout()
+	fmt.Fprintf(out, "Installed pack: %s\n", report.PackName)
+	fmt.Fprintf(out, "Documents: %d\n", report.Documents)
+	fmt.Fprintf(out, "Chunks: %d\n", report.Chunks)
+	fmt.Fprintf(out, "Duration: %v\n", report.Duration)
+	if len(report.Errors) > 0 {
+		fmt.Fprintf(out, "Errors: %d\n", len(report.Errors))
+		for _, e := range report.Errors {
+			fmt.Fprintf(out, "  - %s\n", e)
+		}
+	}
+	return nil
 }
 
 // =============================================================================

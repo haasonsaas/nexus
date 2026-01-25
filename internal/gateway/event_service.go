@@ -76,7 +76,7 @@ func (e *eventService) GetEvents(ctx context.Context, req *proto.GetEventsReques
 
 	return &proto.GetEventsResponse{
 		Events:     protoEvents,
-		TotalCount: int32(len(events)),
+		TotalCount: clampNonNegativeIntToInt32(len(events)),
 	}, nil
 }
 
@@ -129,11 +129,11 @@ func (e *eventService) GetTimeline(ctx context.Context, req *proto.GetTimelineRe
 
 	if timeline.Summary != nil {
 		resp.Summary = &proto.TimelineSummary{
-			TotalEvents:     int32(timeline.Summary.TotalEvents),
-			ErrorCount:      int32(timeline.Summary.ErrorCount),
-			ToolCalls:       int32(timeline.Summary.ToolCalls),
-			LlmCalls:        int32(timeline.Summary.LLMCalls),
-			EdgeEvents:      int32(timeline.Summary.EdgeEvents),
+			TotalEvents:     clampNonNegativeIntToInt32(timeline.Summary.TotalEvents),
+			ErrorCount:      clampNonNegativeIntToInt32(timeline.Summary.ErrorCount),
+			ToolCalls:       clampNonNegativeIntToInt32(timeline.Summary.ToolCalls),
+			LlmCalls:        clampNonNegativeIntToInt32(timeline.Summary.LLMCalls),
+			EdgeEvents:      clampNonNegativeIntToInt32(timeline.Summary.EdgeEvents),
 			TotalDurationMs: timeline.Summary.TotalDuration.Milliseconds(),
 		}
 	}

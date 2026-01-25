@@ -150,6 +150,7 @@ func (l *Logger) Log(ctx context.Context, event *Event) {
 	}
 
 	// Check sampling
+	// #nosec G404 -- sampling does not require cryptographic randomness
 	if l.config.SampleRate < 1.0 && rand.Float64() > l.config.SampleRate {
 		return
 	}

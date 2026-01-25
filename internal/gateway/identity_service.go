@@ -90,7 +90,7 @@ func (s *identityService) ListIdentities(ctx context.Context, req *proto.ListIde
 
 	return &proto.ListIdentitiesResponse{
 		Identities: protoIdentities,
-		TotalCount: int32(total),
+		TotalCount: clampNonNegativeIntToInt32(total),
 	}, nil
 }
 

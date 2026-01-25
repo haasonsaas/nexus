@@ -24,7 +24,7 @@ type BackoffPolicy struct {
 // Returns min(maxMs, base + jitter) as a time.Duration.
 // Attempt numbers start at 1.
 func ComputeBackoff(policy BackoffPolicy, attempt int) time.Duration {
-	return ComputeBackoffWithRand(policy, attempt, rand.Float64())
+	return ComputeBackoffWithRand(policy, attempt, rand.Float64()) // #nosec G404 -- jitter does not require cryptographic randomness
 }
 
 // ComputeBackoffWithRand calculates the backoff duration using a provided random value.

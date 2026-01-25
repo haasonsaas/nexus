@@ -233,7 +233,14 @@ func (e *Executor) Execute(ctx context.Context, call models.ToolCall) *Execution
 		}
 
 		// Exponential backoff
-		sleepDuration := backoff * time.Duration(1<<uint(attempt))
+		sleepDuration := backoff
+		for i := 0; i < attempt && sleepDuration > 0; i++ {
+			if sleepDuration > e.config.MaxRetryBackoff/2 {
+				sleepDuration = e.config.MaxRetryBackoff
+				break
+			}
+			sleepDuration *= 2
+		}
 		if sleepDuration > e.config.MaxRetryBackoff {
 			sleepDuration = e.config.MaxRetryBackoff
 		}

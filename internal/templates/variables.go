@@ -3,6 +3,7 @@ package templates
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"regexp"
 	"strings"
 	"text/template"
@@ -241,8 +242,19 @@ func toInt(v any) int {
 	case int32:
 		return int(val)
 	case int64:
+		if val > int64(math.MaxInt) {
+			return math.MaxInt
+		}
+		if val < int64(math.MinInt) {
+			return math.MinInt
+		}
+		// #nosec G115 -- bounded by checks above
 		return int(val)
 	case uint:
+		if val > uint(math.MaxInt) {
+			return math.MaxInt
+		}
+		// #nosec G115 -- bounded by checks above
 		return int(val)
 	case uint8:
 		return int(val)
@@ -251,6 +263,10 @@ func toInt(v any) int {
 	case uint32:
 		return int(val)
 	case uint64:
+		if val > uint64(math.MaxInt) {
+			return math.MaxInt
+		}
+		// #nosec G115 -- bounded by checks above
 		return int(val)
 	case float32:
 		return int(val)

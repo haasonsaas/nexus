@@ -306,7 +306,7 @@ func (r *Runner) deliverWithRetry(ctx context.Context, ack *HeartbeatAck) error 
 		// Don't sleep after the last attempt
 		if attempt < maxAttempts-1 {
 			// Exponential backoff: retryDelay * 2^attempt
-			sleepDuration := retryDelay * time.Duration(1<<uint(attempt))
+			sleepDuration := retryDelay * (time.Duration(1) << attempt)
 			select {
 			case <-time.After(sleepDuration):
 			case <-ctx.Done():

@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"os"
 	"os/exec"
@@ -437,7 +438,12 @@ func (a *Agent) sendResponse(writer *bufio.Writer, resp *GuestResponse) error {
 	}
 
 	lengthBuf := make([]byte, 4)
-	binary.LittleEndian.PutUint32(lengthBuf, uint32(len(data)))
+	dataLen := uint64(len(data))
+	if dataLen > math.MaxUint32 {
+		return fmt.Errorf("message too large: %d bytes", dataLen)
+	}
+	// #nosec G115 -- bounded by check above
+	binary.LittleEndian.PutUint32(lengthBuf, uint32(dataLen))
 
 	if _, err := writer.Write(lengthBuf); err != nil {
 		return err

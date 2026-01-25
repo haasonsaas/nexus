@@ -100,7 +100,7 @@ func Do(ctx context.Context, config Config, op func() error) Result {
 		sleep := delay
 		if config.Jitter {
 			// Add jitter: delay * [0.5, 1.5]
-			jitterFactor := 0.5 + rand.Float64()
+			jitterFactor := 0.5 + rand.Float64() // #nosec G404 -- jitter does not require cryptographic randomness
 			sleep = time.Duration(float64(delay) * jitterFactor)
 		}
 
@@ -188,7 +188,7 @@ func Backoff(attempt int, initial, max time.Duration, factor float64) time.Durat
 func BackoffWithJitter(attempt int, initial, max time.Duration, factor float64) time.Duration {
 	base := Backoff(attempt, initial, max, factor)
 	// Jitter: base * [0.5, 1.5]
-	jitterFactor := 0.5 + rand.Float64()
+	jitterFactor := 0.5 + rand.Float64() // #nosec G404 -- jitter does not require cryptographic randomness
 	return time.Duration(float64(base) * jitterFactor)
 }
 

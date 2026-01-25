@@ -457,7 +457,7 @@ func provisioningSessionToProto(s *provisioningSession) *proto.ProvisioningSessi
 		ChannelType:      s.ChannelType,
 		Status:           s.Status,
 		Steps:            s.Steps,
-		CurrentStepIndex: int32(s.CurrentStepIndex),
+		CurrentStepIndex: clampNonNegativeIntToInt32(s.CurrentStepIndex),
 		Error:            s.Error,
 		EdgeId:           s.EdgeID,
 		CreatedAt:        timestamppb.New(s.CreatedAt),

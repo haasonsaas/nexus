@@ -3,6 +3,7 @@ package edge
 import (
 	"context"
 	"encoding/base64"
+	"math"
 	"strconv"
 
 	pb "github.com/haasonsaas/nexus/pkg/proto"
@@ -43,7 +44,12 @@ func (s *Service) GetEdgeStatus(ctx context.Context, req *pb.GetEdgeStatusReques
 // ListEdges returns all connected edges with pagination support.
 func (s *Service) ListEdges(ctx context.Context, req *pb.ListEdgesRequest) (*pb.ListEdgesResponse, error) {
 	allEdges := s.manager.ListEdges()
-	totalCount := int32(len(allEdges))
+	total := len(allEdges)
+	if total > math.MaxInt32 {
+		total = math.MaxInt32
+	}
+	// #nosec G115 -- bounded by checks above
+	totalCount := int32(total)
 
 	// Determine page size
 	pageSize := int(req.PageSize)

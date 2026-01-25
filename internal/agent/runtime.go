@@ -72,6 +72,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -1754,7 +1755,12 @@ func (r *Runtime) ProcessStream(ctx context.Context, session *models.Session, ms
 
 		// Get accumulated stats and add dropped events count
 		stats := statsCollector.Stats()
-		stats.DroppedEvents = int(bpSink.DroppedCount())
+		dropped := bpSink.DroppedCount()
+		if dropped > uint64(math.MaxInt) {
+			stats.DroppedEvents = math.MaxInt
+		} else {
+			stats.DroppedEvents = int(dropped)
+		}
 
 		// Emit run finished with stats (using background context for terminal event)
 		emitter.RunFinished(context.Background(), stats)

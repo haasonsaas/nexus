@@ -331,7 +331,7 @@ func (g *grpcService) ListSessions(ctx context.Context, req *proto.ListSessionsR
 	if len(sessionsList) == limit {
 		response.NextPageToken = strconv.Itoa(offset + limit)
 	}
-	response.TotalCount = int32(len(sessionsList))
+	response.TotalCount = clampNonNegativeIntToInt32(len(sessionsList))
 	return response, nil
 }
 
@@ -432,7 +432,7 @@ func (g *grpcService) ListAgents(ctx context.Context, req *proto.ListAgentsReque
 	if total > nextOffset {
 		response.NextPageToken = strconv.Itoa(nextOffset)
 	}
-	response.TotalCount = int32(total)
+	response.TotalCount = clampNonNegativeIntToInt32(total)
 	return response, nil
 }
 
@@ -569,7 +569,7 @@ func (g *grpcService) ListChannels(ctx context.Context, req *proto.ListChannelsR
 	if total > nextOffset {
 		response.NextPageToken = strconv.Itoa(nextOffset)
 	}
-	response.TotalCount = int32(total)
+	response.TotalCount = clampNonNegativeIntToInt32(total)
 	return response, nil
 }
 

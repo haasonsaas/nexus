@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"os"
 	"os/signal"
 	"runtime"
@@ -235,12 +236,19 @@ func (d *EdgeDaemon) register() error {
 	channelTypes := normalizeChannelTypes(d.config.ChannelTypes)
 	toolDefs := make([]*pb.EdgeToolDefinition, len(d.tools))
 	for i, t := range d.tools {
+		timeoutSeconds := t.TimeoutSeconds
+		if timeoutSeconds < 0 {
+			timeoutSeconds = 0
+		} else if timeoutSeconds > math.MaxInt32 {
+			timeoutSeconds = math.MaxInt32
+		}
 		toolDefs[i] = &pb.EdgeToolDefinition{
-			Name:              t.Name,
-			Description:       t.Description,
-			InputSchema:       t.InputSchema,
-			RequiresApproval:  t.RequiresApproval,
-			TimeoutSeconds:    int32(t.TimeoutSeconds),
+			Name:             t.Name,
+			Description:      t.Description,
+			InputSchema:      t.InputSchema,
+			RequiresApproval: t.RequiresApproval,
+			// #nosec G115 -- bounded by checks above
+			TimeoutSeconds:    int32(timeoutSeconds),
 			ProducesArtifacts: t.ProducesArtifacts,
 		}
 	}
@@ -333,7 +341,8 @@ func (d *EdgeDaemon) sendHeartbeat() error {
 				EdgeId:    d.config.EdgeID,
 				Timestamp: timestamppb.Now(),
 				Metrics: &pb.EdgeMetrics{
-					ActiveToolCount: int32(len(d.activeCalls)),
+					// #nosec G115 -- bounded by min() below
+					ActiveToolCount: int32(min(len(d.activeCalls), math.MaxInt32)),
 					UptimeSeconds:   int64(time.Since(d.startTime).Seconds()),
 				},
 				ActiveTools: activeTools,

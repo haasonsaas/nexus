@@ -52,7 +52,9 @@ func (m *Manager) SelectEdge(criteria SelectionCriteria) (*EdgeConnection, error
 	strategy := normalizeStrategy(criteria.Strategy)
 	switch strategy {
 	case StrategyRoundRobin:
-		idx := int(atomic.AddUint64(&m.rrCounter, 1)-1) % len(candidates)
+		counter := atomic.AddUint64(&m.rrCounter, 1) - 1
+		// #nosec G115 -- modulo by len(candidates) bounds the result
+		idx := int(counter % uint64(len(candidates)))
 		return candidates[idx].conn, nil
 	case StrategyRandom:
 		m.randMu.Lock()

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -201,8 +202,10 @@ func (p *BedrockProvider) Complete(ctx context.Context, req *agent.CompletionReq
 
 	// Add inference config
 	if req.MaxTokens > 0 {
+		maxTokens := min(req.MaxTokens, math.MaxInt32)
 		converseReq.InferenceConfig = &types.InferenceConfiguration{
-			MaxTokens: aws.Int32(int32(req.MaxTokens)),
+			// #nosec G115 -- bounded by min above
+			MaxTokens: aws.Int32(int32(maxTokens)),
 		}
 	}
 

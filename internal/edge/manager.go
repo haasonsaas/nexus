@@ -304,7 +304,7 @@ func NewManager(config ManagerConfig, auth Authenticator, logger *slog.Logger) *
 		events:             make(chan EdgeEvent, config.EventBufferSize),
 		logger:             logger.With("component", "edge.manager"),
 		metrics:            &Metrics{},
-		rand:               rand.New(rand.NewSource(time.Now().UnixNano())),
+		rand:               rand.New(rand.NewSource(time.Now().UnixNano())), // #nosec G404 -- used only for edge selection randomness
 	}
 }
 

@@ -167,7 +167,7 @@ func (s *taskService) ListTasks(ctx context.Context, req *proto.ListTasksRequest
 
 	return &proto.ListTasksResponse{
 		Tasks:      protoTasks,
-		TotalCount: int32(len(taskList)),
+		TotalCount: clampNonNegativeIntToInt32(len(taskList)),
 	}, nil
 }
 
@@ -407,7 +407,7 @@ func (s *taskService) ListExecutions(ctx context.Context, req *proto.ListExecuti
 
 	return &proto.ListExecutionsResponse{
 		Executions: protoExecs,
-		TotalCount: int32(len(executions)),
+		TotalCount: clampNonNegativeIntToInt32(len(executions)),
 	}, nil
 }
 
@@ -442,10 +442,12 @@ func taskToProto(t *tasks.ScheduledTask) *proto.ScheduledTask {
 		pt.Status = proto.TaskStatus_TASK_STATUS_DISABLED
 	}
 
+	timeoutSeconds := int64(t.Config.Timeout / time.Second)
+	retryDelaySeconds := int64(t.Config.RetryDelay / time.Second)
 	pt.Config = &proto.TaskConfig{
-		TimeoutSeconds:    int32(t.Config.Timeout.Seconds()),
-		MaxRetries:        int32(t.Config.MaxRetries),
-		RetryDelaySeconds: int32(t.Config.RetryDelay.Seconds()),
+		TimeoutSeconds:    clampNonNegativeInt64ToInt32(timeoutSeconds),
+		MaxRetries:        clampNonNegativeIntToInt32(t.Config.MaxRetries),
+		RetryDelaySeconds: clampNonNegativeInt64ToInt32(retryDelaySeconds),
 		AllowOverlap:      t.Config.AllowOverlap,
 		Channel:           t.Config.Channel,
 		ChannelId:         t.Config.ChannelID,
@@ -475,7 +477,7 @@ func executionToProto(e *tasks.TaskExecution) *proto.TaskExecution {
 		Prompt:        e.Prompt,
 		Response:      e.Response,
 		Error:         e.Error,
-		AttemptNumber: int32(e.AttemptNumber),
+		AttemptNumber: clampNonNegativeIntToInt32(e.AttemptNumber),
 		DurationMs:    e.Duration.Milliseconds(),
 		ScheduledAt:   timestamppb.New(e.ScheduledAt),
 	}

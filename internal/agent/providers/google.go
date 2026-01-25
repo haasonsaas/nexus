@@ -775,8 +775,9 @@ func (p *GoogleProvider) buildConfig(req *agent.CompletionRequest) *genai.Genera
 
 	// Set max tokens if provided
 	if req.MaxTokens > 0 {
-		maxTokens := int32(req.MaxTokens)
-		config.MaxOutputTokens = maxTokens
+		maxTokens := min(req.MaxTokens, math.MaxInt32)
+		// #nosec G115 -- bounded by min above
+		config.MaxOutputTokens = int32(maxTokens)
 	}
 
 	// Convert and set tools

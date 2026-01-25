@@ -196,7 +196,7 @@ func addJitter(d time.Duration, fraction float64) time.Duration {
 	// Calculate jitter range
 	jitter := float64(d) * fraction
 	// Random value between -jitter and +jitter
-	delta := (rand.Float64()*2 - 1) * jitter
+	delta := (rand.Float64()*2 - 1) * jitter // #nosec G404 -- jitter does not require cryptographic randomness
 
 	result := time.Duration(float64(d) + delta)
 	if result < 0 {

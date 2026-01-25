@@ -662,7 +662,7 @@ func (a *Adapter) reconnect() {
 
 func calculateBackoff(attempt int, maxWait time.Duration) time.Duration {
 	// Exponential backoff: 1s, 2s, 4s, 8s, 16s, ...
-	backoff := time.Duration(1<<uint(attempt)) * time.Second
+	backoff := time.Second << attempt
 	if backoff > maxWait {
 		backoff = maxWait
 	}

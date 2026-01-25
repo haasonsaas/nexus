@@ -66,7 +66,7 @@ func selectVariant(subject string, exp Experiment) *Variant {
 	if totalWeight == 0 {
 		return nil
 	}
-	pick := int(hashUint32(subject+":"+exp.ID+":variant") % uint32(totalWeight))
+	pick := int(hashUint32(subject+":"+exp.ID+":variant")) % totalWeight
 	for i := range exp.Variants {
 		v := exp.Variants[i]
 		if v.Weight <= 0 {

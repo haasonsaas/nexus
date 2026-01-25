@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"os"
 	"sync"
@@ -240,7 +241,13 @@ func (vc *VsockConnection) Send(ctx context.Context, req *GuestRequest) (*GuestR
 	}
 
 	lengthBuf := make([]byte, 4)
-	binary.LittleEndian.PutUint32(lengthBuf, uint32(len(data)))
+	dataLen := uint64(len(data))
+	if dataLen > math.MaxUint32 {
+		vc.mu.Unlock()
+		return nil, fmt.Errorf("message too large: %d bytes", dataLen)
+	}
+	// #nosec G115 -- bounded by check above
+	binary.LittleEndian.PutUint32(lengthBuf, uint32(dataLen))
 
 	if _, err := vc.writer.Write(lengthBuf); err != nil {
 		vc.mu.Unlock()

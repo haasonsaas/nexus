@@ -415,6 +415,7 @@ func rollbackInstall(liveDir, backupPath string, hadExisting bool) error {
 
 // extractTarGz extracts a .tar.gz archive.
 func (i *Installer) extractTarGz(destDir string, data []byte) (string, error) {
+	destDir = filepath.Clean(destDir)
 	gzr, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
 		return "", fmt.Errorf("open gzip: %w", err)
@@ -435,7 +436,8 @@ func (i *Installer) extractTarGz(destDir string, data []byte) (string, error) {
 
 		// Sanitize path
 		target := filepath.Join(destDir, filepath.Clean(header.Name))
-		if !strings.HasPrefix(target, destDir) {
+		rel, err := filepath.Rel(destDir, target)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 			continue // Skip paths outside destDir
 		}
 
@@ -450,16 +452,22 @@ func (i *Installer) extractTarGz(destDir string, data []byte) (string, error) {
 				return "", fmt.Errorf("create parent directory: %w", err)
 			}
 
-			f, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode))
+			mode := os.FileMode(0o644)
+			if header.Mode&0o111 != 0 {
+				mode = 0o755
+			}
+			f, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
 			if err != nil {
 				return "", fmt.Errorf("create file: %w", err)
 			}
 
 			if _, err := io.Copy(f, tr); err != nil {
-				f.Close()
+				_ = f.Close()
 				return "", fmt.Errorf("extract file: %w", err)
 			}
-			f.Close()
+			if err := f.Close(); err != nil {
+				return "", fmt.Errorf("close extracted file: %w", err)
+			}
 
 			// Check for binary
 			if strings.HasSuffix(header.Name, ".so") {
@@ -481,6 +489,7 @@ func (i *Installer) extractTarGz(destDir string, data []byte) (string, error) {
 
 // extractZip extracts a .zip archive.
 func (i *Installer) extractZip(destDir string, data []byte) (string, error) {
+	destDir = filepath.Clean(destDir)
 	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
 		return "", fmt.Errorf("open zip: %w", err)
@@ -491,7 +500,8 @@ func (i *Installer) extractZip(destDir string, data []byte) (string, error) {
 	for _, f := range zr.File {
 		// Sanitize path
 		target := filepath.Join(destDir, filepath.Clean(f.Name))
-		if !strings.HasPrefix(target, destDir) {
+		rel, err := filepath.Rel(destDir, target)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 			continue
 		}
 
@@ -511,20 +521,29 @@ func (i *Installer) extractZip(destDir string, data []byte) (string, error) {
 			return "", fmt.Errorf("open file in zip: %w", err)
 		}
 
-		outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, f.Mode())
+		mode := os.FileMode(0o644)
+		if f.Mode()&0o111 != 0 {
+			mode = 0o755
+		}
+		outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
 		if err != nil {
-			rc.Close()
+			_ = rc.Close()
 			return "", fmt.Errorf("create file: %w", err)
 		}
 
 		if _, err := io.Copy(outFile, rc); err != nil {
-			rc.Close()
-			outFile.Close()
+			_ = rc.Close()
+			_ = outFile.Close()
 			return "", fmt.Errorf("extract file: %w", err)
 		}
 
-		rc.Close()
-		outFile.Close()
+		if err := rc.Close(); err != nil {
+			_ = outFile.Close()
+			return "", fmt.Errorf("close file in zip: %w", err)
+		}
+		if err := outFile.Close(); err != nil {
+			return "", fmt.Errorf("close extracted file: %w", err)
+		}
 
 		// Check for binary
 		if strings.HasSuffix(f.Name, ".so") {

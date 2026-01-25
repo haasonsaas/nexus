@@ -3,121 +3,319 @@ import Foundation
 import OSLog
 import WebKit
 
-/// Manages interactive HTML/JavaScript canvas windows.
-/// Provides WebKit-based rendering for agent interfaces.
+/// Singleton manager for canvas windows across sessions.
+/// Provides centralized control over agent-generated artifact rendering.
 @MainActor
 @Observable
 final class CanvasManager {
     static let shared = CanvasManager()
 
-    private let logger = Logger(subsystem: "com.nexus.mac", category: "canvas")
+    private let logger = Logger(subsystem: "com.nexus.mac", category: "canvas.manager")
 
-    private(set) var activeCanvases: [String: CanvasWindowController] = [:]
+    /// Active canvas windows keyed by session ID
+    private(set) var canvasBySession: [String: CanvasWindowController] = [:]
+
+    /// Debug mode for additional logging
     private(set) var isDebugEnabled = false
 
+    /// Base directory for session content
+    private var baseDirectory: URL
+
+    /// Callback for canvas actions from JavaScript
     var onCanvasAction: ((CanvasAction) -> Void)?
 
+    // MARK: - Initialization
+
+    private init() {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        baseDirectory = appSupport.appendingPathComponent("Nexus/sessions")
+
+        // Ensure base directory exists
+        try? FileManager.default.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+    }
+
+    // MARK: - Types
+
+    /// Represents an action received from canvas JavaScript
     struct CanvasAction {
-        let canvasId: String
+        let sessionId: String
         let action: String
         let payload: [String: Any]?
     }
 
+    // MARK: - Session Tracking
+
+    /// All active session IDs with open canvases
+    var activeSessions: [String] {
+        Array(canvasBySession.keys)
+    }
+
+    /// Number of active canvases
+    var activeCount: Int {
+        canvasBySession.count
+    }
+
+    /// Check if a session has an active canvas
+    func hasCanvas(for sessionId: String) -> Bool {
+        canvasBySession[sessionId] != nil
+    }
+
     // MARK: - Canvas Lifecycle
 
-    /// Open a canvas window with HTML content
-    func open(canvasId: String, html: String, title: String? = nil, size: CGSize? = nil) {
-        if let existing = activeCanvases[canvasId] {
-            existing.bringToFront()
-            return
+    /// Create or get an existing canvas for a session
+    /// - Parameters:
+    ///   - sessionId: The session identifier
+    ///   - title: Optional window title
+    ///   - size: Optional window size
+    ///   - presentation: Window or panel presentation mode
+    /// - Returns: The canvas window controller
+    @discardableResult
+    func create(
+        sessionId: String,
+        title: String? = nil,
+        size: CGSize? = nil,
+        presentation: CanvasPresentation = .window
+    ) -> CanvasWindowController {
+        // Return existing canvas if present
+        if let existing = canvasBySession[sessionId] {
+            logger.debug("returning existing canvas sessionId=\(sessionId)")
+            return existing
         }
 
         let controller = CanvasWindowController(
-            canvasId: canvasId,
-            title: title ?? "Canvas",
-            size: size ?? CGSize(width: 800, height: 600)
+            sessionId: sessionId,
+            title: title ?? "Canvas - \(sessionId)",
+            size: size ?? CGSize(width: 800, height: 600),
+            baseDirectory: baseDirectory,
+            presentation: presentation
         )
 
         controller.onAction = { [weak self] action, payload in
-            self?.handleAction(canvasId: canvasId, action: action, payload: payload)
+            self?.handleAction(sessionId: sessionId, action: action, payload: payload)
         }
 
         controller.onClose = { [weak self] in
-            self?.activeCanvases.removeValue(forKey: canvasId)
+            self?.canvasBySession.removeValue(forKey: sessionId)
+            self?.logger.info("canvas removed from tracking sessionId=\(sessionId)")
         }
 
-        controller.loadHTML(html)
-        controller.show()
+        canvasBySession[sessionId] = controller
+        logger.info("canvas created sessionId=\(sessionId)")
 
-        activeCanvases[canvasId] = controller
-        logger.info("canvas opened id=\(canvasId)")
+        return controller
     }
 
-    /// Open a canvas window with a URL
-    func openURL(canvasId: String, url: URL, title: String? = nil, size: CGSize? = nil) {
-        if let existing = activeCanvases[canvasId] {
-            existing.bringToFront()
+    /// Get an existing canvas for a session
+    /// - Parameter sessionId: The session identifier
+    /// - Returns: The canvas controller if it exists
+    func get(sessionId: String) -> CanvasWindowController? {
+        canvasBySession[sessionId]
+    }
+
+    /// Get or create a canvas for a session
+    /// - Parameters:
+    ///   - sessionId: The session identifier
+    ///   - title: Optional window title (only used if creating)
+    /// - Returns: The canvas window controller
+    func getOrCreate(sessionId: String, title: String? = nil) -> CanvasWindowController {
+        if let existing = canvasBySession[sessionId] {
+            return existing
+        }
+        return create(sessionId: sessionId, title: title)
+    }
+
+    /// Close and remove a canvas for a session
+    /// - Parameter sessionId: The session identifier
+    func close(sessionId: String) {
+        guard let controller = canvasBySession[sessionId] else {
+            logger.debug("no canvas to close sessionId=\(sessionId)")
             return
         }
 
-        let controller = CanvasWindowController(
-            canvasId: canvasId,
-            title: title ?? "Canvas",
-            size: size ?? CGSize(width: 800, height: 600)
-        )
-
-        controller.onAction = { [weak self] action, payload in
-            self?.handleAction(canvasId: canvasId, action: action, payload: payload)
-        }
-
-        controller.onClose = { [weak self] in
-            self?.activeCanvases.removeValue(forKey: canvasId)
-        }
-
-        controller.loadURL(url)
-        controller.show()
-
-        activeCanvases[canvasId] = controller
-        logger.info("canvas opened from URL id=\(canvasId) url=\(url.absoluteString)")
-    }
-
-    /// Close a canvas window
-    func close(canvasId: String) {
-        guard let controller = activeCanvases[canvasId] else { return }
         controller.close()
-        activeCanvases.removeValue(forKey: canvasId)
-        logger.info("canvas closed id=\(canvasId)")
+        canvasBySession.removeValue(forKey: sessionId)
+        logger.info("canvas closed sessionId=\(sessionId)")
     }
 
     /// Close all canvas windows
     func closeAll() {
-        for (_, controller) in activeCanvases {
+        for (sessionId, controller) in canvasBySession {
             controller.close()
+            logger.debug("closing canvas sessionId=\(sessionId)")
         }
-        activeCanvases.removeAll()
+        canvasBySession.removeAll()
+        logger.info("all canvases closed count=\(self.canvasBySession.count)")
     }
 
-    /// Send message to canvas JavaScript
-    func sendMessage(canvasId: String, message: String, data: [String: Any]? = nil) async {
-        guard let controller = activeCanvases[canvasId] else { return }
+    // MARK: - Canvas Operations
+
+    /// Open a canvas with HTML content
+    /// - Parameters:
+    ///   - sessionId: The session identifier
+    ///   - html: The HTML content to display
+    ///   - title: Optional window title
+    ///   - size: Optional window size
+    func open(sessionId: String, html: String, title: String? = nil, size: CGSize? = nil) {
+        let controller = create(sessionId: sessionId, title: title, size: size)
+        controller.loadHTML(html)
+        controller.showCanvas()
+
+        logger.info("canvas opened with HTML sessionId=\(sessionId)")
+    }
+
+    /// Open a canvas with a URL
+    /// - Parameters:
+    ///   - sessionId: The session identifier
+    ///   - url: The URL to load
+    ///   - title: Optional window title
+    ///   - size: Optional window size
+    func openURL(sessionId: String, url: URL, title: String? = nil, size: CGSize? = nil) {
+        let controller = create(sessionId: sessionId, title: title, size: size)
+        controller.loadURL(url)
+        controller.showCanvas()
+
+        logger.info("canvas opened with URL sessionId=\(sessionId) url=\(url.absoluteString)")
+    }
+
+    /// Open a canvas with session content (using custom URL scheme)
+    /// - Parameters:
+    ///   - sessionId: The session identifier
+    ///   - path: The path within the session's canvas directory
+    ///   - title: Optional window title
+    ///   - size: Optional window size
+    func openSessionContent(
+        sessionId: String,
+        path: String = "index.html",
+        title: String? = nil,
+        size: CGSize? = nil
+    ) {
+        let controller = create(sessionId: sessionId, title: title, size: size)
+        let target = CanvasTarget(sessionId: sessionId, path: path)
+        controller.load(target: target)
+        controller.showCanvas()
+
+        logger.info("canvas opened with session content sessionId=\(sessionId) path=\(path)")
+    }
+
+    /// Show a canvas window (if it exists)
+    /// - Parameter sessionId: The session identifier
+    func show(sessionId: String) {
+        guard let controller = canvasBySession[sessionId] else {
+            logger.debug("no canvas to show sessionId=\(sessionId)")
+            return
+        }
+        controller.showCanvas()
+    }
+
+    /// Hide a canvas window (if it exists)
+    /// - Parameter sessionId: The session identifier
+    func hide(sessionId: String) {
+        guard let controller = canvasBySession[sessionId] else {
+            logger.debug("no canvas to hide sessionId=\(sessionId)")
+            return
+        }
+        controller.hideCanvas()
+    }
+
+    /// Bring a canvas to front
+    /// - Parameter sessionId: The session identifier
+    func bringToFront(sessionId: String) {
+        guard let controller = canvasBySession[sessionId] else {
+            logger.debug("no canvas to bring to front sessionId=\(sessionId)")
+            return
+        }
+        controller.bringToFront()
+    }
+
+    /// Reload a canvas
+    /// - Parameter sessionId: The session identifier
+    func reload(sessionId: String) {
+        guard let controller = canvasBySession[sessionId] else {
+            logger.debug("no canvas to reload sessionId=\(sessionId)")
+            return
+        }
+        controller.reload()
+    }
+
+    // MARK: - JavaScript Evaluation
+
+    /// Send a message to a canvas
+    /// - Parameters:
+    ///   - sessionId: The session identifier
+    ///   - message: The message name
+    ///   - data: Optional message data
+    func sendMessage(sessionId: String, message: String, data: [String: Any]? = nil) async {
+        guard let controller = canvasBySession[sessionId] else {
+            logger.debug("no canvas to send message sessionId=\(sessionId)")
+            return
+        }
         await controller.sendMessage(message, data: data)
     }
 
-    /// Execute JavaScript in canvas
-    func executeJS(canvasId: String, script: String) async throws -> Any? {
-        guard let controller = activeCanvases[canvasId] else {
-            throw CanvasError.canvasNotFound(canvasId)
+    /// Execute JavaScript in a canvas
+    /// - Parameters:
+    ///   - sessionId: The session identifier
+    ///   - script: The JavaScript to execute
+    /// - Returns: The result of the evaluation
+    func executeJS(sessionId: String, script: String) async throws -> Any? {
+        guard let controller = canvasBySession[sessionId] else {
+            throw CanvasError.canvasNotFound(sessionId)
         }
-        return try await controller.executeJS(script)
+        return try await controller.eval(javaScript: script)
+    }
+
+    /// Take a snapshot of a canvas
+    /// - Parameter sessionId: The session identifier
+    /// - Returns: An NSImage of the canvas content
+    func snapshot(sessionId: String) async throws -> NSImage? {
+        guard let controller = canvasBySession[sessionId] else {
+            throw CanvasError.canvasNotFound(sessionId)
+        }
+        return try await controller.snapshot()
+    }
+
+    // MARK: - Configuration
+
+    /// Set the base directory for session content
+    /// - Parameter directory: The new base directory
+    func setBaseDirectory(_ directory: URL) {
+        baseDirectory = directory
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        logger.info("base directory set to \(directory.path)")
+    }
+
+    /// Get the session directory for a given session
+    /// - Parameter sessionId: The session identifier
+    /// - Returns: The URL to the session's canvas directory
+    func sessionDirectory(for sessionId: String) -> URL {
+        baseDirectory
+            .appendingPathComponent(sessionId)
+            .appendingPathComponent("canvas")
+    }
+
+    /// Enable or disable debug mode
+    /// - Parameter enabled: Whether debug mode should be enabled
+    func setDebugEnabled(_ enabled: Bool) {
+        isDebugEnabled = enabled
+        logger.info("debug mode \(enabled ? "enabled" : "disabled")")
+    }
+
+    /// Set live reload for a specific session's canvas
+    /// - Parameters:
+    ///   - sessionId: The session identifier
+    ///   - enabled: Whether live reload should be enabled
+    func setLiveReload(sessionId: String, enabled: Bool) {
+        guard let controller = canvasBySession[sessionId] else { return }
+        controller.liveReloadEnabled = enabled
     }
 
     // MARK: - Private
 
-    private func handleAction(canvasId: String, action: String, payload: [String: Any]?) {
-        logger.debug("canvas action id=\(canvasId) action=\(action)")
+    private func handleAction(sessionId: String, action: String, payload: [String: Any]?) {
+        logger.debug("canvas action sessionId=\(sessionId) action=\(action)")
 
         let canvasAction = CanvasAction(
-            canvasId: canvasId,
+            sessionId: sessionId,
             action: action,
             payload: payload
         )
@@ -130,7 +328,7 @@ final class CanvasManager {
                 _ = try await ControlChannel.shared.request(
                     method: "canvas.action",
                     params: [
-                        "canvasId": canvasId,
+                        "sessionId": sessionId,
                         "action": action,
                         "payload": payload ?? [:]
                     ] as [String: AnyHashable]
@@ -142,155 +340,21 @@ final class CanvasManager {
     }
 }
 
-/// Controller for individual canvas windows
-@MainActor
-final class CanvasWindowController: NSObject {
-    private let canvasId: String
-    private let logger = Logger(subsystem: "com.nexus.mac", category: "canvas.window")
+// MARK: - Convenience Extensions
 
-    private var window: NSWindow?
-    private var webView: WKWebView?
-
-    var onAction: ((String, [String: Any]?) -> Void)?
-    var onClose: (() -> Void)?
-
-    init(canvasId: String, title: String, size: CGSize) {
-        self.canvasId = canvasId
-        super.init()
-        setupWindow(title: title, size: size)
+extension CanvasManager {
+    /// Open a canvas for the default/main session
+    func openDefault(html: String, title: String = "Canvas") {
+        open(sessionId: "default", html: html, title: title)
     }
 
-    private func setupWindow(title: String, size: CGSize) {
-        // Configure WebView
-        let config = WKWebViewConfiguration()
-        config.preferences.isElementFullscreenEnabled = true
-
-        let userContentController = WKUserContentController()
-        userContentController.add(self, name: "nexusCanvas")
-        config.userContentController = userContentController
-
-        let webView = WKWebView(frame: .zero, configuration: config)
-        webView.translatesAutoresizingMaskIntoConstraints = false
-        self.webView = webView
-
-        // Create window
-        let window = NSWindow(
-            contentRect: NSRect(origin: .zero, size: size),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = title
-        window.contentView = webView
-        window.minSize = NSSize(width: 400, height: 300)
-        window.delegate = self
-        window.isReleasedWhenClosed = false
-
-        self.window = window
+    /// Check if any canvases are visible
+    var hasVisibleCanvases: Bool {
+        canvasBySession.values.contains { $0.isVisible }
     }
 
-    func show() {
-        window?.center()
-        window?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
-    func bringToFront() {
-        window?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
-    func close() {
-        window?.close()
-        window = nil
-        webView = nil
-    }
-
-    func loadHTML(_ html: String) {
-        let wrappedHTML = wrapWithBridge(html)
-        webView?.loadHTMLString(wrappedHTML, baseURL: nil)
-    }
-
-    func loadURL(_ url: URL) {
-        webView?.load(URLRequest(url: url))
-    }
-
-    func sendMessage(_ message: String, data: [String: Any]? = nil) async {
-        var dataJSON = "{}"
-        if let data, let jsonData = try? JSONSerialization.data(withJSONObject: data),
-           let json = String(data: jsonData, encoding: .utf8) {
-            dataJSON = json
-        }
-
-        let script = """
-        if (window.onNexusMessage) {
-            window.onNexusMessage('\(message)', \(dataJSON));
-        }
-        """
-
-        _ = try? await webView?.evaluateJavaScript(script)
-    }
-
-    func executeJS(_ script: String) async throws -> Any? {
-        try await webView?.evaluateJavaScript(script)
-    }
-
-    private func wrapWithBridge(_ html: String) -> String {
-        let bridge = """
-        <script>
-        window.nexus = {
-            send: function(action, payload) {
-                window.webkit.messageHandlers.nexusCanvas.postMessage({
-                    action: action,
-                    payload: payload || {}
-                });
-            },
-            close: function() {
-                window.nexus.send('close');
-            }
-        };
-        </script>
-        """
-
-        if html.contains("<head>") {
-            return html.replacingOccurrences(of: "<head>", with: "<head>\(bridge)")
-        } else if html.contains("<html>") {
-            return html.replacingOccurrences(of: "<html>", with: "<html><head>\(bridge)</head>")
-        } else {
-            return "\(bridge)\(html)"
-        }
-    }
-}
-
-extension CanvasWindowController: NSWindowDelegate {
-    func windowWillClose(_ notification: Notification) {
-        onClose?()
-    }
-}
-
-extension CanvasWindowController: WKScriptMessageHandler {
-    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard message.name == "nexusCanvas",
-              let body = message.body as? [String: Any],
-              let action = body["action"] as? String else {
-            return
-        }
-
-        let payload = body["payload"] as? [String: Any]
-        onAction?(action, payload)
-    }
-}
-
-enum CanvasError: LocalizedError {
-    case canvasNotFound(String)
-    case loadFailed(String)
-
-    var errorDescription: String? {
-        switch self {
-        case .canvasNotFound(let id):
-            return "Canvas not found: \(id)"
-        case .loadFailed(let reason):
-            return "Canvas load failed: \(reason)"
-        }
+    /// Get all visible canvases
+    var visibleSessions: [String] {
+        canvasBySession.filter { $0.value.isVisible }.map { $0.key }
     }
 }

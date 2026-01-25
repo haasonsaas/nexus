@@ -94,6 +94,18 @@ final class ServiceContainer {
     var permissions: PermissionManager { PermissionManager.shared }
     var hotkeys: GlobalHotkeyManager { GlobalHotkeyManager.shared }
 
+    // MARK: - Security Services
+
+    var execApprovals: ExecApprovalsService { ExecApprovalsService.shared }
+
+    // MARK: - Presence Services
+
+    var presence: PresenceReporter { PresenceReporter.shared }
+
+    // MARK: - Canvas Services
+
+    var canvas: CanvasManager { CanvasManager.shared }
+
     // MARK: - Service Initialization
 
     /// Initialize all services (called during app startup)
@@ -124,6 +136,10 @@ final class ServiceContainer {
         clipboard.stopTracking()
         fileWatcher.unwatchAll()
         system.stopMonitoring()
+
+        // Stop security services
+        execApprovals.stop()
+        presence.stop()
 
         logger.info("services shut down")
     }

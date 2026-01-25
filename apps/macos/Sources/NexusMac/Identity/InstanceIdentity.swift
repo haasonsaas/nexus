@@ -41,4 +41,16 @@ enum InstanceIdentity {
         }
         return property.takeRetainedValue() as? String
     }
+
+    /// Hardware UUID from IOPlatformExpertDevice (system-level UUID)
+    static var hardwareUUID: String? {
+        let service = IOServiceGetMatchingService(kIOMainPortDefault,
+            IOServiceMatching("IOPlatformExpertDevice"))
+        defer { IOObjectRelease(service) }
+        guard let property = IORegistryEntryCreateCFProperty(service,
+            "IOPlatformUUID" as CFString, kCFAllocatorDefault, 0) else {
+            return nil
+        }
+        return property.takeRetainedValue() as? String
+    }
 }

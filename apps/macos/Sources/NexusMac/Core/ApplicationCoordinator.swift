@@ -87,6 +87,10 @@ final class ApplicationCoordinator {
         TailscaleService.shared.stopMonitoring()
         GatewayDiscovery.shared.stopScan()
 
+        // Stop security services
+        ExecApprovalsService.shared.stop()
+        PresenceReporter.shared.stop()
+
         // Disconnect using coordinator (handles tunnel and gateway)
         await ConnectionModeCoordinator.shared.disconnect()
 
@@ -148,6 +152,12 @@ final class ApplicationCoordinator {
 
         // Track session start
         UsageAnalytics.shared.trackSessionStart()
+
+        // Start exec approvals socket server
+        ExecApprovalsService.shared.start()
+
+        // Start presence reporter
+        PresenceReporter.shared.start()
 
         logger.debug("services initialized")
     }

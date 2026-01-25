@@ -37,6 +37,11 @@ struct SettingsRootView: View {
                     Label("Skills", systemImage: "puzzlepiece.extension")
                 }
 
+            SecuritySettingsView()
+                .tabItem {
+                    Label("Security", systemImage: "shield.lefthalf.filled")
+                }
+
             HotkeysSettingsView()
                 .tabItem {
                     Label("Shortcuts", systemImage: "keyboard")

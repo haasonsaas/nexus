@@ -45,6 +45,10 @@ const (
 	EventGatewayStartup  EventType = "gateway.startup"
 	EventGatewayShutdown EventType = "gateway.shutdown"
 
+	// Gmail hook events
+	EventGmailReceived EventType = "gmail.received"
+	EventGmailError    EventType = "gmail.error"
+
 	// Lifecycle events (legacy, prefer gateway.* events)
 	EventStartup  EventType = "lifecycle.startup"
 	EventShutdown EventType = "lifecycle.shutdown"

@@ -546,6 +546,7 @@ type ToolsConfig struct {
 	WebSearch    WebSearchConfig     `yaml:"websearch"`
 	WebFetch     WebFetchConfig      `yaml:"web_fetch"`
 	MemorySearch MemorySearchConfig  `yaml:"memory_search"`
+	Links        LinksConfig         `yaml:"links"`
 	Notes        string              `yaml:"notes"`
 	NotesFile    string              `yaml:"notes_file"`
 	Execution    ToolExecutionConfig `yaml:"execution"`
@@ -783,6 +784,57 @@ type WebSearchConfig struct {
 type WebFetchConfig struct {
 	Enabled  bool `yaml:"enabled"`
 	MaxChars int  `yaml:"max_chars"`
+}
+
+// LinksConfig configures link understanding for extracting and processing URLs.
+type LinksConfig struct {
+	// Enabled enables link understanding.
+	Enabled bool `yaml:"enabled"`
+
+	// MaxLinks is the maximum number of links to extract from a message.
+	// Default: 5.
+	MaxLinks int `yaml:"max_links"`
+
+	// TimeoutSeconds is the default timeout for link processing.
+	// Default: 30.
+	TimeoutSeconds int `yaml:"timeout_seconds"`
+
+	// Models are the link processing model configurations.
+	Models []LinkModelConfig `yaml:"models"`
+
+	// Scope controls which channels can use link understanding.
+	Scope *LinkScopeConfig `yaml:"scope"`
+}
+
+// LinkModelConfig defines a link processing model.
+type LinkModelConfig struct {
+	// Type is the model type: "cli".
+	Type string `yaml:"type"`
+
+	// Command is the CLI command to execute.
+	Command string `yaml:"command"`
+
+	// Args are the command arguments. Supports template variables:
+	// {{LinkUrl}}, {{URL}}, {{url}} - the URL to process
+	// {{Channel}}, {{SessionID}}, {{PeerID}}, {{AgentID}} - context info
+	Args []string `yaml:"args"`
+
+	// TimeoutSeconds overrides the default timeout for this model.
+	TimeoutSeconds int `yaml:"timeout_seconds"`
+}
+
+// LinkScopeConfig controls which channels can use link understanding.
+type LinkScopeConfig struct {
+	// Mode is the scope mode: "all", "allowlist", "denylist".
+	// Default: "all".
+	Mode string `yaml:"mode"`
+
+	// Allowlist is the list of channels to allow when mode is "allowlist".
+	// Supports channel names ("telegram"), channel:peer_id ("telegram:123"), or "*".
+	Allowlist []string `yaml:"allowlist"`
+
+	// Denylist is the list of channels to deny when mode is "denylist".
+	Denylist []string `yaml:"denylist"`
 }
 
 type MemorySearchConfig struct {
@@ -1404,6 +1456,7 @@ func applyToolsDefaults(cfg *Config) {
 		cfg.Tools.MemorySearch.MemoryFile = cfg.Workspace.MemoryFile
 	}
 	applyMemorySearchEmbeddingsDefaults(&cfg.Tools.MemorySearch.Embeddings)
+	applyLinksDefaults(&cfg.Tools.Links)
 	// Job persistence defaults
 	if cfg.Tools.Jobs.Retention == 0 {
 		cfg.Tools.Jobs.Retention = 24 * time.Hour
@@ -1453,6 +1506,18 @@ func applyMemorySearchEmbeddingsDefaults(cfg *MemorySearchEmbeddingsConfig) {
 		case "openai", "openrouter":
 			cfg.Model = "text-embedding-3-small"
 		}
+	}
+}
+
+func applyLinksDefaults(cfg *LinksConfig) {
+	if cfg == nil {
+		return
+	}
+	if cfg.MaxLinks == 0 {
+		cfg.MaxLinks = 5
+	}
+	if cfg.TimeoutSeconds == 0 {
+		cfg.TimeoutSeconds = 30
 	}
 }
 

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MenuBarContentView: View {
     @EnvironmentObject var model: AppModel
+    @StateObject private var usageStore = UsageStore()
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -53,6 +54,12 @@ struct MenuBarContentView: View {
                     .lineLimit(2)
             }
 
+            // Usage summary
+            if model.isWebSocketConnected {
+                Divider()
+                UsageMenuView(store: usageStore)
+            }
+
             Divider()
 
             Button("Open Nexus") {
@@ -80,6 +87,24 @@ struct MenuBarContentView: View {
         }
         .padding(8)
         .frame(minWidth: 240)
+        .onAppear {
+            startUsageRefresh()
+        }
+        .onChange(of: model.isWebSocketConnected) { _, connected in
+            if connected {
+                startUsageRefresh()
+            } else {
+                usageStore.stop()
+            }
+        }
+    }
+
+    private func startUsageRefresh() {
+        guard model.isWebSocketConnected,
+              !model.baseURL.isEmpty,
+              !model.apiKey.isEmpty else { return }
+        let api = NexusAPI(baseURL: model.baseURL, apiKey: model.apiKey)
+        usageStore.start(api: api)
     }
 
     private var edgeStatusColor: Color {

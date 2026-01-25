@@ -81,6 +81,10 @@ final class NexusAPI {
         try await request(path: "/api/cron")
     }
 
+    func fetchUsage() async throws -> GatewayUsageSummary {
+        try await request(path: "/api/usage")
+    }
+
     private func request<T: Decodable>(path: String, method: String = "GET", body: Data? = nil, queryItems: [URLQueryItem] = []) async throws -> T {
         let data = try await requestData(path: path, method: method, body: body, queryItems: queryItems)
         let decoder = JSONDecoder()

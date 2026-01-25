@@ -6,6 +6,7 @@ enum NotificationCategory: String, CaseIterable {
     case toolComplete = "toolComplete"
     case error = "error"
     case edgeStatus = "edgeStatus"
+    case execApproval = "execApproval"
 
     var displayName: String {
         switch self {
@@ -17,6 +18,8 @@ enum NotificationCategory: String, CaseIterable {
             return "Errors"
         case .edgeStatus:
             return "Edge Service Status"
+        case .execApproval:
+            return "Command Approvals"
         }
     }
 
@@ -30,6 +33,8 @@ enum NotificationCategory: String, CaseIterable {
             return "Notify when errors occur during operations"
         case .edgeStatus:
             return "Notify when edge service starts or stops"
+        case .execApproval:
+            return "Notify when commands require approval"
         }
     }
 

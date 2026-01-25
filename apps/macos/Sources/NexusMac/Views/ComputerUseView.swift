@@ -61,6 +61,7 @@ private struct PermissionItem: Identifiable {
 
 struct ComputerUseView: View {
     @EnvironmentObject var model: AppModel
+    @StateObject private var hotkeyManager = HotkeyManager.shared
     @State private var selectedNode: NodeSummary?
     @State private var approved: Bool = true
     @State private var autoRefresh: Bool = false
@@ -70,6 +71,7 @@ struct ComputerUseView: View {
     @State private var statusMessage: String?
     @State private var actionLog: [ComputerUseLogEntry] = []
     @State private var isBusy: Bool = false
+    @State private var showHotkeyHints: Bool = true
 
     @State private var coordinateX: Int = 0
     @State private var coordinateY: Int = 0
@@ -146,8 +148,15 @@ struct ComputerUseView: View {
                                 .foregroundColor(.secondary)
                         }
                         Spacer()
+                        Toggle("Hotkey Hints", isOn: $showHotkeyHints)
+                            .toggleStyle(.switch)
                         Toggle("Approved", isOn: $approved)
                             .toggleStyle(.switch)
+                    }
+
+                    // Hotkey hints bar
+                    if showHotkeyHints && hotkeyManager.globalHotkeysEnabled {
+                        HotkeyHintsBar(hotkeyManager: hotkeyManager)
                     }
 
                     HStack(alignment: .top, spacing: 12) {
@@ -462,6 +471,12 @@ struct ComputerUseView: View {
             if newNode == nil {
                 autoRefresh = false
             }
+            // Update the HotkeyManager with the selected node
+            hotkeyManager.selectedNodeEdgeId = newNode?.edgeId
+        }
+        .onAppear {
+            // Configure the HotkeyManager with the app model
+            hotkeyManager.configure(with: model)
         }
         .onChange(of: coordinateX) { _ in
             selectedPoint = CGPoint(x: coordinateX, y: coordinateY)
@@ -683,5 +698,91 @@ private extension NSImage {
             return CGSize(width: rep.pixelsWide, height: rep.pixelsHigh)
         }
         return size
+    }
+}
+
+// MARK: - Hotkey Hints Bar
+
+private struct HotkeyHintsBar: View {
+    @ObservedObject var hotkeyManager: HotkeyManager
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Text("Hotkeys:")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            ForEach(HotkeyAction.allCases) { action in
+                if let binding = hotkeyManager.binding(for: action), binding.isEnabled {
+                    HotkeyHintBadge(
+                        action: action,
+                        binding: binding,
+                        isActive: hotkeyManager.lastTriggeredAction == action
+                    )
+                }
+            }
+
+            Spacer()
+
+            if hotkeyManager.isExecuting {
+                ProgressView()
+                    .scaleEffect(0.6)
+                    .frame(width: 16, height: 16)
+                Text("Executing...")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            if let status = hotkeyManager.statusMessage {
+                Text(status)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(NSColor.controlBackgroundColor))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+        )
+    }
+}
+
+private struct HotkeyHintBadge: View {
+    let action: HotkeyAction
+    let binding: HotkeyBinding
+    let isActive: Bool
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(actionIcon)
+                .font(.caption)
+            Text(binding.keyDisplayString)
+                .font(.system(.caption, design: .monospaced))
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isActive ? Color.accentColor.opacity(0.2) : Color(NSColor.controlBackgroundColor))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(isActive ? Color.accentColor : Color.gray.opacity(0.3), lineWidth: 1)
+        )
+        .help(action.displayName)
+    }
+
+    private var actionIcon: String {
+        switch action {
+        case .screenshot: return "S"
+        case .click: return "C"
+        case .cursorPosition: return "P"
+        case .typeClipboard: return "T"
+        }
     }
 }

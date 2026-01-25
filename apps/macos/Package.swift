@@ -17,5 +17,9 @@ let package = Package(
             name: "NexusMac",
             path: "Sources/NexusMac"
         ),
+        .testTarget(
+            name: "NexusMacTests",
+            dependencies: ["NexusMac"]
+        ),
     ]
 )

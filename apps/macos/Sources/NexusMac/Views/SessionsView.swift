@@ -12,18 +12,52 @@ struct SessionsView: View {
                     Text("Sessions")
                         .font(.title2)
                     Spacer()
+
+                    // Real-time connection indicator
+                    ConnectionStatusBadge(isConnected: model.isWebSocketConnected)
+
                     Button("Refresh") {
                         Task { await model.refreshSessions() }
                     }
                 }
 
-                List(model.sessions, selection: $selectedSession) { session in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(session.title.isEmpty ? session.id : session.title)
-                            .font(.headline)
-                        Text("\(session.channel) • \(session.agentId)")
+                // Real-time activity indicator
+                if model.isWebSocketConnected && !model.recentSessionEvents.isEmpty {
+                    HStack {
+                        Image(systemName: "bolt.fill")
+                            .foregroundColor(.green)
+                        Text("Live updates enabled")
                             .font(.caption)
                             .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.green.opacity(0.1))
+                    .cornerRadius(6)
+                }
+
+                List(model.sessions, selection: $selectedSession) { session in
+                    HStack {
+                        // Activity indicator for sessions with recent events
+                        if hasRecentActivity(sessionId: session.id) {
+                            Circle()
+                                .fill(Color.blue)
+                                .frame(width: 8, height: 8)
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(session.title.isEmpty ? session.id : session.title)
+                                .font(.headline)
+                            HStack {
+                                Text("\(session.channel) • \(session.agentId)")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Text(formatRelativeDate(session.updatedAt))
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
                     }
                 }
                 .onChange(of: selectedSession) { newSession in
@@ -80,6 +114,30 @@ struct SessionsView: View {
                 Spacer()
             }
             .padding()
+        }
+    }
+
+    // MARK: - Helper Functions
+
+    private func hasRecentActivity(sessionId: String) -> Bool {
+        return model.recentSessionEvents.contains { $0.sessionId == sessionId }
+    }
+
+    private func formatRelativeDate(_ date: Date) -> String {
+        let now = Date()
+        let interval = now.timeIntervalSince(date)
+
+        if interval < 60 {
+            return "Just now"
+        } else if interval < 3600 {
+            let minutes = Int(interval / 60)
+            return "\(minutes)m ago"
+        } else if interval < 86400 {
+            let hours = Int(interval / 3600)
+            return "\(hours)h ago"
+        } else {
+            let days = Int(interval / 86400)
+            return "\(days)d ago"
         }
     }
 }

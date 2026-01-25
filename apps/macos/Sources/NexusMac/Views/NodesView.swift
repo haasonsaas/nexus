@@ -12,18 +12,37 @@ struct NodesView: View {
                     Text("Nodes")
                         .font(.title2)
                     Spacer()
+
+                    // Real-time connection indicator
+                    ConnectionStatusBadge(isConnected: model.isWebSocketConnected)
+
                     Button("Refresh") {
                         Task { await model.refreshNodes() }
                     }
                 }
 
                 List(model.nodes, selection: $selectedNode) { node in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(node.name)
-                            .font(.headline)
-                        Text("\(node.edgeId) • \(node.status)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                    HStack {
+                        // Status indicator
+                        NodeStatusIndicator(status: node.status)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(node.name)
+                                .font(.headline)
+                            HStack(spacing: 8) {
+                                Text(String(node.edgeId.prefix(8)) + "...")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Text(node.status)
+                                    .font(.caption)
+                                    .foregroundColor(node.status == "online" ? .green : .orange)
+                                if let version = node.version {
+                                    Text("v\(version)")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
                     }
                 }
                 .onChange(of: selectedNode) { newNode in
@@ -74,6 +93,45 @@ struct NodesView: View {
                 Spacer()
             }
             .padding()
+        }
+    }
+}
+
+// MARK: - Node Status Indicator
+
+struct NodeStatusIndicator: View {
+    let status: String
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(statusColor.opacity(0.2))
+                .frame(width: 24, height: 24)
+
+            Circle()
+                .fill(statusColor)
+                .frame(width: 10, height: 10)
+
+            // Pulsing animation for online status
+            if status == "online" {
+                Circle()
+                    .stroke(statusColor, lineWidth: 2)
+                    .frame(width: 24, height: 24)
+                    .opacity(0.5)
+            }
+        }
+    }
+
+    private var statusColor: Color {
+        switch status.lowercased() {
+        case "online":
+            return .green
+        case "offline":
+            return .red
+        case "connecting":
+            return .orange
+        default:
+            return .gray
         }
     }
 }

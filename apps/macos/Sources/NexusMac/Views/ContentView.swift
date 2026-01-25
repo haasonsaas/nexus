@@ -72,7 +72,32 @@ struct ContentView: View {
             }
         }
         .toolbar {
-            ToolbarItemGroup {
+            ToolbarItemGroup(placement: .automatic) {
+                // WebSocket connection status
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(model.isWebSocketConnected ? Color.green : Color.red)
+                        .frame(width: 8, height: 8)
+                    Text(model.isWebSocketConnected ? "Live" : "Offline")
+                        .font(.caption)
+                        .foregroundColor(model.isWebSocketConnected ? .green : .red)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(model.isWebSocketConnected ? Color.green.opacity(0.1) : Color.red.opacity(0.1))
+                .cornerRadius(8)
+                .help(model.isWebSocketConnected ? "Real-time updates active" : "Real-time updates disconnected")
+
+                // Reconnect button when disconnected
+                if !model.isWebSocketConnected {
+                    Button {
+                        model.reconnectWebSocket()
+                    } label: {
+                        Label("Reconnect", systemImage: "bolt.horizontal")
+                    }
+                    .help("Reconnect to server")
+                }
+
                 Button {
                     Task { await model.refreshAll() }
                 } label: {

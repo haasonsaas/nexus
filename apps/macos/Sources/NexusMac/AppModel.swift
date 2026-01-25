@@ -30,8 +30,23 @@ final class AppModel: ObservableObject {
     @Published var logText: String = ""
     @Published var lastError: String?
 
+    // WebSocket real-time connection
+    @Published var webSocketService: WebSocketService?
+    @Published var isWebSocketConnected: Bool = false
+    @Published var webSocketError: String?
+    @Published var lastServerEvent: ServerEvent?
+    @Published var serverUptimeMs: Int64 = 0
+    @Published var activeToolCalls: [ToolCallEvent] = []
+    @Published var recentSessionEvents: [SessionEventPayload] = []
+
     private let keychain = KeychainStore()
     private let edgeBinary: String
+    private let notificationService = NotificationService.shared
+
+    // Track previous states for change detection
+    private var previousGatewayConnected: Bool?
+    private var previousNodeStatuses: [String: String] = [:]
+    private var webSocketObservation: Task<Void, Never>?
 
     init() {
         baseURL = UserDefaults.standard.string(forKey: "NexusBaseURL") ?? "http://localhost:8080"
@@ -40,18 +55,143 @@ final class AppModel: ObservableObject {
         configPath = AppModel.defaultConfigPath()
         edgeBinary = ProcessInfo.processInfo.environment["NEXUS_EDGE_BIN"] ?? "nexus-edge"
 
+        // Request notification permission on first launch
+        notificationService.requestPermission()
+
         refreshEdgeServiceStatus()
         loadConfig()
         loadLogs()
+
+        // Initialize WebSocket service
+        setupWebSocketService()
+
         Task {
             await refreshAll()
         }
+    }
+
+    // MARK: - WebSocket Management
+
+    private func setupWebSocketService() {
+        guard !baseURL.isEmpty && !apiKey.isEmpty else { return }
+
+        let service = WebSocketService(baseURL: baseURL, apiKey: apiKey)
+        webSocketService = service
+
+        // Set up event handler
+        service.onEvent = { [weak self] event in
+            Task { @MainActor in
+                self?.handleWebSocketEvent(event)
+            }
+        }
+
+        // Start observing published properties
+        startWebSocketObservation()
+
+        // Connect automatically
+        service.connect()
+    }
+
+    private func startWebSocketObservation() {
+        webSocketObservation?.cancel()
+        webSocketObservation = Task { [weak self] in
+            guard let self = self else { return }
+            while !Task.isCancelled {
+                await self.syncWebSocketState()
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+            }
+        }
+    }
+
+    private func syncWebSocketState() {
+        guard let service = webSocketService else { return }
+        isWebSocketConnected = service.isConnected
+        webSocketError = service.connectionError
+        activeToolCalls = service.activeToolCalls
+        recentSessionEvents = service.recentSessionEvents
+        if let snapshot = service.healthSnapshot {
+            serverUptimeMs = snapshot.uptimeMs
+        }
+    }
+
+    private func handleWebSocketEvent(_ event: ServerEvent) {
+        lastServerEvent = event
+
+        switch event {
+        case .connected(let hello):
+            isWebSocketConnected = true
+            webSocketError = nil
+            if let snapshot = hello.healthSnapshot {
+                serverUptimeMs = snapshot.uptimeMs
+            }
+            notificationService.notifyGatewayConnected()
+
+        case .disconnected(let reason):
+            isWebSocketConnected = false
+            webSocketError = reason
+            notificationService.notifyGatewayDisconnected(reason: reason)
+
+        case .healthUpdate(let snapshot):
+            serverUptimeMs = snapshot.uptimeMs
+
+        case .tick:
+            // Periodic health check - could trigger light refresh
+            break
+
+        case .chatComplete(let complete):
+            // Refresh sessions when a chat completes
+            Task { await refreshSessions() }
+            _ = complete // silence unused warning
+
+        case .toolCall(let toolCall):
+            activeToolCalls.append(toolCall)
+            if activeToolCalls.count > 10 {
+                activeToolCalls.removeFirst()
+            }
+
+        case .sessionEvent(let sessionEvent):
+            recentSessionEvents.append(sessionEvent)
+            if recentSessionEvents.count > 20 {
+                recentSessionEvents.removeFirst()
+            }
+            // Refresh sessions on session events
+            Task { await refreshSessions() }
+
+        case .error(let errorEvent):
+            notificationService.notifyError(operation: "WebSocket", message: errorEvent.message)
+
+        case .chatChunk, .pong:
+            // These are handled internally or don't require action
+            break
+        }
+    }
+
+    func connectWebSocket() {
+        if webSocketService == nil {
+            setupWebSocketService()
+        } else {
+            webSocketService?.connect()
+        }
+    }
+
+    func disconnectWebSocket() {
+        webSocketService?.disconnect()
+    }
+
+    func reconnectWebSocket() {
+        disconnectWebSocket()
+        // Recreate the service with current credentials
+        webSocketService = nil
+        setupWebSocketService()
     }
 
     func saveSettings() {
         baseURL = normalizeBaseURL(baseURL)
         UserDefaults.standard.set(baseURL, forKey: "NexusBaseURL")
         _ = keychain.write(apiKey)
+
+        // Reconnect WebSocket with new settings
+        reconnectWebSocket()
     }
 
     func refreshAll() async {
@@ -68,8 +208,23 @@ final class AppModel: ObservableObject {
         guard let api = makeAPI() else { return }
         do {
             status = try await api.fetchStatus()
+            // Check for gateway connection status change
+            let isConnected = status != nil
+            if let previousConnected = previousGatewayConnected {
+                if isConnected && !previousConnected {
+                    notificationService.notifyGatewayConnected()
+                } else if !isConnected && previousConnected {
+                    notificationService.notifyGatewayDisconnected()
+                }
+            }
+            previousGatewayConnected = isConnected
             lastError = nil
         } catch {
+            // Gateway disconnected or error
+            if previousGatewayConnected == true {
+                notificationService.notifyGatewayDisconnected(reason: error.localizedDescription)
+            }
+            previousGatewayConnected = false
             lastError = error.localizedDescription
         }
     }
@@ -77,7 +232,39 @@ final class AppModel: ObservableObject {
     func refreshNodes() async {
         guard let api = makeAPI() else { return }
         do {
-            nodes = try await api.fetchNodes()
+            let newNodes = try await api.fetchNodes()
+
+            // Check for node status changes
+            for node in newNodes {
+                let previousStatus = previousNodeStatuses[node.edgeId]
+                let currentStatus = node.status
+
+                if let prevStatus = previousStatus {
+                    // Node went online
+                    if prevStatus != "online" && currentStatus == "online" {
+                        notificationService.notifyNodeOnline(nodeName: node.name)
+                    }
+                    // Node went offline
+                    else if prevStatus == "online" && currentStatus != "online" {
+                        notificationService.notifyNodeOffline(nodeName: node.name)
+                    }
+                }
+                previousNodeStatuses[node.edgeId] = currentStatus
+            }
+
+            // Check for nodes that disappeared (went offline)
+            let currentNodeIds = Set(newNodes.map { $0.edgeId })
+            for (edgeId, previousStatus) in previousNodeStatuses {
+                if !currentNodeIds.contains(edgeId) && previousStatus == "online" {
+                    // Node was removed from the list, consider it offline
+                    if let nodeName = nodes.first(where: { $0.edgeId == edgeId })?.name {
+                        notificationService.notifyNodeOffline(nodeName: nodeName)
+                    }
+                    previousNodeStatuses.removeValue(forKey: edgeId)
+                }
+            }
+
+            nodes = newNodes
             lastError = nil
         } catch {
             lastError = error.localizedDescription
@@ -193,9 +380,15 @@ final class AppModel: ObservableObject {
         do {
             let result = try await api.invokeTool(edgeID: edgeID, toolName: toolName, input: input, approved: approved)
             lastError = nil
+            notificationService.notifyToolCompleted(
+                toolName: toolName,
+                success: !result.isError,
+                durationMs: result.durationMs
+            )
             return result
         } catch {
             lastError = error.localizedDescription
+            notificationService.notifyError(operation: "Tool Invocation", message: error.localizedDescription)
             return nil
         }
     }
@@ -251,6 +444,9 @@ final class AppModel: ObservableObject {
         let result = runCommand("/usr/bin/env", [edgeBinary, "install", "--config", configPath, "--init-config", "--start"])
         if result.exitCode != 0 {
             lastError = result.output.trimmingCharacters(in: .whitespacesAndNewlines)
+            notificationService.notifyError(operation: "Install Service", message: lastError ?? "Unknown error")
+        } else {
+            notificationService.notifyEdgeServiceInstalled()
         }
         refreshEdgeServiceStatus()
     }
@@ -260,6 +456,9 @@ final class AppModel: ObservableObject {
         let result = runCommand("/usr/bin/env", [edgeBinary, "uninstall", "--keep-config"])
         if result.exitCode != 0 {
             lastError = result.output.trimmingCharacters(in: .whitespacesAndNewlines)
+            notificationService.notifyError(operation: "Uninstall Service", message: lastError ?? "Unknown error")
+        } else {
+            notificationService.notifyEdgeServiceUninstalled()
         }
         refreshEdgeServiceStatus()
     }
@@ -269,6 +468,9 @@ final class AppModel: ObservableObject {
         let result = runCommand("/bin/launchctl", ["load", "-w", plistPath])
         if result.exitCode != 0 {
             lastError = result.output.trimmingCharacters(in: .whitespacesAndNewlines)
+            notificationService.notifyError(operation: "Start Service", message: lastError ?? "Unknown error")
+        } else {
+            notificationService.notifyEdgeServiceStarted()
         }
         refreshEdgeServiceStatus()
     }
@@ -278,6 +480,9 @@ final class AppModel: ObservableObject {
         let result = runCommand("/bin/launchctl", ["unload", plistPath])
         if result.exitCode != 0 {
             lastError = result.output.trimmingCharacters(in: .whitespacesAndNewlines)
+            notificationService.notifyError(operation: "Stop Service", message: lastError ?? "Unknown error")
+        } else {
+            notificationService.notifyEdgeServiceStopped()
         }
         refreshEdgeServiceStatus()
     }

@@ -111,6 +111,11 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		}
 	}
 
+	// Add inbound message to attention feed if enabled
+	if s.attentionFeed != nil {
+		s.attentionFeed.AddMessage(msg)
+	}
+
 	// Track inbound activity
 	if s.integration != nil {
 		s.integration.RecordInbound(string(msg.Channel), msg.ChannelID)

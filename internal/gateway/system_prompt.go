@@ -14,6 +14,7 @@ type SystemPromptOptions struct {
 	MemoryLines         []string
 	VectorMemoryResults []VectorMemoryResult // Results from semantic memory search
 	Heartbeat           string
+	AttentionSummary    string
 	WorkspaceSections   []PromptSection
 	MemoryFlush         string
 	SkillContent        []SkillSection
@@ -106,6 +107,10 @@ func buildSystemPrompt(cfg *config.Config, opts SystemPromptOptions) string {
 
 	if heartbeat := strings.TrimSpace(opts.Heartbeat); heartbeat != "" {
 		lines = append(lines, fmt.Sprintf("Heartbeat checklist (only report new/changed items; reply HEARTBEAT_OK if nothing needs attention):\n%s", heartbeat))
+	}
+
+	if attention := strings.TrimSpace(opts.AttentionSummary); attention != "" {
+		lines = append(lines, fmt.Sprintf("Attention feed (active items):\n%s", attention))
 	}
 
 	if flush := strings.TrimSpace(opts.MemoryFlush); flush != "" {

@@ -37,6 +37,7 @@ type Config struct {
 	Templates     templates.TemplatesConfig `yaml:"templates"`
 	Experiments   experiments.Config        `yaml:"experiments"`
 	VectorMemory  memory.Config             `yaml:"vector_memory"`
+	Attention     AttentionConfig           `yaml:"attention"`
 	RAG           RAGConfig                 `yaml:"rag"`
 	MCP           mcp.Config                `yaml:"mcp"`
 	Edge          EdgeConfig                `yaml:"edge"`
@@ -53,6 +54,16 @@ type Config struct {
 // GatewayConfig configures gateway-level message routing and processing.
 type GatewayConfig struct {
 	Broadcast BroadcastConfig `yaml:"broadcast"`
+}
+
+// AttentionConfig controls the attention feed integration.
+type AttentionConfig struct {
+	// Enabled turns on the attention feed and tools.
+	Enabled bool `yaml:"enabled"`
+	// InjectInPrompt adds a summary of active items to the system prompt.
+	InjectInPrompt bool `yaml:"inject_in_prompt"`
+	// MaxItems limits how many items are injected into the prompt.
+	MaxItems int `yaml:"max_items"`
 }
 
 // CommandsConfig configures gateway command handling.
@@ -1174,6 +1185,7 @@ func applyDefaults(cfg *Config) {
 	applySessionDefaults(&cfg.Session)
 	applyWorkspaceDefaults(&cfg.Workspace)
 	applyToolsDefaults(cfg)
+	applyAttentionDefaults(&cfg.Attention)
 	applyLLMDefaults(&cfg.LLM)
 	applyLoggingDefaults(&cfg.Logging)
 	applyTranscriptionDefaults(&cfg.Transcription)
@@ -1365,6 +1377,15 @@ func applyChannelDefaults(cfg *ChannelsConfig) {
 	applyChannelPolicyDefaults(&cfg.Matrix.Group)
 	applyChannelPolicyDefaults(&cfg.Teams.DM)
 	applyChannelPolicyDefaults(&cfg.Teams.Group)
+}
+
+func applyAttentionDefaults(cfg *AttentionConfig) {
+	if cfg == nil {
+		return
+	}
+	if cfg.MaxItems == 0 {
+		cfg.MaxItems = 5
+	}
 }
 
 func applyChannelPolicyDefaults(cfg *ChannelPolicyConfig) {

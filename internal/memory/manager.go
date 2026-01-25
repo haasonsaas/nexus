@@ -51,6 +51,9 @@ type Config struct {
 
 	// Auto-recall configuration
 	AutoRecall AutoRecallConfig `yaml:"auto_recall"`
+
+	// Consolidation configuration
+	Consolidation ConsolidationConfig `yaml:"consolidation"`
 }
 
 // SQLiteVecConfig contains sqlite-vec specific configuration.
@@ -123,9 +126,30 @@ type IndexingConfig struct {
 
 // SearchConfig contains default search parameters.
 type SearchConfig struct {
-	DefaultLimit     int     `yaml:"default_limit"`
-	DefaultThreshold float32 `yaml:"default_threshold"`
-	DefaultScope     string  `yaml:"default_scope"`
+	DefaultLimit     int             `yaml:"default_limit"`
+	DefaultThreshold float32         `yaml:"default_threshold"`
+	DefaultScope     string          `yaml:"default_scope"`
+	Hierarchy        HierarchyConfig `yaml:"hierarchy"`
+}
+
+// HierarchyConfig configures hierarchical memory search across scopes.
+type HierarchyConfig struct {
+	Enabled    bool               `yaml:"enabled"`
+	Scopes     []string           `yaml:"scopes"`
+	Weights    map[string]float32 `yaml:"weights"`
+	MaxResults int                `yaml:"max_results"`
+}
+
+// ConsolidationConfig controls background memory consolidation.
+type ConsolidationConfig struct {
+	Enabled          bool          `yaml:"enabled"`
+	Interval         time.Duration `yaml:"interval"`
+	MinMessages      int           `yaml:"min_messages"`
+	MaxMessages      int           `yaml:"max_messages"`
+	MaxSessions      int           `yaml:"max_sessions"`
+	SummaryMaxChars  int           `yaml:"summary_max_chars"`
+	SummaryMaxTokens int           `yaml:"summary_max_tokens"`
+	Model            string        `yaml:"model"`
 }
 
 // NewManager creates a new memory manager with the given configuration.
@@ -152,6 +176,42 @@ func NewManager(cfg *Config) (*Manager, error) {
 	}
 	if cfg.Search.DefaultScope == "" {
 		cfg.Search.DefaultScope = "session"
+	}
+	if cfg.Search.Hierarchy.Enabled {
+		if len(cfg.Search.Hierarchy.Scopes) == 0 {
+			cfg.Search.Hierarchy.Scopes = []string{"session", "agent", "channel", "global"}
+		}
+		if cfg.Search.Hierarchy.MaxResults == 0 {
+			cfg.Search.Hierarchy.MaxResults = cfg.Search.DefaultLimit
+		}
+		if cfg.Search.Hierarchy.Weights == nil {
+			cfg.Search.Hierarchy.Weights = map[string]float32{
+				"session": 1.0,
+				"agent":   0.8,
+				"channel": 0.7,
+				"global":  0.5,
+			}
+		}
+	}
+	if cfg.Consolidation.Enabled {
+		if cfg.Consolidation.Interval == 0 {
+			cfg.Consolidation.Interval = 6 * time.Hour
+		}
+		if cfg.Consolidation.MinMessages == 0 {
+			cfg.Consolidation.MinMessages = 20
+		}
+		if cfg.Consolidation.MaxMessages == 0 {
+			cfg.Consolidation.MaxMessages = 120
+		}
+		if cfg.Consolidation.MaxSessions == 0 {
+			cfg.Consolidation.MaxSessions = 50
+		}
+		if cfg.Consolidation.SummaryMaxChars == 0 {
+			cfg.Consolidation.SummaryMaxChars = 2000
+		}
+		if cfg.Consolidation.SummaryMaxTokens == 0 {
+			cfg.Consolidation.SummaryMaxTokens = 512
+		}
 	}
 
 	// Initialize backend

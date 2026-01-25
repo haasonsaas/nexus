@@ -54,6 +54,7 @@ func NewManagedServer(cfg ManagedServerConfig) (*ManagedServer, error) {
 		PolicyResolver: server.toolPolicyResolver,
 		JobStore:       server.jobStore,
 		SkillsManager:  server.skillsManager,
+		AttentionFeed:  server.attentionFeed,
 		Logger:         logger.With("component", "tool-manager"),
 	})
 	server.toolManager = toolManager

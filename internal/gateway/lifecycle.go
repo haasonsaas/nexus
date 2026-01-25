@@ -71,6 +71,9 @@ func (s *Server) Start(ctx context.Context) error {
 	// Start message processing
 	s.startProcessing(ctx)
 
+	// Start memory consolidation background worker
+	s.startMemoryConsolidation(ctx)
+
 	// Start job pruning background task
 	s.startJobPruning(ctx)
 

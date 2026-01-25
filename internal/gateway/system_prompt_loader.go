@@ -2,12 +2,15 @@ package gateway
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/haasonsaas/nexus/internal/attention"
 	"github.com/haasonsaas/nexus/internal/config"
+	"github.com/haasonsaas/nexus/internal/memory"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/skills"
 	"github.com/haasonsaas/nexus/pkg/models"
@@ -24,6 +27,9 @@ func (s *Server) systemPromptForMessage(ctx context.Context, session *models.Ses
 		WorkspaceSections: s.loadWorkspaceSections(),
 		MemoryFlush:       s.memoryFlushPrompt(ctx, session),
 		SkillContent:      s.loadSkillSections(ctx),
+	}
+	if summary := s.attentionSummary(); summary != "" {
+		opts.AttentionSummary = summary
 	}
 
 	if overrides := s.experimentOverrides(session, msg); overrides.SystemPrompt != "" {
@@ -57,6 +63,60 @@ func (s *Server) systemPromptForMessage(ctx context.Context, session *models.Ses
 	return buildSystemPrompt(s.config, opts)
 }
 
+func (s *Server) attentionSummary() string {
+	if s == nil || s.config == nil || s.attentionFeed == nil {
+		return ""
+	}
+	if !s.config.Attention.Enabled || !s.config.Attention.InjectInPrompt {
+		return ""
+	}
+	items := s.attentionFeed.Active()
+	if len(items) == 0 {
+		return ""
+	}
+	limit := s.config.Attention.MaxItems
+	if limit <= 0 {
+		limit = 5
+	}
+	if len(items) > limit {
+		items = items[:limit]
+	}
+	lines := make([]string, 0, len(items))
+	for _, item := range items {
+		title := strings.TrimSpace(item.Title)
+		if title == "" {
+			title = strings.TrimSpace(item.Preview)
+		}
+		if title == "" {
+			title = "Untitled"
+		}
+		lines = append(lines, fmt.Sprintf("- [%s/%s] %s (id: %s)",
+			strings.ToUpper(string(item.Channel)),
+			attentionPriorityLabel(item.Priority),
+			title,
+			item.ID,
+		))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func attentionPriorityLabel(p attention.Priority) string {
+	switch p {
+	case attention.PriorityLow:
+		return "LOW"
+	case attention.PriorityNormal:
+		return "NORMAL"
+	case attention.PriorityHigh:
+		return "HIGH"
+	case attention.PriorityUrgent:
+		return "URGENT"
+	case attention.PriorityCritical:
+		return "CRITICAL"
+	default:
+		return "NORMAL"
+	}
+}
+
 // loadVectorMemoryContext searches vector memory for relevant context.
 func (s *Server) loadVectorMemoryContext(ctx context.Context, session *models.Session, msg *models.Message) []VectorMemoryResult {
 	if s.vectorMemory == nil || msg == nil || msg.Content == "" {
@@ -76,13 +136,35 @@ func (s *Server) loadVectorMemoryContext(ctx context.Context, session *models.Se
 		}
 	}
 
-	resp, err := s.vectorMemory.Search(ctx, &models.SearchRequest{
-		Query:     msg.Content,
-		Scope:     scope,
-		ScopeID:   scopeID,
-		Limit:     5, // Keep context small
-		Threshold: s.config.VectorMemory.Search.DefaultThreshold,
-	})
+	var (
+		resp *models.SearchResponse
+		err  error
+	)
+	sessionID := ""
+	agentID := ""
+	if session != nil {
+		sessionID = session.ID
+		agentID = session.AgentID
+	}
+
+	if s.config.VectorMemory.Search.Hierarchy.Enabled {
+		resp, err = s.vectorMemory.SearchHierarchical(ctx, &memory.HierarchyRequest{
+			Query:     msg.Content,
+			Limit:     5, // Keep context small
+			Threshold: s.config.VectorMemory.Search.DefaultThreshold,
+			SessionID: sessionID,
+			ChannelID: msg.ChannelID,
+			AgentID:   agentID,
+		})
+	} else {
+		resp, err = s.vectorMemory.Search(ctx, &models.SearchRequest{
+			Query:     msg.Content,
+			Scope:     scope,
+			ScopeID:   scopeID,
+			Limit:     5, // Keep context small
+			Threshold: s.config.VectorMemory.Search.DefaultThreshold,
+		})
+	}
 	if err != nil {
 		s.logger.Error("vector memory search failed", "error", err)
 		return nil

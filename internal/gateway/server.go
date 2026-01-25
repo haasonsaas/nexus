@@ -25,6 +25,7 @@ import (
 
 	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/haasonsaas/nexus/internal/artifacts"
+	"github.com/haasonsaas/nexus/internal/attention"
 	"github.com/haasonsaas/nexus/internal/audit"
 	"github.com/haasonsaas/nexus/internal/auth"
 	"github.com/haasonsaas/nexus/internal/canvas"
@@ -85,6 +86,7 @@ type Server struct {
 	memoryLogger    *sessions.MemoryLogger
 	skillsManager   *skills.Manager
 	vectorMemory    *memory.Manager
+	attentionFeed   *attention.Feed
 	mediaProcessor  media.Processor
 	mediaAggregator *media.Aggregator
 	experimentsMgr  *experiments.Manager
@@ -297,6 +299,10 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	vectorMem, err := memory.NewManager(&cfg.VectorMemory)
 	if err != nil {
 		logger.Warn("vector memory not initialized", "error", err)
+	}
+	var attentionFeed *attention.Feed
+	if cfg.Attention.Enabled {
+		attentionFeed = attention.NewFeed()
 	}
 	var mediaProcessor media.Processor
 	var mediaAggregator *media.Aggregator
@@ -545,6 +551,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		runtimePlugins:     plugins.DefaultRuntimeRegistry(),
 		skillsManager:      skillsMgr,
 		vectorMemory:       vectorMem,
+		attentionFeed:      attentionFeed,
 		mediaProcessor:     mediaProcessor,
 		mediaAggregator:    mediaAggregator,
 		experimentsMgr:     experimentsMgr,

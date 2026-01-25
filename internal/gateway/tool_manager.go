@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/haasonsaas/nexus/internal/agent"
+	"github.com/haasonsaas/nexus/internal/attention"
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/infra"
 	"github.com/haasonsaas/nexus/internal/jobs"
@@ -42,6 +43,7 @@ type ToolManager struct {
 	jobStore       jobs.Store
 	sessionStore   sessions.Store
 	skillsManager  *skills.Manager
+	attentionFeed  *attention.Feed
 
 	// Managed resources
 	browserPool        *browser.Pool
@@ -61,6 +63,7 @@ type ToolManagerConfig struct {
 	JobStore       jobs.Store
 	Sessions       sessions.Store
 	SkillsManager  *skills.Manager
+	AttentionFeed  *attention.Feed
 	Logger         *slog.Logger
 }
 
@@ -79,6 +82,7 @@ func NewToolManager(cfg ToolManagerConfig) *ToolManager {
 		jobStore:        cfg.JobStore,
 		sessionStore:    cfg.Sessions,
 		skillsManager:   cfg.SkillsManager,
+		attentionFeed:   cfg.AttentionFeed,
 		registeredTools: make([]string, 0),
 		mcpTools:        make([]string, 0),
 		toolSummaries:   make([]models.ToolSummary, 0),
@@ -288,6 +292,15 @@ func (m *ToolManager) RegisterTools(ctx context.Context, runtime *agent.Runtime)
 	// Register job status tool
 	if m.jobStore != nil {
 		m.registerCoreTool(runtime, jobtools.NewStatusTool(m.jobStore))
+	}
+
+	// Register attention feed tools
+	if m.attentionFeed != nil {
+		m.registerCoreTool(runtime, attention.NewListAttentionTool(m.attentionFeed))
+		m.registerCoreTool(runtime, attention.NewGetAttentionTool(m.attentionFeed))
+		m.registerCoreTool(runtime, attention.NewHandleAttentionTool(m.attentionFeed))
+		m.registerCoreTool(runtime, attention.NewSnoozeAttentionTool(m.attentionFeed))
+		m.registerCoreTool(runtime, attention.NewStatsAttentionTool(m.attentionFeed))
 	}
 
 	// Register MCP tools

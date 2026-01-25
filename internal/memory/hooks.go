@@ -239,13 +239,32 @@ func (h *MemoryHooks) handleMessageReceived(ctx context.Context, event *hooks.Ev
 	}
 
 	// Search for relevant memories
-	results, err := h.manager.Search(ctx, &models.SearchRequest{
-		Query:     content,
-		Limit:     h.recallConfig.MaxResults,
-		Threshold: h.recallConfig.MinScore,
-		Scope:     models.ScopeSession,
-		ScopeID:   event.SessionKey,
-	})
+	var (
+		results *models.SearchResponse
+		err     error
+	)
+	if h.manager.config != nil && h.manager.config.Search.Hierarchy.Enabled {
+		agentID := ""
+		if event.Context != nil {
+			agentID, _ = event.Context["agent_id"].(string)
+		}
+		results, err = h.manager.SearchHierarchical(ctx, &HierarchyRequest{
+			Query:     content,
+			Limit:     h.recallConfig.MaxResults,
+			Threshold: h.recallConfig.MinScore,
+			SessionID: event.SessionKey,
+			ChannelID: event.ChannelID,
+			AgentID:   agentID,
+		})
+	} else {
+		results, err = h.manager.Search(ctx, &models.SearchRequest{
+			Query:     content,
+			Limit:     h.recallConfig.MaxResults,
+			Threshold: h.recallConfig.MinScore,
+			Scope:     models.ScopeSession,
+			ScopeID:   event.SessionKey,
+		})
+	}
 	if err != nil {
 		h.logger.Warn("memory recall failed", "error", err)
 		return nil

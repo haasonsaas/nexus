@@ -475,3 +475,453 @@ func ListByProvider(provider Provider) []*Model {
 func ListByCapability(cap Capability) []*Model {
 	return DefaultCatalog.ListByCapability(cap)
 }
+
+// ==============================================================================
+// Dynamic Model Catalog with Caching (clawdbot-style)
+// ==============================================================================
+
+// ModelCatalogEntry represents a discovered model with its metadata.
+// This matches the clawdbot ModelCatalogEntry structure.
+type ModelCatalogEntry struct {
+	// Id is the model identifier used in API calls
+	Id string `json:"id"`
+
+	// Name is a human-readable name
+	Name string `json:"name"`
+
+	// Provider is the LLM provider (e.g., "anthropic", "openai", "google")
+	Provider string `json:"provider"`
+
+	// ContextWindow is the maximum context size in tokens (optional)
+	ContextWindow int `json:"context_window,omitempty"`
+
+	// Reasoning indicates if the model supports extended reasoning (optional)
+	Reasoning bool `json:"reasoning,omitempty"`
+}
+
+// ModelDiscoverer is the interface for discovering models from external sources.
+type ModelDiscoverer interface {
+	// DiscoverModels returns a list of available models.
+	// Returns an empty slice on transient errors (not poisoning the cache).
+	DiscoverModels() ([]ModelCatalogEntry, error)
+}
+
+// catalogLoadState represents the state of a catalog load operation.
+type catalogLoadState struct {
+	done    chan struct{}
+	entries []ModelCatalogEntry
+	err     error
+}
+
+// ModelCatalog manages a collection of discovered models with caching.
+// It implements promise-based deduplication to avoid thundering herd problems.
+type ModelCatalog struct {
+	mu sync.Mutex
+
+	// Cached entries, sorted by provider then name
+	cached []ModelCatalogEntry
+
+	// In-flight load operation for promise-based deduplication
+	inFlight *catalogLoadState
+
+	// hasLoggedError prevents spamming logs on repeated failures
+	hasLoggedError bool
+
+	// discoverer is the function that discovers models (injectable for testing)
+	discoverer ModelDiscoverer
+
+	// logger for warnings
+	logger func(format string, args ...interface{})
+}
+
+// NewModelCatalog creates a new model catalog.
+func NewModelCatalog() *ModelCatalog {
+	return &ModelCatalog{
+		cached: nil,
+		logger: func(format string, args ...interface{}) {
+			// Default to standard log, can be overridden
+		},
+	}
+}
+
+// NewModelCatalogWithDiscoverer creates a new model catalog with a custom discoverer.
+func NewModelCatalogWithDiscoverer(discoverer ModelDiscoverer) *ModelCatalog {
+	return &ModelCatalog{
+		cached:     nil,
+		discoverer: discoverer,
+		logger: func(format string, args ...interface{}) {
+			// Default to silent, can be overridden
+		},
+	}
+}
+
+// SetLogger sets a custom logger function.
+func (mc *ModelCatalog) SetLogger(logger func(format string, args ...interface{})) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	mc.logger = logger
+}
+
+// SetDiscoverer sets a custom discoverer for testing.
+func (mc *ModelCatalog) SetDiscoverer(discoverer ModelDiscoverer) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	mc.discoverer = discoverer
+}
+
+// LoadCatalog loads the model catalog with caching and promise-based deduplication.
+// If useCache is false, the cache is bypassed and a fresh load is performed.
+// On transient errors, the cache is not poisoned and an empty slice may be returned.
+func (mc *ModelCatalog) LoadCatalog(useCache bool) ([]ModelCatalogEntry, error) {
+	mc.mu.Lock()
+
+	// If useCache is false, clear the cache
+	if !useCache {
+		mc.cached = nil
+		mc.inFlight = nil
+	}
+
+	// Return cached entries if available
+	if mc.cached != nil {
+		entries := make([]ModelCatalogEntry, len(mc.cached))
+		copy(entries, mc.cached)
+		mc.mu.Unlock()
+		return entries, nil
+	}
+
+	// Check for in-flight operation (promise-based deduplication)
+	if mc.inFlight != nil {
+		state := mc.inFlight
+		mc.mu.Unlock()
+		// Wait for in-flight operation to complete
+		<-state.done
+		if state.err != nil {
+			return nil, state.err
+		}
+		entries := make([]ModelCatalogEntry, len(state.entries))
+		copy(entries, state.entries)
+		return entries, nil
+	}
+
+	// Start new load operation
+	state := &catalogLoadState{
+		done: make(chan struct{}),
+	}
+	mc.inFlight = state
+	discoverer := mc.discoverer
+	mc.mu.Unlock()
+
+	// Perform the actual load
+	entries, err := mc.doLoad(discoverer)
+
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+
+	// Store result in state
+	state.entries = entries
+	state.err = err
+
+	// Close channel to wake up any waiters
+	close(state.done)
+
+	// Clear in-flight state
+	mc.inFlight = nil
+
+	if err != nil {
+		// Don't poison the cache on transient errors
+		if !mc.hasLoggedError {
+			mc.hasLoggedError = true
+			if mc.logger != nil {
+				mc.logger("[model-catalog] Failed to load model catalog: %v", err)
+			}
+		}
+		// Return partial results if any
+		if len(entries) > 0 {
+			return entries, nil
+		}
+		return nil, err
+	}
+
+	// Don't cache empty results (allows retry on next call)
+	if len(entries) == 0 {
+		return entries, nil
+	}
+
+	// Sort entries by provider then name
+	mc.sortEntries(entries)
+
+	// Cache successful non-empty results
+	mc.cached = make([]ModelCatalogEntry, len(entries))
+	copy(mc.cached, entries)
+
+	// Return a copy to prevent mutation
+	result := make([]ModelCatalogEntry, len(entries))
+	copy(result, entries)
+	return result, nil
+}
+
+// doLoad performs the actual model discovery.
+func (mc *ModelCatalog) doLoad(discoverer ModelDiscoverer) ([]ModelCatalogEntry, error) {
+	if discoverer == nil {
+		// Return common presets if no discoverer is configured
+		return GetCommonModelPresets(), nil
+	}
+
+	entries, err := discoverer.DiscoverModels()
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate and clean entries
+	var valid []ModelCatalogEntry
+	for _, entry := range entries {
+		id := strings.TrimSpace(entry.Id)
+		if id == "" {
+			continue
+		}
+		provider := strings.TrimSpace(entry.Provider)
+		if provider == "" {
+			continue
+		}
+		name := strings.TrimSpace(entry.Name)
+		if name == "" {
+			name = id
+		}
+
+		valid = append(valid, ModelCatalogEntry{
+			Id:            id,
+			Name:          name,
+			Provider:      provider,
+			ContextWindow: entry.ContextWindow,
+			Reasoning:     entry.Reasoning,
+		})
+	}
+
+	return valid, nil
+}
+
+// sortEntries sorts entries by provider then name.
+func (mc *ModelCatalog) sortEntries(entries []ModelCatalogEntry) {
+	sort.Slice(entries, func(i, j int) bool {
+		p := strings.Compare(entries[i].Provider, entries[j].Provider)
+		if p != 0 {
+			return p < 0
+		}
+		return strings.Compare(entries[i].Name, entries[j].Name) < 0
+	})
+}
+
+// GetModel retrieves a model by ID.
+// Returns nil if not found or if the catalog hasn't been loaded.
+func (mc *ModelCatalog) GetModel(id string) *ModelCatalogEntry {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+
+	if mc.cached == nil {
+		return nil
+	}
+
+	id = strings.TrimSpace(id)
+	for i := range mc.cached {
+		if mc.cached[i].Id == id {
+			entry := mc.cached[i] // Copy
+			return &entry
+		}
+	}
+	return nil
+}
+
+// GetModelsByProvider returns all models for a given provider.
+// Returns an empty slice if no models are found or if the catalog hasn't been loaded.
+func (mc *ModelCatalog) GetModelsByProvider(provider string) []ModelCatalogEntry {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+
+	if mc.cached == nil {
+		return nil
+	}
+
+	provider = strings.TrimSpace(strings.ToLower(provider))
+	var result []ModelCatalogEntry
+	for _, entry := range mc.cached {
+		if strings.ToLower(entry.Provider) == provider {
+			result = append(result, entry)
+		}
+	}
+	return result
+}
+
+// ListAllModels returns all models in the catalog, sorted by provider then name.
+// Returns an empty slice if the catalog hasn't been loaded.
+func (mc *ModelCatalog) ListAllModels() []ModelCatalogEntry {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+
+	if mc.cached == nil {
+		return nil
+	}
+
+	result := make([]ModelCatalogEntry, len(mc.cached))
+	copy(result, mc.cached)
+	return result
+}
+
+// ResetCache clears the cached entries and resets error logging state.
+// This is primarily used for testing.
+func (mc *ModelCatalog) ResetCache() {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+
+	mc.cached = nil
+	mc.inFlight = nil
+	mc.hasLoggedError = false
+}
+
+// IsCached returns true if the catalog has cached entries.
+func (mc *ModelCatalog) IsCached() bool {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	return mc.cached != nil
+}
+
+// GetCommonModelPresets returns a list of common model presets.
+func GetCommonModelPresets() []ModelCatalogEntry {
+	return []ModelCatalogEntry{
+		// Anthropic models
+		{
+			Id:            "claude-3-opus-20240229",
+			Name:          "Claude 3 Opus",
+			Provider:      "anthropic",
+			ContextWindow: 200000,
+			Reasoning:     false,
+		},
+		{
+			Id:            "claude-opus-4-5-20251101",
+			Name:          "Claude Opus 4.5",
+			Provider:      "anthropic",
+			ContextWindow: 200000,
+			Reasoning:     false,
+		},
+		{
+			Id:            "claude-sonnet-4-20250514",
+			Name:          "Claude Sonnet 4",
+			Provider:      "anthropic",
+			ContextWindow: 200000,
+			Reasoning:     false,
+		},
+		{
+			Id:            "claude-3-5-sonnet-20241022",
+			Name:          "Claude 3.5 Sonnet",
+			Provider:      "anthropic",
+			ContextWindow: 200000,
+			Reasoning:     false,
+		},
+		{
+			Id:            "claude-3-5-haiku-20241022",
+			Name:          "Claude 3.5 Haiku",
+			Provider:      "anthropic",
+			ContextWindow: 200000,
+			Reasoning:     false,
+		},
+
+		// OpenAI models
+		{
+			Id:            "gpt-4",
+			Name:          "GPT-4",
+			Provider:      "openai",
+			ContextWindow: 8192,
+			Reasoning:     false,
+		},
+		{
+			Id:            "gpt-4-turbo",
+			Name:          "GPT-4 Turbo",
+			Provider:      "openai",
+			ContextWindow: 128000,
+			Reasoning:     false,
+		},
+		{
+			Id:            "gpt-4o",
+			Name:          "GPT-4o",
+			Provider:      "openai",
+			ContextWindow: 128000,
+			Reasoning:     false,
+		},
+		{
+			Id:            "gpt-4o-mini",
+			Name:          "GPT-4o Mini",
+			Provider:      "openai",
+			ContextWindow: 128000,
+			Reasoning:     false,
+		},
+		{
+			Id:            "o1",
+			Name:          "o1",
+			Provider:      "openai",
+			ContextWindow: 200000,
+			Reasoning:     true,
+		},
+		{
+			Id:            "o1-mini",
+			Name:          "o1-mini",
+			Provider:      "openai",
+			ContextWindow: 128000,
+			Reasoning:     true,
+		},
+		{
+			Id:            "o3-mini",
+			Name:          "o3-mini",
+			Provider:      "openai",
+			ContextWindow: 200000,
+			Reasoning:     true,
+		},
+
+		// Google models
+		{
+			Id:            "gemini-1.5-pro",
+			Name:          "Gemini 1.5 Pro",
+			Provider:      "google",
+			ContextWindow: 2097152,
+			Reasoning:     false,
+		},
+		{
+			Id:            "gemini-1.5-flash",
+			Name:          "Gemini 1.5 Flash",
+			Provider:      "google",
+			ContextWindow: 1048576,
+			Reasoning:     false,
+		},
+		{
+			Id:            "gemini-2.0-flash-exp",
+			Name:          "Gemini 2.0 Flash",
+			Provider:      "google",
+			ContextWindow: 1048576,
+			Reasoning:     false,
+		},
+
+		// Mistral models
+		{
+			Id:            "mistral-large-latest",
+			Name:          "Mistral Large",
+			Provider:      "mistral",
+			ContextWindow: 128000,
+			Reasoning:     false,
+		},
+		{
+			Id:            "mistral-medium-latest",
+			Name:          "Mistral Medium",
+			Provider:      "mistral",
+			ContextWindow: 32000,
+			Reasoning:     false,
+		},
+		{
+			Id:            "mistral-small-latest",
+			Name:          "Mistral Small",
+			Provider:      "mistral",
+			ContextWindow: 32000,
+			Reasoning:     false,
+		},
+	}
+}
+
+// DefaultModelCatalog is the global model catalog for dynamic model discovery.
+var DefaultModelCatalog = NewModelCatalog()

@@ -114,6 +114,10 @@ func (s *Server) ensureRuntime(ctx context.Context) (*agent.Runtime, error) {
 	if plugin := s.GetEventTimelinePlugin(); plugin != nil {
 		runtime.Use(plugin)
 	}
+	// Register tracing plugin for OpenTelemetry spans
+	if plugin := s.GetTracingPlugin(); plugin != nil {
+		runtime.Use(plugin)
+	}
 
 	if s.approvalChecker == nil {
 		basePolicy := buildApprovalPolicy(s.config.Tools.Execution, s.toolPolicyResolver)
@@ -164,6 +168,12 @@ func (s *Server) ensureRuntime(ctx context.Context) (*agent.Runtime, error) {
 	}
 
 	s.runtime = runtime
+	s.postureMu.Lock()
+	lockdownRequested := s.postureLockdownRequested && !s.postureLockdownApplied
+	s.postureMu.Unlock()
+	if lockdownRequested {
+		s.applyPostureLockdown(ctx)
+	}
 	return runtime, nil
 }
 

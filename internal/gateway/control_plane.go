@@ -192,6 +192,15 @@ func applyRuntimeConfigUpdates(s *Server, cfg *config.Config, oldCfg *config.Con
 		}
 	}
 
+	if s != nil {
+		s.postureMu.Lock()
+		lockdownRequested := s.postureLockdownRequested && !s.postureLockdownApplied
+		s.postureMu.Unlock()
+		if lockdownRequested {
+			s.applyPostureLockdown(context.Background())
+		}
+	}
+
 	return restartRequired, warnings
 }
 

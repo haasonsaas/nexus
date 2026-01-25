@@ -75,6 +75,9 @@ func (s *Server) Start(ctx context.Context) error {
 	// Start memory consolidation background worker
 	s.startMemoryConsolidation(ctx)
 
+	// Start security posture background worker
+	s.startSecurityPosture(ctx)
+
 	// Start job pruning background task
 	s.startJobPruning(ctx)
 
@@ -208,6 +211,11 @@ func (s *Server) Stop(ctx context.Context) error {
 	if s.tracePlugin != nil {
 		if err := s.tracePlugin.Close(); err != nil {
 			s.logger.Error("error closing trace plugin", "error", err)
+		}
+	}
+	if s.traceShutdown != nil {
+		if err := s.traceShutdown(ctx); err != nil {
+			s.logger.Error("error shutting down tracer", "error", err)
 		}
 	}
 	if s.canvasHost != nil {

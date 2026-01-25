@@ -49,6 +49,8 @@ type Config struct {
 	Cron          CronConfig                `yaml:"cron"`
 	Tasks         TasksConfig               `yaml:"tasks"`
 	Logging       LoggingConfig             `yaml:"logging"`
+	Observability ObservabilityConfig       `yaml:"observability"`
+	Security      SecurityConfig            `yaml:"security"`
 	Transcription TranscriptionConfig       `yaml:"transcription"`
 }
 
@@ -959,9 +961,51 @@ type MemorySearchEmbeddingsConfig struct {
 	CacheTTL time.Duration `yaml:"cache_ttl"`
 	Timeout  time.Duration `yaml:"timeout"`
 }
+
 type LoggingConfig struct {
 	Level  string `yaml:"level"`
 	Format string `yaml:"format"`
+}
+
+// ObservabilityConfig configures tracing and other observability features.
+type ObservabilityConfig struct {
+	Tracing TracingConfig `yaml:"tracing"`
+}
+
+// TracingConfig controls OpenTelemetry tracing.
+type TracingConfig struct {
+	Enabled        bool              `yaml:"enabled"`
+	Endpoint       string            `yaml:"endpoint"`
+	ServiceName    string            `yaml:"service_name"`
+	ServiceVersion string            `yaml:"service_version"`
+	Environment    string            `yaml:"environment"`
+	SamplingRate   float64           `yaml:"sampling_rate"`
+	Insecure       bool              `yaml:"insecure"`
+	Attributes     map[string]string `yaml:"attributes"`
+}
+
+// SecurityConfig configures security features.
+type SecurityConfig struct {
+	Posture SecurityPostureConfig `yaml:"posture"`
+}
+
+// SecurityPostureConfig controls continuous security posture auditing.
+type SecurityPostureConfig struct {
+	Enabled            bool                   `yaml:"enabled"`
+	Interval           time.Duration          `yaml:"interval"`
+	IncludeFilesystem  *bool                  `yaml:"include_filesystem"`
+	IncludeGateway     *bool                  `yaml:"include_gateway"`
+	IncludeConfig      *bool                  `yaml:"include_config"`
+	CheckSymlinks      *bool                  `yaml:"check_symlinks"`
+	AllowGroupReadable bool                   `yaml:"allow_group_readable"`
+	EmitEvents         *bool                  `yaml:"emit_events"`
+	AutoRemediation    SecurityRemediationCfg `yaml:"auto_remediation"`
+}
+
+// SecurityRemediationCfg configures posture remediation behavior.
+type SecurityRemediationCfg struct {
+	Enabled bool   `yaml:"enabled"`
+	Mode    string `yaml:"mode"` // lockdown | warn_only
 }
 
 // RAGConfig configures the Retrieval-Augmented Generation pipeline.
@@ -1233,6 +1277,8 @@ func applyDefaults(cfg *Config) {
 	applyAttentionDefaults(&cfg.Attention)
 	applyLLMDefaults(&cfg.LLM)
 	applyLoggingDefaults(&cfg.Logging)
+	applyObservabilityDefaults(&cfg.Observability)
+	applySecurityDefaults(&cfg.Security)
 	applyTranscriptionDefaults(&cfg.Transcription)
 	applyMarketplaceDefaults(&cfg.Marketplace)
 	applyRAGDefaults(&cfg.RAG)
@@ -1686,6 +1732,53 @@ func applyLoggingDefaults(cfg *LoggingConfig) {
 	}
 	if cfg.Format == "" {
 		cfg.Format = "json"
+	}
+}
+
+func applyObservabilityDefaults(cfg *ObservabilityConfig) {
+	if cfg == nil {
+		return
+	}
+	if cfg.Tracing.SamplingRate == 0 {
+		cfg.Tracing.SamplingRate = 1.0
+	}
+	if cfg.Tracing.ServiceName == "" {
+		cfg.Tracing.ServiceName = "nexus"
+	}
+	if cfg.Tracing.Attributes == nil {
+		cfg.Tracing.Attributes = map[string]string{}
+	}
+}
+
+func applySecurityDefaults(cfg *SecurityConfig) {
+	if cfg == nil {
+		return
+	}
+	if cfg.Posture.Interval == 0 {
+		cfg.Posture.Interval = 10 * time.Minute
+	}
+	if cfg.Posture.IncludeFilesystem == nil {
+		value := true
+		cfg.Posture.IncludeFilesystem = &value
+	}
+	if cfg.Posture.IncludeGateway == nil {
+		value := true
+		cfg.Posture.IncludeGateway = &value
+	}
+	if cfg.Posture.IncludeConfig == nil {
+		value := true
+		cfg.Posture.IncludeConfig = &value
+	}
+	if cfg.Posture.CheckSymlinks == nil {
+		value := true
+		cfg.Posture.CheckSymlinks = &value
+	}
+	if cfg.Posture.EmitEvents == nil {
+		value := true
+		cfg.Posture.EmitEvents = &value
+	}
+	if cfg.Posture.AutoRemediation.Mode == "" {
+		cfg.Posture.AutoRemediation.Mode = "warn_only"
 	}
 }
 
@@ -2217,6 +2310,21 @@ func validateConfig(cfg *Config) error {
 
 	if pluginIssues := pluginValidationIssues(cfg); len(pluginIssues) > 0 {
 		issues = append(issues, pluginIssues...)
+	}
+
+	if cfg.Observability.Tracing.Enabled {
+		if cfg.Observability.Tracing.SamplingRate < 0 || cfg.Observability.Tracing.SamplingRate > 1 {
+			issues = append(issues, "observability.tracing.sampling_rate must be between 0 and 1")
+		}
+		if strings.TrimSpace(cfg.Observability.Tracing.Endpoint) == "" {
+			issues = append(issues, "observability.tracing.endpoint is required when tracing is enabled")
+		}
+	}
+	if cfg.Security.Posture.Enabled && cfg.Security.Posture.AutoRemediation.Enabled {
+		mode := strings.ToLower(strings.TrimSpace(cfg.Security.Posture.AutoRemediation.Mode))
+		if mode != "" && mode != "lockdown" && mode != "warn_only" {
+			issues = append(issues, "security.posture.auto_remediation.mode must be \"lockdown\" or \"warn_only\"")
+		}
 	}
 
 	if len(issues) > 0 {

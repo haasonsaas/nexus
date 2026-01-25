@@ -17,6 +17,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/pkg/models"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const defaultAgentID = "main"
@@ -149,6 +150,15 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		return
 	}
 
+	var msgSpan trace.Span
+	if s.tracer != nil && s.config != nil && s.config.Observability.Tracing.Enabled {
+		traceCtx, span := s.tracer.TraceMessageProcessing(ctx, string(msg.Channel), "inbound", "")
+		s.tracer.SetAttributes(span, "channel_id", msg.ChannelID)
+		ctx = traceCtx
+		msgSpan = span
+		defer span.End()
+	}
+
 	runtime, err := s.ensureRuntime(ctx)
 	if err != nil {
 		s.logger.Error("runtime initialization failed", "error", err)
@@ -182,6 +192,12 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 	msg.SessionID = session.ID
 	if msg.CreatedAt.IsZero() {
 		msg.CreatedAt = time.Now()
+	}
+	if msgSpan != nil {
+		s.tracer.SetAttributes(msgSpan, "session_id", session.ID, "agent_id", agentID)
+		if msg.ID != "" {
+			s.tracer.SetAttributes(msgSpan, "message_id", msg.ID)
+		}
 	}
 
 	// Handle commands BEFORE acquiring session lock, since commands like /stop

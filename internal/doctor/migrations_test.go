@@ -74,7 +74,7 @@ func TestApplyConfigMigrationsRespectsExistingTools(t *testing.T) {
 	}
 }
 
-func TestApplyConfigMigrationsRemovesObservability(t *testing.T) {
+func TestApplyConfigMigrationsPreservesObservability(t *testing.T) {
 	raw := map[string]any{
 		"observability": map[string]any{"metrics": map[string]any{"enabled": true}},
 	}
@@ -83,11 +83,11 @@ func TestApplyConfigMigrationsRemovesObservability(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected migration error: %v", err)
 	}
-	if len(report.Applied) != 2 {
-		t.Fatalf("expected 2 migrations, got %d", len(report.Applied))
+	if len(report.Applied) != 1 {
+		t.Fatalf("expected 1 migration, got %d", len(report.Applied))
 	}
-	if _, ok := raw["observability"]; ok {
-		t.Fatalf("expected observability to be removed")
+	if _, ok := raw["observability"]; !ok {
+		t.Fatalf("expected observability to be preserved")
 	}
 	if version, ok := raw["version"].(int); !ok || version != config.CurrentVersion {
 		t.Fatalf("expected version %d, got %v", config.CurrentVersion, raw["version"])

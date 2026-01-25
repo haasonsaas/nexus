@@ -86,11 +86,6 @@ func ApplyConfigMigrations(raw map[string]any) (MigrationReport, error) {
 		}
 	}
 
-	if _, ok := raw["observability"]; ok {
-		delete(raw, "observability")
-		report.Applied = append(report.Applied, "removed observability (unsupported)")
-	}
-
 	if version < config.CurrentVersion {
 		raw["version"] = config.CurrentVersion
 		report.Applied = append(report.Applied, fmt.Sprintf("set version to %d", config.CurrentVersion))

@@ -128,6 +128,10 @@ type Server struct {
 	eventStore    *observability.MemoryEventStore
 	eventRecorder *observability.EventRecorder
 
+	// Tracing for distributed observability
+	tracer        *observability.Tracer
+	traceShutdown func(context.Context) error
+
 	// Trace directory plugin for run tracing
 	tracePlugin *agent.TraceDirectoryPlugin
 
@@ -162,6 +166,12 @@ type Server struct {
 	httpListener net.Listener
 
 	configApplyMu sync.Mutex
+
+	// postureMu guards security posture state
+	postureMu                sync.Mutex
+	postureRunning           bool
+	postureLockdownRequested bool
+	postureLockdownApplied   bool
 
 	// singletonLock prevents multiple gateway instances from running
 	singletonLock *GatewayLockHandle
@@ -492,6 +502,27 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	eventStore := observability.NewMemoryEventStore(10000) // Store up to 10k events
 	eventRecorder := observability.NewEventRecorder(eventStore, nil)
 
+	// Initialize OpenTelemetry tracer if enabled
+	var tracer *observability.Tracer
+	var traceShutdown func(context.Context) error
+	if cfg.Observability.Tracing.Enabled {
+		traceCfg := observability.TraceConfig{
+			ServiceName:    cfg.Observability.Tracing.ServiceName,
+			ServiceVersion: cfg.Observability.Tracing.ServiceVersion,
+			Environment:    cfg.Observability.Tracing.Environment,
+			Endpoint:       cfg.Observability.Tracing.Endpoint,
+			SamplingRate:   cfg.Observability.Tracing.SamplingRate,
+			Attributes:     cfg.Observability.Tracing.Attributes,
+			EnableInsecure: cfg.Observability.Tracing.Insecure,
+		}
+		tracer, traceShutdown = observability.NewTracer(traceCfg)
+		if traceCfg.Endpoint == "" {
+			logger.Info("tracing enabled with empty endpoint (no-op tracer)")
+		} else {
+			logger.Info("tracing enabled", "endpoint", traceCfg.Endpoint, "service", traceCfg.ServiceName)
+		}
+	}
+
 	// Initialize identity store for cross-channel linking
 	identityStore := identity.NewMemoryStore()
 	// Import identity links from config if present
@@ -576,6 +607,8 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		artifactRepo:       artifactRepo,
 		eventStore:         eventStore,
 		eventRecorder:      eventRecorder,
+		tracer:             tracer,
+		traceShutdown:      traceShutdown,
 		identityStore:      identityStore,
 		commandRegistry:    commandRegistry,
 		commandParser:      commandParser,

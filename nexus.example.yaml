@@ -498,3 +498,28 @@ logging:
   format: json # json, text
   # Optional: output to file
   # file: /var/log/nexus/nexus.log
+
+observability:
+  tracing:
+    enabled: false
+    endpoint: ""
+    service_name: nexus
+    service_version: "dev"
+    environment: "local"
+    sampling_rate: 1.0
+    insecure: true
+    attributes: {}
+
+security:
+  posture:
+    enabled: false
+    interval: 10m
+    include_filesystem: true
+    include_gateway: true
+    include_config: true
+    check_symlinks: true
+    allow_group_readable: false
+    emit_events: true
+    auto_remediation:
+      enabled: false
+      mode: warn_only

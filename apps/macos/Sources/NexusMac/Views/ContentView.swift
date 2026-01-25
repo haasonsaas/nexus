@@ -2,6 +2,7 @@ import SwiftUI
 
 enum SidebarItem: String, CaseIterable, Hashable {
     case overview = "Overview"
+    case agents = "Agents"
     case edge = "Edge Service"
     case nodes = "Nodes"
     case computerUse = "Computer Use"
@@ -17,6 +18,7 @@ enum SidebarItem: String, CaseIterable, Hashable {
     var systemImage: String {
         switch self {
         case .overview: return "gauge"
+        case .agents: return "cpu"
         case .edge: return "bolt.horizontal"
         case .nodes: return "desktopcomputer"
         case .computerUse: return "cursorarrow"
@@ -47,6 +49,8 @@ struct ContentView: View {
             switch selection ?? .overview {
             case .overview:
                 OverviewView()
+            case .agents:
+                AgentWorkspaceView()
             case .edge:
                 EdgeServiceView()
             case .nodes:

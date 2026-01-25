@@ -62,6 +62,7 @@ final class ConnectionModeCoordinator {
 
     /// Disconnect from gateway
     func disconnect() async {
+        let wasConnected = state == .connected
         state = .disconnected
         connectionTask?.cancel()
         healthCheckTask?.cancel()
@@ -71,6 +72,11 @@ final class ConnectionModeCoordinator {
 
         // Disconnect control channel
         ControlChannel.shared.disconnect()
+
+        // Send notification if we were previously connected
+        if wasConnected {
+            NotificationService.shared.notifyGatewayDisconnected()
+        }
 
         logger.info("disconnected from gateway")
     }
@@ -98,6 +104,9 @@ final class ConnectionModeCoordinator {
 
                 // Start health monitoring
                 startHealthCheck()
+
+                // Send notification
+                NotificationService.shared.notifyGatewayConnected()
 
                 logger.info("connected to local gateway on port \(port)")
             } catch {
@@ -145,6 +154,9 @@ final class ConnectionModeCoordinator {
 
                 // Start health monitoring
                 startHealthCheck()
+
+                // Send notification
+                NotificationService.shared.notifyGatewayConnected()
 
                 logger.info("connected to remote gateway at \(host)")
             } catch {

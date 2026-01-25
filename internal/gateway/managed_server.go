@@ -53,6 +53,7 @@ func NewManagedServer(cfg ManagedServerConfig) (*ManagedServer, error) {
 		MCPManager:     server.mcpManager,
 		PolicyResolver: server.toolPolicyResolver,
 		JobStore:       server.jobStore,
+		SkillsManager:  server.skillsManager,
 		Logger:         logger.With("component", "tool-manager"),
 	})
 	server.toolManager = toolManager

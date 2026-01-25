@@ -32,6 +32,11 @@ func NewManager(workspace string) *Manager {
 	}
 }
 
+// RunCommand executes a command synchronously using the manager's workspace resolver.
+func (m *Manager) RunCommand(ctx context.Context, command string, cwd string, env map[string]string, input string, timeout time.Duration) (ExecResult, error) {
+	return m.runSync(ctx, command, cwd, env, input, timeout)
+}
+
 type process struct {
 	id       string
 	command  string

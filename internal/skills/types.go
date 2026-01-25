@@ -89,6 +89,9 @@ type SkillMetadata struct {
 	// ToolGroups lists tool policy groups required for this skill.
 	// Skills are ineligible if policy doesn't allow these groups.
 	ToolGroups []string `json:"toolGroups,omitempty" yaml:"toolGroups"`
+
+	// Tools defines JSON schema tools provided by this skill.
+	Tools []SkillToolSpec `json:"tools,omitempty" yaml:"tools"`
 }
 
 // SkillRequires defines gating requirements for a skill.

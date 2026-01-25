@@ -15,6 +15,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/jobs"
 	"github.com/haasonsaas/nexus/internal/mcp"
 	"github.com/haasonsaas/nexus/internal/sessions"
+	"github.com/haasonsaas/nexus/internal/skills"
 	"github.com/haasonsaas/nexus/internal/tools/browser"
 	exectools "github.com/haasonsaas/nexus/internal/tools/exec"
 	"github.com/haasonsaas/nexus/internal/tools/files"
@@ -40,6 +41,7 @@ type ToolManager struct {
 	policyResolver *policy.Resolver
 	jobStore       jobs.Store
 	sessionStore   sessions.Store
+	skillsManager  *skills.Manager
 
 	// Managed resources
 	browserPool        *browser.Pool
@@ -58,6 +60,7 @@ type ToolManagerConfig struct {
 	PolicyResolver *policy.Resolver
 	JobStore       jobs.Store
 	Sessions       sessions.Store
+	SkillsManager  *skills.Manager
 	Logger         *slog.Logger
 }
 
@@ -75,6 +78,7 @@ func NewToolManager(cfg ToolManagerConfig) *ToolManager {
 		policyResolver:  cfg.PolicyResolver,
 		jobStore:        cfg.JobStore,
 		sessionStore:    cfg.Sessions,
+		skillsManager:   cfg.SkillsManager,
 		registeredTools: make([]string, 0),
 		mcpTools:        make([]string, 0),
 		toolSummaries:   make([]models.ToolSummary, 0),
@@ -270,6 +274,15 @@ func (m *ToolManager) RegisterTools(ctx context.Context, runtime *agent.Runtime)
 				Timeout:  cfg.Tools.MemorySearch.Embeddings.Timeout,
 			},
 		}))
+	}
+
+	// Register skill-provided tools
+	if m.skillsManager != nil {
+		for _, skill := range m.skillsManager.ListEligible() {
+			for _, tool := range skills.BuildSkillTools(skill, execManager) {
+				m.registerCoreTool(runtime, tool)
+			}
+		}
 	}
 
 	// Register job status tool

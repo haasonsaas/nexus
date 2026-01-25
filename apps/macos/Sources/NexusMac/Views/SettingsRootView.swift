@@ -187,43 +187,8 @@ struct ChannelsSettingsView: View {
 }
 
 struct CronSettingsView: View {
-    @State private var cronStore = CronJobsStore.shared
-
     var body: some View {
-        VStack {
-            if cronStore.jobs.isEmpty {
-                ContentUnavailableView(
-                    "No Scheduled Jobs",
-                    systemImage: "clock.badge.questionmark",
-                    description: Text("Create a cron job to automate tasks")
-                )
-            } else {
-                List(cronStore.jobs) { job in
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text(job.name)
-                            Text(job.schedule.displayString)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Toggle("", isOn: Binding(
-                            get: { job.enabled },
-                            set: { newValue in
-                                Task {
-                                    try? await cronStore.setEnabled(newValue, jobId: job.id)
-                                }
-                            }
-                        ))
-                        .labelsHidden()
-                    }
-                }
-            }
-        }
-        .padding()
-        .task {
-            await cronStore.loadJobs()
-        }
+        CronJobEditorView()
     }
 }
 

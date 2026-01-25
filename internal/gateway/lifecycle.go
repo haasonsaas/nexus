@@ -48,6 +48,15 @@ func (s *Server) Start(ctx context.Context) error {
 	if err := s.channels.StartAll(ctx); err != nil {
 		return fmt.Errorf("failed to start channels: %w", err)
 	}
+
+	// Start integration subsystems (diagnostics, health, migrations)
+	if s.integration != nil {
+		if err := s.integration.Start(ctx); err != nil {
+			return fmt.Errorf("failed to start integration subsystems: %w", err)
+		}
+		s.logger.Info("integration subsystems started")
+	}
+
 	if s.cronScheduler != nil {
 		if err := s.cronScheduler.Start(ctx); err != nil {
 			return fmt.Errorf("failed to start cron scheduler: %w", err)
@@ -122,6 +131,13 @@ func (s *Server) Stop(ctx context.Context) error {
 	// Stop channel adapters
 	if err := s.channels.StopAll(ctx); err != nil {
 		s.logger.Error("error stopping channels", "error", err)
+	}
+
+	// Stop integration subsystems
+	if s.integration != nil {
+		if err := s.integration.Stop(ctx); err != nil {
+			s.logger.Error("error stopping integration subsystems", "error", err)
+		}
 	}
 
 	if err := s.waitForProcessing(ctx); err != nil {

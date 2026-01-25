@@ -151,6 +151,9 @@ type Server struct {
 
 	// singletonLock prevents multiple gateway instances from running
 	singletonLock *GatewayLockHandle
+
+	// integration wires up cross-cutting observability and health systems
+	integration *Integration
 }
 
 // NewServer creates a new gateway server with the given configuration and logger.
@@ -474,6 +477,30 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		}
 	}
 
+	// Initialize integration subsystems for observability and health
+	integration := NewIntegration(&IntegrationConfig{
+		DiagnosticsEnabled: true,
+		HealthProbeTimeout: 10 * time.Second,
+		UsageCacheTTL:      5 * time.Minute,
+		AutoMigrate:        true,
+		StateDir:           cfg.Workspace.Path,
+	})
+
+	// Configure provider usage fetchers from LLM provider configs
+	var anthropicKey, openaiKey, geminiKey string
+	if p, ok := cfg.LLM.Providers["anthropic"]; ok {
+		anthropicKey = p.APIKey
+	}
+	if p, ok := cfg.LLM.Providers["openai"]; ok {
+		openaiKey = p.APIKey
+	}
+	if p, ok := cfg.LLM.Providers["google"]; ok {
+		geminiKey = p.APIKey
+	} else if p, ok := cfg.LLM.Providers["gemini"]; ok {
+		geminiKey = p.APIKey
+	}
+	integration.ConfigureProviderUsage(anthropicKey, openaiKey, geminiKey)
+
 	startupCancelUsed = true
 	server := &Server{
 		config:             cfg,
@@ -513,6 +540,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		messageSem:         make(chan struct{}, 100), // Limit concurrent message handlers
 		normalizer:         NewMessageNormalizer(),
 		streamingRegistry:  NewStreamingRegistry(),
+		integration:        integration,
 	}
 	if artifactSetup != nil {
 		server.artifactRepo = artifactSetup.repo

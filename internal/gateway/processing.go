@@ -84,15 +84,24 @@ func (s *Server) processMessages(ctx context.Context) {
 
 // handleMessage processes a single incoming message.
 func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
+	startTime := time.Now()
 	s.logger.Debug("received message",
 		"channel", msg.Channel,
 		"content_length", len(msg.Content),
 	)
 
+	// Track inbound activity
+	if s.integration != nil {
+		s.integration.RecordInbound(string(msg.Channel), msg.ChannelID)
+	}
+
 	if s.handleMessageHook != nil {
 		s.handleMessageHook(ctx, msg)
 		return
 	}
+
+	// Emit message queued diagnostic event
+	EmitMessageQueued("", "", string(msg.Channel), "inbound", 1)
 
 	// Normalize message metadata to canonical format
 	if s.normalizer != nil {
@@ -405,9 +414,18 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		// Non-streaming: send complete message
 		if err := outboundAdapter.Send(ctx, outboundMsg); err != nil {
 			s.logger.Error("failed to send outbound message", "error", err)
+			EmitMessageProcessed(string(msg.Channel), outboundMsg.ID, channelID, key, session.ID,
+				"error", "", err.Error(), time.Since(startTime).Milliseconds())
 			return
 		}
 	}
+
+	// Track outbound activity and emit completion event
+	if s.integration != nil {
+		s.integration.RecordOutbound(string(msg.Channel), channelID)
+	}
+	EmitMessageProcessed(string(msg.Channel), outboundMsg.ID, channelID, key, session.ID,
+		"completed", "", "", time.Since(startTime).Milliseconds())
 
 	// Note: assistant message persistence is handled by runtime.Process()
 	// The runtime persists the full message with tool calls during the agentic loop.
@@ -449,6 +467,10 @@ func (s *Server) sendImmediateReply(ctx context.Context, session *models.Session
 	if err := adapter.Send(ctx, outbound); err != nil {
 		s.logger.Error("failed to send outbound message", "error", err)
 		return
+	}
+	// Track outbound activity
+	if s.integration != nil {
+		s.integration.RecordOutbound(string(inbound.Channel), inbound.ChannelID)
 	}
 	if s.memoryLogger != nil {
 		if err := s.memoryLogger.Append(outbound); err != nil {

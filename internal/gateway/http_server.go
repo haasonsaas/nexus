@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/haasonsaas/nexus/internal/commands"
 	"github.com/haasonsaas/nexus/internal/web"
 )
 
@@ -96,6 +98,59 @@ func (s *Server) stopHTTPServer(ctx context.Context) {
 
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+
+	// Use integration health checker if available
+	if s.integration != nil {
+		// Quick health check without probing
+		probeChannels := r.URL.Query().Get("probe") == "true"
+		summary, err := s.integration.CheckHealth(r.Context(), &commands.HealthCheckOptions{
+			ProbeChannels: &probeChannels,
+		})
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"status":"error","error":"` + err.Error() + `"}`))
+			return
+		}
+
+		// Build response
+		status := "ok"
+		statusCode := http.StatusOK
+		if !summary.OK {
+			status = "degraded"
+			statusCode = http.StatusServiceUnavailable
+		}
+
+		response := map[string]any{
+			"status":      status,
+			"ts":          summary.Ts,
+			"duration_ms": summary.DurationMs,
+		}
+
+		// Include activity stats
+		activityStats := s.integration.GetActivityStats()
+		response["activity"] = map[string]any{
+			"channels":        activityStats.TotalChannels,
+			"recent_inbound":  activityStats.RecentInbound,
+			"recent_outbound": activityStats.RecentOutbound,
+		}
+
+		// Include migration status
+		current, latest, pending, err := s.integration.GetMigrationStatus()
+		if err == nil {
+			response["migrations"] = map[string]any{
+				"current": current,
+				"latest":  latest,
+				"pending": pending,
+			}
+		}
+
+		w.WriteHeader(statusCode)
+		data, _ := json.Marshal(response)
+		_, _ = w.Write(data)
+		return
+	}
+
+	// Fallback to simple health check
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{"status":"ok"}`)) //nolint:errcheck
 }

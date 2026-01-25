@@ -1,298 +1,445 @@
-import AppKit
+import Foundation
 import OSLog
-import SwiftUI
 
-/// Injects active sessions into the menu bar menu.
-/// Acts as a delegate wrapper to preserve SwiftUI's menu handling.
+/// Pre-warms and provides session previews for the menu bar.
+/// Acts as a data layer between SessionBridge/ConversationMemory and MenuBarView.
 @MainActor
-final class MenuSessionsInjector: NSObject, NSMenuDelegate {
+@Observable
+final class MenuSessionsInjector {
     static let shared = MenuSessionsInjector()
 
-    private let logger = Logger(subsystem: "com.nexus.mac", category: "menu.injector")
-    private let sessionTag = 9_415_557
-    private let menuWidth: CGFloat = 320
+    private let logger = Logger(subsystem: "com.nexus.mac", category: "menu-sessions")
 
-    private weak var originalDelegate: NSMenuDelegate?
-    private weak var statusItem: NSStatusItem?
-    private var isMenuOpen = false
+    // MARK: - Session Preview Model
 
-    private override init() {
-        super.init()
-    }
+    struct SessionPreview: Identifiable, Equatable {
+        let id: String
+        var title: String
+        var lastMessageTimestamp: Date
+        var agentType: AgentType
+        var status: Status
+        var lastUserMessage: String?
+        var lastAssistantResponse: String?
 
-    /// Install the injector on a status item
-    func install(into statusItem: NSStatusItem) {
-        self.statusItem = statusItem
-        guard let menu = statusItem.menu else { return }
+        enum AgentType: String, CaseIterable {
+            case chat
+            case voice
+            case agent
+            case computerUse
+            case mcp
 
-        // Preserve SwiftUI's internal delegate
-        if menu.delegate !== self {
-            originalDelegate = menu.delegate
-            menu.delegate = self
-        }
+            var icon: String {
+                switch self {
+                case .chat: return "message"
+                case .voice: return "mic"
+                case .agent: return "cpu"
+                case .computerUse: return "desktopcomputer"
+                case .mcp: return "puzzlepiece"
+                }
+            }
 
-        logger.debug("menu injector installed")
-    }
-
-    // MARK: - NSMenuDelegate
-
-    func menuWillOpen(_ menu: NSMenu) {
-        originalDelegate?.menuWillOpen?(menu)
-        isMenuOpen = true
-
-        // Inject sessions
-        injectSessions(into: menu)
-    }
-
-    func menuDidClose(_ menu: NSMenu) {
-        originalDelegate?.menuDidClose?(menu)
-        isMenuOpen = false
-    }
-
-    func menuNeedsUpdate(_ menu: NSMenu) {
-        originalDelegate?.menuNeedsUpdate?(menu)
-    }
-
-    // MARK: - Injection
-
-    private func injectSessions(into menu: NSMenu) {
-        // Remove any previous injected items
-        for item in menu.items where item.tag == sessionTag {
-            menu.removeItem(item)
-        }
-
-        // Find insert position (after first separator or at position 1)
-        let insertIndex = findInsertIndex(in: menu)
-
-        // Get active sessions
-        let sessions = SessionBridge.shared.activeSessions.prefix(5)
-
-        var cursor = insertIndex
-
-        // Header
-        let headerItem = makeHeaderItem()
-        menu.insertItem(headerItem, at: cursor)
-        cursor += 1
-
-        if sessions.isEmpty {
-            // No sessions message
-            let emptyItem = makeMessageItem(text: "No active sessions", symbol: "minus")
-            menu.insertItem(emptyItem, at: cursor)
-            cursor += 1
-        } else {
-            // Session rows
-            for session in sessions {
-                let sessionItem = makeSessionItem(session)
-                menu.insertItem(sessionItem, at: cursor)
-                cursor += 1
+            var displayName: String {
+                switch self {
+                case .chat: return "Chat"
+                case .voice: return "Voice"
+                case .agent: return "Agent"
+                case .computerUse: return "Computer Use"
+                case .mcp: return "MCP"
+                }
             }
         }
 
-        // Divider after sessions
-        let divider = NSMenuItem.separator()
-        divider.tag = sessionTag
-        menu.insertItem(divider, at: cursor)
-    }
+        enum Status: String, CaseIterable {
+            case active
+            case paused
+            case completed
 
-    // MARK: - Menu Items
-
-    private func makeHeaderItem() -> NSMenuItem {
-        let item = NSMenuItem()
-        item.tag = sessionTag
-        item.isEnabled = false
-
-        let view = NSHostingView(rootView: SessionMenuHeaderView(
-            sessionCount: SessionBridge.shared.activeSessions.count,
-            isConnected: ControlChannel.shared.isConnected
-        ))
-        view.frame.size.width = menuWidth
-        let size = view.fittingSize
-        view.frame = NSRect(origin: .zero, size: NSSize(width: menuWidth, height: size.height))
-        item.view = view
-
-        return item
-    }
-
-    private func makeSessionItem(_ session: SessionBridge.Session) -> NSMenuItem {
-        let item = NSMenuItem()
-        item.tag = sessionTag
-        item.isEnabled = true
-        item.target = self
-        item.action = #selector(openSession(_:))
-        item.representedObject = session.id
-
-        let view = NSHostingView(rootView: SessionMenuRowView(session: session, width: menuWidth))
-        view.frame.size.width = menuWidth
-        let size = view.fittingSize
-        view.frame = NSRect(origin: .zero, size: NSSize(width: menuWidth, height: size.height))
-        item.view = view
-
-        // Submenu with session actions
-        item.submenu = makeSessionSubmenu(for: session)
-
-        return item
-    }
-
-    private func makeMessageItem(text: String, symbol: String) -> NSMenuItem {
-        let item = NSMenuItem()
-        item.tag = sessionTag
-        item.isEnabled = false
-
-        let view = NSHostingView(rootView: HStack(spacing: 8) {
-            Image(systemName: symbol)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(text)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Spacer()
+            var color: String {
+                switch self {
+                case .active: return "green"
+                case .paused: return "orange"
+                case .completed: return "secondary"
+                }
+            }
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 6)
-        .frame(width: menuWidth, alignment: .leading))
 
-        view.frame.size.width = menuWidth
-        let size = view.fittingSize
-        view.frame = NSRect(origin: .zero, size: NSSize(width: menuWidth, height: size.height))
-        item.view = view
+        /// Truncated preview of the last user message
+        var userMessagePreview: String? {
+            guard let message = lastUserMessage else { return nil }
+            return truncate(message, maxLength: 80)
+        }
 
-        return item
+        /// Truncated preview of the last assistant response
+        var assistantResponsePreview: String? {
+            guard let response = lastAssistantResponse else { return nil }
+            return truncate(response, maxLength: 100)
+        }
+
+        /// Human-readable time since last activity
+        var timeSinceActivity: String {
+            let formatter = RelativeDateTimeFormatter()
+            formatter.unitsStyle = .abbreviated
+            return formatter.localizedString(for: lastMessageTimestamp, relativeTo: Date())
+        }
+
+        private func truncate(_ text: String, maxLength: Int) -> String {
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.count <= maxLength {
+                return trimmed
+            }
+            let index = trimmed.index(trimmed.startIndex, offsetBy: maxLength - 1)
+            return String(trimmed[..<index]) + "…"
+        }
     }
 
-    private func makeSessionSubmenu(for session: SessionBridge.Session) -> NSMenu {
-        let menu = NSMenu()
+    // MARK: - State
 
-        let openItem = NSMenuItem(title: "Open Chat", action: #selector(openSession(_:)), keyEquivalent: "")
-        openItem.target = self
-        openItem.representedObject = session.id
-        menu.addItem(openItem)
+    private(set) var cachedPreviews: [String: SessionPreview] = [:]
+    private(set) var isLoading: Bool = false
+    private(set) var lastRefreshed: Date?
 
-        menu.addItem(NSMenuItem.separator())
+    private var refreshTask: Task<Void, Never>?
+    private var autoRefreshTask: Task<Void, Never>?
+    private var isMenuOpen: Bool = false
 
-        let deleteItem = NSMenuItem(title: "Delete Session", action: #selector(deleteSession(_:)), keyEquivalent: "")
-        deleteItem.target = self
-        deleteItem.representedObject = session.id
-        menu.addItem(deleteItem)
+    private let maxCompletedSessions = 5
+    private let autoRefreshInterval: TimeInterval = 30
 
-        return menu
+    private init() {}
+
+    // MARK: - Computed Properties
+
+    /// Sorted list of session previews for menu display.
+    /// Active sessions first (sorted by most recent activity), then recent completed sessions.
+    var menuItems: [SessionPreview] {
+        let previews = Array(cachedPreviews.values)
+
+        // Separate active and completed
+        let activeSessions = previews
+            .filter { $0.status == .active || $0.status == .paused }
+            .sorted { $0.lastMessageTimestamp > $1.lastMessageTimestamp }
+
+        let completedSessions = previews
+            .filter { $0.status == .completed }
+            .sorted { $0.lastMessageTimestamp > $1.lastMessageTimestamp }
+            .prefix(maxCompletedSessions)
+
+        return activeSessions + completedSessions
+    }
+
+    /// Count of active sessions
+    var activeSessionCount: Int {
+        cachedPreviews.values.filter { $0.status == .active }.count
+    }
+
+    /// Count of paused sessions
+    var pausedSessionCount: Int {
+        cachedPreviews.values.filter { $0.status == .paused }.count
+    }
+
+    // MARK: - Public Methods
+
+    /// Load and cache session previews from SessionBridge and ConversationMemory.
+    func inject() {
+        guard !isLoading else {
+            logger.debug("inject skipped - already loading")
+            return
+        }
+
+        isLoading = true
+        logger.debug("injecting session previews")
+
+        // Get sessions from SessionBridge
+        let sessions = SessionBridge.shared.activeSessions
+
+        // Build previews
+        var newPreviews: [String: SessionPreview] = [:]
+
+        for session in sessions {
+            let preview = buildPreview(from: session)
+            newPreviews[session.id] = preview
+        }
+
+        // Merge with conversation memory for completed sessions
+        let conversations = ConversationMemory.shared.recentConversations(limit: maxCompletedSessions)
+        for conversation in conversations {
+            // Skip if already tracked as active
+            if newPreviews[conversation.id] != nil { continue }
+
+            let preview = buildPreview(from: conversation)
+            newPreviews[conversation.id] = preview
+        }
+
+        cachedPreviews = newPreviews
+        lastRefreshed = Date()
+        isLoading = false
+
+        logger.info("injected \(newPreviews.count) session previews")
+    }
+
+    /// Update cached previews from SessionBridge without full reload.
+    func refresh() {
+        refreshTask?.cancel()
+        refreshTask = Task { @MainActor in
+            logger.debug("refreshing session previews")
+
+            // Update existing active sessions
+            let sessions = SessionBridge.shared.activeSessions
+
+            for session in sessions {
+                if var existing = cachedPreviews[session.id] {
+                    // Update mutable fields
+                    existing.status = mapStatus(session.status)
+                    existing.lastMessageTimestamp = session.lastActiveAt
+                    if let title = session.metadata.title {
+                        existing.title = title
+                    }
+                    cachedPreviews[session.id] = existing
+                } else {
+                    // New session, add it
+                    let preview = buildPreview(from: session)
+                    cachedPreviews[session.id] = preview
+                }
+            }
+
+            // Remove stale active sessions
+            let activeIds = Set(sessions.map(\.id))
+            for (id, preview) in cachedPreviews {
+                if preview.status != .completed && !activeIds.contains(id) {
+                    // Mark as completed instead of removing
+                    var updated = preview
+                    updated.status = .completed
+                    cachedPreviews[id] = updated
+                }
+            }
+
+            // Prune old completed sessions
+            pruneCompletedSessions()
+
+            lastRefreshed = Date()
+            logger.debug("refresh complete - \(self.cachedPreviews.count) sessions")
+        }
+    }
+
+    /// Get preview data for a specific session.
+    func previewFor(sessionId: String) -> SessionPreview? {
+        if let cached = cachedPreviews[sessionId] {
+            return cached
+        }
+
+        // Try to build on-demand from SessionBridge
+        if let session = SessionBridge.shared.activeSessions.first(where: { $0.id == sessionId }) {
+            let preview = buildPreview(from: session)
+            cachedPreviews[sessionId] = preview
+            return preview
+        }
+
+        // Try conversation memory
+        if let conversation = ConversationMemory.shared.conversations.first(where: { $0.id == sessionId }) {
+            let preview = buildPreview(from: conversation)
+            cachedPreviews[sessionId] = preview
+            return preview
+        }
+
+        return nil
     }
 
     // MARK: - Actions
 
-    @objc private func openSession(_ sender: NSMenuItem) {
-        guard let sessionId = sender.representedObject as? String else { return }
-        WebChatManager.shared.openChat(for: sessionId)
-        logger.debug("opened session: \(sessionId)")
-    }
+    /// Resume a paused or completed session.
+    func resumeSession(_ sessionId: String) {
+        logger.info("resuming session: \(sessionId)")
 
-    @objc private func deleteSession(_ sender: NSMenuItem) {
-        guard let sessionId = sender.representedObject as? String else { return }
+        // Update local cache
+        if var preview = cachedPreviews[sessionId] {
+            preview.status = .active
+            preview.lastMessageTimestamp = Date()
+            cachedPreviews[sessionId] = preview
+        }
 
+        // Notify SessionBridge
+        SessionBridge.shared.setPrimarySession(id: sessionId)
+
+        // Open chat
         Task {
-            await SessionBridge.shared.deleteSession(id: sessionId)
-            logger.info("deleted session: \(sessionId)")
+            WebChatManager.shared.show(sessionKey: sessionId)
         }
     }
 
-    // MARK: - Helpers
+    /// Delete a session.
+    func deleteSession(_ sessionId: String) {
+        logger.info("deleting session: \(sessionId)")
 
-    private func findInsertIndex(in menu: NSMenu) -> Int {
-        // Insert after the first separator, or at position 1
-        if let sepIdx = menu.items.firstIndex(where: { $0.isSeparatorItem }) {
-            return sepIdx + 1
-        }
-        return min(1, menu.items.count)
+        // Remove from cache
+        cachedPreviews.removeValue(forKey: sessionId)
+
+        // End session in bridge
+        SessionBridge.shared.endSession(id: sessionId, status: .completed)
+
+        // Delete from conversation memory
+        ConversationMemory.shared.deleteConversation(id: sessionId)
     }
-}
 
-// MARK: - Supporting Views
+    /// Duplicate a session (creates new session with same context).
+    func duplicateSession(_ sessionId: String) {
+        logger.info("duplicating session: \(sessionId)")
 
-struct SessionMenuHeaderView: View {
-    let sessionCount: Int
-    let isConnected: Bool
+        guard let original = cachedPreviews[sessionId] else {
+            logger.warning("cannot duplicate - session not found: \(sessionId)")
+            return
+        }
 
-    var body: some View {
-        HStack {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        // Create new session via bridge
+        var metadata = SessionBridge.Session.SessionMetadata()
+        metadata.title = "Copy of \(original.title)"
 
-            Text("Sessions (\(sessionCount))")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
+        let sessionType = mapAgentTypeToSessionType(original.agentType)
+        let newSession = SessionBridge.shared.createSession(type: sessionType, metadata: metadata)
 
-            Spacer()
+        // Add to cache
+        let preview = SessionPreview(
+            id: newSession.id,
+            title: metadata.title ?? "New Session",
+            lastMessageTimestamp: Date(),
+            agentType: original.agentType,
+            status: .active,
+            lastUserMessage: nil,
+            lastAssistantResponse: nil
+        )
+        cachedPreviews[newSession.id] = preview
 
-            if !isConnected {
-                Image(systemName: "bolt.slash")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
+        // Open the new session
+        Task {
+            WebChatManager.shared.show(sessionKey: newSession.id)
+        }
+    }
+
+    // MARK: - Menu Lifecycle
+
+    /// Called when menu opens - starts auto-refresh.
+    func menuDidOpen() {
+        isMenuOpen = true
+        startAutoRefresh()
+        refresh()
+    }
+
+    /// Called when menu closes - stops auto-refresh.
+    func menuDidClose() {
+        isMenuOpen = false
+        stopAutoRefresh()
+    }
+
+    // MARK: - Private Helpers
+
+    private func buildPreview(from session: SessionBridge.Session) -> SessionPreview {
+        // Try to get message previews from conversation memory
+        let conversation = ConversationMemory.shared.conversations.first { $0.id == session.id }
+
+        let lastUserMessage = conversation?.messages
+            .last { $0.role == .user }?
+            .content
+
+        let lastAssistantResponse = conversation?.messages
+            .last { $0.role == .assistant }?
+            .content
+
+        return SessionPreview(
+            id: session.id,
+            title: session.metadata.title ?? generateTitle(from: session),
+            lastMessageTimestamp: session.lastActiveAt,
+            agentType: mapAgentType(session.type),
+            status: mapStatus(session.status),
+            lastUserMessage: lastUserMessage,
+            lastAssistantResponse: lastAssistantResponse
+        )
+    }
+
+    private func buildPreview(from conversation: ConversationMemory.ConversationRecord) -> SessionPreview {
+        let lastUserMessage = conversation.messages
+            .last { $0.role == .user }?
+            .content
+
+        let lastAssistantResponse = conversation.messages
+            .last { $0.role == .assistant }?
+            .content
+
+        return SessionPreview(
+            id: conversation.id,
+            title: conversation.title ?? "Conversation",
+            lastMessageTimestamp: conversation.updatedAt,
+            agentType: .chat, // Default for memory-only conversations
+            status: .completed,
+            lastUserMessage: lastUserMessage,
+            lastAssistantResponse: lastAssistantResponse
+        )
+    }
+
+    private func generateTitle(from session: SessionBridge.Session) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return "\(session.type.rawValue.capitalized) - \(formatter.string(from: session.createdAt))"
+    }
+
+    private func mapAgentType(_ type: SessionBridge.Session.SessionType) -> SessionPreview.AgentType {
+        switch type {
+        case .chat: return .chat
+        case .voice: return .voice
+        case .agent: return .agent
+        case .computerUse: return .computerUse
+        case .mcp: return .mcp
+        }
+    }
+
+    private func mapAgentTypeToSessionType(_ agentType: SessionPreview.AgentType) -> SessionBridge.Session.SessionType {
+        switch agentType {
+        case .chat: return .chat
+        case .voice: return .voice
+        case .agent: return .agent
+        case .computerUse: return .computerUse
+        case .mcp: return .mcp
+        }
+    }
+
+    private func mapStatus(_ status: SessionBridge.Session.SessionStatus) -> SessionPreview.Status {
+        switch status {
+        case .active: return .active
+        case .paused: return .paused
+        case .completed: return .completed
+        case .error: return .paused // Treat error as paused for menu purposes
+        }
+    }
+
+    private func pruneCompletedSessions() {
+        let completedSessions = cachedPreviews.values
+            .filter { $0.status == .completed }
+            .sorted { $0.lastMessageTimestamp > $1.lastMessageTimestamp }
+
+        if completedSessions.count > maxCompletedSessions {
+            let toRemove = completedSessions.dropFirst(maxCompletedSessions)
+            for session in toRemove {
+                cachedPreviews.removeValue(forKey: session.id)
             }
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 6)
     }
-}
 
-struct SessionMenuRowView: View {
-    let session: SessionBridge.Session
-    let width: CGFloat
+    private func startAutoRefresh() {
+        stopAutoRefresh()
 
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: sessionIcon)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(width: 16)
+        autoRefreshTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(self?.autoRefreshInterval ?? 30))
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(session.metadata.title ?? "Session")
-                    .font(.callout)
-                    .lineLimit(1)
+                guard let self, self.isMenuOpen else { break }
 
-                Text(session.lastActiveAt, style: .relative)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                self.refresh()
+                self.logger.debug("auto-refresh triggered")
             }
-
-            Spacer()
-
-            statusIndicator
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 6)
-        .frame(width: width, alignment: .leading)
-    }
-
-    private var sessionIcon: String {
-        switch session.type {
-        case .chat: return "message"
-        case .voice: return "mic"
-        case .agent: return "cpu"
-        case .computerUse: return "desktopcomputer"
-        case .mcp: return "puzzlepiece"
         }
     }
 
-    @ViewBuilder
-    private var statusIndicator: some View {
-        switch session.status {
-        case .idle:
-            Circle()
-                .fill(.secondary.opacity(0.3))
-                .frame(width: 6, height: 6)
-        case .processing:
-            Circle()
-                .fill(.blue)
-                .frame(width: 6, height: 6)
-        case .waiting:
-            Circle()
-                .fill(.orange)
-                .frame(width: 6, height: 6)
-        case .error:
-            Circle()
-                .fill(.red)
-                .frame(width: 6, height: 6)
-        }
+    private func stopAutoRefresh() {
+        autoRefreshTask?.cancel()
+        autoRefreshTask = nil
     }
 }

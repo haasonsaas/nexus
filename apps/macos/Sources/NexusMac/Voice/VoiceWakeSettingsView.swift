@@ -267,7 +267,7 @@ struct VoiceWakeSettingsView: View {
 
     private func toggleTest() {
         if isTesting {
-            VoiceWakeRuntime.shared.stopListening()
+            VoiceWakeOverlayRuntime.shared.stopListening()
             isTesting = false
             testState = .idle
         } else {
@@ -278,7 +278,7 @@ struct VoiceWakeSettingsView: View {
                 do {
                     testState = .listening
                     // Start voice wake in test mode
-                    VoiceWakeRuntime.shared.startListening()
+                    VoiceWakeOverlayRuntime.shared.startListening()
 
                     // Simulate listening for 10 seconds
                     try await Task.sleep(for: .seconds(10))
@@ -373,6 +373,294 @@ extension Binding where Value == String? {
             set: { self.wrappedValue = $0.isEmpty ? nil : $0 }
         )
     }
+}
+
+// MARK: - Wake Word Config Section
+
+/// Advanced configuration section for the WakeWordEngine.
+/// Allows users to manage trigger words, confidence threshold, and silence timeout.
+struct WakeWordConfigSection: View {
+    @State private var engine = WakeWordEngine.shared
+    @State private var newWord = ""
+    @State private var showAdvanced = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Wake Words Management
+            wakeWordsSection
+
+            // Detection Settings
+            detectionSettingsSection
+
+            // Advanced Settings (collapsible)
+            advancedSettingsSection
+
+            // Engine Status
+            engineStatusSection
+        }
+    }
+
+    // MARK: - Wake Words Section
+
+    private var wakeWordsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Wake Words")
+                    .font(.headline)
+                Spacer()
+                Button("Reset") {
+                    engine.setTriggerWords(WakeWordConfig.default.triggerWords)
+                }
+                .buttonStyle(.link)
+                .controlSize(.small)
+            }
+
+            VStack(spacing: 4) {
+                ForEach(engine.config.triggerWords, id: \.self) { word in
+                    HStack {
+                        Text(word)
+                            .font(.body)
+                        Spacer()
+                        Button {
+                            engine.removeTriggerWord(word)
+                        } label: {
+                            Image(systemName: "minus.circle")
+                                .foregroundStyle(.red)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(engine.config.triggerWords.count <= 1)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color(NSColor.controlBackgroundColor))
+                    )
+                }
+            }
+
+            HStack {
+                TextField("Add wake word", text: $newWord)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit {
+                        addWord()
+                    }
+
+                Button("Add") {
+                    addWord()
+                }
+                .disabled(newWord.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+
+            Text("Wake words trigger voice activation. Use distinct phrases to avoid false positives.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Detection Settings Section
+
+    private var detectionSettingsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Detection Settings")
+                .font(.headline)
+
+            // Confidence Threshold
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("Confidence Threshold")
+                        .font(.subheadline)
+                    Spacer()
+                    Text("\(engine.config.confidenceThreshold, specifier: "%.0f")%")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+
+                Slider(
+                    value: Binding(
+                        get: { Double(engine.config.confidenceThreshold) },
+                        set: { engine.config.confidenceThreshold = Float($0) }
+                    ),
+                    in: 0.5...1.0,
+                    step: 0.05
+                )
+
+                Text("Higher values reduce false positives but may miss quieter speech.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            // Silence Timeout
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("Silence Timeout")
+                        .font(.subheadline)
+                    Spacer()
+                    Text("\(engine.config.silenceTimeout, specifier: "%.1f")s")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+
+                Slider(
+                    value: $engine.config.silenceTimeout,
+                    in: 0.5...5.0,
+                    step: 0.5
+                )
+
+                Text("Time to wait for speech to complete before processing.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    // MARK: - Advanced Settings Section
+
+    private var advancedSettingsSection: some View {
+        DisclosureGroup("Advanced Settings", isExpanded: $showAdvanced) {
+            VStack(alignment: .leading, spacing: 12) {
+                // Max Listen Duration
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Max Listen Duration")
+                            .font(.subheadline)
+                        Spacer()
+                        Text("\(Int(engine.config.maxListenDuration))s")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Slider(
+                        value: $engine.config.maxListenDuration,
+                        in: 30...300,
+                        step: 30
+                    )
+
+                    Text("Recognition restarts after this duration to maintain accuracy.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                // Noise Floor RMS
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Noise Floor Threshold")
+                            .font(.subheadline)
+                        Spacer()
+                        Text("\(engine.config.noiseFloorRMS, specifier: "%.3f")")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Slider(
+                        value: Binding(
+                            get: { Double(engine.config.noiseFloorRMS) },
+                            set: { engine.config.noiseFloorRMS = Float($0) }
+                        ),
+                        in: 0.005...0.1,
+                        step: 0.005
+                    )
+
+                    Text("Audio level below this is considered silence. Increase in noisy environments.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.top, 8)
+        }
+    }
+
+    // MARK: - Engine Status Section
+
+    private var engineStatusSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Engine Status")
+                .font(.headline)
+
+            HStack(spacing: 16) {
+                // State indicator
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(stateColor)
+                        .frame(width: 8, height: 8)
+                    Text(engine.state.rawValue.capitalized)
+                        .font(.caption)
+                }
+
+                // Enabled status
+                HStack(spacing: 6) {
+                    Image(systemName: engine.isEnabled ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .foregroundStyle(engine.isEnabled ? .green : .secondary)
+                    Text(engine.isEnabled ? "Enabled" : "Disabled")
+                        .font(.caption)
+                }
+
+                Spacer()
+
+                // Audio level
+                if engine.isEnabled {
+                    HStack(spacing: 4) {
+                        Image(systemName: "waveform")
+                            .font(.caption)
+                        Text("\(Int(engine.audioLevel * 100))%")
+                            .font(.caption.monospacedDigit())
+                    }
+                    .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(NSColor.controlBackgroundColor))
+            )
+
+            // Last detection info
+            if let lastWord = engine.lastDetectedWord {
+                HStack {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    Text("Last: \"\(lastWord)\" (\(Int(engine.lastDetectionConfidence * 100))%)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
+    private var stateColor: Color {
+        switch engine.state {
+        case .idle:
+            return .secondary
+        case .listening:
+            return .green
+        case .hearing:
+            return .blue
+        case .finalizing:
+            return .orange
+        case .detected:
+            return .green
+        case .failed:
+            return .red
+        }
+    }
+
+    private func addWord() {
+        let trimmed = newWord.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        engine.addTriggerWord(trimmed)
+        newWord = ""
+    }
+}
+
+// MARK: - Wake Word Config Section Preview
+
+#Preview("WakeWordConfigSection") {
+    WakeWordConfigSection()
+        .padding()
+        .frame(width: 400)
 }
 
 #Preview {

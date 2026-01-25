@@ -20,6 +20,7 @@ final class VoiceWakeOverlayController {
         var text: String = ""
         var isFinal: Bool = false
         var isVisible: Bool = false
+        var isListening: Bool = true
         var forwardEnabled: Bool = false
         var isSending: Bool = false
         var isOverflowing: Bool = false
@@ -35,6 +36,14 @@ final class VoiceWakeOverlayController {
     private(set) var model = Model()
     var isVisible: Bool { model.isVisible }
 
+    // MARK: - Configuration
+
+    /// Auto-send delay in seconds after final transcript
+    var autoSendDelay: TimeInterval = 1.5
+
+    /// Whether auto-send is enabled
+    var autoSendEnabled = true
+
     // MARK: - Window State
 
     private var window: NSPanel?
@@ -48,7 +57,7 @@ final class VoiceWakeOverlayController {
     private let width: CGFloat = 360
     private let padding: CGFloat = 10
     private let maxHeight: CGFloat = 400
-    private let minHeight: CGFloat = 48
+    private let minHeight: CGFloat = 140
 
     private init() {}
 
@@ -62,11 +71,20 @@ final class VoiceWakeOverlayController {
         activeToken = token
         activeSource = source
 
-        model = Model(isVisible: true)
+        model = Model(isVisible: true, isListening: true)
 
         createWindowIfNeeded()
         positionWindow()
+
+        // Animate in
+        window?.alphaValue = 0
         window?.orderFront(nil)
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.2
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            window?.animator().alphaValue = 1
+        }
 
         logger.debug("overlay shown for \(source.rawValue)")
     }
@@ -81,7 +99,16 @@ final class VoiceWakeOverlayController {
         autoSendTask?.cancel()
         autoSendTask = nil
 
-        window?.orderOut(nil)
+        guard let panel = window else { return }
+
+        // Animate out
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.15
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            panel.animator().alphaValue = 0
+        } completionHandler: { [weak self] in
+            self?.window?.orderOut(nil)
+        }
 
         logger.debug("overlay hidden")
     }
@@ -92,17 +119,29 @@ final class VoiceWakeOverlayController {
         model.isFinal = isFinal
         model.forwardEnabled = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 
+        // Update listening state based on final status
+        if isFinal {
+            model.isListening = false
+        }
+
         updateWindowFrame()
 
         // Auto-send after final transcript
         if isFinal && model.forwardEnabled {
             scheduleAutoSend()
+        } else {
+            cancelAutoSend()
         }
     }
 
     /// Update the audio level (0-1)
     func updateLevel(_ level: Double) {
         model.level = max(0, min(1, level))
+    }
+
+    /// Update the listening state
+    func updateListeningState(_ isListening: Bool) {
+        model.isListening = isListening
     }
 
     /// User requested to send the command
@@ -123,7 +162,7 @@ final class VoiceWakeOverlayController {
 
     /// User began editing the transcript
     func userBeganEditing() {
-        autoSendTask?.cancel()
+        cancelAutoSend()
         model.isEditing = true
     }
 
@@ -171,12 +210,12 @@ final class VoiceWakeOverlayController {
     private func positionWindow() {
         guard let window, let screen = NSScreen.main else { return }
 
-        // Position below menu bar, centered horizontally
-        let menuBarHeight: CGFloat = 24
-        let margin: CGFloat = 8
+        let screenFrame = screen.visibleFrame
+        let panelSize = window.frame.size
 
-        let x = (screen.frame.width - width) / 2
-        let y = screen.frame.maxY - menuBarHeight - window.frame.height - margin
+        // Position at top center with padding
+        let x = screenFrame.midX - panelSize.width / 2
+        let y = screenFrame.maxY - panelSize.height - 80
 
         window.setFrameOrigin(NSPoint(x: x, y: y))
     }
@@ -186,11 +225,12 @@ final class VoiceWakeOverlayController {
 
         // Calculate required height based on text
         let textHeight = calculateTextHeight()
-        let newHeight = min(maxHeight, max(minHeight, textHeight + padding * 2))
+        let newHeight = min(maxHeight, max(minHeight, textHeight + padding * 2 + 60))
 
+        let currentOrigin = window.frame.origin
         let frame = NSRect(
-            x: window.frame.minX,
-            y: window.frame.maxY - newHeight,
+            x: currentOrigin.x,
+            y: currentOrigin.y + window.frame.height - newHeight,
             width: width,
             height: newHeight
         )
@@ -205,12 +245,12 @@ final class VoiceWakeOverlayController {
             window.setFrame(frame, display: true)
         }
 
-        model.isOverflowing = textHeight > maxHeight - padding * 2
+        model.isOverflowing = textHeight > maxHeight - padding * 2 - 60
     }
 
     private func calculateTextHeight() -> CGFloat {
-        let font = NSFont.systemFont(ofSize: 14)
-        let constraintWidth = width - padding * 2 - 50 // Account for button
+        let font = NSFont.systemFont(ofSize: 20) // title3 equivalent
+        let constraintWidth = width - padding * 2 - 20
 
         let attributedString = NSAttributedString(
             string: model.text,
@@ -234,12 +274,25 @@ final class VoiceWakeOverlayController {
     }
 
     private func scheduleAutoSend() {
+        guard autoSendEnabled else { return }
+
         autoSendTask?.cancel()
-        autoSendTask = Task {
-            try? await Task.sleep(for: .seconds(2))
+        autoSendTask = Task { [weak self] in
+            guard let self else { return }
+
+            try? await Task.sleep(for: .seconds(self.autoSendDelay))
+
             guard !Task.isCancelled else { return }
-            requestSend()
+
+            if self.model.isFinal && self.model.forwardEnabled && !self.model.isEditing {
+                self.requestSend()
+            }
         }
+    }
+
+    private func cancelAutoSend() {
+        autoSendTask?.cancel()
+        autoSendTask = nil
     }
 
     private func sendCommand(_ command: String) async {
@@ -250,16 +303,27 @@ final class VoiceWakeOverlayController {
 
         // Send to the gateway
         do {
-            try await ControlChannel.shared.send(
+            try await ControlChannel.shared.request(
                 method: "voice.command",
                 params: [
                     "sessionId": session.id,
                     "command": command,
                     "source": activeSource?.rawValue ?? "unknown",
-                ]
+                ] as [String: AnyHashable]
             )
         } catch {
             logger.error("failed to send voice command: \(error.localizedDescription)")
+
+            // Fallback: try to send via ChatSessionManager
+            do {
+                // Ensure there's an active session
+                if ChatSessionManager.shared.activeSessionId == nil {
+                    try await ChatSessionManager.shared.createSession(title: "Voice Command")
+                }
+                try await ChatSessionManager.shared.send(content: command)
+            } catch {
+                logger.error("fallback send also failed: \(error.localizedDescription)")
+            }
         }
     }
 }

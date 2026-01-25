@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Overlay view showing the voice wake transcript.
+/// Voice wake overlay showing transcript and send button
 struct VoiceWakeOverlayView: View {
     @Bindable var controller: VoiceWakeOverlayController
     @FocusState private var textFocused: Bool
@@ -10,24 +10,42 @@ struct VoiceWakeOverlayView: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             // Main content
-            HStack(alignment: .top, spacing: 8) {
-                // Transcript text
+            VStack(spacing: 12) {
+                // Transcript area
                 if controller.model.isEditing {
-                    editableTextView
+                    editableTranscript
                 } else {
-                    displayTextView
+                    displayTranscript
                 }
 
-                // Send button
-                sendButton
+                // Bottom bar with controls
+                HStack(spacing: 16) {
+                    // Audio level indicator
+                    AudioLevelIndicator(level: Float(controller.model.level))
+                        .frame(width: 24, height: 24)
+
+                    Spacer()
+
+                    // Edit button
+                    Button {
+                        controller.userBeganEditing()
+                    } label: {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 14))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(controller.model.text.isEmpty)
+
+                    // Send button
+                    sendButton
+                }
             }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding()
+            .frame(width: 360)
             .background {
                 overlayBackground
             }
-            .shadow(color: Color.black.opacity(0.22), radius: 14, x: 0, y: -2)
+            .shadow(color: Color.black.opacity(0.3), radius: 10, y: 5)
             .onHover { isHovering = $0 }
 
             // Close button
@@ -45,34 +63,77 @@ struct VoiceWakeOverlayView: View {
         }
     }
 
-    // MARK: - Text Views
+    // MARK: - Transcript Views
 
-    @ViewBuilder
-    private var editableTextView: some View {
-        TextEditor(text: Binding(
-            get: { controller.model.text },
-            set: { controller.updateText($0) }
-        ))
-        .font(.system(size: 14))
-        .scrollContentBackground(.hidden)
-        .background(Color.clear)
-        .focused($textFocused)
-        .frame(maxWidth: .infinity, minHeight: 32, maxHeight: .infinity, alignment: .topLeading)
-        .onSubmit {
-            controller.requestSend()
+    private var displayTranscript: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Status indicator
+            HStack {
+                Circle()
+                    .fill(controller.model.isListening ? Color.green : Color.orange)
+                    .frame(width: 8, height: 8)
+
+                Text(controller.model.isListening ? "Listening" : "Processing")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+            }
+
+            // Transcript text
+            if controller.model.text.isEmpty {
+                Text("Say something...")
+                    .font(.title3)
+                    .foregroundStyle(.tertiary)
+                    .italic()
+            } else {
+                Text(controller.model.text)
+                    .font(.title3)
+                    .lineLimit(5)
+                    .textSelection(.enabled)
+            }
         }
-    }
-
-    @ViewBuilder
-    private var displayTextView: some View {
-        Text(controller.model.text.isEmpty ? "Listening..." : controller.model.text)
-            .font(.system(size: 14))
-            .foregroundStyle(controller.model.text.isEmpty ? .secondary : .primary)
-            .frame(maxWidth: .infinity, minHeight: 32, maxHeight: .infinity, alignment: .topLeading)
-            .onTapGesture {
+        .frame(minHeight: 80, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onTapGesture(count: 2) {
+            if !controller.model.text.isEmpty {
                 controller.userBeganEditing()
                 textFocused = true
             }
+        }
+    }
+
+    private var editableTranscript: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Edit Transcript")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Button("Cancel") {
+                    controller.endEditing()
+                }
+                .buttonStyle(.plain)
+                .font(.caption)
+            }
+
+            TextEditor(text: Binding(
+                get: { controller.model.text },
+                set: { controller.updateText($0) }
+            ))
+            .font(.title3)
+            .frame(minHeight: 60)
+            .scrollContentBackground(.hidden)
+            .background(Color.secondary.opacity(0.1))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .focused($textFocused)
+            .onSubmit {
+                controller.requestSend()
+            }
+        }
+        .frame(minHeight: 80, alignment: .topLeading)
     }
 
     // MARK: - Send Button
@@ -82,46 +143,33 @@ struct VoiceWakeOverlayView: View {
         Button {
             controller.requestSend()
         } label: {
-            ZStack {
-                // Level indicator background
-                GeometryReader { geo in
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color.accentColor.opacity(0.12))
+            HStack(spacing: 6) {
+                Text(controller.model.isFinal ? "Send" : "Listening...")
+                    .font(.subheadline.weight(.medium))
 
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color.accentColor.opacity(0.25))
-                        .frame(width: geo.size.width * controller.model.level, alignment: .leading)
-                        .animation(.easeOut(duration: 0.08), value: controller.model.level)
+                if controller.model.isFinal {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 18))
                 }
-                .frame(height: 28)
-
-                // Icon
-                ZStack {
-                    Image(systemName: "paperplane.fill")
-                        .opacity(controller.model.isSending ? 0 : 1)
-                        .scaleEffect(controller.model.isSending ? 0.5 : 1)
-
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                        .opacity(controller.model.isSending ? 1 : 0)
-                        .scaleEffect(controller.model.isSending ? 1.05 : 0.8)
-                }
-                .imageScale(.small)
             }
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .frame(width: 32, height: 28)
-            .animation(.spring(response: 0.35, dampingFraction: 0.78), value: controller.model.isSending)
+            .foregroundStyle(controller.model.isFinal ? .white : .secondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(controller.model.isFinal ? Color.accentColor : Color.secondary.opacity(0.2))
+            )
         }
         .buttonStyle(.plain)
         .disabled(!controller.model.forwardEnabled || controller.model.isSending)
-        .keyboardShortcut(.return, modifiers: .command)
+        .keyboardShortcut(.return, modifiers: [])
     }
 
     // MARK: - Background
 
     @ViewBuilder
     private var overlayBackground: some View {
-        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
 
         VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
             .clipShape(shape)
@@ -168,6 +216,39 @@ struct VoiceWakeOverlayView: View {
     }
 }
 
+// MARK: - Audio Level Circular Indicator
+
+/// Audio level circular indicator with microphone icon
+struct AudioLevelIndicator: View {
+    let level: Float
+
+    var body: some View {
+        ZStack {
+            // Background ring
+            Circle()
+                .stroke(Color.secondary.opacity(0.3), lineWidth: 3)
+
+            // Level ring
+            Circle()
+                .trim(from: 0, to: CGFloat(level))
+                .stroke(levelColor, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .animation(.easeOut(duration: 0.08), value: level)
+
+            // Mic icon
+            Image(systemName: "mic.fill")
+                .font(.system(size: 10))
+                .foregroundStyle(level > 0.1 ? levelColor : .secondary)
+        }
+    }
+
+    private var levelColor: Color {
+        if level > 0.7 { return .red }
+        if level > 0.4 { return .orange }
+        return .green
+    }
+}
+
 // MARK: - Visual Effect View
 
 struct VisualEffectView: NSViewRepresentable {
@@ -191,5 +272,7 @@ struct VisualEffectView: NSViewRepresentable {
 #Preview {
     let controller = VoiceWakeOverlayController.shared
     return VoiceWakeOverlayView(controller: controller)
-        .frame(width: 360, height: 100)
+        .frame(width: 360, height: 200)
+        .padding()
+        .background(Color.black.opacity(0.5))
 }

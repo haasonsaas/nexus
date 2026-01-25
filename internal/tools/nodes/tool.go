@@ -10,6 +10,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/haasonsaas/nexus/internal/edge"
 	"github.com/haasonsaas/nexus/internal/observability"
+	pb "github.com/haasonsaas/nexus/pkg/proto"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -28,7 +29,7 @@ func NewTool(manager *edge.Manager, tofuAuth *edge.TOFUAuthenticator) *Tool {
 func (t *Tool) Name() string { return "nodes" }
 
 func (t *Tool) Description() string {
-	return "Inspect and control connected edge nodes (status/describe/pending/approve/reject/invoke)."
+	return "Inspect and control connected edge nodes (status/describe/pending/approve/reject/route/invoke/invoke_any)."
 }
 
 func (t *Tool) Schema() json.RawMessage {
@@ -37,7 +38,7 @@ func (t *Tool) Schema() json.RawMessage {
 		"properties": map[string]interface{}{
 			"action": map[string]interface{}{
 				"type":        "string",
-				"description": "Action: status, describe, pending, approve, reject, invoke.",
+				"description": "Action: status, describe, pending, approve, reject, route, invoke, invoke_any.",
 			},
 			"edge_id": map[string]interface{}{
 				"type":        "string",
@@ -63,6 +64,28 @@ func (t *Tool) Schema() json.RawMessage {
 				"type":        "string",
 				"description": "Approver identifier (approve action).",
 			},
+			"channel_type": map[string]interface{}{
+				"type":        "string",
+				"description": "Filter edges by supported channel type (route/invoke_any).",
+			},
+			"strategy": map[string]interface{}{
+				"type":        "string",
+				"description": "Selection strategy: least_busy, round_robin, random (route/invoke_any).",
+			},
+			"capabilities": map[string]interface{}{
+				"type":        "object",
+				"description": "Required edge capabilities (route/invoke_any).",
+				"properties": map[string]interface{}{
+					"tools":     map[string]interface{}{"type": "boolean"},
+					"channels":  map[string]interface{}{"type": "boolean"},
+					"streaming": map[string]interface{}{"type": "boolean"},
+					"artifacts": map[string]interface{}{"type": "boolean"},
+				},
+			},
+			"metadata": map[string]interface{}{
+				"type":        "object",
+				"description": "Metadata filters (key/value) for edge selection (route/invoke_any).",
+			},
 		},
 		"required": []string{"action"},
 	}
@@ -78,13 +101,22 @@ func (t *Tool) Execute(ctx context.Context, params json.RawMessage) (*agent.Tool
 		return toolError("edge manager unavailable"), nil
 	}
 	var input struct {
-		Action     string          `json:"action"`
-		EdgeID     string          `json:"edge_id"`
-		Tool       string          `json:"tool"`
-		Params     json.RawMessage `json:"params"`
-		TimeoutMS  int             `json:"timeout_ms"`
-		Approved   bool            `json:"approved"`
-		ApprovedBy string          `json:"approved_by"`
+		Action       string          `json:"action"`
+		EdgeID       string          `json:"edge_id"`
+		Tool         string          `json:"tool"`
+		Params       json.RawMessage `json:"params"`
+		TimeoutMS    int             `json:"timeout_ms"`
+		Approved     bool            `json:"approved"`
+		ApprovedBy   string          `json:"approved_by"`
+		ChannelType  string          `json:"channel_type"`
+		Strategy     string          `json:"strategy"`
+		Capabilities *struct {
+			Tools     bool `json:"tools"`
+			Channels  bool `json:"channels"`
+			Streaming bool `json:"streaming"`
+			Artifacts bool `json:"artifacts"`
+		} `json:"capabilities"`
+		Metadata map[string]string `json:"metadata"`
 	}
 	if err := json.Unmarshal(params, &input); err != nil {
 		return toolError(fmt.Sprintf("Invalid parameters: %v", err)), nil
@@ -226,9 +258,110 @@ func (t *Tool) Execute(ctx context.Context, params json.RawMessage) (*agent.Tool
 			IsError:   result.IsError,
 			Artifacts: artifacts,
 		}, nil
+	case "route":
+		criteria := buildSelectionCriteria(input.Tool, input.ChannelType, input.Strategy, input.Capabilities, input.Metadata)
+		selected, err := t.manager.SelectEdge(criteria)
+		if err != nil {
+			return toolError(fmt.Sprintf("route: %v", err)), nil
+		}
+		status, ok := t.manager.GetEdge(selected.ID)
+		payload := map[string]interface{}{
+			"selected_edge_id": selected.ID,
+			"strategy":         string(criteria.Strategy),
+		}
+		if ok && status != nil {
+			if encoded, err := marshalProto(status); err == nil {
+				payload["edge"] = json.RawMessage(encoded)
+			}
+		}
+		return jsonResult(payload), nil
+	case "invoke_any":
+		toolName := strings.TrimSpace(input.Tool)
+		if toolName == "" {
+			return toolError("tool is required"), nil
+		}
+		runID := observability.GetRunID(ctx)
+		toolCallID := observability.GetToolCallID(ctx)
+		sessionID := ""
+		if session := agent.SessionFromContext(ctx); session != nil {
+			sessionID = session.ID
+		}
+
+		payload := input.Params
+		if len(payload) == 0 {
+			payload = []byte("{}")
+		}
+		opts := edge.ExecuteOptions{
+			RunID:     runID,
+			SessionID: sessionID,
+			Approved:  input.Approved,
+		}
+		if input.TimeoutMS > 0 {
+			opts.Timeout = time.Duration(input.TimeoutMS) * time.Millisecond
+		}
+		if toolCallID != "" {
+			opts.Metadata = map[string]string{"tool_call_id": toolCallID}
+		}
+
+		criteria := buildSelectionCriteria(toolName, input.ChannelType, input.Strategy, input.Capabilities, input.Metadata)
+		selected, err := t.manager.SelectEdge(criteria)
+		if err != nil {
+			return toolError(fmt.Sprintf("invoke_any: %v", err)), nil
+		}
+		result, err := t.manager.ExecuteTool(ctx, selected.ID, toolName, string(payload), opts)
+		if err != nil {
+			return toolError(fmt.Sprintf("invoke_any: %v", err)), nil
+		}
+
+		artifacts := make([]agent.Artifact, 0, len(result.Artifacts))
+		for _, art := range result.Artifacts {
+			artifacts = append(artifacts, agent.Artifact{
+				ID:       art.Id,
+				Type:     art.Type,
+				MimeType: art.MimeType,
+				Filename: art.Filename,
+				Data:     art.Data,
+			})
+		}
+		content, err := json.MarshalIndent(map[string]interface{}{
+			"edge_id":  selected.ID,
+			"content":  result.Content,
+			"is_error": result.IsError,
+		}, "", "  ")
+		if err != nil {
+			return toolError(fmt.Sprintf("encode invoke_any result: %v", err)), nil
+		}
+		return &agent.ToolResult{
+			Content:   string(content),
+			IsError:   result.IsError,
+			Artifacts: artifacts,
+		}, nil
 	default:
 		return toolError("unsupported action"), nil
 	}
+}
+
+func buildSelectionCriteria(toolName, channelType, strategy string, caps *struct {
+	Tools     bool `json:"tools"`
+	Channels  bool `json:"channels"`
+	Streaming bool `json:"streaming"`
+	Artifacts bool `json:"artifacts"`
+}, metadata map[string]string) edge.SelectionCriteria {
+	criteria := edge.SelectionCriteria{
+		ToolName:    strings.TrimSpace(toolName),
+		ChannelType: strings.TrimSpace(channelType),
+		Metadata:    metadata,
+		Strategy:    edge.SelectionStrategy(strings.TrimSpace(strategy)),
+	}
+	if caps != nil {
+		criteria.Capabilities = &pb.EdgeCapabilities{
+			Tools:     caps.Tools,
+			Channels:  caps.Channels,
+			Streaming: caps.Streaming,
+			Artifacts: caps.Artifacts,
+		}
+	}
+	return criteria
 }
 
 func jsonResult(payload map[string]interface{}) *agent.ToolResult {

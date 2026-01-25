@@ -117,6 +117,9 @@ type MicroVM struct {
 	// execCount tracks how many executions have been run.
 	execCount int
 
+	// lastUsed tracks the last time the VM executed work.
+	lastUsed time.Time
+
 	// workDir is the working directory for this VM.
 	workDir string
 
@@ -232,6 +235,7 @@ func (vm *MicroVM) Start(ctx context.Context) error {
 
 	vm.state = VMStateRunning
 	vm.startedAt = time.Now()
+	vm.lastUsed = vm.startedAt
 
 	// Establish vsock connection
 	vsock, err := NewVsockConnection(vm.config.SocketPath, vm.config.VsockCID, GuestAgentPort)
@@ -370,6 +374,14 @@ func (vm *MicroVM) IncrementExecCount() {
 	vm.mu.Lock()
 	defer vm.mu.Unlock()
 	vm.execCount++
+	vm.lastUsed = time.Now()
+}
+
+// LastUsed returns the last time the VM executed work.
+func (vm *MicroVM) LastUsed() time.Time {
+	vm.mu.RLock()
+	defer vm.mu.RUnlock()
+	return vm.lastUsed
 }
 
 // Vsock returns the vsock connection for this VM.
@@ -563,6 +575,7 @@ type VMInfo struct {
 	State     string        `json:"state"`
 	Language  string        `json:"language"`
 	Uptime    time.Duration `json:"uptime"`
+	LastUsed  time.Time     `json:"last_used"`
 	ExecCount int           `json:"exec_count"`
 	VCPUs     int64         `json:"vcpus"`
 	MemSizeMB int64         `json:"mem_size_mb"`
@@ -578,6 +591,7 @@ func (vm *MicroVM) Info() VMInfo {
 		State:     vm.state.String(),
 		Language:  vm.config.Language,
 		Uptime:    vm.Uptime(),
+		LastUsed:  vm.lastUsed,
 		ExecCount: vm.execCount,
 		VCPUs:     vm.config.VCPUs,
 		MemSizeMB: vm.config.MemSizeMB,

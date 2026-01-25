@@ -663,6 +663,9 @@ func (s *wsSession) buildHealthSnapshot() map[string]any {
 			"status": "ok",
 		},
 	}
+	if s.control.server != nil && s.control.server.nodeID != "" {
+		payload["node_id"] = s.control.server.nodeID
+	}
 
 	channelStatuses := make([]map[string]any, 0)
 	for channel, adapter := range s.control.server.channels.HealthAdapters() {

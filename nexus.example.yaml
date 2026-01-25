@@ -9,6 +9,17 @@ server:
   http_port: 8080
   metrics_port: 9090
 
+cluster:
+  enabled: false
+  node_id: ""
+  allow_multiple_gateways: false
+  session_locks:
+    enabled: false
+    ttl: 2m
+    refresh_interval: 30s
+    acquire_timeout: 10s
+    poll_interval: 200ms
+
 canvas_host:
   # Dedicated canvas host for local HTML/JS canvas files.
   # When enabled, the canvas is available at http://<host>:<port>/__nexus__/canvas/
@@ -365,12 +376,18 @@ tools:
     # Number of pre-warmed sandboxes
     pool_size: 5
     max_pool_size: 10
+    min_idle: 5
+    max_idle_time: 5m
     # Maximum execution time per request
     timeout: 30s
     network_enabled: false
     limits:
       max_cpu: 1000 # millicores
       max_memory: 512MB
+    snapshots:
+      enabled: false
+      refresh_interval: 30m
+      max_age: 6h
   browser:
     enabled: true
     headless: true

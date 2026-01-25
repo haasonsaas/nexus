@@ -125,6 +125,9 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 			"ts":          summary.Ts,
 			"duration_ms": summary.DurationMs,
 		}
+		if s.nodeID != "" {
+			response["node_id"] = s.nodeID
+		}
 
 		// Include activity stats
 		activityStats := s.integration.GetActivityStats()
@@ -152,5 +155,10 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 
 	// Fallback to simple health check
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(`{"status":"ok"}`)) //nolint:errcheck
+	response := map[string]any{"status": "ok"}
+	if s.nodeID != "" {
+		response["node_id"] = s.nodeID
+	}
+	data, _ := json.Marshal(response)
+	_, _ = w.Write(data)
 }

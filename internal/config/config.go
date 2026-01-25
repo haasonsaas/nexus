@@ -24,6 +24,7 @@ type Config struct {
 	CanvasHost    CanvasHostConfig          `yaml:"canvas_host"`
 	Canvas        CanvasConfig              `yaml:"canvas"`
 	Gateway       GatewayConfig             `yaml:"gateway"`
+	Cluster       ClusterConfig             `yaml:"cluster"`
 	Commands      CommandsConfig            `yaml:"commands"`
 	Database      DatabaseConfig            `yaml:"database"`
 	Auth          AuthConfig                `yaml:"auth"`
@@ -54,6 +55,39 @@ type Config struct {
 // GatewayConfig configures gateway-level message routing and processing.
 type GatewayConfig struct {
 	Broadcast BroadcastConfig `yaml:"broadcast"`
+}
+
+// ClusterConfig controls multi-gateway behavior.
+type ClusterConfig struct {
+	// Enabled turns on cluster-aware behavior.
+	Enabled bool `yaml:"enabled"`
+
+	// NodeID uniquely identifies this gateway instance.
+	NodeID string `yaml:"node_id"`
+
+	// AllowMultipleGateways bypasses the singleton gateway lock.
+	AllowMultipleGateways bool `yaml:"allow_multiple_gateways"`
+
+	// SessionLocks controls distributed session locking.
+	SessionLocks SessionLockConfig `yaml:"session_locks"`
+}
+
+// SessionLockConfig configures distributed session locks.
+type SessionLockConfig struct {
+	// Enabled uses DB-backed session locks.
+	Enabled bool `yaml:"enabled"`
+
+	// TTL is the lock lease duration.
+	TTL time.Duration `yaml:"ttl"`
+
+	// RefreshInterval is how often leases are renewed.
+	RefreshInterval time.Duration `yaml:"refresh_interval"`
+
+	// AcquireTimeout is how long to wait for a lock.
+	AcquireTimeout time.Duration `yaml:"acquire_timeout"`
+
+	// PollInterval controls backoff when lock is held by another owner.
+	PollInterval time.Duration `yaml:"poll_interval"`
 }
 
 // AttentionConfig controls the attention feed integration.
@@ -716,13 +750,16 @@ type ElevatedConfig struct {
 }
 
 type SandboxConfig struct {
-	Enabled        bool           `yaml:"enabled"`
-	Backend        string         `yaml:"backend"`
-	PoolSize       int            `yaml:"pool_size"`
-	MaxPoolSize    int            `yaml:"max_pool_size"`
-	Timeout        time.Duration  `yaml:"timeout"`
-	NetworkEnabled bool           `yaml:"network_enabled"`
-	Limits         ResourceLimits `yaml:"limits"`
+	Enabled        bool                  `yaml:"enabled"`
+	Backend        string                `yaml:"backend"`
+	PoolSize       int                   `yaml:"pool_size"`
+	MaxPoolSize    int                   `yaml:"max_pool_size"`
+	MinIdle        int                   `yaml:"min_idle"`
+	MaxIdleTime    time.Duration         `yaml:"max_idle_time"`
+	Timeout        time.Duration         `yaml:"timeout"`
+	NetworkEnabled bool                  `yaml:"network_enabled"`
+	Limits         ResourceLimits        `yaml:"limits"`
+	Snapshots      SandboxSnapshotConfig `yaml:"snapshots"`
 
 	// Mode controls which agents use sandboxing:
 	// - "off": sandboxing disabled (default when enabled=false)
@@ -741,6 +778,13 @@ type SandboxConfig struct {
 
 	// WorkspaceAccess controls workspace access mode: "readonly" or "readwrite".
 	WorkspaceAccess string `yaml:"workspace_access"`
+}
+
+// SandboxSnapshotConfig controls Firecracker snapshot behavior.
+type SandboxSnapshotConfig struct {
+	Enabled         bool          `yaml:"enabled"`
+	RefreshInterval time.Duration `yaml:"refresh_interval"`
+	MaxAge          time.Duration `yaml:"max_age"`
 }
 
 type ResourceLimits struct {
@@ -1180,6 +1224,7 @@ func applyDefaults(cfg *Config) {
 	applyCanvasDefaults(&cfg.Canvas)
 	applyDatabaseDefaults(&cfg.Database)
 	applyAuthDefaults(&cfg.Auth)
+	applyClusterDefaults(&cfg.Cluster)
 	applyChannelDefaults(&cfg.Channels)
 	applyCommandsDefaults(&cfg.Commands)
 	applySessionDefaults(&cfg.Session)
@@ -1207,6 +1252,28 @@ func applyServerDefaults(cfg *ServerConfig) {
 	}
 	if cfg.MetricsPort == 0 {
 		cfg.MetricsPort = 9090
+	}
+}
+
+func applyClusterDefaults(cfg *ClusterConfig) {
+	if cfg.NodeID == "" {
+		if host, err := os.Hostname(); err == nil && host != "" {
+			cfg.NodeID = host
+		} else {
+			cfg.NodeID = fmt.Sprintf("gateway-%d", time.Now().UnixNano())
+		}
+	}
+	if cfg.SessionLocks.TTL == 0 {
+		cfg.SessionLocks.TTL = 2 * time.Minute
+	}
+	if cfg.SessionLocks.RefreshInterval == 0 {
+		cfg.SessionLocks.RefreshInterval = 30 * time.Second
+	}
+	if cfg.SessionLocks.AcquireTimeout == 0 {
+		cfg.SessionLocks.AcquireTimeout = 10 * time.Second
+	}
+	if cfg.SessionLocks.PollInterval == 0 {
+		cfg.SessionLocks.PollInterval = 200 * time.Millisecond
 	}
 }
 

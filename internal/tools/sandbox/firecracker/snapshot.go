@@ -4,6 +4,7 @@ package firecracker
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -395,11 +396,14 @@ func NewSnapshotManager(baseDir string) (*SnapshotManager, error) {
 	if err := os.MkdirAll(baseDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create snapshot directory: %w", err)
 	}
-
-	return &SnapshotManager{
+	manager := &SnapshotManager{
 		baseDir:   baseDir,
 		snapshots: make(map[string]*Snapshot),
-	}, nil
+	}
+	if err := manager.loadSnapshots(); err != nil {
+		return nil, err
+	}
+	return manager, nil
 }
 
 // CreateSnapshot creates a snapshot of a running VM.
@@ -441,6 +445,14 @@ func (sm *SnapshotManager) CreateSnapshot(ctx context.Context, vm *MicroVM, snap
 
 	memoryPath := filepath.Join(snapshotDir, "memory.snap")
 	statePath := filepath.Join(snapshotDir, "state.snap")
+	metaPath := filepath.Join(snapshotDir, "snapshot.json")
+
+	if err := os.WriteFile(memoryPath, []byte{}, 0644); err != nil {
+		return nil, fmt.Errorf("failed to create snapshot memory file: %w", err)
+	}
+	if err := os.WriteFile(statePath, []byte{}, 0644); err != nil {
+		return nil, fmt.Errorf("failed to create snapshot state file: %w", err)
+	}
 
 	// Use Firecracker's snapshot API
 	// This would be done through the firecracker-go-sdk in practice
@@ -466,6 +478,9 @@ func (sm *SnapshotManager) CreateSnapshot(ctx context.Context, vm *MicroVM, snap
 	snapshot.Size = totalSize
 
 	sm.snapshots[snapshotID] = snapshot
+	if err := sm.persistSnapshot(metaPath, snapshot); err != nil {
+		return snapshot, err
+	}
 	return snapshot, nil
 }
 
@@ -556,6 +571,50 @@ func (sm *SnapshotManager) GetSnapshot(id string) (*Snapshot, bool) {
 // Close cleans up the snapshot manager.
 func (sm *SnapshotManager) Close() error {
 	return nil // Snapshots are kept on disk
+}
+
+func (sm *SnapshotManager) loadSnapshots() error {
+	entries, err := os.ReadDir(sm.baseDir)
+	if err != nil {
+		return fmt.Errorf("read snapshots dir: %w", err)
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		snapshotDir := filepath.Join(sm.baseDir, entry.Name())
+		metaPath := filepath.Join(snapshotDir, "snapshot.json")
+		data, err := os.ReadFile(metaPath)
+		if err != nil {
+			continue
+		}
+		var snap Snapshot
+		if err := json.Unmarshal(data, &snap); err != nil {
+			continue
+		}
+		if snap.ID == "" {
+			snap.ID = entry.Name()
+		}
+		if snap.MemoryPath == "" {
+			snap.MemoryPath = filepath.Join(snapshotDir, "memory.snap")
+		}
+		if snap.StatePath == "" {
+			snap.StatePath = filepath.Join(snapshotDir, "state.snap")
+		}
+		sm.snapshots[snap.ID] = &snap
+	}
+	return nil
+}
+
+func (sm *SnapshotManager) persistSnapshot(path string, snapshot *Snapshot) error {
+	data, err := json.MarshalIndent(snapshot, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal snapshot metadata: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return fmt.Errorf("write snapshot metadata: %w", err)
+	}
+	return nil
 }
 
 // DeviceMapperSnapshot manages device-mapper based copy-on-write snapshots.

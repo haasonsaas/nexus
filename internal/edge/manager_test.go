@@ -209,6 +209,84 @@ func TestManagerGetEdgesWithChannel(t *testing.T) {
 	}
 }
 
+func TestManagerSelectEdgeLeastBusy(t *testing.T) {
+	manager := NewManager(DefaultManagerConfig(), &mockAuthenticator{}, nil)
+
+	manager.mu.Lock()
+	manager.edges["edge-fast"] = &EdgeConnection{
+		ID:    "edge-fast",
+		Tools: map[string]*EdgeTool{"browser.snapshot": {Name: "browser.snapshot"}},
+		Metrics: &pb.EdgeMetrics{
+			ActiveToolCount: 1,
+		},
+	}
+	manager.edges["edge-busy"] = &EdgeConnection{
+		ID:    "edge-busy",
+		Tools: map[string]*EdgeTool{"browser.snapshot": {Name: "browser.snapshot"}},
+		Metrics: &pb.EdgeMetrics{
+			ActiveToolCount: 7,
+		},
+	}
+	manager.mu.Unlock()
+
+	edge, err := manager.SelectEdge(SelectionCriteria{ToolName: "browser.snapshot"})
+	if err != nil {
+		t.Fatalf("SelectEdge: %v", err)
+	}
+	if edge.ID != "edge-fast" {
+		t.Fatalf("expected edge-fast, got %s", edge.ID)
+	}
+}
+
+func TestManagerSelectEdgeMetadata(t *testing.T) {
+	manager := NewManager(DefaultManagerConfig(), &mockAuthenticator{}, nil)
+
+	manager.mu.Lock()
+	manager.edges["edge-us"] = &EdgeConnection{
+		ID:       "edge-us",
+		Tools:    map[string]*EdgeTool{"browser.snapshot": {Name: "browser.snapshot"}},
+		Metadata: map[string]string{"region": "us"},
+	}
+	manager.edges["edge-eu"] = &EdgeConnection{
+		ID:       "edge-eu",
+		Tools:    map[string]*EdgeTool{"browser.snapshot": {Name: "browser.snapshot"}},
+		Metadata: map[string]string{"region": "eu"},
+	}
+	manager.mu.Unlock()
+
+	edge, err := manager.SelectEdge(SelectionCriteria{
+		ToolName: "browser.snapshot",
+		Metadata: map[string]string{"region": "eu"},
+	})
+	if err != nil {
+		t.Fatalf("SelectEdge: %v", err)
+	}
+	if edge.ID != "edge-eu" {
+		t.Fatalf("expected edge-eu, got %s", edge.ID)
+	}
+}
+
+func TestManagerSelectEdgeRoundRobin(t *testing.T) {
+	manager := NewManager(DefaultManagerConfig(), &mockAuthenticator{}, nil)
+
+	manager.mu.Lock()
+	manager.edges["edge-1"] = &EdgeConnection{ID: "edge-1"}
+	manager.edges["edge-2"] = &EdgeConnection{ID: "edge-2"}
+	manager.mu.Unlock()
+
+	first, err := manager.SelectEdge(SelectionCriteria{Strategy: StrategyRoundRobin})
+	if err != nil {
+		t.Fatalf("SelectEdge: %v", err)
+	}
+	second, err := manager.SelectEdge(SelectionCriteria{Strategy: StrategyRoundRobin})
+	if err != nil {
+		t.Fatalf("SelectEdge: %v", err)
+	}
+	if first.ID == second.ID {
+		t.Fatalf("expected round robin to alternate, got %s twice", first.ID)
+	}
+}
+
 func TestManagerSendChannelMessageNoEdge(t *testing.T) {
 	config := DefaultManagerConfig()
 	auth := &mockAuthenticator{}

@@ -198,7 +198,7 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 	// Acquire session write lock to prevent concurrent writes to the same session
 	// This is done AFTER command handling so /stop can cancel active runs
 	if s.sessionLocker != nil {
-		if err := s.sessionLocker.Lock(session.ID); err != nil {
+		if err := s.sessionLocker.Lock(ctx, session.ID); err != nil {
 			s.logger.Error("failed to acquire session lock",
 				"session_id", session.ID,
 				"error", err,

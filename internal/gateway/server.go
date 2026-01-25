@@ -170,7 +170,10 @@ type Server struct {
 	integration *Integration
 
 	// sessionLocker provides per-session write locks to prevent concurrent writes
-	sessionLocker *sessions.SessionLocker
+	sessionLocker sessions.Locker
+
+	// nodeID identifies this gateway in a cluster.
+	nodeID string
 }
 
 // NewServer creates a new gateway server with the given configuration and logger.
@@ -584,7 +587,8 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		normalizer:         NewMessageNormalizer(),
 		streamingRegistry:  NewStreamingRegistry(),
 		integration:        integration,
-		sessionLocker:      sessions.NewSessionLocker(sessions.DefaultLockTimeout),
+		sessionLocker:      sessions.NewLocalLocker(sessions.DefaultLockTimeout),
+		nodeID:             cfg.Cluster.NodeID,
 	}
 	if artifactSetup != nil {
 		server.artifactRepo = artifactSetup.repo

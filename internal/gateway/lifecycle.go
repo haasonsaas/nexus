@@ -26,8 +26,9 @@ func (s *Server) Start(ctx context.Context) error {
 		stateDir = ".nexus"
 	}
 	lock, err := AcquireGatewayLock(GatewayLockOptions{
-		StateDir:   stateDir,
-		ConfigPath: s.configPath,
+		StateDir:      stateDir,
+		ConfigPath:    s.configPath,
+		AllowMultiple: s.config.Cluster.Enabled && s.config.Cluster.AllowMultipleGateways,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to acquire gateway lock: %w", err)
@@ -156,6 +157,11 @@ func (s *Server) Stop(ctx context.Context) error {
 	if closer, ok := s.sessions.(interface{ Close() error }); ok {
 		if err := closer.Close(); err != nil {
 			s.logger.Error("error closing session store", "error", err)
+		}
+	}
+	if closer, ok := s.sessionLocker.(interface{ Close() error }); ok {
+		if err := closer.Close(); err != nil {
+			s.logger.Error("error closing session locker", "error", err)
 		}
 	}
 

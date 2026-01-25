@@ -41,6 +41,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -100,6 +101,13 @@ type Manager struct {
 
 	// artifactRedactor applies redaction rules to artifacts
 	artifactRedactor *artifacts.RedactionPolicy
+
+	// rrCounter is used for round-robin selection across candidates.
+	rrCounter uint64
+
+	// rand is used for randomized selection.
+	rand   *rand.Rand
+	randMu sync.Mutex
 }
 
 // ManagerConfig configures the edge manager.
@@ -296,6 +304,7 @@ func NewManager(config ManagerConfig, auth Authenticator, logger *slog.Logger) *
 		events:             make(chan EdgeEvent, config.EventBufferSize),
 		logger:             logger.With("component", "edge.manager"),
 		metrics:            &Metrics{},
+		rand:               rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 

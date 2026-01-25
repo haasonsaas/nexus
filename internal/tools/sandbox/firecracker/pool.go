@@ -54,29 +54,45 @@ type PoolConfig struct {
 
 	// OverlayDir is the directory for overlay files.
 	OverlayDir string
+
+	// SnapshotsEnabled enables snapshot-aware VM creation.
+	SnapshotsEnabled bool
+
+	// SnapshotRefreshInterval controls how often to refresh snapshots.
+	SnapshotRefreshInterval time.Duration
+
+	// SnapshotMaxAge controls when snapshots should be refreshed.
+	SnapshotMaxAge time.Duration
 }
 
 // DefaultPoolConfig returns a PoolConfig with sensible defaults.
 func DefaultPoolConfig() *PoolConfig {
 	return &PoolConfig{
-		InitialSize:    3,
-		MaxSize:        10,
-		MinIdle:        2,
-		MaxIdleTime:    5 * time.Minute,
-		MaxExecCount:   100,
-		MaxUptime:      30 * time.Minute,
-		WarmupInterval: 30 * time.Second,
-		DefaultVCPUs:   1,
-		DefaultMemMB:   512,
-		NetworkEnabled: false,
-		OverlayEnabled: true,
-		OverlayDir:     "/tmp/firecracker-overlays",
+		InitialSize:             3,
+		MaxSize:                 10,
+		MinIdle:                 2,
+		MaxIdleTime:             5 * time.Minute,
+		MaxExecCount:            100,
+		MaxUptime:               30 * time.Minute,
+		WarmupInterval:          30 * time.Second,
+		DefaultVCPUs:            1,
+		DefaultMemMB:            512,
+		NetworkEnabled:          false,
+		OverlayEnabled:          true,
+		OverlayDir:              "/tmp/firecracker-overlays",
+		SnapshotsEnabled:        false,
+		SnapshotRefreshInterval: 30 * time.Minute,
+		SnapshotMaxAge:          6 * time.Hour,
 	}
 }
 
 // VMPool manages a pool of pre-warmed Firecracker microVMs.
 type VMPool struct {
 	config *PoolConfig
+
+	snapshotManager *SnapshotManager
+	snapshotMu      sync.Mutex
+	snapshotRefresh map[string]time.Time
 
 	// pools holds per-language pools of VMs.
 	pools   map[string]*languageVMPool
@@ -97,6 +113,11 @@ type VMPool struct {
 
 	// wg tracks background goroutines.
 	wg sync.WaitGroup
+}
+
+// SetSnapshotManager configures snapshot usage for the pool.
+func (p *VMPool) SetSnapshotManager(manager *SnapshotManager) {
+	p.snapshotManager = manager
 }
 
 // languageVMPool manages VMs for a specific language.
@@ -130,10 +151,11 @@ func NewVMPool(config *PoolConfig) (*VMPool, error) {
 	}
 
 	pool := &VMPool{
-		config:     config,
-		pools:      make(map[string]*languageVMPool),
-		cidCounter: 3, // CIDs 0, 1, 2 are reserved
-		stopCh:     make(chan struct{}),
+		config:          config,
+		pools:           make(map[string]*languageVMPool),
+		cidCounter:      3, // CIDs 0, 1, 2 are reserved
+		stopCh:          make(chan struct{}),
+		snapshotRefresh: make(map[string]time.Time),
 	}
 
 	// Initialize per-language pools
@@ -256,6 +278,9 @@ func (p *VMPool) performMaintenance() {
 		// Recycle old VMs
 		p.recycleOldVMs(ctx, langPool)
 
+		// Refresh snapshots if enabled
+		p.maybeRefreshSnapshot(ctx, lang, langPool)
+
 		// Replenish if below minimum
 		if idleCount < p.config.MinIdle && totalCount < p.config.MaxSize {
 			toCreate := p.config.MinIdle - idleCount
@@ -302,6 +327,14 @@ func (p *VMPool) recycleOldVMs(ctx context.Context, langPool *languageVMPool) {
 				shouldRecycle = true
 			}
 
+			// Check idle time
+			if !shouldRecycle && p.config.MaxIdleTime > 0 {
+				lastUsed := vm.LastUsed()
+				if !lastUsed.IsZero() && time.Since(lastUsed) > p.config.MaxIdleTime {
+					shouldRecycle = true
+				}
+			}
+
 			if shouldRecycle {
 				go func(v *MicroVM) {
 					p.stopVM(ctx, v)
@@ -317,6 +350,56 @@ func (p *VMPool) recycleOldVMs(ctx context.Context, langPool *languageVMPool) {
 			return
 		}
 	}
+}
+
+func (p *VMPool) maybeRefreshSnapshot(ctx context.Context, language string, langPool *languageVMPool) {
+	if p.snapshotManager == nil || !p.config.SnapshotsEnabled {
+		return
+	}
+	if p.config.SnapshotRefreshInterval > 0 {
+		p.snapshotMu.Lock()
+		last := p.snapshotRefresh[language]
+		if !last.IsZero() && time.Since(last) < p.config.SnapshotRefreshInterval {
+			p.snapshotMu.Unlock()
+			return
+		}
+		p.snapshotMu.Unlock()
+	}
+
+	latest := p.latestSnapshot(language)
+	if latest != nil && p.config.SnapshotMaxAge > 0 && time.Since(latest.CreatedAt) < p.config.SnapshotMaxAge {
+		return
+	}
+
+	select {
+	case vm := <-langPool.available:
+		atomic.AddInt64(&p.stats.IdleVMs, -1)
+		_, _ = p.snapshotManager.CreateSnapshot(ctx, vm, SnapshotTypeFull)
+		langPool.available <- vm
+		atomic.AddInt64(&p.stats.IdleVMs, 1)
+		p.snapshotMu.Lock()
+		p.snapshotRefresh[language] = time.Now()
+		p.snapshotMu.Unlock()
+	default:
+		return
+	}
+}
+
+func (p *VMPool) latestSnapshot(language string) *Snapshot {
+	if p.snapshotManager == nil {
+		return nil
+	}
+	snapshots := p.snapshotManager.ListSnapshots(language)
+	var latest *Snapshot
+	for _, snap := range snapshots {
+		if snap == nil {
+			continue
+		}
+		if latest == nil || snap.CreatedAt.After(latest.CreatedAt) {
+			latest = snap
+		}
+	}
+	return latest
 }
 
 // Get retrieves a VM from the pool for the specified language.
@@ -487,6 +570,23 @@ func (p *VMPool) createVM(ctx context.Context, language string) (*MicroVM, error
 	if p.config.OverlayEnabled {
 		overlayPath := fmt.Sprintf("%s/%s-%d.overlay", p.config.OverlayDir, language, cid)
 		vmConfig.OverlayPath = overlayPath
+	}
+
+	// Try to load from snapshot if enabled.
+	if p.snapshotManager != nil && p.config.SnapshotsEnabled {
+		if snapshot := p.latestSnapshot(language); snapshot != nil {
+			if vm, err := p.snapshotManager.LoadSnapshot(ctx, snapshot.ID, vmConfig); err == nil {
+				p.poolsMu.RLock()
+				langPool, ok := p.pools[language]
+				p.poolsMu.RUnlock()
+				if ok {
+					atomic.AddInt32(&langPool.total, 1)
+				}
+				atomic.AddInt64(&p.stats.TotalCreated, 1)
+				atomic.AddInt64(&p.stats.TotalVMs, 1)
+				return vm, nil
+			}
+		}
 	}
 
 	// Create the VM

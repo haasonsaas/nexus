@@ -21,34 +21,39 @@ type Backend struct{}
 
 // BackendConfig contains configuration for the Firecracker backend.
 type BackendConfig struct {
-	KernelPath      string
-	RootFSImages    map[string]string
-	PoolConfig      *PoolConfig
-	OverlayDir      string
-	SnapshotDir     string
-	DefaultVCPUs    int64
-	DefaultMemMB    int64
-	NetworkEnabled  bool
-	MaxExecTime     time.Duration
-	EnableSnapshots bool
+	KernelPath              string
+	RootFSImages            map[string]string
+	PoolConfig              *PoolConfig
+	OverlayDir              string
+	SnapshotDir             string
+	DefaultVCPUs            int64
+	DefaultMemMB            int64
+	NetworkEnabled          bool
+	MaxExecTime             time.Duration
+	EnableSnapshots         bool
+	SnapshotRefreshInterval time.Duration
+	SnapshotMaxAge          time.Duration
 }
 
 // PoolConfig contains configuration for the VM pool.
 type PoolConfig struct {
-	InitialSize    int
-	MaxSize        int
-	MinIdle        int
-	MaxIdleTime    time.Duration
-	MaxExecCount   int
-	MaxUptime      time.Duration
-	WarmupInterval time.Duration
-	DefaultVCPUs   int64
-	DefaultMemMB   int64
-	OverlayEnabled bool
-	KernelPath     string
-	RootFSImages   map[string]string
-	NetworkEnabled bool
-	OverlayDir     string
+	InitialSize             int
+	MaxSize                 int
+	MinIdle                 int
+	MaxIdleTime             time.Duration
+	MaxExecCount            int
+	MaxUptime               time.Duration
+	WarmupInterval          time.Duration
+	DefaultVCPUs            int64
+	DefaultMemMB            int64
+	OverlayEnabled          bool
+	KernelPath              string
+	RootFSImages            map[string]string
+	NetworkEnabled          bool
+	OverlayDir              string
+	SnapshotsEnabled        bool
+	SnapshotRefreshInterval time.Duration
+	SnapshotMaxAge          time.Duration
 }
 
 // PoolStats contains VM pool statistics.
@@ -98,29 +103,34 @@ func DefaultBackendConfig() *BackendConfig {
 			DefaultMemMB:   512,
 			OverlayEnabled: true,
 		},
-		OverlayDir:      "/var/lib/firecracker/overlays",
-		SnapshotDir:     "/var/lib/firecracker/snapshots",
-		DefaultVCPUs:    1,
-		DefaultMemMB:    512,
-		NetworkEnabled:  false,
-		MaxExecTime:     5 * time.Minute,
-		EnableSnapshots: false,
+		OverlayDir:              "/var/lib/firecracker/overlays",
+		SnapshotDir:             "/var/lib/firecracker/snapshots",
+		DefaultVCPUs:            1,
+		DefaultMemMB:            512,
+		NetworkEnabled:          false,
+		MaxExecTime:             5 * time.Minute,
+		EnableSnapshots:         false,
+		SnapshotRefreshInterval: 30 * time.Minute,
+		SnapshotMaxAge:          6 * time.Hour,
 	}
 }
 
 // DefaultPoolConfig returns a PoolConfig with sensible defaults.
 func DefaultPoolConfig() *PoolConfig {
 	return &PoolConfig{
-		InitialSize:    3,
-		MaxSize:        10,
-		MinIdle:        2,
-		MaxIdleTime:    5 * time.Minute,
-		MaxExecCount:   100,
-		MaxUptime:      30 * time.Minute,
-		WarmupInterval: 30 * time.Second,
-		DefaultVCPUs:   1,
-		DefaultMemMB:   512,
-		OverlayEnabled: true,
+		InitialSize:             3,
+		MaxSize:                 10,
+		MinIdle:                 2,
+		MaxIdleTime:             5 * time.Minute,
+		MaxExecCount:            100,
+		MaxUptime:               30 * time.Minute,
+		WarmupInterval:          30 * time.Second,
+		DefaultVCPUs:            1,
+		DefaultMemMB:            512,
+		OverlayEnabled:          true,
+		SnapshotsEnabled:        false,
+		SnapshotRefreshInterval: 30 * time.Minute,
+		SnapshotMaxAge:          6 * time.Hour,
 	}
 }
 

@@ -53,6 +53,7 @@ func (s *Server) ensureRuntime(ctx context.Context) (*agent.Runtime, error) {
 		}
 		s.sessions = store
 	}
+	s.ensureSessionLocker()
 	if s.branchStore == nil {
 		if cr, ok := s.sessions.(*sessions.CockroachStore); ok {
 			s.branchStore = sessions.NewCockroachBranchStore(cr.DB())
@@ -164,6 +165,36 @@ func (s *Server) ensureRuntime(ctx context.Context) (*agent.Runtime, error) {
 
 	s.runtime = runtime
 	return runtime, nil
+}
+
+func (s *Server) ensureSessionLocker() {
+	if s == nil || s.config == nil {
+		return
+	}
+	if !s.config.Cluster.Enabled || !s.config.Cluster.SessionLocks.Enabled {
+		return
+	}
+	if _, ok := s.sessionLocker.(*sessions.DBLocker); ok {
+		return
+	}
+	cr, ok := s.sessions.(*sessions.CockroachStore)
+	if !ok {
+		s.logger.Warn("cluster session locks require cockroach session store")
+		return
+	}
+	locker, err := sessions.NewDBLocker(cr.DB(), sessions.DBLockerConfig{
+		OwnerID:         s.nodeID,
+		TTL:             s.config.Cluster.SessionLocks.TTL,
+		RefreshInterval: s.config.Cluster.SessionLocks.RefreshInterval,
+		AcquireTimeout:  s.config.Cluster.SessionLocks.AcquireTimeout,
+		PollInterval:    s.config.Cluster.SessionLocks.PollInterval,
+	})
+	if err != nil {
+		s.logger.Warn("failed to enable db session locks", "error", err)
+		return
+	}
+	s.sessionLocker = locker
+	s.logger.Info("db session locks enabled", "node_id", s.nodeID)
 }
 
 // newSessionStore creates a new session store based on configuration.
@@ -293,9 +324,18 @@ func (s *Server) registerTools(ctx context.Context, runtime *agent.Runtime) erro
 			fcConfig.NetworkEnabled = s.config.Tools.Sandbox.NetworkEnabled
 			if s.config.Tools.Sandbox.PoolSize > 0 {
 				fcConfig.PoolConfig.InitialSize = s.config.Tools.Sandbox.PoolSize
+				if s.config.Tools.Sandbox.MinIdle == 0 {
+					fcConfig.PoolConfig.MinIdle = s.config.Tools.Sandbox.PoolSize
+				}
 			}
 			if s.config.Tools.Sandbox.MaxPoolSize > 0 {
 				fcConfig.PoolConfig.MaxSize = s.config.Tools.Sandbox.MaxPoolSize
+			}
+			if s.config.Tools.Sandbox.MinIdle > 0 {
+				fcConfig.PoolConfig.MinIdle = s.config.Tools.Sandbox.MinIdle
+			}
+			if s.config.Tools.Sandbox.MaxIdleTime > 0 {
+				fcConfig.PoolConfig.MaxIdleTime = s.config.Tools.Sandbox.MaxIdleTime
 			}
 			if s.config.Tools.Sandbox.Limits.MaxCPU > 0 {
 				vcpus := int64((s.config.Tools.Sandbox.Limits.MaxCPU + 999) / 1000)
@@ -308,6 +348,15 @@ func (s *Server) registerTools(ctx context.Context, runtime *agent.Runtime) erro
 			if memMB, err := parseMemoryMB(s.config.Tools.Sandbox.Limits.MaxMemory); err == nil && memMB > 0 {
 				fcConfig.DefaultMemMB = int64(memMB)
 				fcConfig.PoolConfig.DefaultMemMB = int64(memMB)
+			}
+			if s.config.Tools.Sandbox.Snapshots.Enabled {
+				fcConfig.EnableSnapshots = true
+				if s.config.Tools.Sandbox.Snapshots.RefreshInterval > 0 {
+					fcConfig.SnapshotRefreshInterval = s.config.Tools.Sandbox.Snapshots.RefreshInterval
+				}
+				if s.config.Tools.Sandbox.Snapshots.MaxAge > 0 {
+					fcConfig.SnapshotMaxAge = s.config.Tools.Sandbox.Snapshots.MaxAge
+				}
 			}
 			fcBackend, err := firecracker.NewBackend(fcConfig)
 			if err != nil {

@@ -56,6 +56,12 @@ type BackendConfig struct {
 
 	// EnableSnapshots enables snapshot-based fast boot.
 	EnableSnapshots bool
+
+	// SnapshotRefreshInterval controls snapshot refresh cadence.
+	SnapshotRefreshInterval time.Duration
+
+	// SnapshotMaxAge controls when snapshots are considered stale.
+	SnapshotMaxAge time.Duration
 }
 
 // DefaultBackendConfig returns a BackendConfig with sensible defaults.
@@ -80,13 +86,15 @@ func DefaultBackendConfig() *BackendConfig {
 			DefaultMemMB:   512,
 			OverlayEnabled: true,
 		},
-		OverlayDir:      "/var/lib/firecracker/overlays",
-		SnapshotDir:     "/var/lib/firecracker/snapshots",
-		DefaultVCPUs:    1,
-		DefaultMemMB:    512,
-		NetworkEnabled:  false,
-		MaxExecTime:     5 * time.Minute,
-		EnableSnapshots: false,
+		OverlayDir:              "/var/lib/firecracker/overlays",
+		SnapshotDir:             "/var/lib/firecracker/snapshots",
+		DefaultVCPUs:            1,
+		DefaultMemMB:            512,
+		NetworkEnabled:          false,
+		MaxExecTime:             5 * time.Minute,
+		EnableSnapshots:         false,
+		SnapshotRefreshInterval: 30 * time.Minute,
+		SnapshotMaxAge:          6 * time.Hour,
 	}
 }
 
@@ -128,12 +136,22 @@ func NewBackend(config *BackendConfig) (*Backend, error) {
 	poolConfig.DefaultMemMB = config.DefaultMemMB
 	poolConfig.NetworkEnabled = config.NetworkEnabled
 	poolConfig.OverlayDir = config.OverlayDir
+	poolConfig.SnapshotsEnabled = config.EnableSnapshots
+	if config.SnapshotRefreshInterval > 0 {
+		poolConfig.SnapshotRefreshInterval = config.SnapshotRefreshInterval
+	}
+	if config.SnapshotMaxAge > 0 {
+		poolConfig.SnapshotMaxAge = config.SnapshotMaxAge
+	}
 
 	// Create VM pool
 	pool, err := NewVMPool(poolConfig)
 	if err != nil {
 		overlayManager.Close()
 		return nil, fmt.Errorf("failed to create VM pool: %w", err)
+	}
+	if snapshotManager != nil {
+		pool.SetSnapshotManager(snapshotManager)
 	}
 
 	backend := &Backend{

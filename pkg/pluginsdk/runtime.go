@@ -68,7 +68,7 @@ type CLICommand struct {
 // CLIRegistry allows plugins to register CLI commands.
 type CLIRegistry interface {
 	// RegisterCommand registers a top-level CLI command.
-	// The command will be accessible as "nexus <plugin-id> <command>".
+	// The command will be accessible as "nexus <command>".
 	RegisterCommand(cmd *CLICommand) error
 
 	// RegisterSubcommand registers a command under an existing parent.

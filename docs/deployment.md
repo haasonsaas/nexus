@@ -4,7 +4,7 @@ This guide covers deploying Nexus in both managed (Kubernetes) and self-hosted c
 
 ## Prerequisites
 
-- Go 1.22+
+- Go 1.24+
 - Docker
 - kubectl (for Kubernetes deployment)
 - Helm 3.x (optional, for Helm chart deployment)

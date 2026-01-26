@@ -73,7 +73,7 @@ The sandbox supports the following languages out of the box:
 
 - **Python 3.11** - Full standard library
 - **Node.js 20** - Modern JavaScript/ES2020+
-- **Go 1.22** - Complete Go toolchain
+- **Go 1.24** - Complete Go toolchain
 - **Bash 5** - Shell scripting
 
 ## Features

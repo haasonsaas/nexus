@@ -24,7 +24,7 @@ final class ModelsTests: XCTestCase {
         {
             "uptime": "3h15m",
             "uptime_string": "3 hours 15 minutes",
-            "go_version": "go1.22.0",
+            "go_version": "go1.24.12",
             "num_goroutines": 50,
             "mem_alloc_mb": 64.25,
             "mem_sys_mb": 128.5,
@@ -39,7 +39,7 @@ final class ModelsTests: XCTestCase {
 
         XCTAssertEqual(status.uptime, "3h15m")
         XCTAssertEqual(status.uptimeString, "3 hours 15 minutes")
-        XCTAssertEqual(status.goVersion, "go1.22.0")
+        XCTAssertEqual(status.goVersion, "go1.24.12")
         XCTAssertEqual(status.numGoroutines, 50)
         XCTAssertEqual(status.memAllocMb, 64.25, accuracy: 0.001)
         XCTAssertEqual(status.memSysMb, 128.5, accuracy: 0.001)

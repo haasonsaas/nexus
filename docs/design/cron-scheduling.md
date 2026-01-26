@@ -780,7 +780,10 @@ func (s *CronScheduler) registerBuiltinHandlers() {
 
 ---
 
-## 5. Configuration
+## 5. Proposed Configuration (Future)
+
+> The configuration below matches the *proposed* (future) cron job model in this design doc. For the shipped MVP
+> configuration, see **Current Implementation (MVP, as of 2026-01-26)** at the top of this document.
 
 ```yaml
 # nexus.yaml
@@ -862,6 +865,8 @@ cron:
 
 ## 6. CLI Commands
 
+> CLI commands are not shipped yet (as of 2026-01-26). This section documents a proposed future interface.
+
 ```bash
 # List all jobs
 nexus cron list [--enabled] [--type <type>]
@@ -889,6 +894,9 @@ nexus cron validate "0 9 * * 1-5"
 ---
 
 ## 7. Execution Store
+
+> Execution history persistence is not shipped yet (as of 2026-01-26). The shipped MVP tracks `last_run` and `last_error`
+> in memory only.
 
 ```go
 // internal/cron/store.go

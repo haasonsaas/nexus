@@ -346,6 +346,9 @@ data:
       enabled: false
       jobs: []
 
+    tasks:
+      enabled: false
+
     logging:
       level: info
       format: json

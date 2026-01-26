@@ -761,27 +761,43 @@ internal/config/
 ### Configuration Structure
 
 ```go
+// internal/config/config.go (abridged)
+//
+// Config parsing is strict: unknown keys fail validation. See `nexus.example.yaml`
+// for a full working config file.
 type Config struct {
+    Version  int            `yaml:"version"`
     Server   ServerConfig   `yaml:"server"`
     Database DatabaseConfig `yaml:"database"`
     Auth     AuthConfig     `yaml:"auth"`
+    Session  SessionConfig  `yaml:"session"`
+
+    Commands CommandsConfig `yaml:"commands"`
     Channels ChannelsConfig `yaml:"channels"`
-    LLM      LLMConfig      `yaml:"llm"`
-    Tools    ToolsConfig    `yaml:"tools"`
-    Logging  LoggingConfig  `yaml:"logging"`
+
+    Plugins PluginsConfig `yaml:"plugins"`
+    LLM     LLMConfig     `yaml:"llm"`
+    Tools   ToolsConfig   `yaml:"tools"`
+
+    Cron  CronConfig  `yaml:"cron"`
+    Tasks TasksConfig `yaml:"tasks"`
+
+    Logging       LoggingConfig       `yaml:"logging"`
+    Observability ObservabilityConfig `yaml:"observability"`
+    Security      SecurityConfig      `yaml:"security"`
 }
 
 type ServerConfig struct {
-    Host        string `yaml:"host" env:"NEXUS_HOST" default:"0.0.0.0"`
-    GRPCPort    int    `yaml:"grpc_port" env:"NEXUS_GRPC_PORT" default:"50051"`
-    HTTPPort    int    `yaml:"http_port" env:"NEXUS_HTTP_PORT" default:"8080"`
-    MetricsPort int    `yaml:"metrics_port" env:"NEXUS_METRICS_PORT" default:"9090"`
+    Host        string `yaml:"host"`
+    GRPCPort    int    `yaml:"grpc_port"`
+    HTTPPort    int    `yaml:"http_port"`
+    MetricsPort int    `yaml:"metrics_port"`
 }
 
 type DatabaseConfig struct {
-    URL             string `yaml:"url" env:"DATABASE_URL" required:"true"`
-    MaxConnections  int    `yaml:"max_connections" default:"25"`
-    ConnMaxLifetime string `yaml:"conn_max_lifetime" default:"5m"`
+    URL             string        `yaml:"url"`
+    MaxConnections  int           `yaml:"max_connections"`
+    ConnMaxLifetime time.Duration `yaml:"conn_max_lifetime"`
 }
 
 type ChannelsConfig struct {
@@ -794,13 +810,17 @@ type ChannelsConfig struct {
 ### Config File (nexus.yaml)
 
 ```yaml
+version: 1
+
 server:
   host: 0.0.0.0
   grpc_port: 50051
   http_port: 8080
+  metrics_port: 9090
 
 database:
   url: postgres://nexus:password@localhost:26257/nexus?sslmode=disable
+  max_connections: 25
 
 auth:
   jwt_secret: ${JWT_SECRET}
@@ -911,6 +931,13 @@ tools:
     allow_from:
       telegram: ["123456789"]
     tools: ["execute_code"]
+
+cron:
+  enabled: false
+  jobs: []
+
+tasks:
+  enabled: false
 
 logging:
   level: info

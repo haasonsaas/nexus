@@ -176,8 +176,8 @@ func (t *ListEntitiesTool) Execute(ctx context.Context, params json.RawMessage) 
 
 	out := make([]entitySummary, 0, min(input.Limit, len(states)))
 	for _, item := range states {
-		entityID, _ := item["entity_id"].(string)
-		if entityID == "" {
+		entityID, ok := item["entity_id"].(string)
+		if !ok || entityID == "" {
 			continue
 		}
 		if prefix != "" && !strings.HasPrefix(strings.ToLower(entityID), prefix) {

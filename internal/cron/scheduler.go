@@ -17,11 +17,12 @@ var defaultWebhookTimeout = 30 * time.Second
 
 // Scheduler runs cron jobs from configuration.
 type Scheduler struct {
-	jobs         []*Job
-	logger       *slog.Logger
-	httpClient   *http.Client
-	now          func() time.Time
-	tickInterval time.Duration
+	jobs          []*Job
+	logger        *slog.Logger
+	httpClient    *http.Client
+	messageSender MessageSender
+	now           func() time.Time
+	tickInterval  time.Duration
 
 	mu      sync.Mutex
 	started bool
@@ -49,6 +50,15 @@ func WithHTTPClient(client *http.Client) Option {
 	}
 }
 
+// WithMessageSender configures the message sender used for message jobs.
+func WithMessageSender(sender MessageSender) Option {
+	return func(s *Scheduler) {
+		if sender != nil {
+			s.messageSender = sender
+		}
+	}
+}
+
 // WithNow overrides the clock for tests.
 func WithNow(now func() time.Time) Option {
 	return func(s *Scheduler) {
@@ -65,6 +75,16 @@ func WithTickInterval(interval time.Duration) Option {
 			s.tickInterval = interval
 		}
 	}
+}
+
+// SetMessageSender updates the sender for message jobs after initialization.
+func (s *Scheduler) SetMessageSender(sender MessageSender) {
+	if s == nil || sender == nil {
+		return
+	}
+	s.mu.Lock()
+	s.messageSender = sender
+	s.mu.Unlock()
 }
 
 // NewScheduler creates a scheduler from config.
@@ -302,7 +322,17 @@ func (s *Scheduler) buildJob(cfg config.CronJobConfig, now time.Time) (*Job, err
 		if cfg.Webhook == nil || strings.TrimSpace(cfg.Webhook.URL) == "" {
 			return nil, fmt.Errorf("webhook job missing url")
 		}
-	case JobTypeMessage, JobTypeAgent:
+	case JobTypeMessage:
+		if cfg.Message == nil {
+			return nil, fmt.Errorf("message job missing payload")
+		}
+		if strings.TrimSpace(cfg.Message.Channel) == "" || strings.TrimSpace(cfg.Message.ChannelID) == "" {
+			return nil, fmt.Errorf("message job missing channel")
+		}
+		if strings.TrimSpace(cfg.Message.Content) == "" {
+			return nil, fmt.Errorf("message job missing content")
+		}
+	case JobTypeAgent:
 		return nil, fmt.Errorf("job type %s not implemented", jobType)
 	default:
 		return nil, fmt.Errorf("unsupported job type %q", cfg.Type)
@@ -335,9 +365,29 @@ func (s *Scheduler) executeJob(ctx context.Context, job *Job) error {
 	switch job.Type {
 	case JobTypeWebhook:
 		return s.executeWebhook(ctx, job)
+	case JobTypeMessage:
+		return s.executeMessage(ctx, job)
 	default:
 		return fmt.Errorf("job type %s not implemented", job.Type)
 	}
+}
+
+func (s *Scheduler) executeMessage(ctx context.Context, job *Job) error {
+	if s.messageSender == nil {
+		return errors.New("message sender not configured")
+	}
+	if job.Message == nil {
+		return errors.New("missing message payload")
+	}
+	channel := strings.TrimSpace(job.Message.Channel)
+	channelID := strings.TrimSpace(job.Message.ChannelID)
+	if channel == "" || channelID == "" {
+		return errors.New("message payload missing channel")
+	}
+	if strings.TrimSpace(job.Message.Content) == "" {
+		return errors.New("message payload missing content")
+	}
+	return s.messageSender.Send(ctx, job.Message)
 }
 
 func (s *Scheduler) executeWebhook(ctx context.Context, job *Job) error {

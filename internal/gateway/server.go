@@ -15,6 +15,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -622,6 +623,31 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		integration:        integration,
 		sessionLocker:      sessions.NewLocalLocker(sessions.DefaultLockTimeout),
 		nodeID:             cfg.Cluster.NodeID,
+	}
+	if server.cronScheduler != nil {
+		messageSvc := newMessageService(server)
+		server.cronScheduler.SetMessageSender(cron.MessageSenderFunc(func(ctx context.Context, message *config.CronMessageConfig) error {
+			if message == nil {
+				return fmt.Errorf("missing message payload")
+			}
+			req := &proto.ProactiveSendRequest{
+				Channel: strings.TrimSpace(message.Channel),
+				PeerId:  strings.TrimSpace(message.ChannelID),
+				Content: message.Content,
+			}
+			resp, err := messageSvc.SendMessage(ctx, req)
+			if err != nil {
+				return err
+			}
+			if resp == nil || !resp.Success {
+				errMsg := "message send failed"
+				if resp != nil && resp.Error != "" {
+					errMsg = fmt.Sprintf("message send failed: %s", resp.Error)
+				}
+				return fmt.Errorf("%s", errMsg)
+			}
+			return nil
+		}))
 	}
 	if artifactSetup != nil {
 		server.artifactRepo = artifactSetup.repo

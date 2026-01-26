@@ -1,6 +1,7 @@
 package cron
 
 import (
+	"context"
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/config"
@@ -38,4 +39,17 @@ type Job struct {
 	NextRun   time.Time
 	LastRun   time.Time
 	LastError string
+}
+
+// MessageSender executes outbound cron message jobs.
+type MessageSender interface {
+	Send(ctx context.Context, message *config.CronMessageConfig) error
+}
+
+// MessageSenderFunc adapts a function to a MessageSender.
+type MessageSenderFunc func(ctx context.Context, message *config.CronMessageConfig) error
+
+// Send executes the message sender function.
+func (f MessageSenderFunc) Send(ctx context.Context, message *config.CronMessageConfig) error {
+	return f(ctx, message)
 }

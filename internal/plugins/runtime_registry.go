@@ -95,11 +95,12 @@ func (r *RuntimeRegistry) LoadChannels(cfg *config.Config, registry *channels.Re
 	if cfg == nil || registry == nil {
 		return nil
 	}
+	loader := runtimePluginLoaderForConfig(cfg)
 	for id, entry := range cfg.Plugins.Entries {
 		if !entry.Enabled {
 			continue
 		}
-		pluginEntry := r.ensureEntry(id, entry.Path)
+		pluginEntry := r.ensureEntry(id, entry.Path, loader)
 		plugin, err := pluginEntry.load(entry.Path)
 		if err != nil {
 			return err
@@ -135,11 +136,12 @@ func (r *RuntimeRegistry) LoadTools(cfg *config.Config, runtime *agent.Runtime) 
 	if cfg == nil || runtime == nil {
 		return nil
 	}
+	loader := runtimePluginLoaderForConfig(cfg)
 	for id, entry := range cfg.Plugins.Entries {
 		if !entry.Enabled {
 			continue
 		}
-		pluginEntry := r.ensureEntry(id, entry.Path)
+		pluginEntry := r.ensureEntry(id, entry.Path, loader)
 		plugin, err := pluginEntry.load(entry.Path)
 		if err != nil {
 			return err
@@ -175,11 +177,12 @@ func (r *RuntimeRegistry) LoadCLI(cfg *config.Config, rootCmd *cobra.Command, lo
 	if cfg == nil || rootCmd == nil {
 		return nil
 	}
+	loader := runtimePluginLoaderForConfig(cfg)
 	for id, entry := range cfg.Plugins.Entries {
 		if !entry.Enabled {
 			continue
 		}
-		pluginEntry := r.ensureEntry(id, entry.Path)
+		pluginEntry := r.ensureEntry(id, entry.Path, loader)
 		plugin, err := pluginEntry.load(entry.Path)
 		if err != nil {
 			return err
@@ -225,11 +228,12 @@ func (r *RuntimeRegistry) LoadServices(cfg *config.Config, manager *ServiceManag
 	if cfg == nil || manager == nil {
 		return nil
 	}
+	loader := runtimePluginLoaderForConfig(cfg)
 	for id, entry := range cfg.Plugins.Entries {
 		if !entry.Enabled {
 			continue
 		}
-		pluginEntry := r.ensureEntry(id, entry.Path)
+		pluginEntry := r.ensureEntry(id, entry.Path, loader)
 		plugin, err := pluginEntry.load(entry.Path)
 		if err != nil {
 			return err
@@ -274,11 +278,12 @@ func (r *RuntimeRegistry) LoadHooks(cfg *config.Config, registry *hooks.Registry
 	if cfg == nil || registry == nil {
 		return nil
 	}
+	loader := runtimePluginLoaderForConfig(cfg)
 	for id, entry := range cfg.Plugins.Entries {
 		if !entry.Enabled {
 			continue
 		}
-		pluginEntry := r.ensureEntry(id, entry.Path)
+		pluginEntry := r.ensureEntry(id, entry.Path, loader)
 		plugin, err := pluginEntry.load(entry.Path)
 		if err != nil {
 			return err
@@ -323,11 +328,12 @@ func (r *RuntimeRegistry) LoadFullPlugins(cfg *config.Config, api *PluginAPIBuil
 	if cfg == nil || api == nil {
 		return nil
 	}
+	loader := runtimePluginLoaderForConfig(cfg)
 	for id, entry := range cfg.Plugins.Entries {
 		if !entry.Enabled {
 			continue
 		}
-		pluginEntry := r.ensureEntry(id, entry.Path)
+		pluginEntry := r.ensureEntry(id, entry.Path, loader)
 		plugin, err := pluginEntry.load(entry.Path)
 		if err != nil {
 			return err
@@ -405,18 +411,23 @@ func (b *PluginAPIBuilder) Build(pluginID string, cfg map[string]any, manifest *
 	}
 }
 
-func (r *RuntimeRegistry) ensureEntry(id, path string) *runtimeEntry {
+func (r *RuntimeRegistry) ensureEntry(id, path string, loader runtimePluginLoader) *runtimeEntry {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	entry, ok := r.plugins[id]
 	if !ok {
-		entry = &runtimeEntry{}
+		entry = &runtimeEntry{id: id}
 		r.plugins[id] = entry
 	}
-	if entry.loader == nil && entry.plugin == nil && strings.TrimSpace(path) != "" {
+	if entry.id == "" {
+		entry.id = id
+	}
+	if entry.loader == nil && entry.plugin == nil && strings.TrimSpace(path) != "" && loader != nil {
+		pluginID := id
+		pluginPath := path
 		entry.loader = func() (pluginsdk.RuntimePlugin, error) {
-			return loadRuntimePlugin(resolvePluginBinary(path, id))
+			return loader.Load(pluginID, pluginPath)
 		}
 	}
 	return entry
@@ -454,6 +465,29 @@ func (e *runtimeEntry) load(path string) (pluginsdk.RuntimePlugin, error) {
 		}
 	}
 	return e.loaded, nil
+}
+
+type runtimePluginLoader interface {
+	Load(pluginID string, path string) (pluginsdk.RuntimePlugin, error)
+}
+
+type inProcessRuntimePluginLoader struct{}
+
+func (inProcessRuntimePluginLoader) Load(pluginID string, path string) (pluginsdk.RuntimePlugin, error) {
+	return loadRuntimePlugin(resolvePluginBinary(path, pluginID))
+}
+
+type unsupportedIsolationRuntimePluginLoader struct{}
+
+func (unsupportedIsolationRuntimePluginLoader) Load(_ string, _ string) (pluginsdk.RuntimePlugin, error) {
+	return nil, errPluginIsolationNotImplemented
+}
+
+func runtimePluginLoaderForConfig(cfg *config.Config) runtimePluginLoader {
+	if cfg != nil && cfg.Plugins.Isolation.Enabled {
+		return unsupportedIsolationRuntimePluginLoader{}
+	}
+	return inProcessRuntimePluginLoader{}
 }
 
 func resolvePluginBinary(path string, id string) string {

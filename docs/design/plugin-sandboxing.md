@@ -61,6 +61,6 @@ Config lives under `plugins.isolation` (intentionally not `plugins.sandbox`):
 ## Rollout
 
 1. Enforce manifest-declared capabilities (tools/channels/commands/services/hooks) for runtime plugin registration. ✅
-2. Add config + runner abstraction.
+2. Add config + runner abstraction. ✅ (config scaffold + loader selection; backend not implemented yet)
 3. Implement Docker backend (out-of-process plugin host).
 4. Extend with Firecracker backend + snapshots (reuse existing sandbox pool patterns).

@@ -212,3 +212,27 @@ func TestRuntimeRegistryCapabilitiesDenied(t *testing.T) {
 		t.Fatalf("expected capability error, got %v", err)
 	}
 }
+
+func TestRuntimeRegistryRejectsIsolationEnabled(t *testing.T) {
+	registry := NewRuntimeRegistry()
+
+	cfg := &config.Config{
+		Plugins: config.PluginsConfig{
+			Isolation: config.PluginIsolationConfig{
+				Enabled: true,
+			},
+			Entries: map[string]config.PluginEntryConfig{
+				"stub-plugin": {Enabled: true, Path: "./stub-plugin.so", Config: map[string]any{}},
+			},
+		},
+	}
+
+	runtime := agent.NewRuntime(stubProvider{}, stubStore{})
+	err := registry.LoadTools(cfg, runtime)
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), pluginIsolationNotImplementedMessage) {
+		t.Fatalf("expected error to contain %q, got %q", pluginIsolationNotImplementedMessage, err.Error())
+	}
+}

@@ -75,18 +75,14 @@ type Adapter struct {
 	client      *model.Client4
 	wsClient    *model.WebSocketClient
 	messages    chan *models.Message
-	status      channels.Status
-	statusMu    sync.RWMutex
 	ctx         context.Context
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
 	botUserID   string
 	botUserIDMu sync.RWMutex
 	rateLimiter *channels.RateLimiter
-	metrics     *channels.Metrics
 	logger      *slog.Logger
-	degraded    bool
-	degradedMu  sync.RWMutex
+	health      *channels.BaseHealthAdapter
 }
 
 // NewAdapter creates a new Mattermost adapter with the given configuration.
@@ -100,15 +96,15 @@ func NewAdapter(cfg Config) (*Adapter, error) {
 		client.SetToken(cfg.Token)
 	}
 
-	return &Adapter{
+	adapter := &Adapter{
 		cfg:         cfg,
 		client:      client,
 		messages:    make(chan *models.Message, 100),
-		status:      channels.Status{Connected: false},
 		rateLimiter: channels.NewRateLimiter(cfg.RateLimit, cfg.RateBurst),
-		metrics:     channels.NewMetrics(models.ChannelMattermost),
 		logger:      cfg.Logger.With("adapter", "mattermost"),
-	}, nil
+	}
+	adapter.health = channels.NewBaseHealthAdapter(models.ChannelMattermost, adapter.logger)
+	return adapter, nil
 }
 
 // Start begins listening for messages from Mattermost via WebSocket.
@@ -121,7 +117,7 @@ func (a *Adapter) Start(ctx context.Context) error {
 	if a.cfg.Token == "" {
 		user, _, err := a.client.Login(ctx, a.cfg.Username, a.cfg.Password)
 		if err != nil {
-			a.metrics.RecordError(channels.ErrCodeAuthentication)
+			a.health.RecordError(channels.ErrCodeAuthentication)
 			return channels.ErrAuthentication("failed to login to Mattermost", err)
 		}
 		a.setBotUserID(user.Id)
@@ -130,7 +126,7 @@ func (a *Adapter) Start(ctx context.Context) error {
 		// Get bot user info
 		me, _, err := a.client.GetMe(ctx, "")
 		if err != nil {
-			a.metrics.RecordError(channels.ErrCodeAuthentication)
+			a.health.RecordError(channels.ErrCodeAuthentication)
 			return channels.ErrAuthentication("failed to get bot user info", err)
 		}
 		a.setBotUserID(me.Id)
@@ -145,7 +141,7 @@ func (a *Adapter) Start(ctx context.Context) error {
 	var err error
 	a.wsClient, err = model.NewWebSocketClient4(wsURL, a.client.AuthToken)
 	if err != nil {
-		a.metrics.RecordError(channels.ErrCodeConnection)
+		a.health.RecordError(channels.ErrCodeConnection)
 		return channels.ErrConnection("failed to connect to Mattermost WebSocket", err)
 	}
 
@@ -157,7 +153,7 @@ func (a *Adapter) Start(ctx context.Context) error {
 	go a.handleEvents()
 
 	a.updateStatus(true, "")
-	a.metrics.RecordConnectionOpened()
+	a.health.RecordConnectionOpened()
 
 	a.logger.Info("mattermost adapter started successfully")
 
@@ -188,14 +184,14 @@ func (a *Adapter) Stop(ctx context.Context) error {
 	case <-done:
 		close(a.messages)
 		a.updateStatus(false, "")
-		a.metrics.RecordConnectionClosed()
+		a.health.RecordConnectionClosed()
 		a.logger.Info("mattermost adapter stopped gracefully")
 		return nil
 	case <-ctx.Done():
 		close(a.messages)
 		a.updateStatus(false, "shutdown timeout")
 		a.logger.Warn("mattermost adapter stop timeout")
-		a.metrics.RecordError(channels.ErrCodeTimeout)
+		a.health.RecordError(channels.ErrCodeTimeout)
 		return channels.ErrTimeout("shutdown timeout", ctx.Err())
 	}
 }
@@ -207,15 +203,15 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	// Apply rate limiting
 	if err := a.rateLimiter.Wait(ctx); err != nil {
 		a.logger.Warn("rate limit wait cancelled", "error", err)
-		a.metrics.RecordError(channels.ErrCodeTimeout)
+		a.health.RecordError(channels.ErrCodeTimeout)
 		return channels.ErrTimeout("rate limit wait cancelled", err)
 	}
 
 	// Extract channel ID from message metadata
 	channelID, ok := msg.Metadata["mattermost_channel"].(string)
 	if !ok {
-		a.metrics.RecordMessageFailed()
-		a.metrics.RecordError(channels.ErrCodeInvalidInput)
+		a.health.RecordMessageFailed()
+		a.health.RecordError(channels.ErrCodeInvalidInput)
 		return channels.ErrInvalidInput("missing mattermost_channel in message metadata", nil)
 	}
 
@@ -236,23 +232,23 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	// Send the message
 	sentPost, _, err := a.client.CreatePost(ctx, post)
 	if err != nil {
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 		a.logger.Error("failed to send message",
 			"error", err,
 			"channel_id", channelID)
 
 		if isRateLimitError(err) {
-			a.metrics.RecordError(channels.ErrCodeRateLimit)
+			a.health.RecordError(channels.ErrCodeRateLimit)
 			return channels.ErrRateLimit("mattermost rate limit exceeded", err)
 		}
 
-		a.metrics.RecordError(channels.ErrCodeInternal)
+		a.health.RecordError(channels.ErrCodeInternal)
 		return channels.ErrInternal("failed to send Mattermost message", err)
 	}
 
 	// Record success metrics
-	a.metrics.RecordMessageSent()
-	a.metrics.RecordSendLatency(time.Since(startTime))
+	a.health.RecordMessageSent()
+	a.health.RecordSendLatency(time.Since(startTime))
 
 	a.logger.Debug("message sent successfully",
 		"channel_id", channelID,
@@ -283,9 +279,10 @@ func (a *Adapter) Type() models.ChannelType {
 
 // Status returns the current connection status.
 func (a *Adapter) Status() channels.Status {
-	a.statusMu.RLock()
-	defer a.statusMu.RUnlock()
-	return a.status
+	if a.health == nil {
+		return channels.Status{}
+	}
+	return a.health.Status()
 }
 
 // HealthCheck performs a connectivity check with Mattermost's API.
@@ -327,7 +324,10 @@ func (a *Adapter) HealthCheck(ctx context.Context) channels.HealthStatus {
 
 // Metrics returns the current metrics snapshot.
 func (a *Adapter) Metrics() channels.MetricsSnapshot {
-	return a.metrics.Snapshot()
+	if a.health == nil {
+		return channels.MetricsSnapshot{ChannelType: models.ChannelMattermost}
+	}
+	return a.health.Metrics()
 }
 
 // handleEvents processes incoming WebSocket events.
@@ -345,10 +345,7 @@ func (a *Adapter) handleEvents() {
 				return
 			}
 
-			// Update last ping timestamp
-			a.statusMu.Lock()
-			a.status.LastPing = time.Now().Unix()
-			a.statusMu.Unlock()
+			a.updateLastPing()
 
 			a.handleEvent(event)
 		case _, ok := <-a.wsClient.ResponseChannel:
@@ -423,8 +420,8 @@ func (a *Adapter) handlePosted(event *model.WebSocketEvent) {
 	msg := a.convertPost(&post, event.GetData())
 
 	// Record metrics
-	a.metrics.RecordMessageReceived()
-	a.metrics.RecordReceiveLatency(time.Since(startTime))
+	a.health.RecordMessageReceived()
+	a.health.RecordReceiveLatency(time.Since(startTime))
 
 	// Send to messages channel
 	select {
@@ -433,7 +430,7 @@ func (a *Adapter) handlePosted(event *model.WebSocketEvent) {
 	default:
 		a.logger.Warn("messages channel full, dropping message",
 			"channel", post.ChannelId)
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 	}
 }
 
@@ -524,11 +521,11 @@ func (a *Adapter) StartStreamingResponse(ctx context.Context, msg *models.Messag
 	sentPost, _, err := a.client.CreatePost(ctx, post)
 	if err != nil {
 		a.logger.Error("failed to start streaming response", "error", err, "channel_id", channelID)
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 		return "", channels.ErrInternal("failed to send initial message", err)
 	}
 
-	a.metrics.RecordMessageSent()
+	a.health.RecordMessageSent()
 	return sentPost.Id, nil
 }
 
@@ -559,25 +556,31 @@ func (a *Adapter) UpdateStreamingResponse(ctx context.Context, msg *models.Messa
 // Helper functions
 
 func (a *Adapter) updateStatus(connected bool, errMsg string) {
-	a.statusMu.Lock()
-	defer a.statusMu.Unlock()
-	a.status.Connected = connected
-	a.status.Error = errMsg
-	if connected {
-		a.status.LastPing = time.Now().Unix()
+	if a.health == nil {
+		return
 	}
+	a.health.SetStatus(connected, errMsg)
+}
+
+func (a *Adapter) updateLastPing() {
+	if a.health == nil {
+		return
+	}
+	a.health.UpdateLastPing()
 }
 
 func (a *Adapter) setDegraded(degraded bool) {
-	a.degradedMu.Lock()
-	defer a.degradedMu.Unlock()
-	a.degraded = degraded
+	if a.health == nil {
+		return
+	}
+	a.health.SetDegraded(degraded)
 }
 
 func (a *Adapter) isDegraded() bool {
-	a.degradedMu.RLock()
-	defer a.degradedMu.RUnlock()
-	return a.degraded
+	if a.health == nil {
+		return false
+	}
+	return a.health.IsDegraded()
 }
 
 func (a *Adapter) setBotUserID(id string) {

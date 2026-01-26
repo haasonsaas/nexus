@@ -119,16 +119,12 @@ type Adapter struct {
 	httpClient  *http.Client
 	server      *http.Server
 	messages    chan *models.Message
-	status      channels.Status
-	statusMu    sync.RWMutex
 	ctx         context.Context
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
 	rateLimiter *channels.RateLimiter
-	metrics     *channels.Metrics
 	logger      *slog.Logger
-	degraded    bool
-	degradedMu  sync.RWMutex
+	health      *channels.BaseHealthAdapter
 }
 
 // NewAdapter creates a new Nextcloud Talk adapter with the given configuration.
@@ -137,15 +133,15 @@ func NewAdapter(cfg Config) (*Adapter, error) {
 		return nil, err
 	}
 
-	return &Adapter{
+	adapter := &Adapter{
 		cfg:         cfg,
 		httpClient:  &http.Client{Timeout: 30 * time.Second},
 		messages:    make(chan *models.Message, 100),
-		status:      channels.Status{Connected: false},
 		rateLimiter: channels.NewRateLimiter(cfg.RateLimit, cfg.RateBurst),
-		metrics:     channels.NewMetrics(models.ChannelNextcloudTalk),
 		logger:      cfg.Logger.With("adapter", "nextcloud-talk"),
-	}, nil
+	}
+	adapter.health = channels.NewBaseHealthAdapter(models.ChannelNextcloudTalk, adapter.logger)
+	return adapter, nil
 }
 
 // Start begins listening for webhooks from Nextcloud Talk.
@@ -161,9 +157,7 @@ func (a *Adapter) Start(ctx context.Context) error {
 	mux.HandleFunc(a.cfg.WebhookPath, a.handleWebhook)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		if _, err := w.Write([]byte("ok")); err != nil {
-			a.logger.Debug("healthz write failed", "error", err)
-		}
+		_, _ = w.Write([]byte("ok"))
 	})
 
 	addr := fmt.Sprintf("%s:%d", a.cfg.WebhookHost, a.cfg.WebhookPort)
@@ -179,13 +173,13 @@ func (a *Adapter) Start(ctx context.Context) error {
 		a.logger.Info("webhook server starting", "address", addr)
 		if err := a.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			a.logger.Error("webhook server error", "error", err)
-			a.metrics.RecordError(channels.ErrCodeConnection)
+			a.health.RecordError(channels.ErrCodeConnection)
 			a.updateStatus(false, fmt.Sprintf("webhook server error: %v", err))
 		}
 	}()
 
 	a.updateStatus(true, "")
-	a.metrics.RecordConnectionOpened()
+	a.health.RecordConnectionOpened()
 
 	a.logger.Info("nextcloud-talk adapter started successfully",
 		"webhook_path", a.cfg.WebhookPath)
@@ -219,14 +213,14 @@ func (a *Adapter) Stop(ctx context.Context) error {
 	case <-done:
 		close(a.messages)
 		a.updateStatus(false, "")
-		a.metrics.RecordConnectionClosed()
+		a.health.RecordConnectionClosed()
 		a.logger.Info("nextcloud-talk adapter stopped gracefully")
 		return nil
 	case <-ctx.Done():
 		close(a.messages)
 		a.updateStatus(false, "shutdown timeout")
 		a.logger.Warn("nextcloud-talk adapter stop timeout")
-		a.metrics.RecordError(channels.ErrCodeTimeout)
+		a.health.RecordError(channels.ErrCodeTimeout)
 		return channels.ErrTimeout("shutdown timeout", ctx.Err())
 	}
 }
@@ -289,8 +283,8 @@ func (a *Adapter) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	msg := a.convertPayload(payload)
 
 	// Record metrics
-	a.metrics.RecordMessageReceived()
-	a.metrics.RecordReceiveLatency(time.Since(startTime))
+	a.health.RecordMessageReceived()
+	a.health.RecordReceiveLatency(time.Since(startTime))
 
 	// Respond immediately before processing
 	w.WriteHeader(http.StatusOK)
@@ -304,7 +298,7 @@ func (a *Adapter) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	default:
 		a.logger.Warn("messages channel full, dropping message",
 			"room", payload.Target.ID)
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 	}
 }
 
@@ -362,15 +356,15 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	// Apply rate limiting
 	if err := a.rateLimiter.Wait(ctx); err != nil {
 		a.logger.Warn("rate limit wait cancelled", "error", err)
-		a.metrics.RecordError(channels.ErrCodeTimeout)
+		a.health.RecordError(channels.ErrCodeTimeout)
 		return channels.ErrTimeout("rate limit wait cancelled", err)
 	}
 
 	// Extract room token from message metadata
 	roomToken, ok := msg.Metadata["nextcloud_room_token"].(string)
 	if !ok || roomToken == "" {
-		a.metrics.RecordMessageFailed()
-		a.metrics.RecordError(channels.ErrCodeInvalidInput)
+		a.health.RecordMessageFailed()
+		a.health.RecordError(channels.ErrCodeInvalidInput)
 		return channels.ErrInvalidInput("missing nextcloud_room_token in message metadata", nil)
 	}
 
@@ -394,16 +388,14 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
-		a.setDegraded(true)
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 		return channels.ErrInternal("failed to marshal request body", err)
 	}
 
 	// Create and send request
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, strings.NewReader(string(bodyBytes)))
 	if err != nil {
-		a.setDegraded(true)
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 		return channels.ErrInternal("failed to create request", err)
 	}
 
@@ -414,23 +406,15 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
-		a.setDegraded(true)
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 		a.logger.Error("failed to send message", "error", err, "room_token", roomToken)
 		return channels.ErrConnection("failed to send message", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		a.setDegraded(true)
-		a.metrics.RecordMessageFailed()
-		bodyBytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			a.logger.Error("message send failed",
-				"status", resp.StatusCode,
-				"read_error", err)
-			return channels.ErrInternal(fmt.Sprintf("API error: %d", resp.StatusCode), err)
-		}
+		a.health.RecordMessageFailed()
+		bodyBytes, _ := io.ReadAll(resp.Body)
 		a.logger.Error("message send failed",
 			"status", resp.StatusCode,
 			"body", string(bodyBytes))
@@ -438,9 +422,8 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	}
 
 	// Record success metrics
-	a.setDegraded(false)
-	a.metrics.RecordMessageSent()
-	a.metrics.RecordSendLatency(time.Since(startTime))
+	a.health.RecordMessageSent()
+	a.health.RecordSendLatency(time.Since(startTime))
 
 	a.logger.Debug("message sent successfully",
 		"room_token", roomToken,
@@ -470,9 +453,10 @@ func (a *Adapter) Type() models.ChannelType {
 
 // Status returns the current connection status.
 func (a *Adapter) Status() channels.Status {
-	a.statusMu.RLock()
-	defer a.statusMu.RUnlock()
-	return a.status
+	if a.health == nil {
+		return channels.Status{}
+	}
+	return a.health.Status()
 }
 
 // HealthCheck performs a connectivity check.
@@ -518,7 +502,10 @@ func (a *Adapter) HealthCheck(ctx context.Context) channels.HealthStatus {
 
 // Metrics returns the current metrics snapshot.
 func (a *Adapter) Metrics() channels.MetricsSnapshot {
-	return a.metrics.Snapshot()
+	if a.health == nil {
+		return channels.MetricsSnapshot{ChannelType: models.ChannelNextcloudTalk}
+	}
+	return a.health.Metrics()
 }
 
 // SendTypingIndicator is a no-op for Nextcloud Talk.
@@ -553,31 +540,31 @@ func (a *Adapter) UpdateStreamingResponse(ctx context.Context, msg *models.Messa
 // Helper functions
 
 func (a *Adapter) updateStatus(connected bool, errMsg string) {
-	a.statusMu.Lock()
-	defer a.statusMu.Unlock()
-	a.status.Connected = connected
-	a.status.Error = errMsg
-	if connected {
-		a.status.LastPing = time.Now().Unix()
+	if a.health == nil {
+		return
 	}
+	a.health.SetStatus(connected, errMsg)
 }
 
 func (a *Adapter) updateLastPing() {
-	a.statusMu.Lock()
-	defer a.statusMu.Unlock()
-	a.status.LastPing = time.Now().Unix()
+	if a.health == nil {
+		return
+	}
+	a.health.UpdateLastPing()
 }
 
 func (a *Adapter) setDegraded(degraded bool) {
-	a.degradedMu.Lock()
-	defer a.degradedMu.Unlock()
-	a.degraded = degraded
+	if a.health == nil {
+		return
+	}
+	a.health.SetDegraded(degraded)
 }
 
 func (a *Adapter) isDegraded() bool {
-	a.degradedMu.RLock()
-	defer a.degradedMu.RUnlock()
-	return a.degraded
+	if a.health == nil {
+		return false
+	}
+	return a.health.IsDegraded()
 }
 
 func generateSessionID(roomToken string) string {

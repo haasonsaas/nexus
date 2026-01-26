@@ -23,7 +23,7 @@ Minimal example:
 }
 ```
 
-### Capability Allowlists (Phase 0)
+### Registration Allowlists (Phase 0)
 
 The manifest may include optional allowlists:
 
@@ -38,6 +38,31 @@ Semantics:
 - Omitted or empty allowlists allow all registrations (backwards compatible).
 - When an allowlist is non-empty, the gateway rejects any runtime registrations not declared in the allowlist.
 - `commands` uses dotted paths for nested subcommands; the full command tree is validated (declare each path you register).
+
+### Capabilities (Optional)
+
+The manifest may also include a `capabilities` object:
+
+```json
+{
+  "capabilities": {
+    "required": ["tool:stub", "channel:telegram"],
+    "optional": ["cli:plugins.*"]
+  }
+}
+```
+
+Semantics:
+
+- If `capabilities` is omitted/empty, capability checks are disabled (backwards compatible).
+- When present, runtime registrations require matching capabilities:
+  - Tools: `tool:<name>`
+  - Channels: `channel:<type>`
+  - CLI: `cli:<dotted-path>` (e.g. `cli:plugins.install`)
+  - Services: `service:<id>`
+  - Hooks: `hook:<eventType>`
+- Matching supports exact, `*`, and prefix wildcards like `tool:*` or `cli:plugins.*`.
+- Today `required` and `optional` are treated the same by the runtime; `optional` is reserved for future user-approval flows.
 
 ## Gateway Config (`nexus.yaml`)
 

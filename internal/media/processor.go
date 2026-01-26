@@ -131,7 +131,18 @@ func (p *DefaultProcessor) getData(attachment *Attachment, opts ProcessingOption
 		if err != nil {
 			return nil, fmt.Errorf("invalid local path: %w", err)
 		}
-		data, err := os.ReadFile(safePath)
+
+		f, err := os.Open(safePath)
+		if err != nil {
+			return nil, fmt.Errorf("open local file: %w", err)
+		}
+		defer f.Close()
+
+		reader := io.Reader(f)
+		if opts.MaxFileSize > 0 {
+			reader = io.LimitReader(f, opts.MaxFileSize+1)
+		}
+		data, err := io.ReadAll(reader)
 		if err != nil {
 			return nil, fmt.Errorf("read local file: %w", err)
 		}

@@ -579,12 +579,6 @@ func (a *Adapter) isDegraded() bool {
 	return a.health.IsDegraded()
 }
 
-func generateSessionID(roomToken string) string {
-	data := fmt.Sprintf("nextcloud-talk:%s", roomToken)
-	hash := sha256.Sum256([]byte(data))
-	return hex.EncodeToString(hash[:])
-}
-
 func generateRandom() string {
 	hash := sha256.Sum256([]byte(fmt.Sprintf("%d", time.Now().UnixNano())))
 	return hex.EncodeToString(hash[:16])

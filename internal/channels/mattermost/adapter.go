@@ -2,8 +2,6 @@ package mattermost
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -593,12 +591,6 @@ func (a *Adapter) getBotUserID() string {
 	a.botUserIDMu.RLock()
 	defer a.botUserIDMu.RUnlock()
 	return a.botUserID
-}
-
-func generateSessionID(channel, threadID string) string {
-	data := fmt.Sprintf("mattermost:%s:%s", channel, threadID)
-	hash := sha256.Sum256([]byte(data))
-	return hex.EncodeToString(hash[:])
 }
 
 func buildWebSocketURL(serverURL string) string {

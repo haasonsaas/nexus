@@ -27,6 +27,10 @@ final class NotificationBridge: NSObject {
         var isRead: Bool
     }
 
+    private var notificationsAvailable: Bool {
+        Bundle.main.bundleURL.pathExtension.lowercased() == "app"
+    }
+
     override init() {
         super.init()
         registerForNotifications()
@@ -72,6 +76,9 @@ final class NotificationBridge: NSObject {
 
     /// Send a notification from nexus
     func send(title: String, body: String?, category: String? = nil) async throws {
+        guard notificationsAvailable else {
+            throw NotificationBridgeError.unavailable
+        }
         let center = UNUserNotificationCenter.current()
 
         // Check permission
@@ -102,6 +109,10 @@ final class NotificationBridge: NSObject {
 
     /// Request notification permission
     func requestPermission() async throws -> Bool {
+        guard notificationsAvailable else {
+            logger.warning("notification center unavailable; skipping permission request")
+            return false
+        }
         let center = UNUserNotificationCenter.current()
         let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
         logger.info("notification permission granted=\(granted)")
@@ -111,6 +122,10 @@ final class NotificationBridge: NSObject {
     // MARK: - Private
 
     private func registerForNotifications() {
+        guard notificationsAvailable else {
+            logger.warning("notifications disabled (no app bundle)")
+            return
+        }
         // Register for distributed notifications to capture system-wide notifications
         DistributedNotificationCenter.default().addObserver(
             self,
@@ -194,6 +209,7 @@ extension NotificationBridge: UNUserNotificationCenterDelegate {
 enum NotificationBridgeError: LocalizedError {
     case notAuthorized
     case sendFailed(String)
+    case unavailable
 
     var errorDescription: String? {
         switch self {
@@ -201,6 +217,8 @@ enum NotificationBridgeError: LocalizedError {
             return "Notification permission not granted"
         case .sendFailed(let reason):
             return "Failed to send notification: \(reason)"
+        case .unavailable:
+            return "Notifications unavailable outside app bundle"
         }
     }
 }

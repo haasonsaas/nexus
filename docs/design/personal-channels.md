@@ -667,8 +667,15 @@ channels:
   signal:
     enabled: true
     account: "+1234567890"  # Phone number
-    config_path: ~/.local/share/signal-cli
-    trust_new_identities: false
+    signal_cli_path: signal-cli
+    config_dir: ~/.config/signal-cli
+    dm:
+      policy: pairing
+    group:
+      policy: allowlist
+    presence:
+      send_read_receipts: true
+      send_typing: true
 ```
 
 ---
@@ -950,30 +957,46 @@ channels:
     enabled: false
     session_path: ~/.nexus/whatsapp/session.db
     media_path: ~/.nexus/whatsapp/media
-    log_level: warn
     sync_contacts: true
+    dm:
+      policy: pairing
+    group:
+      policy: allowlist
     presence:
       send_read_receipts: true
       send_typing: true
-      show_online: true
+      broadcast_online: false
 
   # Signal (via signal-cli subprocess)
   signal:
     enabled: false
     account: ""  # Phone number with country code
-    config_path: ~/.local/share/signal-cli
-    trust_new_identities: false  # Auto-trust new identity keys
+    signal_cli_path: signal-cli
+    config_dir: ~/.config/signal-cli
+    dm:
+      policy: pairing
+    group:
+      policy: allowlist
+    presence:
+      send_read_receipts: true
+      send_typing: true
 
   # iMessage (macOS only)
   imessage:
     enabled: false
-    database_path: ""  # Uses ~/Library/Messages/chat.db by default
+    database_path: ~/Library/Messages/chat.db
     poll_interval: 1s
+    dm:
+      policy: pairing
+    group:
+      policy: allowlist
 ```
 
 ---
 
 ## 7. CLI Commands
+
+As of 2026-01-26, the `nexus` CLI does **not** ship these commands; they are a proposed interface.
 
 ```bash
 # WhatsApp setup

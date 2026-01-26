@@ -668,7 +668,11 @@ func buildRagPackCmd() *cobra.Command {
 		Use:   "pack",
 		Short: "Manage RAG knowledge packs",
 	}
-	cmd.AddCommand(buildRagPackInstallCmd())
+	cmd.AddCommand(
+		buildRagPackInstallCmd(),
+		buildRagPackListCmd(),
+		buildRagPackSearchCmd(),
+	)
 	return cmd
 }
 
@@ -689,6 +693,41 @@ func buildRagPackInstallCmd() *cobra.Command {
 	if err := cmd.MarkFlagRequired("path"); err != nil {
 		panic(err)
 	}
+	return cmd
+}
+
+func buildRagPackListCmd() *cobra.Command {
+	var (
+		configPath string
+		root       string
+	)
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List available knowledge packs",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runRagPackList(cmd, configPath, root)
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	cmd.Flags().StringVar(&root, "root", "", "Root directory containing packs (defaults to workspace/packs and ~/.nexus/packs)")
+	return cmd
+}
+
+func buildRagPackSearchCmd() *cobra.Command {
+	var (
+		configPath string
+		root       string
+	)
+	cmd := &cobra.Command{
+		Use:   "search <query>",
+		Short: "Search available knowledge packs",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runRagPackSearch(cmd, configPath, root, args[0])
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	cmd.Flags().StringVar(&root, "root", "", "Root directory containing packs (defaults to workspace/packs and ~/.nexus/packs)")
 	return cmd
 }
 

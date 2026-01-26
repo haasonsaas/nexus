@@ -1543,6 +1543,132 @@ func runRagPackInstall(cmd *cobra.Command, configPath, packDir string) error {
 	return nil
 }
 
+func runRagPackList(cmd *cobra.Command, configPath, root string) error {
+	return runRagPackQuery(cmd, configPath, root, "")
+}
+
+func runRagPackSearch(cmd *cobra.Command, configPath, root, query string) error {
+	if strings.TrimSpace(query) == "" {
+		return fmt.Errorf("query is required")
+	}
+	return runRagPackQuery(cmd, configPath, root, query)
+}
+
+func runRagPackQuery(cmd *cobra.Command, configPath, root, query string) error {
+	configPath = resolveConfigPath(configPath)
+	roots, err := resolvePackRoots(configPath, root)
+	if err != nil {
+		return err
+	}
+
+	found, warnings := discoverPacks(roots)
+	if query != "" {
+		found = packs.FilterPacks(found, query)
+	}
+
+	out := cmd.OutOrStdout()
+	if len(found) == 0 {
+		if len(warnings) > 0 {
+			return errors.Join(warnings...)
+		}
+		fmt.Fprintln(out, "No packs found.")
+		return nil
+	}
+
+	w := tabwriter.NewWriter(out, 0, 4, 2, ' ', 0)
+	fmt.Fprintln(w, "NAME\tVERSION\tDOCS\tPATH\tDESCRIPTION")
+	for _, pack := range found {
+		description := strings.TrimSpace(pack.Pack.Description)
+		fmt.Fprintf(w, "%s\t%s\t%d\t%s\t%s\n",
+			pack.Pack.Name,
+			pack.Pack.Version,
+			len(pack.Pack.Documents),
+			pack.Path,
+			description,
+		)
+	}
+	if err := w.Flush(); err != nil {
+		return err
+	}
+
+	if len(warnings) > 0 {
+		for _, warn := range warnings {
+			fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v\n", warn)
+		}
+	}
+	return nil
+}
+
+func resolvePackRoots(configPath, root string) ([]string, error) {
+	if strings.TrimSpace(root) != "" {
+		return []string{root}, nil
+	}
+
+	workspacePath := "."
+	if strings.TrimSpace(configPath) != "" {
+		cfg, err := config.Load(configPath)
+		if err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				return nil, err
+			}
+		} else if strings.TrimSpace(cfg.Workspace.Path) != "" {
+			workspacePath = cfg.Workspace.Path
+		}
+	}
+
+	roots := []string{filepath.Join(workspacePath, "packs")}
+	if homeDir, err := os.UserHomeDir(); err == nil {
+		roots = append(roots, filepath.Join(homeDir, ".nexus", "packs"))
+	}
+	return roots, nil
+}
+
+func discoverPacks(roots []string) ([]packs.DiscoveredPack, []error) {
+	var discovered []packs.DiscoveredPack
+	var warnings []error
+
+	seen := map[string]struct{}{}
+	for _, root := range roots {
+		root = strings.TrimSpace(root)
+		if root == "" {
+			continue
+		}
+		absRoot, err := filepath.Abs(root)
+		if err != nil {
+			warnings = append(warnings, fmt.Errorf("resolve pack root %q: %w", root, err))
+			continue
+		}
+		if _, ok := seen[absRoot]; ok {
+			continue
+		}
+		seen[absRoot] = struct{}{}
+
+		info, err := os.Stat(absRoot)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			warnings = append(warnings, fmt.Errorf("stat pack root %q: %w", absRoot, err))
+			continue
+		}
+		if !info.IsDir() {
+			warnings = append(warnings, fmt.Errorf("pack root is not a directory: %s", absRoot))
+			continue
+		}
+
+		packsFound, err := packs.Discover(absRoot)
+		if err != nil {
+			warnings = append(warnings, err)
+		}
+		discovered = append(discovered, packsFound...)
+	}
+
+	sort.Slice(discovered, func(i, j int) bool {
+		return strings.ToLower(discovered[i].Pack.Name) < strings.ToLower(discovered[j].Pack.Name)
+	})
+	return discovered, warnings
+}
+
 // =============================================================================
 // MCP Command Handlers
 // =============================================================================

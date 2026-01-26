@@ -24,6 +24,12 @@ enum LogLocator {
         (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
     }
 
+    /// Returns the log directory URL, creating it if needed.
+    static func logsDirectory() -> URL {
+        ensureLogDirExists()
+        return logDir
+    }
+
     /// Returns the newest log file under /tmp/nexus/, or nil if none exist
     static func bestLogFile() -> URL? {
         ensureLogDirExists()

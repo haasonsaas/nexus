@@ -3,7 +3,7 @@ import SwiftUI
 struct ArtifactsView: View {
     @EnvironmentObject var model: AppModel
     @State private var isRefreshing = false
-    @State private var selectedArtifact: Artifact?
+    @State private var selectedArtifact: ArtifactSummary?
     @State private var filterType: ArtifactTypeFilter = .all
     @State private var searchText = ""
 
@@ -74,7 +74,7 @@ struct ArtifactsView: View {
             // Stats
             if !model.artifacts.isEmpty {
                 HStack(spacing: 12) {
-                    let totalSize = model.artifacts.reduce(0) { $0 + $1.size }
+                    let totalSize = model.artifacts.reduce(Int64(0)) { $0 + $1.size }
                     Label("\(model.artifacts.count) files", systemImage: "doc.fill")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -157,7 +157,7 @@ struct ArtifactsView: View {
         }
     }
 
-    private var filteredArtifacts: [Artifact] {
+    private var filteredArtifacts: [ArtifactSummary] {
         model.artifacts.filter { artifact in
             // Filter by search
             let matchesSearch = searchText.isEmpty ||
@@ -197,7 +197,7 @@ struct ArtifactsView: View {
         ["code", "script", "js", "ts", "py", "swift", "go", "rs", "json", "yaml", "yml", "xml", "html", "css"].contains { type.lowercased().contains($0) }
     }
 
-    private func formatSize(_ bytes: Int) -> String {
+    private func formatSize(_ bytes: Int64) -> String {
         if bytes < 1024 { return "\(bytes) B" }
         let kb = Double(bytes) / 1024
         if kb < 1024 { return String(format: "%.1f KB", kb) }
@@ -219,7 +219,7 @@ struct ArtifactsView: View {
 // MARK: - Artifact Card
 
 struct ArtifactCard: View {
-    let artifact: Artifact
+    let artifact: ArtifactSummary
     let isSelected: Bool
     let onSelect: () -> Void
     let onOpen: () -> Void
@@ -316,7 +316,7 @@ struct ArtifactCard: View {
         return .secondary
     }
 
-    private func formatSize(_ bytes: Int) -> String {
+    private func formatSize(_ bytes: Int64) -> String {
         if bytes < 1024 { return "\(bytes) B" }
         let kb = Double(bytes) / 1024
         if kb < 1024 { return String(format: "%.1f KB", kb) }

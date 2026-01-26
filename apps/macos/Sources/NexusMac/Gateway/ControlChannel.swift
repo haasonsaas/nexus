@@ -57,6 +57,7 @@ final class ControlChannel {
     }
 
     private(set) var lastPingMs: Double?
+    var onRequest: (@Sendable (String, [String: Any]) async throws -> Data?)?
     private var eventTask: Task<Void, Never>?
     private var recoveryTask: Task<Void, Never>?
     private var lastRecoveryAt: Date?
@@ -95,8 +96,17 @@ final class ControlChannel {
 
     func request(method: String, params: [String: AnyHashable]? = nil, timeoutMs: Double? = nil) async throws -> Data {
         let rawParams = params?.reduce(into: [String: AnyCodable]()) { $0[$1.key] = AnyCodable($1.value.base) }
+        return try await requestRaw(method: method, params: rawParams, timeoutMs: timeoutMs)
+    }
+
+    func requestAny(method: String, params: [String: Any]? = nil, timeoutMs: Double? = nil) async throws -> Data {
+        let rawParams = params?.mapValues { AnyCodable($0) }
+        return try await requestRaw(method: method, params: rawParams, timeoutMs: timeoutMs)
+    }
+
+    private func requestRaw(method: String, params: [String: AnyCodable]?, timeoutMs: Double? = nil) async throws -> Data {
         do {
-            let data = try await GatewayConnection.shared.request(method: method, params: rawParams, timeoutMs: timeoutMs)
+            let data = try await GatewayConnection.shared.request(method: method, params: params, timeoutMs: timeoutMs)
             state = .connected
             return data
         } catch {
@@ -173,9 +183,9 @@ final class ControlChannel {
         let size = CGSize(width: width, height: height)
 
         if let html {
-            CanvasManager.shared.open(canvasId: canvasId, html: html, title: title, size: size)
+            CanvasManager.shared.open(sessionId: canvasId, html: html, title: title, size: size)
         } else if let urlString, let url = URL(string: urlString) {
-            CanvasManager.shared.openURL(canvasId: canvasId, url: url, title: title, size: size)
+            CanvasManager.shared.openURL(sessionId: canvasId, url: url, title: title, size: size)
         }
     }
 
@@ -187,11 +197,11 @@ final class ControlChannel {
         if let message = json["message"] as? String {
             let data = json["data"] as? [String: Any]
             Task {
-                await CanvasManager.shared.sendMessage(canvasId: canvasId, message: message, data: data)
+                await CanvasManager.shared.sendMessage(sessionId: canvasId, message: message, data: data)
             }
         } else if let script = json["script"] as? String {
             Task {
-                _ = try? await CanvasManager.shared.executeJS(canvasId: canvasId, script: script)
+                _ = try? await CanvasManager.shared.executeJS(sessionId: canvasId, script: script)
             }
         }
     }
@@ -201,7 +211,7 @@ final class ControlChannel {
               let json = try? JSONSerialization.jsonObject(with: payload) as? [String: Any],
               let canvasId = json["canvasId"] as? String else { return }
 
-        CanvasManager.shared.close(canvasId: canvasId)
+        CanvasManager.shared.close(sessionId: canvasId)
     }
 
     private func friendlyMessage(_ error: Error) -> String {

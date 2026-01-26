@@ -189,7 +189,7 @@ struct OnboardingStepView: View {
                 // Icon with animation
                 Image(systemName: step.icon)
                     .font(.system(size: 64))
-                    .foregroundStyle(.accent)
+                    .foregroundStyle(Color.accentColor)
                     .symbolEffect(.pulse, options: .repeating, isActive: isProcessing)
 
                 // Title and subtitle
@@ -818,7 +818,7 @@ struct ConnectionModeButton: View {
 
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.accent)
+                        .foregroundStyle(Color.accentColor)
                 }
             }
             .padding(12)
@@ -844,7 +844,7 @@ struct FeatureRow: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.title2)
-                .foregroundStyle(.accent)
+                .foregroundStyle(Color.accentColor)
                 .frame(width: 32)
 
             VStack(alignment: .leading, spacing: 2) {

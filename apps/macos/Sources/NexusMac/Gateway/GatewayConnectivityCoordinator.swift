@@ -47,6 +47,7 @@ final class GatewayConnectivityCoordinator {
         startModeObservation()
     }
 
+    @MainActor
     deinit {
         modeObservationTask?.cancel()
         for continuation in endpointContinuations.values {

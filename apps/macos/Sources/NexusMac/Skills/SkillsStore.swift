@@ -1,4 +1,5 @@
 import Foundation
+import Foundation
 import OSLog
 
 /// Manages skill extensions for Nexus.
@@ -78,10 +79,11 @@ final class SkillsStore {
         error = nil
 
         do {
-            let response = try await ControlChannel.shared.send(
+            let data = try await ControlChannel.shared.requestAny(
                 method: "skills.status",
-                params: [:]
+                params: nil
             )
+            let response = decodeResponse(data)
 
             if let skillsData = response["skills"] as? [[String: Any]] {
                 skills = skillsData.compactMap { parseSkill($0) }
@@ -100,17 +102,17 @@ final class SkillsStore {
     func setEnabled(_ enabled: Bool, skillKey: String) async {
         await withBusy(skillKey) {
             do {
-                _ = try await ControlChannel.shared.send(
+                _ = try await ControlChannel.shared.requestAny(
                     method: "skills.update",
                     params: [
                         "skillKey": skillKey,
                         "enabled": enabled,
                     ]
                 )
-                statusMessage = enabled ? "Skill enabled" : "Skill disabled"
-                await refresh()
+                self.statusMessage = enabled ? "Skill enabled" : "Skill disabled"
+                await self.refresh()
             } catch {
-                statusMessage = error.localizedDescription
+                self.statusMessage = error.localizedDescription
             }
         }
     }
@@ -119,7 +121,7 @@ final class SkillsStore {
     func install(skillKey: String, optionId: String) async {
         await withBusy(skillKey) {
             do {
-                let result = try await ControlChannel.shared.send(
+                let data = try await ControlChannel.shared.requestAny(
                     method: "skills.install",
                     params: [
                         "skillKey": skillKey,
@@ -127,13 +129,14 @@ final class SkillsStore {
                         "timeoutMs": 300_000,
                     ]
                 )
+                let result = self.decodeResponse(data)
 
                 if let message = result["message"] as? String {
-                    statusMessage = message
+                    self.statusMessage = message
                 }
-                await refresh()
+                await self.refresh()
             } catch {
-                statusMessage = error.localizedDescription
+                self.statusMessage = error.localizedDescription
             }
         }
     }
@@ -142,17 +145,17 @@ final class SkillsStore {
     func setEnvironment(skillKey: String, key: String, value: String) async {
         await withBusy(skillKey) {
             do {
-                _ = try await ControlChannel.shared.send(
+                _ = try await ControlChannel.shared.requestAny(
                     method: "skills.update",
                     params: [
                         "skillKey": skillKey,
                         "env": [key: value],
                     ]
                 )
-                statusMessage = "Saved \(key)"
-                await refresh()
+                self.statusMessage = "Saved \(key)"
+                await self.refresh()
             } catch {
-                statusMessage = error.localizedDescription
+                self.statusMessage = error.localizedDescription
             }
         }
     }
@@ -168,6 +171,10 @@ final class SkillsStore {
         busySkills.insert(skillKey)
         defer { busySkills.remove(skillKey) }
         await work()
+    }
+
+    private func decodeResponse(_ data: Data) -> [String: Any] {
+        (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
     }
 
     private func parseSkill(_ data: [String: Any]) -> Skill? {

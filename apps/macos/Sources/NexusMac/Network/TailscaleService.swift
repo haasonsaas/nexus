@@ -118,7 +118,7 @@ final class TailscaleService {
 
         // Notify endpoint store if IP changed
         if previousIP != ipAddress {
-            await GatewayEndpointStore.shared.refresh()
+            await GatewayConnectivityCoordinator.shared.refresh()
         }
     }
 

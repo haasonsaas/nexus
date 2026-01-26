@@ -25,11 +25,8 @@ final class CanvasFileWatcher {
     var currentPath: String? { watchedPath }
 
     deinit {
-        // Clean up stream on deallocation
-        if let stream = stream {
-            FSEventStreamStop(stream)
-            FSEventStreamInvalidate(stream)
-            FSEventStreamRelease(stream)
+        Task { @MainActor [weak self] in
+            self?.stop()
         }
     }
 

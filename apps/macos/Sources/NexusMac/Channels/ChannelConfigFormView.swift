@@ -53,7 +53,7 @@ struct ChannelConfigFormView: View {
             HStack(spacing: 12) {
                 Image(systemName: schema.iconName)
                     .font(.largeTitle)
-                    .foregroundStyle(.accent)
+                    .foregroundStyle(Color.accentColor)
                     .frame(width: 48, height: 48)
                     .background(Color.accentColor.opacity(0.1))
                     .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -473,7 +473,7 @@ private struct MultiSelectCheckbox: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: isSelected ? "checkmark.square.fill" : "square")
-                    .foregroundStyle(isSelected ? .accent : .secondary)
+                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
 
                 Text(label)
                     .font(.subheadline)
@@ -566,7 +566,7 @@ struct AddChannelView: View {
                         HStack(spacing: 12) {
                             Image(systemName: schema.iconName)
                                 .font(.title2)
-                                .foregroundStyle(.accent)
+                                .foregroundStyle(Color.accentColor)
                                 .frame(width: 40)
 
                             VStack(alignment: .leading, spacing: 2) {
@@ -647,7 +647,7 @@ struct AddChannelView: View {
                 onCancel: {
                     dismiss()
                 },
-                onTestConnection: { config in
+                onTestConnection: {
                     await testConnection(type: type, config: config)
                 }
             )
@@ -747,7 +747,7 @@ struct AddChannelView: View {
         config: .constant([:]),
         onSave: {},
         onCancel: {},
-        onTestConnection: { _ in .success("Connected") }
+        onTestConnection: { .success("Connected") }
     )
     .frame(width: 500, height: 600)
 }

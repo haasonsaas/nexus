@@ -99,11 +99,9 @@ extension NodeCommandDispatcher {
             throw NodeRegistrationError.encodingFailed
         }
 
-        let params = dict.compactMapValues { $0 as? AnyHashable }
-
-        _ = try await ControlChannel.shared.request(
+        _ = try await ControlChannel.shared.requestAny(
             method: "node.register",
-            params: params
+            params: dict
         )
     }
 }
@@ -187,6 +185,7 @@ struct NodeCommandRequirement {
     }
 
     /// Check if all requirements are met for a command
+    @MainActor
     func isSatisfied() -> Bool {
         let pm = PermissionManager.shared
 

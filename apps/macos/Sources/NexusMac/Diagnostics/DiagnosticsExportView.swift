@@ -31,7 +31,7 @@ struct DiagnosticsExportView: View {
             await refreshInfo()
         }
         .sheet(isPresented: $showLogViewer) {
-            LogViewerSheet(logs: recentLogs)
+            DiagnosticsLogViewerSheet(logs: recentLogs)
         }
         .alert("Clear Logs", isPresented: $showClearConfirmation) {
             Button("Cancel", role: .cancel) {}
@@ -275,7 +275,7 @@ private struct InfoRow: View {
 
 // MARK: - LogViewerSheet
 
-private struct LogViewerSheet: View {
+private struct DiagnosticsLogViewerSheet: View {
     let logs: String
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
@@ -325,7 +325,7 @@ private struct LogViewerSheet: View {
                 ScrollViewReader { proxy in
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(filteredLines.enumerated()), id: \.offset) { index, line in
-                            LogLineView(line: line, searchText: searchText)
+                            DiagnosticsLogLineView(line: line, searchText: searchText)
                                 .id(index)
                         }
                     }
@@ -378,7 +378,7 @@ private struct LogViewerSheet: View {
 
 // MARK: - LogLineView
 
-private struct LogLineView: View {
+private struct DiagnosticsLogLineView: View {
     let line: String
     let searchText: String
 

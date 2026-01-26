@@ -71,7 +71,7 @@ final class ConnectionModeCoordinator {
         GatewayProcessManager.shared.stop()
 
         // Disconnect control channel
-        ControlChannel.shared.disconnect()
+        await ControlChannel.shared.disconnect()
 
         // Send notification if we were previously connected
         if wasConnected {
@@ -87,17 +87,22 @@ final class ConnectionModeCoordinator {
         state = .connecting
         reconnectAttempts = 0
 
-        connectionTask = Task {
+        connectionTask = Task { @MainActor in
             do {
                 // Start the local gateway process
-                try await GatewayProcessManager.shared.start()
+                GatewayProcessManager.shared.setActive(true)
 
                 // Wait for gateway to be ready
                 try await waitForGatewayReady()
 
-                // Connect control channel
                 let port = AppStateStore.shared.gatewayPort
-                try await ControlChannel.shared.connect(to: "ws://127.0.0.1:\(port)/control")
+                updateBaseURL(host: "127.0.0.1", port: port)
+
+                // Connect control channel
+                await ControlChannel.shared.refreshEndpoint(reason: "connect-local")
+                guard ControlChannel.shared.state == .connected else {
+                    throw ConnectionError.gatewayUnavailable
+                }
 
                 state = .connected
                 lastConnectedAt = Date()
@@ -125,7 +130,7 @@ final class ConnectionModeCoordinator {
         state = .connecting
         reconnectAttempts = 0
 
-        connectionTask = Task {
+        connectionTask = Task { @MainActor in
             do {
                 guard let host = AppStateStore.shared.remoteHost else {
                     throw ConnectionError.noRemoteHost
@@ -145,9 +150,16 @@ final class ConnectionModeCoordinator {
                     )
                 }
 
+                // Configure base URL for remote or tunnel
+                let port = RemoteTunnelManager.shared.localPort ?? AppStateStore.shared.gatewayPort
+                let baseHost = RemoteTunnelManager.shared.isConnected ? "127.0.0.1" : host
+                updateBaseURL(host: baseHost, port: port)
+
                 // Connect control channel to remote
-                let port = AppStateStore.shared.gatewayPort
-                try await ControlChannel.shared.connect(to: "ws://\(host):\(port)/control")
+                await ControlChannel.shared.refreshEndpoint(reason: "connect-remote")
+                guard ControlChannel.shared.state == .connected else {
+                    throw ConnectionError.gatewayUnavailable
+                }
 
                 state = .connected
                 lastConnectedAt = Date()
@@ -173,11 +185,14 @@ final class ConnectionModeCoordinator {
 
     private func setupSSHTunnel(host: String, user: String, identityFile: String) async throws {
         // Use RemoteTunnelManager to establish SSH tunnel
-        try await RemoteTunnelManager.shared.start(
-            target: "\(user)@\(host)",
-            identityFile: identityFile,
-            localPort: AppStateStore.shared.gatewayPort
+        let config = RemoteTunnelManager.TunnelConfig(
+            host: host,
+            user: user,
+            remotePort: AppStateStore.shared.gatewayPort,
+            localPort: AppStateStore.shared.gatewayPort,
+            identityFile: identityFile
         )
+        try await RemoteTunnelManager.shared.connect(config: config)
         logger.info("SSH tunnel established to \(host)")
     }
 
@@ -185,14 +200,14 @@ final class ConnectionModeCoordinator {
 
     private func startHealthCheck() {
         healthCheckTask?.cancel()
-        healthCheckTask = Task {
+        healthCheckTask = Task { @MainActor in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(10))
 
                 guard !Task.isCancelled else { break }
 
                 // Check if control channel is still connected
-                if !ControlChannel.shared.isConnected {
+                if ControlChannel.shared.state != .connected {
                     logger.warning("control channel disconnected, attempting reconnect")
                     state = .reconnecting
                     await reconnect()
@@ -201,7 +216,7 @@ final class ConnectionModeCoordinator {
 
                 // Ping the gateway
                 do {
-                    _ = try await ControlChannel.shared.send(method: "health.ping", params: [:])
+                    _ = try await ControlChannel.shared.health(timeout: 10)
                 } catch {
                     logger.warning("health check failed: \(error.localizedDescription)")
                 }
@@ -214,16 +229,10 @@ final class ConnectionModeCoordinator {
     private func waitForGatewayReady(timeout: TimeInterval = 30) async throws {
         let deadline = Date().addingTimeInterval(timeout)
 
-        while Date() < deadline {
-            if GatewayProcessManager.shared.isRunning {
-                // Give it a moment to fully initialize
-                try await Task.sleep(for: .milliseconds(500))
-                return
-            }
-            try await Task.sleep(for: .milliseconds(100))
+        let ready = await GatewayProcessManager.shared.waitForGatewayReady(timeout: timeout)
+        if !ready {
+            throw ConnectionError.gatewayTimeout
         }
-
-        throw ConnectionError.gatewayTimeout
     }
 
     private func scheduleReconnect() {
@@ -235,7 +244,7 @@ final class ConnectionModeCoordinator {
         reconnectAttempts += 1
         let delay = Double(reconnectAttempts * 2) // Exponential backoff
 
-        Task {
+        Task { @MainActor in
             try? await Task.sleep(for: .seconds(delay))
             if state != .connected {
                 await reconnect()
@@ -249,6 +258,7 @@ final class ConnectionModeCoordinator {
         case noRemoteHost
         case gatewayTimeout
         case tunnelFailed
+        case gatewayUnavailable
 
         var errorDescription: String? {
             switch self {
@@ -258,7 +268,23 @@ final class ConnectionModeCoordinator {
                 return "Gateway failed to start in time"
             case .tunnelFailed:
                 return "SSH tunnel connection failed"
+            case .gatewayUnavailable:
+                return "Gateway did not respond to health check"
             }
+        }
+    }
+}
+
+// MARK: - Base URL Helpers
+
+private extension ConnectionModeCoordinator {
+    func updateBaseURL(host: String, port: Int) {
+        var components = URLComponents()
+        components.scheme = "http"
+        components.host = host
+        components.port = port
+        if let url = components.url {
+            UserDefaults.standard.set(url.absoluteString, forKey: "NexusBaseURL")
         }
     }
 }

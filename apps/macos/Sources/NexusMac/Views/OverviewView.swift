@@ -70,7 +70,7 @@ struct OverviewView: View {
     // MARK: - Status Content
 
     @ViewBuilder
-    private func statusContent(_ status: GatewayStatus) -> some View {
+    private func statusContent(_ status: SystemStatus) -> some View {
         // Live indicator
         if model.isWebSocketConnected {
             HStack(spacing: 8) {
@@ -128,9 +128,14 @@ struct OverviewView: View {
             ForEach(model.activeToolCalls.indices, id: \.self) { index in
                 let toolCall = model.activeToolCalls[index]
                 HStack(spacing: 10) {
-                    Image(systemName: "gearshape.2.fill")
-                        .foregroundStyle(.orange)
-                        .symbolEffect(.rotate, isActive: true)
+                    if #available(macOS 15.0, *) {
+                        Image(systemName: "gearshape.2.fill")
+                            .foregroundStyle(.orange)
+                            .symbolEffect(.rotate, isActive: true)
+                    } else {
+                        Image(systemName: "gearshape.2.fill")
+                            .foregroundStyle(.orange)
+                    }
                     Text(toolCall.toolName ?? "Unknown Tool")
                         .font(.subheadline)
                     Spacer()

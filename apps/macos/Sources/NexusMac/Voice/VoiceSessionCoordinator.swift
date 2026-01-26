@@ -133,7 +133,7 @@ final class VoiceSessionCoordinator {
     @discardableResult
     func startSession(mode: VoiceMode) -> Bool {
         guard activeMode == nil || activeMode == mode else {
-            logger.warning("cannot start \(mode.rawValue): \(activeMode?.rawValue ?? "nil") already active")
+            logger.warning("cannot start \(mode.rawValue): \(self.activeMode?.rawValue ?? "nil") already active")
             return false
         }
 
@@ -179,7 +179,7 @@ final class VoiceSessionCoordinator {
 
         // Can only resume if nothing else is active
         guard activeMode == nil else {
-            logger.warning("cannot resume \(mode.rawValue): \(activeMode?.rawValue ?? "nil") is active")
+            logger.warning("cannot resume \(mode.rawValue): \(self.activeMode?.rawValue ?? "nil") is active")
             return
         }
 

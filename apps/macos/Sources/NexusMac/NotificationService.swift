@@ -15,7 +15,7 @@ enum NotificationCategory: String, CaseIterable {
         case .toolComplete:
             return "Tool Execution Complete"
         case .error:
-            return "Errors"
+            return "Error Alerts"
         case .edgeStatus:
             return "Edge Service Status"
         case .execApproval:

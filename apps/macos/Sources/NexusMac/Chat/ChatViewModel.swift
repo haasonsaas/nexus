@@ -52,7 +52,9 @@ final class ChatViewModel {
     }
 
     deinit {
-        eventTask?.cancel()
+        Task { @MainActor [weak self] in
+            self?.eventTask?.cancel()
+        }
     }
 
     private func loadInitialState() {

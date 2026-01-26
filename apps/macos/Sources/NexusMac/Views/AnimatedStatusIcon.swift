@@ -8,6 +8,7 @@ struct AnimatedStatusIcon: View {
     @State private var pulseScale: CGFloat = 1.0
     @State private var rotationAngle: Double = 0
     @State private var glowOpacity: Double = 0
+    @State private var voiceWake = VoiceWakeOverlayRuntime.shared
 
     var body: some View {
         ZStack {
@@ -64,12 +65,12 @@ struct AnimatedStatusIcon: View {
     private var isWorking: Bool {
         // Check if any session is actively processing
         SessionBridge.shared.activeSessions.contains { session in
-            session.status == .processing
+            session.status == .active
         }
     }
 
     private var isListening: Bool {
-        appState.voiceWakeEnabled && VoiceWakeRuntime.shared.isListening
+        appState.voiceWakeEnabled && voiceWake.isListening
     }
 
     private var showGlow: Bool {

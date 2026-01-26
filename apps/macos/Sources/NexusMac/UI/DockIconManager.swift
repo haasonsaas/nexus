@@ -78,17 +78,20 @@ final class DockIconManager {
     }
 
     deinit {
-        pulseTimer?.invalidate()
-        progressTimer?.invalidate()
-        observationTask?.cancel()
-        if let observer = controlChannelObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
-        if let observer = approvalsObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
-        if let observer = agentEventObserver {
-            NotificationCenter.default.removeObserver(observer)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.pulseTimer?.invalidate()
+            self.progressTimer?.invalidate()
+            self.observationTask?.cancel()
+            if let observer = self.controlChannelObserver {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            if let observer = self.approvalsObserver {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            if let observer = self.agentEventObserver {
+                NotificationCenter.default.removeObserver(observer)
+            }
         }
     }
 

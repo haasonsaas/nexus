@@ -183,7 +183,7 @@ struct CronSchedulerView: View {
     private var jobsListView: some View {
         List {
             ForEach(filteredJobs) { job in
-                CronJobRowView(
+                SchedulerCronJobRowView(
                     job: job,
                     isSelected: selectedJob?.id == job.id,
                     onSelect: {
@@ -215,7 +215,7 @@ struct CronSchedulerView: View {
 
 // MARK: - Cron Job Row View
 
-struct CronJobRowView: View {
+struct SchedulerCronJobRowView: View {
     let job: CronJob
     let isSelected: Bool
     let onSelect: () -> Void

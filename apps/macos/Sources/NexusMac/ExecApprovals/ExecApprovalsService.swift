@@ -271,19 +271,19 @@ private final class ExecApprovalsSocketServer: @unchecked Sendable {
             return -1
         }
 
-        unlink(socketPath)
+        unlink(self.socketPath)
 
         var addr = sockaddr_un()
         addr.sun_family = sa_family_t(AF_UNIX)
         let maxLen = MemoryLayout.size(ofValue: addr.sun_path)
 
-        if socketPath.utf8.count >= maxLen {
+        if self.socketPath.utf8.count >= maxLen {
             logger.error("exec approvals socket path too long")
             close(fd)
             return -1
         }
 
-        socketPath.withCString { cstr in
+        self.socketPath.withCString { cstr in
             withUnsafeMutablePointer(to: &addr.sun_path) { ptr in
                 let raw = UnsafeMutableRawPointer(ptr).assumingMemoryBound(to: Int8.self)
                 memset(raw, 0, maxLen)
@@ -310,8 +310,8 @@ private final class ExecApprovalsSocketServer: @unchecked Sendable {
             return -1
         }
 
-        chmod(socketPath, 0o600)
-        logger.info("exec approvals socket listening at \(socketPath, privacy: .public)")
+        chmod(self.socketPath, 0o600)
+        logger.info("exec approvals socket listening at \(self.socketPath, privacy: .public)")
         return fd
     }
 

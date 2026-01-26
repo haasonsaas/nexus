@@ -102,7 +102,7 @@ struct CLIInstallerView: View {
         }
 
         if let error = installer.error {
-            ErrorBanner(message: error.localizedDescription)
+            CLIErrorBanner(message: error.localizedDescription)
         }
     }
 
@@ -371,7 +371,7 @@ struct InstallMethodRow: View {
 
                 if isSelected && isAvailable {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.accent)
+                        .foregroundStyle(Color.accentColor)
                 }
             }
             .padding(10)
@@ -392,7 +392,7 @@ struct InstallMethodRow: View {
 
 // MARK: - Error Banner
 
-struct ErrorBanner: View {
+struct CLIErrorBanner: View {
     let message: String
 
     var body: some View {

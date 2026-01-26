@@ -12,7 +12,7 @@ final class ServiceContainer {
     // MARK: - Core Services
 
     var coordinator: ApplicationCoordinator { ApplicationCoordinator.shared }
-    var config: ConfigStore { ConfigStore.shared }
+    var config: ConfigStore.Type { ConfigStore.self }
 
     // MARK: - Gateway Services
 
@@ -87,7 +87,7 @@ final class ServiceContainer {
     // MARK: - Audio Services
 
     var micMonitor: MicLevelMonitor { MicLevelMonitor.shared }
-    var audioDevices: AudioInputDeviceObserver { AudioInputDeviceObserver.shared }
+    var audioDevices: AudioInputObserver { AudioInputObserver.shared }
 
     // MARK: - UI Services
 

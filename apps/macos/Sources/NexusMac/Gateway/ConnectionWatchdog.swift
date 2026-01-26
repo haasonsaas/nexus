@@ -210,7 +210,7 @@ final class ConnectionWatchdog {
 
             if let response = try? JSONDecoder().decode(HealthResponse.self, from: data) {
                 if response.ok == true || response.state == "ok" {
-                    HealthStore.shared.refresh()
+                    await HealthStore.shared.refresh()
                     recordTick(source: "health_poll")
                 } else {
                     let summary = response.summary ?? response.message ?? "Unknown"

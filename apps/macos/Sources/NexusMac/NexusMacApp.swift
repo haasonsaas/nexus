@@ -1,6 +1,5 @@
 import SwiftUI
 
-@main
 struct NexusMacApp: App {
     @StateObject private var model = AppModel()
 

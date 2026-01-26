@@ -111,11 +111,12 @@ final class SpotlightIntegration {
             )
         }
 
+        let itemCount = items.count
         CSSearchableIndex.default().indexSearchableItems(items) { [weak self] error in
             if let error {
                 self?.logger.error("failed to index conversations: \(error.localizedDescription)")
             } else {
-                self?.logger.info("indexed \(items.count) conversations")
+                self?.logger.info("indexed \(itemCount) conversations")
             }
         }
     }
@@ -139,11 +140,12 @@ final class SpotlightIntegration {
             )
         }
 
+        let itemCount = items.count
         CSSearchableIndex.default().indexSearchableItems(items) { [weak self] error in
             if let error {
                 self?.logger.error("failed to index prompts: \(error.localizedDescription)")
             } else {
-                self?.logger.info("indexed \(items.count) prompts")
+                self?.logger.info("indexed \(itemCount) prompts")
             }
         }
     }

@@ -262,14 +262,14 @@ struct CostUsageExpandedMenuView: View {
 
             // Summary cards
             HStack(spacing: 12) {
-                CostSummaryCard(
+                CostUsageSummaryCard(
                     title: "Today",
                     value: store.formattedTodayCost,
                     icon: "calendar",
                     isAvailable: store.todayCost != nil
                 )
 
-                CostSummaryCard(
+                CostUsageSummaryCard(
                     title: "Last \(store.periodDays) days",
                     value: store.formattedTotalCost,
                     icon: "chart.bar.fill",
@@ -349,7 +349,7 @@ struct CostUsageExpandedMenuView: View {
 
 // MARK: - Summary Card
 
-struct CostSummaryCard: View {
+struct CostUsageSummaryCard: View {
     let title: String
     let value: String
     let icon: String

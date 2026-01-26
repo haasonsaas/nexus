@@ -200,7 +200,7 @@ struct ImprovedMenuContentView: View {
                 .padding(.vertical, 8)
             } else {
                 ForEach(sessions) { session in
-                    MenuSessionRow(session: session)
+                    ImprovedMenuSessionRow(session: session)
                 }
             }
         }
@@ -296,7 +296,7 @@ struct MenuActionButton: View {
 
 // MARK: - Menu Session Row
 
-struct MenuSessionRow: View {
+struct ImprovedMenuSessionRow: View {
     let session: SessionBridge.Session
 
     @State private var isHovered = false
@@ -354,10 +354,10 @@ struct MenuSessionRow: View {
     @ViewBuilder
     private var sessionStatusIndicator: some View {
         switch session.status {
-        case .processing:
+        case .active:
             ProgressView()
                 .controlSize(.mini)
-        case .waiting:
+        case .paused:
             Circle()
                 .fill(.orange)
                 .frame(width: 6, height: 6)
@@ -365,7 +365,7 @@ struct MenuSessionRow: View {
             Circle()
                 .fill(.red)
                 .frame(width: 6, height: 6)
-        case .idle:
+        case .completed:
             EmptyView()
         }
     }

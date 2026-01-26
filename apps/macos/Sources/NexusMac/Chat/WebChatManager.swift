@@ -33,6 +33,16 @@ final class WebChatManager {
         panelSessionKey ?? windowSessionKey
     }
 
+    func openChat(for sessionId: String, withMessage message: String? = nil) {
+        show(sessionKey: sessionId)
+        Task { @MainActor in
+            try? await ChatSessionManager.shared.switchSession(sessionId)
+            if let message, !message.isEmpty {
+                try? await ChatSessionManager.shared.send(content: message)
+            }
+        }
+    }
+
     func show(sessionKey: String) {
         closePanel()
         if let controller = windowController {
@@ -90,7 +100,7 @@ final class WebChatManager {
 
     func preferredSessionKey() async -> String {
         if let cachedPreferredSessionKey { return cachedPreferredSessionKey }
-        let key = await GatewayConnection.shared.mainSessionKey()
+        let key = WorkActivityStore.shared.mainSessionKey
         cachedPreferredSessionKey = key
         return key
     }

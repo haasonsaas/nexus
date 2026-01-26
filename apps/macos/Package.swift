@@ -6,15 +6,20 @@ import PackageDescription
 let package = Package(
     name: "NexusMac",
     platforms: [
-        .macOS(.v13),
+        .macOS(.v14),
     ],
     products: [
         .executable(name: "NexusMac", targets: ["NexusMac"]),
     ],
-    dependencies: [],
+    dependencies: [
+        .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
+    ],
     targets: [
         .executableTarget(
             name: "NexusMac",
+            dependencies: [
+                .product(name: "Logging", package: "swift-log"),
+            ],
             path: "Sources/NexusMac"
         ),
         .testTarget(

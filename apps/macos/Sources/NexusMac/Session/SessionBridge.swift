@@ -147,13 +147,14 @@ final class SessionBridge {
     /// Notify gateway of session changes
     func notifyGateway(event: SessionEvent) async {
         do {
-            _ = try await ControlChannel.shared.request(
+            let params: [String: Any] = [
+                "event": event.type.rawValue,
+                "sessionId": event.sessionId,
+                "data": event.data ?? [:]
+            ]
+            _ = try await ControlChannel.shared.requestAny(
                 method: "session.event",
-                params: [
-                    "event": event.type.rawValue,
-                    "sessionId": event.sessionId,
-                    "data": event.data ?? [:]
-                ] as [String: AnyHashable]
+                params: params
             )
         } catch {
             logger.warning("failed to notify gateway: \(error.localizedDescription)")

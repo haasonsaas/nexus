@@ -22,8 +22,8 @@ enum NexusLogging {
 struct NexusLogHandler: LogHandler {
     let label: String
 
-    var metadata: Logger.Metadata = [:]
-    var logLevel: Logger.Level = .info
+    var metadata: Logging.Logger.Metadata = [:]
+    var logLevel: Logging.Logger.Level = .info
 
     private let osLogger: os.Logger
 
@@ -32,15 +32,15 @@ struct NexusLogHandler: LogHandler {
         self.osLogger = os.Logger(subsystem: "com.nexus.mac", category: label)
     }
 
-    subscript(metadataKey key: String) -> Logger.Metadata.Value? {
+    subscript(metadataKey key: String) -> Logging.Logger.Metadata.Value? {
         get { metadata[key] }
         set { metadata[key] = newValue }
     }
 
     func log(
-        level: Logger.Level,
-        message: Logger.Message,
-        metadata: Logger.Metadata?,
+        level: Logging.Logger.Level,
+        message: Logging.Logger.Message,
+        metadata: Logging.Logger.Metadata?,
         source: String,
         file: String,
         function: String,
@@ -71,7 +71,7 @@ struct NexusLogHandler: LogHandler {
         }
     }
 
-    private func writeToFile(level: Logger.Level, message: String) {
+    private func writeToFile(level: Logging.Logger.Level, message: String) {
         let logFile = getLogFileURL()
         let timestamp = ISO8601DateFormatter().string(from: Date())
         let line = "[\(timestamp)] [\(level)] \(label): \(message)\n"

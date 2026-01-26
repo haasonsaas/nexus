@@ -323,7 +323,7 @@ struct AboutSettingsView: View {
         VStack(spacing: 16) {
             Image(systemName: "circle.hexagongrid.fill")
                 .font(.system(size: 64))
-                .foregroundStyle(.accent)
+                .foregroundStyle(Color.accentColor)
 
             Text("Nexus")
                 .font(.title)

@@ -325,13 +325,20 @@ final class CanvasManager {
         // Forward to gateway if connected
         Task {
             do {
+                var params: [String: AnyHashable] = [
+                    "sessionId": sessionId,
+                    "action": action
+                ]
+                if let payload,
+                   JSONSerialization.isValidJSONObject(payload),
+                   let data = try? JSONSerialization.data(withJSONObject: payload, options: []),
+                   let payloadString = String(data: data, encoding: .utf8) {
+                    params["payload"] = payloadString
+                }
+
                 _ = try await ControlChannel.shared.request(
                     method: "canvas.action",
-                    params: [
-                        "sessionId": sessionId,
-                        "action": action,
-                        "payload": payload ?? [:]
-                    ] as [String: AnyHashable]
+                    params: params
                 )
             } catch {
                 logger.warning("failed to forward canvas action: \(error.localizedDescription)")

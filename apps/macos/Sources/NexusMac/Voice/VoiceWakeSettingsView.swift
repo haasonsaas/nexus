@@ -7,7 +7,7 @@ struct VoiceWakeSettingsView: View {
     @Bindable var appState: AppStateStore
     @State private var permissions = PermissionManager.shared
     @State private var micMonitor = MicLevelMonitor.shared
-    @State private var audioDevices = AudioInputDeviceObserver.shared
+    @State private var audioDevices = AudioInputObserver.shared
     @State private var testState: VoiceWakeTestState = .idle
     @State private var isTesting = false
     @State private var meterLevel: Double = 0
@@ -96,7 +96,7 @@ struct VoiceWakeSettingsView: View {
 
             Picker("Input Device", selection: $appState.selectedMicrophone.toUnwrapped(defaultValue: "")) {
                 Text("System Default").tag("")
-                ForEach(audioDevices.devices, id: \.uid) { device in
+                ForEach(audioDevices.availableDevices, id: \.uid) { device in
                     Text(device.name).tag(device.uid)
                 }
             }
@@ -117,7 +117,7 @@ struct VoiceWakeSettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            MicLevelBar(level: meterLevel)
+            VoiceWakeMicLevelBar(level: meterLevel)
                 .frame(height: 8)
         }
     }
@@ -246,7 +246,8 @@ struct VoiceWakeSettingsView: View {
     // MARK: - Actions
 
     private func startMonitoring() async {
-        audioDevices.start()
+        audioDevices.startObserving()
+        audioDevices.refreshDevices()
         do {
             try await micMonitor.start { level in
                 Task { @MainActor in
@@ -259,7 +260,7 @@ struct VoiceWakeSettingsView: View {
     }
 
     private func stopMonitoring() {
-        audioDevices.stop()
+        audioDevices.stopObserving()
         Task {
             await micMonitor.stop()
         }
@@ -336,7 +337,7 @@ struct PermissionBadge: View {
     }
 }
 
-struct MicLevelBar: View {
+struct VoiceWakeMicLevelBar: View {
     let level: Double
 
     var body: some View {

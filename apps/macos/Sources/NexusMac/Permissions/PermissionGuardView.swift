@@ -276,7 +276,7 @@ struct PermissionRow: View {
 // MARK: - Permission Badge
 
 /// A compact badge showing permission status
-struct PermissionBadge: View {
+struct GuardedPermissionBadge: View {
     let permission: GuardedPermission
     let status: PermissionCheckResult
 

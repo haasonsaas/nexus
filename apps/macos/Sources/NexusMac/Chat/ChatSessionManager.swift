@@ -95,8 +95,8 @@ final class ChatSessionManager {
     private var saveTask: Task<Void, Never>?
     private let saveDebounceMs: UInt64 = 500
 
-    init(transport: ChatTransportProtocol = GatewayChatTransport()) {
-        self.transport = transport
+    init(transport: ChatTransportProtocol? = nil) {
+        self.transport = transport ?? GatewayChatTransport()
         loadFromDisk()
     }
 
@@ -144,10 +144,10 @@ final class ChatSessionManager {
                 method: "session.create",
                 params: [
                     "id": session.id,
-                    "title": title ?? "" as Any,
-                    "model": model ?? "" as Any,
-                    "provider": provider ?? "" as Any
-                ] as [String: AnyHashable]
+                    "title": title ?? "",
+                    "model": model ?? "",
+                    "provider": provider ?? ""
+                ]
             )
         } catch {
             logger.warning("Failed to notify gateway of session creation: \(error.localizedDescription)")

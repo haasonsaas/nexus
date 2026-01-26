@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import Observation
 
 /// Status of the launchd service.

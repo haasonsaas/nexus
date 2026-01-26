@@ -52,7 +52,7 @@ final class NodeCommandDispatcher {
     private(set) var capabilities: Set<NodeCommand> = []
 
     // Handlers
-    private var handlers: [NodeCommand: @Sendable ([String: AnyCodable]) async throws -> NodeCommandResult] = [:]
+    private var handlers: [NodeCommand: @MainActor @Sendable ([String: AnyCodable]) async throws -> NodeCommandResult] = [:]
 
     init() {
         registerDefaultHandlers()
@@ -106,7 +106,7 @@ final class NodeCommandDispatcher {
 
     // MARK: - Handler Registration
 
-    func register(_ command: NodeCommand, handler: @escaping @Sendable ([String: AnyCodable]) async throws -> NodeCommandResult) {
+    func register(_ command: NodeCommand, handler: @escaping @MainActor @Sendable ([String: AnyCodable]) async throws -> NodeCommandResult) {
         handlers[command] = handler
         logger.debug("Registered handler for \(command.rawValue)")
     }
@@ -138,17 +138,13 @@ final class NodeCommandDispatcher {
             let size = CGSize(width: width, height: height)
             let sessionId = params["session_id"]?.value as? String ?? UUID().uuidString
 
-            await MainActor.run {
-                CanvasManager.shared.openURL(sessionId: sessionId, url: url, title: title, size: size)
-            }
+            CanvasManager.shared.openURL(sessionId: sessionId, url: url, title: title, size: size)
             return .ok(["session_id": AnyCodable(sessionId)])
         }
 
         register(.canvasClose) { params in
             let sessionId = params["session_id"]?.value as? String ?? "default"
-            await MainActor.run {
-                CanvasManager.shared.close(sessionId: sessionId)
-            }
+            CanvasManager.shared.close(sessionId: sessionId)
             return .ok()
         }
 
@@ -157,9 +153,7 @@ final class NodeCommandDispatcher {
                 return .fail("Missing script parameter")
             }
             let sessionId = params["session_id"]?.value as? String ?? "default"
-            let result = try await MainActor.run {
-                try await CanvasManager.shared.executeJS(sessionId: sessionId, script: js)
-            }
+            let result = try await CanvasManager.shared.executeJS(sessionId: sessionId, script: js)
             if let result {
                 return .ok(["result": AnyCodable(result)])
             }
@@ -168,9 +162,7 @@ final class NodeCommandDispatcher {
 
         register(.canvasSnapshot) { params in
             let sessionId = params["session_id"]?.value as? String ?? "default"
-            let image = try await MainActor.run {
-                try await CanvasManager.shared.snapshot(sessionId: sessionId)
-            }
+            let image = try await CanvasManager.shared.snapshot(sessionId: sessionId)
             guard let image,
                   let tiffData = image.tiffRepresentation,
                   let bitmap = NSBitmapImageRep(data: tiffData),
@@ -182,9 +174,7 @@ final class NodeCommandDispatcher {
 
         // Camera capture
         register(.cameraCapture) { _ in
-            let result = try await MainActor.run {
-                try await CameraCaptureService.shared.captureFrame()
-            }
+            let result = try await CameraCaptureService.shared.captureFrame()
             return .ok(["image": AnyCodable(result.data.base64EncodedString())])
         }
 
@@ -308,9 +298,7 @@ final class NodeCommandDispatcher {
         register(.notify) { params in
             let title = params["title"]?.value as? String ?? "Nexus"
             let body = params["body"]?.value as? String ?? ""
-            try await MainActor.run {
-                try await NotificationBridge.shared.send(title: title, body: body)
-            }
+            try await NotificationBridge.shared.send(title: title, body: body)
             return .ok()
         }
     }
@@ -439,18 +427,18 @@ final class NodeCommandDispatcher {
 
         // Send result back
         do {
-            var resultParams: [String: AnyHashable] = [
+            var resultParams: [String: Any] = [
                 "invoke_id": invokeId,
                 "success": result.success,
             ]
             if let data = result.data {
-                resultParams["data"] = data.mapValues { $0.value as? AnyHashable ?? "" }
+                resultParams["data"] = data.mapValues { $0.value }
             }
             if let error = result.error {
                 resultParams["error"] = error
             }
 
-            _ = try await ControlChannel.shared.request(
+            _ = try await ControlChannel.shared.requestAny(
                 method: "node.invoke_result",
                 params: resultParams
             )

@@ -505,7 +505,7 @@ actor VoicePushToTalkCapture {
         recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
             guard let self else { return }
             if let error {
-                Task { await self.logger.debug("ptt recognition error: \(error.localizedDescription)") }
+                self.logger.debug("ptt recognition error: \(error.localizedDescription)")
             }
             let transcript = result?.bestTranscription.formattedString
             let isFinal = result?.isFinal ?? false

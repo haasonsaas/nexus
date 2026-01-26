@@ -148,7 +148,7 @@ struct HotkeysSettingsView: View {
                 .foregroundStyle(.secondary)
 
             ForEach(hotkeyManager.bindings) { binding in
-                HotkeyBindingRow(
+                HotkeysSettingsBindingRow(
                     binding: binding,
                     isEnabled: hotkeyManager.globalHotkeysEnabled,
                     onToggle: { enabled in
@@ -166,7 +166,7 @@ struct HotkeysSettingsView: View {
 
 // MARK: - Binding Row
 
-struct HotkeyBindingRow: View {
+struct HotkeysSettingsBindingRow: View {
     let binding: HotkeyBinding
     let isEnabled: Bool
     let onToggle: (Bool) -> Void

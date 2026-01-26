@@ -67,37 +67,39 @@ struct AgentStatusView: View {
     // MARK: - Active Agents
 
     private var activeAgentsView: some View {
-        Group {
-            if lifecycle.activeAgents.isEmpty {
+        if lifecycle.activeAgents.isEmpty {
+            return AnyView(
                 EmptyStateView(
                     icon: "bolt.horizontal.circle",
                     title: "No Active Agents",
                     description: "Agents will appear here when they are running."
                 )
                 .frame(maxHeight: 200)
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 8) {
-                        ForEach(lifecycle.activeAgents, id: \.id) { agent in
-                            AgentInstanceRow(
-                                agent: agent,
-                                isSelected: selectedAgentId == agent.id,
-                                onSelect: { selectedAgentId = agent.id }
-                            )
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color(NSColor.textBackgroundColor))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                )
-            }
+            )
         }
+
+        return AnyView(
+            ScrollView {
+                LazyVStack(spacing: 8) {
+                    ForEach(lifecycle.activeAgents, id: \.id) { agent in
+                        AgentStatusInstanceRow(
+                            agent: agent,
+                            isSelected: selectedAgentId == agent.id,
+                            onSelect: { selectedAgentId = agent.id }
+                        )
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color(NSColor.textBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+            )
+        )
     }
 
     // MARK: - History View
@@ -151,7 +153,7 @@ struct AgentStatusView: View {
 
 // MARK: - Agent Instance Row
 
-struct AgentInstanceRow: View {
+private struct AgentStatusInstanceRow: View {
     let agent: AgentInstance
     let isSelected: Bool
     let onSelect: () -> Void
@@ -465,7 +467,7 @@ struct CompactAgentStatus: View {
 // MARK: - Agent Status Badge
 
 /// Badge showing agent count with animation
-struct AgentStatusBadge: View {
+private struct AgentStatusBadgeView: View {
     @State private var lifecycle = AgentLifecycleManager.shared
 
     var body: some View {
@@ -495,7 +497,7 @@ struct AgentStatusBadge: View {
 
 #Preview("Agent Instance Row") {
     let agent = AgentLifecycleManager._testCreateAgent()
-    AgentInstanceRow(agent: agent, isSelected: false, onSelect: {})
+    AgentStatusInstanceRow(agent: agent, isSelected: false, onSelect: {})
         .frame(width: 350)
         .padding()
 }

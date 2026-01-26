@@ -346,10 +346,10 @@ struct MenuSessionRowView: View {
     @ViewBuilder
     private var sessionStatusIndicator: some View {
         switch session.status {
-        case .processing:
+        case .active:
             ProgressView()
                 .controlSize(.mini)
-        case .waiting:
+        case .paused:
             Circle()
                 .fill(.orange)
                 .frame(width: 6, height: 6)
@@ -357,7 +357,7 @@ struct MenuSessionRowView: View {
             Circle()
                 .fill(.red)
                 .frame(width: 6, height: 6)
-        case .idle:
+        case .completed:
             EmptyView()
         }
     }

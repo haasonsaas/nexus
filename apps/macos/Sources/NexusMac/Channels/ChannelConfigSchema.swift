@@ -160,8 +160,8 @@ struct ChannelField: Identifiable, Codable, Equatable {
             id: id,
             label: label,
             type: .toggle,
-            defaultValue: defaultValue ? "true" : "false",
-            helpText: helpText
+            helpText: helpText,
+            defaultValue: defaultValue ? "true" : "false"
         )
     }
 

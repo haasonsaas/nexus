@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import IOKit
 import IOKit.pwr_mgt
+import IOKit.ps
 import OSLog
 
 /// Deep integration with macOS system features.

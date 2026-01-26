@@ -3,7 +3,7 @@ import SwiftUI
 struct CronView: View {
     @EnvironmentObject var model: AppModel
     @State private var isRefreshing = false
-    @State private var selectedJob: CronJob?
+    @State private var selectedJob: CronJobSummary?
     @State private var showCreateSheet = false
 
     var body: some View {
@@ -132,7 +132,7 @@ struct CronStatusBadge: View {
 // MARK: - Cron Job Card
 
 struct CronJobCard: View {
-    let job: CronJob
+    let job: CronJobSummary
     let isSelected: Bool
     let onSelect: () -> Void
     let onToggle: (Bool) -> Void

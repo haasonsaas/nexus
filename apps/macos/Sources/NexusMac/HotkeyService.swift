@@ -212,6 +212,7 @@ final class HotkeyService: ObservableObject {
         }
     }
 
+    @MainActor
     deinit {
         unregisterAllHotkeys()
         if let handler = hotkeyEventHandler {

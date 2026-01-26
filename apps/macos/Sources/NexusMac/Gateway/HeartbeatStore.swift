@@ -94,6 +94,7 @@ final class HeartbeatStore {
         logger.info("HeartbeatStore initialized with timeout threshold: \(self.timeoutThreshold)s")
     }
 
+    @MainActor
     deinit {
         if let observer { NotificationCenter.default.removeObserver(observer) }
         healthCheckTask?.cancel()

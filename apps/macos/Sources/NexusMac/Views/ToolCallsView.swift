@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Displays active and recent tool calls
 struct ToolCallsView: View {
-    @State private var tracker = ToolCallTracker.shared
+    @State private var tracker = AgentToolCallTracker.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {

@@ -1,13 +1,5 @@
 import SwiftUI
 
-// MARK: - Helper
-
-func age(from date: Date) -> String {
-    let seconds = Int(Date().timeIntervalSince(date))
-    if seconds < 60 { return "\(seconds)s ago" }
-    if seconds < 3600 { return "\(seconds / 60)m ago" }
-    return "\(seconds / 3600)h ago"
-}
 
 // MARK: - StatusIndicatorView
 

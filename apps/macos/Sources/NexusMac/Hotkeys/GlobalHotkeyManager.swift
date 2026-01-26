@@ -63,6 +63,22 @@ final class GlobalHotkeyManager {
         registeredHotkeys[id]?.action()
     }
 
+    /// Start the global hotkey manager.
+    func start() {
+        logger.info("global hotkey manager started")
+    }
+
+    /// Stop and unregister all hotkeys.
+    func stop() {
+        for (_, binding) in registeredHotkeys {
+            if let ref = binding.eventHotKey {
+                UnregisterEventHotKey(ref)
+            }
+        }
+        registeredHotkeys.removeAll()
+        logger.info("global hotkey manager stopped")
+    }
+
     private func fourCharCode(_ string: String) -> OSType {
         var result: OSType = 0
         for char in string.utf8.prefix(4) {

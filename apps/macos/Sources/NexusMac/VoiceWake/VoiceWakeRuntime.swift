@@ -157,12 +157,22 @@ actor VoiceWakeRuntime {
         let lastAt = lastTranscriptAt, lastText = lastTranscript
         triggerOnlyTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: UInt64((self?.triggerPauseWindow ?? 0.55) * 1_000_000_000))
-            guard let self, !Task.isCancelled, !self.isCapturing else { return }
-            guard self.lastTranscriptAt == lastAt, self.lastTranscript == lastText else { return }
-            guard self.isTriggerOnly(transcript: lastText ?? "", triggers: triggers) else { return }
-            if let cd = self.cooldownUntil, Date() < cd { return }
-            await self.beginCapture(command: "", triggerEndTime: nil, config: config)
+            await self?.handleTriggerOnlyCheck(lastAt: lastAt, lastText: lastText, triggers: triggers, config: config)
         }
+    }
+
+    private func handleTriggerOnlyCheck(
+        lastAt: Date?,
+        lastText: String?,
+        triggers: [String],
+        config: RuntimeConfig
+    ) async {
+        guard !Task.isCancelled else { return }
+        guard !isCapturing else { return }
+        guard lastTranscriptAt == lastAt, lastTranscript == lastText else { return }
+        guard isTriggerOnly(transcript: lastText ?? "", triggers: triggers) else { return }
+        if let cd = cooldownUntil, Date() < cd { return }
+        await beginCapture(command: "", triggerEndTime: nil, config: config)
     }
 
     private func beginCapture(command: String, triggerEndTime: TimeInterval?, config: RuntimeConfig) async {
@@ -228,10 +238,16 @@ actor VoiceWakeRuntime {
         scheduledRestartTask?.cancel()
         scheduledRestartTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-            guard let self, !Task.isCancelled, !self.isCapturing else { return }
-            let cfg = self.currentConfig; self.stop()
-            if let cfg { await self.start(with: cfg) }
+            await self?.performScheduledRestart()
         }
+    }
+
+    private func performScheduledRestart() async {
+        guard !Task.isCancelled else { return }
+        guard !isCapturing else { return }
+        guard let cfg = currentConfig else { return }
+        stop()
+        await start(with: cfg)
     }
 
     func applyPushToTalkCooldown() { cooldownUntil = Date().addingTimeInterval(debounceAfterSend) }

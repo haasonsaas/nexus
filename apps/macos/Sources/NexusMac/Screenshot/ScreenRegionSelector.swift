@@ -133,7 +133,7 @@ private class SelectionOverlayWindow: NSWindow {
 
         if currentRect.width > 10 && currentRect.height > 10 {
             // Convert to screen coordinates
-            let screenRect = convertToScreen(currentRect)
+            let screenRect = convertToScreenCoordinates(currentRect)
             selectionComplete?(screenRect)
         } else {
             selectionComplete?(nil)
@@ -148,7 +148,7 @@ private class SelectionOverlayWindow: NSWindow {
         }
     }
 
-    private func convertToScreen(_ rect: NSRect) -> CGRect {
+    private func convertToScreenCoordinates(_ rect: NSRect) -> CGRect {
         guard let screen = screen else { return rect }
 
         // Convert from window coordinates to screen coordinates

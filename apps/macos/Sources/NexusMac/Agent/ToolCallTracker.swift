@@ -149,11 +149,11 @@ struct ToolMetadata {
     }
 }
 
-/// Tracks active and completed tool calls
+/// Tracks active and completed tool calls from control channel events.
 @MainActor
 @Observable
-final class ToolCallTracker {
-    static let shared = ToolCallTracker()
+final class AgentToolCallTracker {
+    static let shared = AgentToolCallTracker()
 
     private let logger = Logger(subsystem: "com.nexus.mac", category: "tool-tracker")
 

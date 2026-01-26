@@ -83,10 +83,13 @@ final class InstancesStore {
     }
 
     deinit {
-        if let observer = eventObserver {
-            NotificationCenter.default.removeObserver(observer)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            if let observer = self.eventObserver {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            self.pruneTask?.cancel()
         }
-        pruneTask?.cancel()
     }
 
     // MARK: - Public Methods

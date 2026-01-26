@@ -5,6 +5,7 @@ import SwiftUI
 /// Actor for monitoring microphone input levels with smoothed output.
 /// Used for VoiceWake/TalkMode audio level visualization.
 actor MicLevelMonitor {
+    static let shared = MicLevelMonitor()
     private let logger = Logger(subsystem: "com.nexus.mac", category: "audio.meter")
     private var engine: AVAudioEngine?
     private var update: (@Sendable (Double) -> Void)?

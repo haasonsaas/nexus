@@ -1,4 +1,5 @@
 import AVFoundation
+import AppKit
 import Foundation
 import OSLog
 import Speech
@@ -476,32 +477,26 @@ actor TalkModeRuntime {
     }
 
     private func playAudioData(_ data: Data) async throws {
-        try await MainActor.run {
-            self.stopAudioPlayer()
-            let player = try AVAudioPlayer(data: data)
-            self.audioPlayer = player
-            self.isPlaying = true
-            player.prepareToPlay()
-            player.play()
-        }
+        stopAudioPlayer()
+        let player = try AVAudioPlayer(data: data)
+        audioPlayer = player
+        isPlaying = true
+        player.prepareToPlay()
+        player.play()
 
         // Wait for playback to complete
-        while await isPlayerPlaying() {
+        while isPlayerPlaying() {
             try await Task.sleep(nanoseconds: 100_000_000)
             if !isCurrent(lifecycleGeneration) { break }
         }
 
-        await MainActor.run {
-            self.isPlaying = false
-        }
+        isPlaying = false
     }
 
-    @MainActor
     private func isPlayerPlaying() -> Bool {
         audioPlayer?.isPlaying ?? false
     }
 
-    @MainActor
     private func stopAudioPlayer() {
         audioPlayer?.stop()
         audioPlayer = nil
@@ -537,11 +532,8 @@ actor TalkModeRuntime {
     }
 
     func stopSpeaking(reason: TalkStopReason) async {
-        let interruptedAt = await MainActor.run { () -> Double? in
-            let time = self.audioPlayer?.currentTime
-            self.stopAudioPlayer()
-            return time
-        }
+        let interruptedAt = audioPlayer?.currentTime
+        stopAudioPlayer()
 
         guard phase == .speaking else { return }
 

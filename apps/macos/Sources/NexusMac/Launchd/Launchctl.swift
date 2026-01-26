@@ -53,7 +53,7 @@ enum Launchctl {
     static func kickstart(label: String) async -> Result {
         // Use gui domain for user LaunchAgents
         let uid = getuid()
-        await run(arguments: ["kickstart", "-k", "gui/\(uid)/\(label)"])
+        return await run(arguments: ["kickstart", "-k", "gui/\(uid)/\(label)"])
     }
 
     /// Bootstraps a service plist into the GUI domain.
@@ -61,7 +61,7 @@ enum Launchctl {
     /// - Returns: Result of the operation.
     static func bootstrap(plist: URL) async -> Result {
         let uid = getuid()
-        await run(arguments: ["bootstrap", "gui/\(uid)", plist.path])
+        return await run(arguments: ["bootstrap", "gui/\(uid)", plist.path])
     }
 
     /// Bootout (remove) a service from the GUI domain.
@@ -69,7 +69,7 @@ enum Launchctl {
     /// - Returns: Result of the operation.
     static func bootout(label: String) async -> Result {
         let uid = getuid()
-        await run(arguments: ["bootout", "gui/\(uid)/\(label)"])
+        return await run(arguments: ["bootout", "gui/\(uid)/\(label)"])
     }
 
     /// Prints detailed information about a service.
@@ -77,7 +77,7 @@ enum Launchctl {
     /// - Returns: Result containing service info in output.
     static func print(label: String) async -> Result {
         let uid = getuid()
-        await run(arguments: ["print", "gui/\(uid)/\(label)"])
+        return await run(arguments: ["print", "gui/\(uid)/\(label)"])
     }
 
     // MARK: - Internal
@@ -118,14 +118,3 @@ enum Launchctl {
     }
 }
 
-// MARK: - FileHandle Extension (if not available from ShellExecutor)
-
-private extension FileHandle {
-    func readToEndSafely() -> Data {
-        do {
-            return try self.readToEnd() ?? Data()
-        } catch {
-            return Data()
-        }
-    }
-}

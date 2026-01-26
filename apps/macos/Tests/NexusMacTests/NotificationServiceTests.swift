@@ -11,23 +11,26 @@ final class NotificationServiceTests: XCTestCase {
         XCTAssertEqual(NotificationCategory.toolComplete.rawValue, "toolComplete")
         XCTAssertEqual(NotificationCategory.error.rawValue, "error")
         XCTAssertEqual(NotificationCategory.edgeStatus.rawValue, "edgeStatus")
+        XCTAssertEqual(NotificationCategory.execApproval.rawValue, "execApproval")
     }
 
     func testNotificationCategoryAllCases() {
         let allCases = NotificationCategory.allCases
 
-        XCTAssertEqual(allCases.count, 4)
+        XCTAssertEqual(allCases.count, 5)
         XCTAssertTrue(allCases.contains(.statusChange))
         XCTAssertTrue(allCases.contains(.toolComplete))
         XCTAssertTrue(allCases.contains(.error))
         XCTAssertTrue(allCases.contains(.edgeStatus))
+        XCTAssertTrue(allCases.contains(.execApproval))
     }
 
     func testNotificationCategoryDisplayNames() {
         XCTAssertEqual(NotificationCategory.statusChange.displayName, "Gateway Status Changes")
         XCTAssertEqual(NotificationCategory.toolComplete.displayName, "Tool Execution Complete")
-        XCTAssertEqual(NotificationCategory.error.displayName, "Errors")
+        XCTAssertEqual(NotificationCategory.error.displayName, "Error Alerts")
         XCTAssertEqual(NotificationCategory.edgeStatus.displayName, "Edge Service Status")
+        XCTAssertEqual(NotificationCategory.execApproval.displayName, "Command Approvals")
     }
 
     func testNotificationCategoryDescriptions() {
@@ -47,6 +50,10 @@ final class NotificationServiceTests: XCTestCase {
             NotificationCategory.edgeStatus.description,
             "Notify when edge service starts or stops"
         )
+        XCTAssertEqual(
+            NotificationCategory.execApproval.description,
+            "Notify when commands require approval"
+        )
     }
 
     func testNotificationCategoryUserDefaultsKeys() {
@@ -65,6 +72,10 @@ final class NotificationServiceTests: XCTestCase {
         XCTAssertEqual(
             NotificationCategory.edgeStatus.userDefaultsKey,
             "notification_edgeStatus_enabled"
+        )
+        XCTAssertEqual(
+            NotificationCategory.execApproval.userDefaultsKey,
+            "notification_execApproval_enabled"
         )
     }
 
@@ -165,7 +176,7 @@ final class NotificationServiceTests: XCTestCase {
             XCTAssertFalse(category.rawValue.isEmpty)
             categoryCount += 1
         }
-        XCTAssertEqual(categoryCount, 4)
+        XCTAssertEqual(categoryCount, 5)
     }
 
     // MARK: - Display Name Formatting Tests
@@ -233,12 +244,14 @@ final class NotificationServiceTests: XCTestCase {
         let tool = NotificationCategory(rawValue: "toolComplete")
         let error = NotificationCategory(rawValue: "error")
         let edge = NotificationCategory(rawValue: "edgeStatus")
+        let exec = NotificationCategory(rawValue: "execApproval")
         let invalid = NotificationCategory(rawValue: "invalid")
 
         XCTAssertEqual(status, .statusChange)
         XCTAssertEqual(tool, .toolComplete)
         XCTAssertEqual(error, .error)
         XCTAssertEqual(edge, .edgeStatus)
+        XCTAssertEqual(exec, .execApproval)
         XCTAssertNil(invalid)
     }
 
@@ -253,6 +266,8 @@ final class NotificationServiceTests: XCTestCase {
                 return "error"
             case .edgeStatus:
                 return "edge"
+            case .execApproval:
+                return "exec"
             }
         }
 
@@ -260,6 +275,7 @@ final class NotificationServiceTests: XCTestCase {
         XCTAssertEqual(getMessage(for: .toolComplete), "tool")
         XCTAssertEqual(getMessage(for: .error), "error")
         XCTAssertEqual(getMessage(for: .edgeStatus), "edge")
+        XCTAssertEqual(getMessage(for: .execApproval), "exec")
     }
 
     // MARK: - Concurrent Preference Access

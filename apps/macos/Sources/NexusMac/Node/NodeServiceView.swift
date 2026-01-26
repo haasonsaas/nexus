@@ -155,15 +155,6 @@ struct NodeServiceStatusIndicator: View {
     }
 }
 
-// MARK: - NodeServiceManager Extension
-
-extension NodeServiceManager {
-    /// Clears the last error message.
-    func clearError() {
-        lastError = nil
-    }
-}
-
 // MARK: - Preview
 
 #if DEBUG

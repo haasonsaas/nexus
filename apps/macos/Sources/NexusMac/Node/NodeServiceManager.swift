@@ -140,6 +140,11 @@ final class NodeServiceManager: ObservableObject {
         return status
     }
 
+    /// Clears the last error message.
+    func clearError() {
+        lastError = nil
+    }
+
     /// Refreshes the current status and updates published state.
     func refreshStatus() async {
         _ = await status()
@@ -378,15 +383,3 @@ final class NodeServiceManager: ObservableObject {
     }
 }
 
-// MARK: - FileHandle Extension (from ShellExecutor)
-
-private extension FileHandle {
-    /// Reads until EOF using the throwing FileHandle API and returns empty Data on failure.
-    func readToEndSafely() -> Data {
-        do {
-            return try self.readToEnd() ?? Data()
-        } catch {
-            return Data()
-        }
-    }
-}

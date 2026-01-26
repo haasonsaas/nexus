@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum SidebarItem: String, CaseIterable, Hashable {
+enum SidebarItem: String, CaseIterable, Hashable, Identifiable {
     case overview = "Overview"
     case agents = "Agents"
     case edge = "Edge Service"
@@ -32,6 +32,8 @@ enum SidebarItem: String, CaseIterable, Hashable {
         case .settings: return "gearshape"
         }
     }
+
+    var id: String { rawValue }
 }
 
 struct ContentView: View {

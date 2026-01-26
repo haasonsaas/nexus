@@ -141,6 +141,7 @@ final class PermissionGuard {
         startPeriodicRefresh()
     }
 
+    @MainActor
     deinit {
         refreshTask?.cancel()
     }
@@ -276,7 +277,7 @@ final class PermissionGuard {
     func executeWithTimeout<T>(
         requiring permission: GuardedPermission,
         timeout: Duration = .seconds(30),
-        operation: () async throws -> T
+        operation: @escaping () async throws -> T
     ) async throws -> T {
         let status = await check(permission)
 

@@ -70,6 +70,7 @@ final class PermissionManager {
         startPeriodicRefresh()
     }
 
+    @MainActor
     deinit {
         refreshTask?.cancel()
     }

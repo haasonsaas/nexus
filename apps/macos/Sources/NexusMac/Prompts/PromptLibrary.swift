@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import OSLog
 
 /// Library of prompt templates for various AI tasks.

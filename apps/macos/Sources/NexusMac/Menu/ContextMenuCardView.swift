@@ -579,7 +579,7 @@ struct QuickActionCardView: View {
 
                     Image(systemName: card.icon)
                         .font(.system(size: 14))
-                        .foregroundStyle(.accentColor)
+                        .foregroundStyle(Color.accentColor)
                 }
 
                 VStack(alignment: .leading, spacing: 2) {

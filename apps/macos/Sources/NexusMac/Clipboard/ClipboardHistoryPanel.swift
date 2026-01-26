@@ -91,31 +91,27 @@ final class ClipboardHistoryPanel {
         self.panel = panel
     }
 
-    private func pasteItem(_ item: ClipboardHistory.Item) {
+    private func pasteItem(_ item: ClipboardHistory.ClipboardEntry) {
         // Set to pasteboard
         NSPasteboard.general.clearContents()
 
-        switch item.type {
-        case .text:
-            if let text = item.textContent {
-                NSPasteboard.general.setString(text, forType: .string)
-            }
-        case .image:
-            if let data = item.data, let image = NSImage(data: data) {
-                NSPasteboard.general.writeObjects([image])
-            }
-        case .file:
-            if let urls = item.fileURLs {
-                NSPasteboard.general.writeObjects(urls as [NSURL])
-            }
-        case .rtf:
-            if let data = item.data {
-                NSPasteboard.general.setData(data, forType: .rtf)
-            }
-        case .html:
-            if let data = item.data {
+        switch item.content {
+        case .text(let text):
+            NSPasteboard.general.setString(text, forType: .string)
+        case .image(let image):
+            NSPasteboard.general.writeObjects([image])
+        case .files(let urls):
+            NSPasteboard.general.writeObjects(urls as [NSURL])
+        case .rtf(let data):
+            NSPasteboard.general.setData(data, forType: .rtf)
+        case .html(let html):
+            if let data = html.data(using: .utf8) {
                 NSPasteboard.general.setData(data, forType: .html)
+            } else {
+                NSPasteboard.general.setString(html, forType: .string)
             }
+        case .unknown:
+            break
         }
 
         // Simulate paste
@@ -136,19 +132,19 @@ final class ClipboardHistoryPanel {
 // MARK: - Clipboard History View
 
 struct ClipboardHistoryView: View {
-    let onSelect: (ClipboardHistory.Item) -> Void
+    let onSelect: (ClipboardHistory.ClipboardEntry) -> Void
     let onDismiss: () -> Void
 
     @State private var clipboardHistory = ClipboardHistory.shared
     @State private var searchText = ""
     @State private var selectedIndex: Int? = nil
 
-    private var filteredItems: [ClipboardHistory.Item] {
+    private var filteredItems: [ClipboardHistory.ClipboardEntry] {
         if searchText.isEmpty {
-            return clipboardHistory.items
+            return clipboardHistory.history
         }
-        return clipboardHistory.items.filter { item in
-            if let text = item.textContent {
+        return clipboardHistory.history.filter { item in
+            if let text = item.textPreview {
                 return text.localizedCaseInsensitiveContains(searchText)
             }
             return false
@@ -268,7 +264,7 @@ struct ClipboardHistoryView: View {
 }
 
 struct ClipboardItemRow: View {
-    let item: ClipboardHistory.Item
+    let item: ClipboardHistory.ClipboardEntry
     let isSelected: Bool
 
     var body: some View {
@@ -294,7 +290,7 @@ struct ClipboardItemRow: View {
             Spacer()
 
             // Size indicator for images/files
-            if item.type == .image || item.type == .file {
+            if showsSizeIndicator {
                 Text(sizeText)
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
@@ -310,38 +306,59 @@ struct ClipboardItemRow: View {
     }
 
     private var iconForType: String {
-        switch item.type {
+        switch item.content {
         case .text: return "doc.text"
         case .image: return "photo"
-        case .file: return "doc"
+        case .files: return "doc"
         case .rtf: return "doc.richtext"
         case .html: return "globe"
+        case .unknown: return "questionmark"
         }
     }
 
     private var previewText: String {
-        switch item.type {
-        case .text, .rtf, .html:
-            return item.textContent ?? "Empty"
+        switch item.content {
+        case .text, .html:
+            return item.textPreview ?? "Empty"
+        case .rtf:
+            return "Rich text"
         case .image:
             return "Image"
-        case .file:
-            if let urls = item.fileURLs {
-                return urls.map { $0.lastPathComponent }.joined(separator: ", ")
-            }
-            return "File"
+        case .files(let urls):
+            let names = urls.map { $0.lastPathComponent }
+            return names.isEmpty ? "Files" : names.joined(separator: ", ")
+        case .unknown:
+            return "Unknown"
         }
     }
 
     private var sizeText: String {
-        guard let data = item.data else { return "" }
-        let bytes = data.count
+        let bytes: Int
+        switch item.content {
+        case .image(let image):
+            bytes = image.tiffRepresentation?.count ?? 0
+        case .files(let urls):
+            bytes = urls.compactMap { try? $0.resourceValues(forKeys: [.fileSizeKey]).fileSize }.reduce(0, +)
+        default:
+            bytes = 0
+        }
+
+        guard bytes > 0 else { return "" }
         if bytes < 1024 {
             return "\(bytes) B"
         } else if bytes < 1024 * 1024 {
             return "\(bytes / 1024) KB"
         } else {
             return "\(bytes / 1024 / 1024) MB"
+        }
+    }
+
+    private var showsSizeIndicator: Bool {
+        switch item.content {
+        case .image, .files:
+            return true
+        default:
+            return false
         }
     }
 }

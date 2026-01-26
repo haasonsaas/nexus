@@ -3,12 +3,12 @@ import Observation
 
 // MARK: - Supporting Types
 
-enum SessionRole: Equatable {
+enum WorkSessionRole: Equatable {
     case main
     case other
 }
 
-enum ToolKind: String, Codable, Equatable {
+enum WorkToolKind: String, Codable, Equatable {
     case bash
     case read
     case write
@@ -17,16 +17,16 @@ enum ToolKind: String, Codable, Equatable {
     case other
 }
 
-enum ActivityKind: Codable, Equatable {
+enum WorkActivityKind: Codable, Equatable {
     case job
-    case tool(ToolKind)
+    case tool(WorkToolKind)
 }
 
-enum IconState: Equatable {
+enum WorkIconState: Equatable {
     case idle
-    case workingMain(ActivityKind)
-    case workingOther(ActivityKind)
-    case overridden(ActivityKind)
+    case workingMain(WorkActivityKind)
+    case workingOther(WorkActivityKind)
+    case overridden(WorkActivityKind)
 
     enum BadgeProminence: Equatable {
         case primary
@@ -61,7 +61,7 @@ enum IconState: Equatable {
         }
     }
 
-    private var activity: ActivityKind {
+    private var activity: WorkActivityKind {
         switch self {
         case let .workingMain(kind),
              let .workingOther(kind),
@@ -98,8 +98,8 @@ enum IconOverrideSelection: String, CaseIterable, Identifiable {
         }
     }
 
-    func toIconState() -> IconState {
-        let map: (ToolKind) -> ActivityKind = { .tool($0) }
+    func toIconState() -> WorkIconState {
+        let map: (WorkToolKind) -> WorkActivityKind = { .tool($0) }
         switch self {
         case .system: return .idle
         case .idle: return .idle
@@ -126,15 +126,15 @@ final class WorkActivityStore {
 
     struct Activity: Equatable {
         let sessionKey: String
-        let role: SessionRole
-        let kind: ActivityKind
+        let role: WorkSessionRole
+        let kind: WorkActivityKind
         let label: String
         let startedAt: Date
         var lastUpdate: Date
     }
 
     private(set) var current: Activity?
-    private(set) var iconState: IconState = .idle
+    private(set) var iconState: WorkIconState = .idle
     private(set) var lastToolLabel: String?
     private(set) var lastToolUpdatedAt: Date?
 
@@ -294,7 +294,7 @@ final class WorkActivityStore {
         self.currentSessionKey = next
     }
 
-    private func role(for sessionKey: String) -> SessionRole {
+    private func role(for sessionKey: String) -> WorkSessionRole {
         sessionKey == self.mainSessionKeyStorage ? .main : .other
     }
 
@@ -319,7 +319,7 @@ final class WorkActivityStore {
         self.iconState = self.deriveIconState()
     }
 
-    private func deriveIconState() -> IconState {
+    private func deriveIconState() -> WorkIconState {
         guard let sessionKey = self.currentSessionKey,
               let activity = self.currentActivity(for: sessionKey)
         else { return .idle }
@@ -332,7 +332,7 @@ final class WorkActivityStore {
 
     // MARK: - Static Helpers
 
-    private static func mapToolKind(_ name: String?) -> ToolKind {
+    private static func mapToolKind(_ name: String?) -> WorkToolKind {
         switch name?.lowercased() {
         case "bash", "shell": .bash
         case "read": .read

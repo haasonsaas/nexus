@@ -114,6 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return instances.count > 1
     }
 
+    @MainActor
     private func initializeServices() async {
         // Core services
         await ApplicationCoordinator.shared.initialize()
@@ -137,7 +138,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Start voice wake if enabled
         if AppStateStore.shared.voiceWakeEnabled {
-            VoiceWakeRuntime.shared.startListening()
+            VoiceWakeOverlayRuntime.shared.startListening()
         }
 
         // Wire up global hotkey manager
@@ -156,9 +157,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         logger.info("services initialized")
     }
 
+    @MainActor
     private func shutdownServices() async {
         // Stop voice wake
-        VoiceWakeRuntime.shared.stopListening()
+        VoiceWakeOverlayRuntime.shared.stopListening()
 
         // Stop global hotkeys
         GlobalHotkeyManager.shared.stop()

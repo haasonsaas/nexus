@@ -49,8 +49,8 @@ final class AppModel: ObservableObject {
     private var webSocketObservation: Task<Void, Never>?
 
     init() {
-        baseURL = UserDefaults.standard.string(forKey: "NexusBaseURL") ?? "http://localhost:8080"
-        baseURL = normalizeBaseURL(baseURL)
+        let rawBaseURL = UserDefaults.standard.string(forKey: "NexusBaseURL") ?? "http://localhost:8080"
+        baseURL = Self.normalizeBaseURL(rawBaseURL)
         apiKey = keychain.read() ?? ""
         configPath = AppModel.defaultConfigPath()
         edgeBinary = ProcessInfo.processInfo.environment["NEXUS_EDGE_BIN"] ?? "nexus-edge"
@@ -186,7 +186,7 @@ final class AppModel: ObservableObject {
     }
 
     func saveSettings() {
-        baseURL = normalizeBaseURL(baseURL)
+        baseURL = Self.normalizeBaseURL(baseURL)
         UserDefaults.standard.set(baseURL, forKey: "NexusBaseURL")
         _ = keychain.write(apiKey)
 
@@ -554,7 +554,7 @@ final class AppModel: ObservableObject {
     }
 
     private func makeAPI() -> NexusAPI? {
-        let trimmedURL = normalizeBaseURL(baseURL)
+        let trimmedURL = Self.normalizeBaseURL(baseURL)
         if trimmedURL.isEmpty || apiKey.isEmpty {
             lastError = "Set base URL and API key in Settings"
             return nil
@@ -571,13 +571,13 @@ final class AppModel: ObservableObject {
         return Data(base64Encoded: parts[1])
     }
 
-    private func normalizeBaseURL(_ raw: String) -> String {
+    private static func normalizeBaseURL(_ raw: String) -> String {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
             return trimmed
         }
         if trimmed.contains("://") {
-            return trimmed
+        return trimmed
         }
         return "http://\(trimmed)"
     }

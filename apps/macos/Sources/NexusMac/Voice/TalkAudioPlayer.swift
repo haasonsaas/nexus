@@ -1,4 +1,5 @@
 import AVFoundation
+import AppKit
 import Combine
 import Foundation
 import Observation
@@ -190,8 +191,11 @@ final class TalkAudioPlayer: NSObject, @preconcurrency AVAudioPlayerDelegate {
     }
 
     deinit {
-        if let observer = interruptionObserver {
-            NotificationCenter.default.removeObserver(observer)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            if let observer = self.interruptionObserver {
+                NotificationCenter.default.removeObserver(observer)
+            }
         }
     }
 
@@ -211,8 +215,8 @@ final class TalkAudioPlayer: NSObject, @preconcurrency AVAudioPlayerDelegate {
         interruptionObserver = center.addObserver(
             forName: NSWorkspace.willSleepNotification,
             object: nil,
-            queue: .main
-        ) { [weak self] _ in
+            queue: OperationQueue.main
+        ) { [weak self] (_: Notification) in
             Task { @MainActor [weak self] in
                 self?.handleInterruption(began: true)
             }
@@ -222,8 +226,8 @@ final class TalkAudioPlayer: NSObject, @preconcurrency AVAudioPlayerDelegate {
         center.addObserver(
             forName: NSWorkspace.didWakeNotification,
             object: nil,
-            queue: .main
-        ) { [weak self] _ in
+            queue: OperationQueue.main
+        ) { [weak self] (_: Notification) in
             Task { @MainActor [weak self] in
                 self?.handleInterruption(began: false)
             }

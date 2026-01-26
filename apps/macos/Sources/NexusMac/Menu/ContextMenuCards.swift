@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import OSLog
 
 // MARK: - Context Card Protocol
@@ -636,7 +637,7 @@ final class ContextCardManager {
     private func collectSystemStatusCard() -> AnyContextCard? {
         let card = SystemStatusCard(
             id: "system_status",
-            isGatewayConnected: ControlChannel.shared.isConnected,
+            isGatewayConnected: ControlChannel.shared.state == .connected,
             memoryUsageMB: getMemoryUsage(),
             pendingApprovals: 0, // Would need ExecApprovalsManager access
             activeAgents: SessionBridge.shared.activeSessions.count
@@ -728,6 +729,7 @@ final class ContextCardManager {
         logger.debug("context card manager started observing")
     }
 
+    @MainActor
     deinit {
         updateTask?.cancel()
     }

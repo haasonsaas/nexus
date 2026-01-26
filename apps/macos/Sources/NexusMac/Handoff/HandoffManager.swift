@@ -1,4 +1,5 @@
 import AppKit
+import AppKit
 import Foundation
 import OSLog
 
@@ -26,7 +27,6 @@ final class HandoffManager {
         activity.title = title ?? "Continue Conversation"
         activity.isEligibleForHandoff = true
         activity.isEligibleForSearch = true
-        activity.isEligibleForPrediction = true
 
         activity.userInfo = [
             "conversationId": id,
@@ -133,7 +133,7 @@ final class HandoffManager {
         }
 
         // Open the conversation
-        Task {
+        Task { @MainActor in
             // Try to find existing session or create new one
             if let existingSession = SessionBridge.shared.activeSessions.first(where: { $0.id == conversationId }) {
                 WebChatManager.shared.openChat(for: existingSession.id)
@@ -142,8 +142,13 @@ final class HandoffManager {
                 let session = SessionBridge.shared.createSession(type: .chat)
 
                 // Load any saved memory context for this conversation
-                if let memory = ConversationMemory.shared.searchMemories(query: conversationId).first {
-                    WebChatManager.shared.openChat(for: session.id, withMessage: "Continue our previous conversation about: \(memory.content)")
+                if let memory = ConversationMemory.shared.conversations.first(where: { $0.id == conversationId }) {
+                    let summary = memory.summary ?? memory.messages.last?.content ?? ""
+                    if !summary.isEmpty {
+                        WebChatManager.shared.openChat(for: session.id, withMessage: "Continue our previous conversation about: \(summary)")
+                    } else {
+                        WebChatManager.shared.openChat(for: session.id)
+                    }
                 } else {
                     WebChatManager.shared.openChat(for: session.id)
                 }
@@ -162,7 +167,7 @@ final class HandoffManager {
         }
 
         // Open chat with prompt pre-filled
-        Task {
+        Task { @MainActor in
             let session = SessionBridge.shared.createSession(type: .chat)
 
             // Expand prompt with no variables
@@ -185,7 +190,7 @@ final class HandoffManager {
         }
 
         // Open new session with context
-        Task {
+        Task { @MainActor in
             let session = SessionBridge.shared.createSession(type: .chat)
             WebChatManager.shared.openChat(for: session.id)
         }

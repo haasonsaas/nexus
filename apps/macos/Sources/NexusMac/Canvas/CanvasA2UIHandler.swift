@@ -61,7 +61,9 @@ final class CanvasA2UIHandler {
     }
 
     deinit {
-        subscriptionTask?.cancel()
+        Task { @MainActor [weak self] in
+            self?.subscriptionTask?.cancel()
+        }
     }
 
     // MARK: - Canvas Registration

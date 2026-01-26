@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
@@ -49,6 +51,8 @@ type BlueBubblesAdapter struct {
 
 	messages chan *models.Message
 	client   *http.Client
+	logger   *slog.Logger
+	health   *channels.BaseHealthAdapter
 
 	mu      sync.RWMutex
 	running bool
@@ -69,6 +73,9 @@ type BlueBubblesConfig struct {
 
 	// Timeout is the HTTP timeout (default: 10s)
 	Timeout time.Duration
+
+	// Logger is an optional logger for adapter diagnostics.
+	Logger *slog.Logger
 }
 
 // NewBlueBubblesAdapter creates a new BlueBubbles channel adapter.
@@ -97,6 +104,13 @@ func NewBlueBubblesAdapter(cfg BlueBubblesConfig) (*BlueBubblesAdapter, error) {
 		serverURL = "http://" + serverURL
 	}
 
+	logger := cfg.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+	logger = logger.With("adapter", "bluebubbles")
+	health := channels.NewBaseHealthAdapter(models.ChannelBlueBubbles, logger)
+
 	return &BlueBubblesAdapter{
 		serverURL:   serverURL,
 		password:    cfg.Password,
@@ -105,6 +119,8 @@ func NewBlueBubblesAdapter(cfg BlueBubblesConfig) (*BlueBubblesAdapter, error) {
 		client: &http.Client{
 			Timeout: timeout,
 		},
+		logger: logger,
+		health: health,
 	}, nil
 }
 
@@ -121,10 +137,19 @@ func (a *BlueBubblesAdapter) Start(ctx context.Context) error {
 
 	// Verify connection by pinging the server
 	if err := a.ping(ctx); err != nil {
+		if a.health != nil {
+			a.health.SetStatus(false, err.Error())
+			a.health.RecordError(channels.ErrCodeConnection)
+		}
 		a.mu.Lock()
 		a.running = false
 		a.mu.Unlock()
 		return fmt.Errorf("bluebubbles: failed to connect: %w", err)
+	}
+
+	if a.health != nil {
+		a.health.SetStatus(true, "")
+		a.health.RecordConnectionOpened()
 	}
 
 	return nil
@@ -144,6 +169,10 @@ func (a *BlueBubblesAdapter) Stop() error {
 	}
 
 	a.running = false
+	if a.health != nil {
+		a.health.SetStatus(false, "")
+		a.health.RecordConnectionClosed()
+	}
 	return nil
 }
 
@@ -158,10 +187,25 @@ func (a *BlueBubblesAdapter) Send(ctx context.Context, msg *models.Message) erro
 		return errors.New("bluebubbles: channel_id (target) is required")
 	}
 
+	recordSend := func(err error, start time.Time) error {
+		if a.health == nil {
+			return err
+		}
+		if err != nil {
+			a.health.RecordMessageFailed()
+			a.health.RecordError(channels.GetErrorCode(err))
+			return err
+		}
+		a.health.RecordMessageSent()
+		a.health.RecordSendLatency(time.Since(start))
+		return nil
+	}
+
 	// Handle media attachments
 	for _, att := range msg.Attachments {
 		if att.URL != "" {
-			if err := a.sendAttachment(ctx, target, att.URL, msg.Content); err != nil {
+			start := time.Now()
+			if err := recordSend(a.sendAttachment(ctx, target, att.URL, msg.Content), start); err != nil {
 				return err
 			}
 			// If we sent media with caption, don't send text separately
@@ -173,7 +217,10 @@ func (a *BlueBubblesAdapter) Send(ctx context.Context, msg *models.Message) erro
 
 	// Send text message
 	if msg.Content != "" {
-		return a.sendText(ctx, target, msg.Content)
+		start := time.Now()
+		if err := recordSend(a.sendText(ctx, target, msg.Content), start); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -182,6 +229,35 @@ func (a *BlueBubblesAdapter) Send(ctx context.Context, msg *models.Message) erro
 // Messages returns the channel for receiving inbound messages.
 func (a *BlueBubblesAdapter) Messages() <-chan *models.Message {
 	return a.messages
+}
+
+// Type returns the channel type.
+func (a *BlueBubblesAdapter) Type() models.ChannelType {
+	return models.ChannelBlueBubbles
+}
+
+// Status returns the current connection status.
+func (a *BlueBubblesAdapter) Status() channels.Status {
+	if a.health == nil {
+		return channels.Status{}
+	}
+	return a.health.Status()
+}
+
+// HealthCheck performs a connectivity check.
+func (a *BlueBubblesAdapter) HealthCheck(ctx context.Context) channels.HealthStatus {
+	if a.health == nil {
+		return channels.HealthStatus{Healthy: false, Message: "health adapter unavailable", LastCheck: time.Now()}
+	}
+	return a.health.HealthCheck(ctx)
+}
+
+// Metrics returns the current metrics snapshot.
+func (a *BlueBubblesAdapter) Metrics() channels.MetricsSnapshot {
+	if a.health == nil {
+		return channels.MetricsSnapshot{ChannelType: models.ChannelBlueBubbles}
+	}
+	return a.health.Metrics()
 }
 
 // HandleWebhook processes incoming webhook requests.
@@ -227,6 +303,9 @@ func (a *BlueBubblesAdapter) HandleWebhook(w http.ResponseWriter, r *http.Reques
 	switch payload.Type {
 	case "new-message", "message":
 		if msg := a.parseMessage(&payload); msg != nil {
+			if a.health != nil {
+				a.health.RecordMessageReceived()
+			}
 			select {
 			case a.messages <- msg:
 			default:
@@ -263,6 +342,10 @@ func (a *BlueBubblesAdapter) ping(ctx context.Context) error {
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("ping failed: HTTP %d", resp.StatusCode)
+	}
+
+	if a.health != nil {
+		a.health.UpdateLastPing()
 	}
 
 	return nil

@@ -10,11 +10,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
@@ -51,6 +53,8 @@ type ZaloAdapter struct {
 
 	messages chan *models.Message
 	client   *http.Client
+	logger   *slog.Logger
+	health   *channels.BaseHealthAdapter
 
 	mu      sync.RWMutex
 	running bool
@@ -76,6 +80,9 @@ type ZaloConfig struct {
 
 	// PollTimeout is the long-polling timeout in seconds (default: 30)
 	PollTimeout int
+
+	// Logger is an optional logger for adapter diagnostics.
+	Logger *slog.Logger
 }
 
 // NewZaloAdapter creates a new Zalo channel adapter.
@@ -94,6 +101,13 @@ func NewZaloAdapter(cfg ZaloConfig) (*ZaloAdapter, error) {
 		webhookPath = "/webhook/zalo"
 	}
 
+	logger := cfg.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+	logger = logger.With("adapter", "zalo")
+	health := channels.NewBaseHealthAdapter(models.ChannelZalo, logger)
+
 	return &ZaloAdapter{
 		token:         cfg.Token,
 		webhookURL:    cfg.WebhookURL,
@@ -104,6 +118,8 @@ func NewZaloAdapter(cfg ZaloConfig) (*ZaloAdapter, error) {
 		client: &http.Client{
 			Timeout: time.Duration(pollTimeout+10) * time.Second,
 		},
+		logger: logger,
+		health: health,
 	}, nil
 }
 
@@ -120,6 +136,10 @@ func (a *ZaloAdapter) Start(ctx context.Context) error {
 
 	// Validate token and get bot info
 	if err := a.validateToken(ctx); err != nil {
+		if a.health != nil {
+			a.health.SetStatus(false, err.Error())
+			a.health.RecordError(channels.ErrCodeAuthentication)
+		}
 		a.mu.Lock()
 		a.running = false
 		a.mu.Unlock()
@@ -129,16 +149,28 @@ func (a *ZaloAdapter) Start(ctx context.Context) error {
 	if a.webhookURL != "" {
 		// Webhook mode - set webhook and wait for HTTP callbacks
 		if err := a.setWebhook(ctx); err != nil {
+			if a.health != nil {
+				a.health.SetStatus(false, err.Error())
+				a.health.RecordError(channels.GetErrorCode(err))
+			}
 			a.mu.Lock()
 			a.running = false
 			a.mu.Unlock()
 			return fmt.Errorf("zalo: failed to set webhook: %w", err)
 		}
 		// In webhook mode, messages come via HTTP handler
+		if a.health != nil {
+			a.health.SetStatus(true, "")
+			a.health.RecordConnectionOpened()
+		}
 		return nil
 	}
 
 	// Polling mode
+	if a.health != nil {
+		a.health.SetStatus(true, "")
+		a.health.RecordConnectionOpened()
+	}
 	go a.pollLoop(ctx)
 	return nil
 }
@@ -157,6 +189,10 @@ func (a *ZaloAdapter) Stop() error {
 	}
 
 	a.running = false
+	if a.health != nil {
+		a.health.SetStatus(false, "")
+		a.health.RecordConnectionClosed()
+	}
 	return nil
 }
 
@@ -171,10 +207,25 @@ func (a *ZaloAdapter) Send(ctx context.Context, msg *models.Message) error {
 		return errors.New("zalo: channel_id (chat_id) is required")
 	}
 
+	recordSend := func(err error, start time.Time) error {
+		if a.health == nil {
+			return err
+		}
+		if err != nil {
+			a.health.RecordMessageFailed()
+			a.health.RecordError(channels.GetErrorCode(err))
+			return err
+		}
+		a.health.RecordMessageSent()
+		a.health.RecordSendLatency(time.Since(start))
+		return nil
+	}
+
 	// Handle media attachments
 	for _, att := range msg.Attachments {
 		if att.Type == "image" && att.URL != "" {
-			if err := a.sendPhoto(ctx, chatID, att.URL, msg.Content); err != nil {
+			start := time.Now()
+			if err := recordSend(a.sendPhoto(ctx, chatID, att.URL, msg.Content), start); err != nil {
 				return err
 			}
 			// If we sent a photo with caption, don't send text separately
@@ -186,7 +237,10 @@ func (a *ZaloAdapter) Send(ctx context.Context, msg *models.Message) error {
 
 	// Send text message
 	if msg.Content != "" {
-		return a.sendText(ctx, chatID, msg.Content)
+		start := time.Now()
+		if err := recordSend(a.sendText(ctx, chatID, msg.Content), start); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -195,6 +249,35 @@ func (a *ZaloAdapter) Send(ctx context.Context, msg *models.Message) error {
 // Messages returns the channel for receiving inbound messages.
 func (a *ZaloAdapter) Messages() <-chan *models.Message {
 	return a.messages
+}
+
+// Type returns the channel type.
+func (a *ZaloAdapter) Type() models.ChannelType {
+	return models.ChannelZalo
+}
+
+// Status returns the current connection status.
+func (a *ZaloAdapter) Status() channels.Status {
+	if a.health == nil {
+		return channels.Status{}
+	}
+	return a.health.Status()
+}
+
+// HealthCheck performs a connectivity check.
+func (a *ZaloAdapter) HealthCheck(ctx context.Context) channels.HealthStatus {
+	if a.health == nil {
+		return channels.HealthStatus{Healthy: false, Message: "health adapter unavailable", LastCheck: time.Now()}
+	}
+	return a.health.HealthCheck(ctx)
+}
+
+// Metrics returns the current metrics snapshot.
+func (a *ZaloAdapter) Metrics() channels.MetricsSnapshot {
+	if a.health == nil {
+		return channels.MetricsSnapshot{ChannelType: models.ChannelZalo}
+	}
+	return a.health.Metrics()
 }
 
 // HandleWebhook processes incoming webhook requests.
@@ -235,6 +318,9 @@ func (a *ZaloAdapter) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if msg := a.parseUpdate(&update); msg != nil {
+		if a.health != nil {
+			a.health.RecordMessageReceived()
+		}
 		select {
 		case a.messages <- msg:
 		default:
@@ -310,6 +396,9 @@ func (a *ZaloAdapter) pollLoop(ctx context.Context) {
 		}
 
 		if msg := a.parseUpdate(update); msg != nil {
+			if a.health != nil {
+				a.health.RecordMessageReceived()
+			}
 			select {
 			case a.messages <- msg:
 			case <-ctx.Done():

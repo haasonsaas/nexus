@@ -24,10 +24,15 @@
 | **Telegram** | Stable | Long polling, webhooks, inline keyboards, media handling |
 | **Discord** | Stable | Slash commands, threads, rich embeds, guild management |
 | **Slack** | Stable | Socket Mode, Block Kit, app mentions, thread replies |
+| **Microsoft Teams** | Beta | Microsoft Graph integration (polling + optional webhooks) |
+| **Mattermost** | Beta | WebSocket events, channels + DMs, threads |
+| **Nextcloud Talk** | Beta | Webhook receiver, room messaging |
 | **Matrix** | Beta | Room messaging, E2E encryption support |
 | **WhatsApp** | Alpha | Business API integration |
 | **Signal** | Alpha | Signal Protocol messaging |
-| **iMessage** | Alpha | macOS-only, requires BlueBubbles/pypush |
+| **Zalo** | Alpha | Bot API integration (polling + optional webhooks) |
+| **BlueBubbles (iMessage)** | Alpha | Webhook receiver, attachments (BlueBubbles server) |
+| **iMessage (local)** | Alpha | macOS-only, local Messages DB access |
 
 ### LLM Providers
 

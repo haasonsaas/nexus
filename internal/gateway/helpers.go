@@ -98,6 +98,9 @@ func (s *Server) resolveConversationID(msg *models.Message) (string, error) {
 		}
 		return "", errors.New("discord channel id missing")
 	default:
+		if msg.ChannelID != "" {
+			return msg.ChannelID, nil
+		}
 		return "", fmt.Errorf("unsupported channel %q", msg.Channel)
 	}
 }

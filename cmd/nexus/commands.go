@@ -204,7 +204,7 @@ func buildPairingListCmd() *cobra.Command {
 			return runPairingList(cmd, provider)
 		},
 	}
-	cmd.Flags().StringVar(&provider, "provider", "", "Filter by provider (telegram, discord, slack, whatsapp, signal, imessage, matrix, teams)")
+	cmd.Flags().StringVar(&provider, "provider", "", "Filter by provider (telegram, discord, slack, whatsapp, signal, imessage, matrix, teams, mattermost, nextcloud-talk, zalo, bluebubbles)")
 	return cmd
 }
 

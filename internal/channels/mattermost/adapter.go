@@ -436,19 +436,18 @@ func (a *Adapter) handlePosted(event *model.WebSocketEvent) {
 
 // convertPost converts a Mattermost post to unified message format.
 func (a *Adapter) convertPost(post *model.Post, eventData map[string]any) *models.Message {
-	// Generate session ID for threaded conversations
+	// Use a thread-scoped conversation ID (channel + thread root).
 	threadID := post.RootId
 	if threadID == "" {
 		threadID = post.Id
 	}
-	sessionID := generateSessionID(post.ChannelId, threadID)
+	conversationID := fmt.Sprintf("%s:%s", post.ChannelId, threadID)
 
 	// Create message
 	msg := &models.Message{
 		ID:        post.Id,
-		SessionID: sessionID,
 		Channel:   models.ChannelMattermost,
-		ChannelID: post.Id,
+		ChannelID: conversationID,
 		Direction: models.DirectionInbound,
 		Role:      models.RoleUser,
 		Content:   post.Message,
@@ -457,6 +456,7 @@ func (a *Adapter) convertPost(post *model.Post, eventData map[string]any) *model
 			"mattermost_root_id": post.RootId,
 			"mattermost_user_id": post.UserId,
 			"sender_id":          post.UserId,
+			"group_id":           post.ChannelId,
 			"conversation_type":  "group",
 		},
 		CreatedAt: time.Unix(post.CreateAt/1000, 0),

@@ -456,6 +456,8 @@ func (a *ZaloAdapter) parseUpdate(update *ZaloUpdate) *models.Message {
 			"zalo_message_id": zm.MessageID,
 			"from_id":         zm.From.ID,
 			"from_name":       zm.From.Name,
+			"sender_id":       zm.From.ID,
+			"sender_name":     zm.From.Name,
 			"chat_type":       zm.Chat.ChatType,
 		},
 		CreatedAt: time.Unix(int64(zm.Date), 0),

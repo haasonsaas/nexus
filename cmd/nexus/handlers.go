@@ -354,6 +354,10 @@ var pairingProviders = []string{
 	"imessage",
 	"matrix",
 	"teams",
+	"mattermost",
+	"nextcloud-talk",
+	"zalo",
+	"bluebubbles",
 }
 
 func runPairingList(cmd *cobra.Command, provider string) error {

@@ -117,6 +117,26 @@ func (s *Server) channelPolicyConfig(channel models.ChannelType, convType string
 			return s.config.Channels.Teams.Group, true
 		}
 		return s.config.Channels.Teams.DM, true
+	case models.ChannelMattermost:
+		if isGroup {
+			return s.config.Channels.Mattermost.Group, true
+		}
+		return s.config.Channels.Mattermost.DM, true
+	case models.ChannelNextcloudTalk:
+		if isGroup {
+			return s.config.Channels.NextcloudTalk.Group, true
+		}
+		return s.config.Channels.NextcloudTalk.DM, true
+	case models.ChannelZalo:
+		if isGroup {
+			return s.config.Channels.Zalo.Group, true
+		}
+		return s.config.Channels.Zalo.DM, true
+	case models.ChannelBlueBubbles:
+		if isGroup {
+			return s.config.Channels.BlueBubbles.Group, true
+		}
+		return s.config.Channels.BlueBubbles.DM, true
 	default:
 		return config.ChannelPolicyConfig{}, false
 	}
@@ -327,6 +347,9 @@ func extractGroupID(msg *models.Message) string {
 		if chatID, ok := msg.Metadata["chat_id"].(string); ok && chatID != "" {
 			return chatID
 		}
+	}
+	if msg.ChannelID != "" {
+		return msg.ChannelID
 	}
 	return ""
 }

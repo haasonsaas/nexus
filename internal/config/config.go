@@ -425,6 +425,11 @@ type ChannelsConfig struct {
 	Matrix   MatrixConfig   `yaml:"matrix"`
 	Teams    TeamsConfig    `yaml:"teams"`
 	Email    EmailConfig    `yaml:"email"`
+
+	Mattermost    MattermostConfig    `yaml:"mattermost"`
+	NextcloudTalk NextcloudTalkConfig `yaml:"nextcloud_talk"`
+	Zalo          ZaloConfig          `yaml:"zalo"`
+	BlueBubbles   BlueBubblesConfig   `yaml:"bluebubbles"`
 }
 
 type ChannelPolicyConfig struct {
@@ -579,6 +584,104 @@ type EmailConfig struct {
 	AutoMarkRead bool `yaml:"auto_mark_read"`
 	// PollInterval for checking new emails (default: 30s)
 	PollInterval string `yaml:"poll_interval"`
+}
+
+type MattermostConfig struct {
+	Enabled bool `yaml:"enabled"`
+
+	// ServerURL is the Mattermost server URL (required).
+	ServerURL string `yaml:"server_url"`
+
+	// Token is the bot token for API calls (optional).
+	// Either Token or (Username + Password) must be provided.
+	Token string `yaml:"token"`
+
+	// Username for login-based authentication (optional).
+	Username string `yaml:"username"`
+
+	// Password for login-based authentication (optional).
+	Password string `yaml:"password"`
+
+	// TeamName is the default team to operate in (optional).
+	TeamName string `yaml:"team_name"`
+
+	// RateLimit configures rate limiting for API calls (ops/sec).
+	RateLimit float64 `yaml:"rate_limit"`
+
+	// RateBurst configures burst capacity for rate limiting.
+	RateBurst int `yaml:"rate_burst"`
+
+	DM    ChannelPolicyConfig `yaml:"dm"`
+	Group ChannelPolicyConfig `yaml:"group"`
+}
+
+type NextcloudTalkConfig struct {
+	Enabled bool `yaml:"enabled"`
+
+	// BaseURL is the Nextcloud server base URL (required).
+	BaseURL string `yaml:"base_url"`
+
+	// BotSecret is the bot secret for webhook verification (required).
+	BotSecret string `yaml:"bot_secret"`
+
+	// WebhookPort is the port for the webhook server (default: 8788).
+	WebhookPort int `yaml:"webhook_port"`
+
+	// WebhookHost is the host for the webhook server (default: 0.0.0.0).
+	WebhookHost string `yaml:"webhook_host"`
+
+	// WebhookPath is the path for the webhook endpoint (default: /nextcloud-talk-webhook).
+	WebhookPath string `yaml:"webhook_path"`
+
+	// RateLimit configures rate limiting for API calls (ops/sec).
+	RateLimit float64 `yaml:"rate_limit"`
+
+	// RateBurst configures burst capacity for rate limiting.
+	RateBurst int `yaml:"rate_burst"`
+
+	DM    ChannelPolicyConfig `yaml:"dm"`
+	Group ChannelPolicyConfig `yaml:"group"`
+}
+
+type ZaloConfig struct {
+	Enabled bool `yaml:"enabled"`
+
+	// Token is the Zalo bot token (required).
+	Token string `yaml:"token"`
+
+	// WebhookURL is the public URL for webhook callbacks (optional).
+	WebhookURL string `yaml:"webhook_url"`
+
+	// WebhookSecret is the secret for validating webhook signatures (optional).
+	WebhookSecret string `yaml:"webhook_secret"`
+
+	// WebhookPath is the path for the webhook endpoint (default: /webhook/zalo).
+	WebhookPath string `yaml:"webhook_path"`
+
+	// PollTimeout is the long-polling timeout in seconds (default: 30).
+	PollTimeout int `yaml:"poll_timeout"`
+
+	DM    ChannelPolicyConfig `yaml:"dm"`
+	Group ChannelPolicyConfig `yaml:"group"`
+}
+
+type BlueBubblesConfig struct {
+	Enabled bool `yaml:"enabled"`
+
+	// ServerURL is the BlueBubbles server URL (required).
+	ServerURL string `yaml:"server_url"`
+
+	// Password is the API password (required).
+	Password string `yaml:"password"`
+
+	// WebhookPath is the path for webhook callbacks (default: /webhook/bluebubbles).
+	WebhookPath string `yaml:"webhook_path"`
+
+	// Timeout is the HTTP timeout (default: 10s).
+	Timeout string `yaml:"timeout"`
+
+	DM    ChannelPolicyConfig `yaml:"dm"`
+	Group ChannelPolicyConfig `yaml:"group"`
 }
 
 type LLMConfig struct {
@@ -2059,6 +2162,14 @@ func validateConfig(cfg *Config) error {
 	validateChannelPolicy(&issues, "channels.matrix.group", cfg.Channels.Matrix.Group)
 	validateChannelPolicy(&issues, "channels.teams.dm", cfg.Channels.Teams.DM)
 	validateChannelPolicy(&issues, "channels.teams.group", cfg.Channels.Teams.Group)
+	validateChannelPolicy(&issues, "channels.mattermost.dm", cfg.Channels.Mattermost.DM)
+	validateChannelPolicy(&issues, "channels.mattermost.group", cfg.Channels.Mattermost.Group)
+	validateChannelPolicy(&issues, "channels.nextcloud_talk.dm", cfg.Channels.NextcloudTalk.DM)
+	validateChannelPolicy(&issues, "channels.nextcloud_talk.group", cfg.Channels.NextcloudTalk.Group)
+	validateChannelPolicy(&issues, "channels.zalo.dm", cfg.Channels.Zalo.DM)
+	validateChannelPolicy(&issues, "channels.zalo.group", cfg.Channels.Zalo.Group)
+	validateChannelPolicy(&issues, "channels.bluebubbles.dm", cfg.Channels.BlueBubbles.DM)
+	validateChannelPolicy(&issues, "channels.bluebubbles.group", cfg.Channels.BlueBubbles.Group)
 	if cfg.Channels.Slack.Canvas.Enabled {
 		command := strings.TrimSpace(cfg.Channels.Slack.Canvas.Command)
 		if command == "" {

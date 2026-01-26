@@ -9,6 +9,11 @@ All open issues as of 2026-01-25 should receive design docs and follow-on implem
 3) Track status across design + execution.
 
 ## Issue Inventory
+- #120 Add BlueBubbles channel adapter (iMessage)
+- #119 Add Zalo channel adapters (Zalo + ZaloUser)
+- #118 Add Nextcloud Talk channel adapter
+- #117 Add Mattermost channel adapter
+- #116 Add Microsoft Teams channel adapter
 - #115 Deep: Agentic Loop State Machine - Checkpointing, Parallelism & Recovery
 - #114 Deep: MCP Evolution - Hot Reload, Capability Negotiation & Tool Composition
 - #113 Deep: Steering System Evolution - Conditional Injection & Observability
@@ -64,7 +69,7 @@ All open issues as of 2026-01-25 should receive design docs and follow-on implem
 - `docs/design/tape-system-evolution.md` (#104)
 - `docs/design/structured-fact-extraction.md` (#103)
 - `docs/design/horizontal-scaling.md` (#102)
-- `docs/design/channel-native-features.md` (#101)
+- `docs/design/channel-native-features.md` (#101, #120, #119, #118, #117, #116)
 - `docs/design/identity-layer.md` (#99)
 - `docs/design/extension-unification.md` (#98)
 - `docs/design/plugin-sandboxing.md` (#97)
@@ -93,4 +98,4 @@ All open issues as of 2026-01-25 should receive design docs and follow-on implem
 
 ## Status
 - Design docs: provider routing, RAG evaluation, knowledge packs, prompt experiments, skills composition, adapter refactors, multi-agent memory, extension unification, MCP evolution, plugin sandboxing, edge mesh, horizontal scaling, VM pool lifecycle, security posture, observability tracing, agent loop state machine, steering system, canvas workspace, tape system evolution, structured fact extraction, channel-native features, identity layer, analytics dashboard, agent swarm, conversation forking, home assistant integration, local TTS drafted.
-- Implementation: RAG eval phase 2 (LLM judge) complete; provider routing + Ollama provider + discovery complete; knowledge packs CLI complete; prompt experiments scaffolding complete; skill tool scaffolding complete; adapter refactors in progress (BaseHealthAdapter rollout complete incl. BlueBubbles + Zalo; StreamManager tests complete; Bedrock tool conversion moved to toolconv; Reconnector adopted for Discord + Matrix; BaseProvider migration complete for OpenAI/Azure/Bedrock/Anthropic/Google/OpenRouter; Anthropic/Gemini tool converters added); structured fact extraction tool (regex-based) in progress; hierarchical memory search + attention feed injection + consolidation worker in progress (consolidation model config honored); steering system conditional injection + trace complete; extensions list CLI complete; MCP reload helper complete; conversation forking CLI (branch list/fork/tree/merge/compare/history) in progress; identity session scoping (DM key builder + gRPC/proactive routing) in progress; edge mesh + horizontal scaling + VM pool lifecycle implementation in progress; security posture + tracing implementation in progress; hardening work in progress (request body limits for webhooks/web API/gateway hooks, bounded external response reads, template import size cap, transcription input size cap, gRPC artifact include_data cap, CLI artifact downloads streamed to disk, media local file reads capped); CI hardening in progress (Go toolchain setup to avoid cache restore tar errors).
+- Implementation: RAG eval phase 2 (LLM judge) complete; provider routing + Ollama provider + discovery complete; knowledge packs CLI complete; prompt experiments scaffolding complete; skill tool scaffolding complete; adapter refactors in progress (BaseHealthAdapter rollout complete incl. BlueBubbles + Zalo; StreamManager tests complete; Bedrock tool conversion moved to toolconv; Reconnector adopted for Discord + Matrix; BaseProvider migration complete for OpenAI/Azure/Bedrock/Anthropic/Google/OpenRouter; Anthropic/Gemini tool converters added); structured fact extraction tool (regex-based) in progress; hierarchical memory search + attention feed injection + consolidation worker in progress (consolidation model config honored); steering system conditional injection + trace complete; extensions list CLI complete; MCP reload helper complete; conversation forking CLI (branch list/fork/tree/merge/compare/history) in progress; identity session scoping (DM key builder + gRPC/proactive routing) in progress; edge mesh + horizontal scaling + VM pool lifecycle implementation in progress; security posture + tracing implementation in progress; hardening work in progress (request body limits for webhooks/web API/gateway hooks, bounded external response reads, template import size cap, transcription input size cap, gRPC artifact include_data cap, CLI artifact downloads streamed to disk, media local file reads capped); channel parity work in progress (built-in channel plugins/config for Mattermost/Nextcloud Talk/Zalo/BlueBubbles + gateway session routing beyond Telegram/Slack/Discord; ZaloUser pending); CI hardening in progress (Go toolchain setup to avoid cache restore tar errors).

@@ -420,8 +420,15 @@ func (a *BlueBubblesAdapter) parseMessage(payload *WebhookPayload) *models.Messa
 			"sender_name":            senderName,
 			"chat_guid":              chatGUID,
 			"is_group":               isGroup,
+			"conversation_type":      "dm",
 		},
 		CreatedAt: time.Now(),
+	}
+	if isGroup {
+		msg.Metadata["conversation_type"] = "group"
+		if chatGUID != "" {
+			msg.Metadata["group_id"] = chatGUID
+		}
 	}
 
 	// Parse timestamp

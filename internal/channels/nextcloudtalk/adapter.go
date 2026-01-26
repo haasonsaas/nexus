@@ -335,14 +335,10 @@ func (a *Adapter) verifySignature(signature, random string, body []byte) bool {
 
 // convertPayload converts a Nextcloud Talk webhook payload to unified message format.
 func (a *Adapter) convertPayload(payload WebhookPayload) *models.Message {
-	// Generate session ID from room
-	sessionID := generateSessionID(payload.Target.ID)
-
 	msg := &models.Message{
 		ID:        payload.Object.ID,
-		SessionID: sessionID,
 		Channel:   models.ChannelNextcloudTalk,
-		ChannelID: payload.Object.ID,
+		ChannelID: payload.Target.ID,
 		Direction: models.DirectionInbound,
 		Role:      models.RoleUser,
 		Content:   payload.Object.Content,
@@ -352,6 +348,7 @@ func (a *Adapter) convertPayload(payload WebhookPayload) *models.Message {
 			"nextcloud_user_id":    payload.Actor.ID,
 			"sender_id":            payload.Actor.ID,
 			"sender_name":          payload.Actor.Name,
+			"room_id":              payload.Target.ID,
 			"conversation_type":    "group",
 		},
 		CreatedAt: time.Now(),

@@ -277,6 +277,73 @@ channels:
       #   T1234567890:
       #     U1234567890: viewer
 
+  teams:
+    enabled: false
+    tenant_id: ${TEAMS_TENANT_ID}
+    client_id: ${TEAMS_CLIENT_ID}
+    client_secret: ${TEAMS_CLIENT_SECRET}
+    # Optional: webhook URL for Graph subscriptions (recommended)
+    # webhook_url: https://your-domain.com/webhook/teams
+    # Optional: polling fallback interval (default: 5s)
+    # poll_interval: 5s
+    dm:
+      policy: pairing
+    group:
+      policy: allowlist
+
+  mattermost:
+    enabled: false
+    server_url: ${MATTERMOST_SERVER_URL} # https://mattermost.example.com
+    # Provide either a bot token OR username/password
+    token: ${MATTERMOST_TOKEN:-}
+    # username: ${MATTERMOST_USERNAME:-}
+    # password: ${MATTERMOST_PASSWORD:-}
+    # team_name: ${MATTERMOST_TEAM:-}
+    # rate_limit: 10
+    # rate_burst: 5
+    dm:
+      policy: pairing
+    group:
+      policy: allowlist
+
+  nextcloud_talk:
+    enabled: false
+    base_url: ${NEXTCLOUD_BASE_URL} # https://nextcloud.example.com
+    bot_secret: ${NEXTCLOUD_TALK_BOT_SECRET}
+    # webhook_port: 8788
+    # webhook_host: 0.0.0.0
+    # webhook_path: /nextcloud-talk-webhook
+    # rate_limit: 10
+    # rate_burst: 5
+    dm:
+      policy: pairing
+    group:
+      policy: allowlist
+
+  zalo:
+    enabled: false
+    token: ${ZALO_BOT_TOKEN}
+    # Optional: webhook URL for production
+    # webhook_url: https://your-domain.com/webhook/zalo
+    # webhook_secret: ${ZALO_WEBHOOK_SECRET:-}
+    # webhook_path: /webhook/zalo
+    # poll_timeout: 30
+    dm:
+      policy: pairing
+    group:
+      policy: allowlist
+
+  bluebubbles:
+    enabled: false
+    server_url: ${BLUEBUBBLES_SERVER_URL} # http://mac-host:1234
+    password: ${BLUEBUBBLES_PASSWORD}
+    # webhook_path: /webhook/bluebubbles
+    # timeout: 10s
+    dm:
+      policy: pairing
+    group:
+      policy: allowlist
+
 llm:
   # default_provider can reference a profile (e.g., "openai:fast")
   default_provider: anthropic

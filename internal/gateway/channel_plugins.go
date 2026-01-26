@@ -7,11 +7,15 @@ import (
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/channels"
+	"github.com/haasonsaas/nexus/internal/channels/bluebubbles"
 	"github.com/haasonsaas/nexus/internal/channels/discord"
 	"github.com/haasonsaas/nexus/internal/channels/email"
+	"github.com/haasonsaas/nexus/internal/channels/mattermost"
+	"github.com/haasonsaas/nexus/internal/channels/nextcloudtalk"
 	"github.com/haasonsaas/nexus/internal/channels/slack"
 	"github.com/haasonsaas/nexus/internal/channels/teams"
 	"github.com/haasonsaas/nexus/internal/channels/telegram"
+	"github.com/haasonsaas/nexus/internal/channels/zalo"
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/pkg/models"
 	"log/slog"
@@ -79,6 +83,10 @@ func registerBuiltinChannelPlugins(registry *channelPluginRegistry) {
 	registry.Register(slackPlugin{})
 	registry.Register(teamsPlugin{})
 	registry.Register(emailPlugin{})
+	registry.Register(mattermostPlugin{})
+	registry.Register(nextcloudTalkPlugin{})
+	registry.Register(zaloPlugin{})
+	registry.Register(blueBubblesPlugin{})
 }
 
 type telegramPlugin struct{}
@@ -255,5 +263,113 @@ func (emailPlugin) Build(cfg *config.Config, logger *slog.Logger) (channels.Adap
 		AutoMarkRead: cfg.Channels.Email.AutoMarkRead,
 		PollInterval: pollInterval,
 		Logger:       logger,
+	})
+}
+
+type mattermostPlugin struct{}
+
+func (mattermostPlugin) Manifest() ChannelPluginManifest {
+	return ChannelPluginManifest{
+		ID:   models.ChannelMattermost,
+		Name: "Mattermost",
+	}
+}
+
+func (mattermostPlugin) Enabled(cfg *config.Config) bool {
+	return cfg != nil && cfg.Channels.Mattermost.Enabled
+}
+
+func (mattermostPlugin) Build(cfg *config.Config, logger *slog.Logger) (channels.Adapter, error) {
+	return mattermost.NewAdapter(mattermost.Config{
+		ServerURL: strings.TrimSpace(cfg.Channels.Mattermost.ServerURL),
+		Token:     strings.TrimSpace(cfg.Channels.Mattermost.Token),
+		Username:  cfg.Channels.Mattermost.Username,
+		Password:  cfg.Channels.Mattermost.Password,
+		TeamName:  cfg.Channels.Mattermost.TeamName,
+		RateLimit: cfg.Channels.Mattermost.RateLimit,
+		RateBurst: cfg.Channels.Mattermost.RateBurst,
+		Logger:    logger,
+	})
+}
+
+type nextcloudTalkPlugin struct{}
+
+func (nextcloudTalkPlugin) Manifest() ChannelPluginManifest {
+	return ChannelPluginManifest{
+		ID:   models.ChannelNextcloudTalk,
+		Name: "Nextcloud Talk",
+	}
+}
+
+func (nextcloudTalkPlugin) Enabled(cfg *config.Config) bool {
+	return cfg != nil && cfg.Channels.NextcloudTalk.Enabled
+}
+
+func (nextcloudTalkPlugin) Build(cfg *config.Config, logger *slog.Logger) (channels.Adapter, error) {
+	return nextcloudtalk.NewAdapter(nextcloudtalk.Config{
+		BaseURL:     strings.TrimSpace(cfg.Channels.NextcloudTalk.BaseURL),
+		BotSecret:   cfg.Channels.NextcloudTalk.BotSecret,
+		WebhookPort: cfg.Channels.NextcloudTalk.WebhookPort,
+		WebhookHost: cfg.Channels.NextcloudTalk.WebhookHost,
+		WebhookPath: cfg.Channels.NextcloudTalk.WebhookPath,
+		RateLimit:   cfg.Channels.NextcloudTalk.RateLimit,
+		RateBurst:   cfg.Channels.NextcloudTalk.RateBurst,
+		Logger:      logger,
+	})
+}
+
+type zaloPlugin struct{}
+
+func (zaloPlugin) Manifest() ChannelPluginManifest {
+	return ChannelPluginManifest{
+		ID:   models.ChannelZalo,
+		Name: "Zalo",
+	}
+}
+
+func (zaloPlugin) Enabled(cfg *config.Config) bool {
+	return cfg != nil && cfg.Channels.Zalo.Enabled
+}
+
+func (zaloPlugin) Build(cfg *config.Config, logger *slog.Logger) (channels.Adapter, error) {
+	return zalo.NewZaloAdapter(zalo.ZaloConfig{
+		Token:         cfg.Channels.Zalo.Token,
+		WebhookURL:    strings.TrimSpace(cfg.Channels.Zalo.WebhookURL),
+		WebhookSecret: cfg.Channels.Zalo.WebhookSecret,
+		WebhookPath:   cfg.Channels.Zalo.WebhookPath,
+		PollTimeout:   cfg.Channels.Zalo.PollTimeout,
+		Logger:        logger,
+	})
+}
+
+type blueBubblesPlugin struct{}
+
+func (blueBubblesPlugin) Manifest() ChannelPluginManifest {
+	return ChannelPluginManifest{
+		ID:   models.ChannelBlueBubbles,
+		Name: "BlueBubbles (iMessage)",
+	}
+}
+
+func (blueBubblesPlugin) Enabled(cfg *config.Config) bool {
+	return cfg != nil && cfg.Channels.BlueBubbles.Enabled
+}
+
+func (blueBubblesPlugin) Build(cfg *config.Config, logger *slog.Logger) (channels.Adapter, error) {
+	timeout := time.Duration(0)
+	if cfg.Channels.BlueBubbles.Timeout != "" {
+		parsed, err := time.ParseDuration(cfg.Channels.BlueBubbles.Timeout)
+		if err != nil {
+			return nil, err
+		}
+		timeout = parsed
+	}
+
+	return bluebubbles.NewBlueBubblesAdapter(bluebubbles.BlueBubblesConfig{
+		ServerURL:   strings.TrimSpace(cfg.Channels.BlueBubbles.ServerURL),
+		Password:    cfg.Channels.BlueBubbles.Password,
+		WebhookPath: cfg.Channels.BlueBubbles.WebhookPath,
+		Timeout:     timeout,
+		Logger:      logger,
 	})
 }

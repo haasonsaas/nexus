@@ -21,6 +21,9 @@ const (
 	// DefaultWebhookPath is the default path for webhook callbacks.
 	DefaultWebhookPath = "/webhook/bluebubbles"
 
+	// DefaultMaxWebhookBodyBytes is the maximum allowed webhook payload size.
+	DefaultMaxWebhookBodyBytes = 1 << 20
+
 	// DefaultTimeout is the default HTTP timeout.
 	DefaultTimeout = 10 * time.Second
 
@@ -188,12 +191,19 @@ func (a *BlueBubblesAdapter) HandleWebhook(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, DefaultMaxWebhookBodyBytes)
+	defer r.Body.Close()
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			http.Error(w, "Request entity too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, "Failed to read body", http.StatusBadRequest)
 		return
 	}
-	defer r.Body.Close()
 
 	// Validate password if present in query
 	queryPassword := r.URL.Query().Get("password")

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -17,6 +18,8 @@ import (
 	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
+
+const maxWebhookBodyBytes = 1 << 20
 
 // Config holds configuration for the Nextcloud Talk adapter.
 type Config struct {
@@ -241,14 +244,20 @@ func (a *Adapter) handleWebhook(w http.ResponseWriter, r *http.Request) {
 
 	startTime := time.Now()
 
-	// Read body
+	r.Body = http.MaxBytesReader(w, r.Body, maxWebhookBodyBytes)
+	defer r.Body.Close()
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			http.Error(w, "Request entity too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		a.logger.Warn("failed to read webhook body", "error", err)
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
-	defer r.Body.Close()
 
 	// Verify signature
 	signature := r.Header.Get("X-Nextcloud-Talk-Signature")

@@ -22,6 +22,9 @@ const (
 	// ZaloAPIBase is the Zalo Bot API endpoint.
 	ZaloAPIBase = "https://bot-api.zaloplatforms.com"
 
+	// DefaultMaxWebhookBodyBytes is the maximum allowed webhook payload size.
+	DefaultMaxWebhookBodyBytes = 1 << 20
+
 	// DefaultPollTimeout is the default long-polling timeout in seconds.
 	DefaultPollTimeout = 30
 
@@ -202,12 +205,19 @@ func (a *ZaloAdapter) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, DefaultMaxWebhookBodyBytes)
+	defer r.Body.Close()
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			http.Error(w, "Request entity too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, "Failed to read body", http.StatusBadRequest)
 		return
 	}
-	defer r.Body.Close()
 
 	// Validate signature if secret is configured
 	if a.webhookSecret != "" {

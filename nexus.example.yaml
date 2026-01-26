@@ -598,7 +598,7 @@ plugins:
   # Optional plugin manifest search paths
   load:
     paths: []
-  # Optional (future): run third-party plugins out-of-process (issue #97)
+  # Optional (future): run third-party plugins out-of-process (not implemented yet)
   isolation:
     enabled: false
     backend: docker # docker | firecracker

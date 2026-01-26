@@ -13,6 +13,7 @@ type stubProvider struct {
 	supportsTools bool
 	calls         int
 	lastModel     string
+	err           error
 }
 
 type dummyTool struct{}
@@ -27,6 +28,9 @@ func (dummyTool) Execute(ctx context.Context, params json.RawMessage) (*agent.To
 func (p *stubProvider) Complete(ctx context.Context, req *agent.CompletionRequest) (<-chan *agent.CompletionChunk, error) {
 	p.calls++
 	p.lastModel = req.Model
+	if p.err != nil {
+		return nil, p.err
+	}
 	ch := make(chan *agent.CompletionChunk, 1)
 	ch <- &agent.CompletionChunk{Done: true}
 	close(ch)
@@ -129,5 +133,31 @@ func TestRouterToolFallback(t *testing.T) {
 	}
 	if withTools.calls != 1 {
 		t.Fatalf("expected tool-capable provider to be called")
+	}
+}
+
+func TestRouterFallbackOnError(t *testing.T) {
+	bad := &stubProvider{name: "bad", err: errInvalidRequest("boom")}
+	fallback := &stubProvider{name: "fallback"}
+	providers := map[string]agent.LLMProvider{
+		"bad":      bad,
+		"fallback": fallback,
+	}
+
+	router := NewRouter(Config{
+		DefaultProvider: "bad",
+		Fallback: Target{
+			Provider: "fallback",
+		},
+	}, providers)
+
+	_, err := router.Complete(context.Background(), &agent.CompletionRequest{
+		Messages: []agent.CompletionMessage{{Role: "user", Content: "hello"}},
+	})
+	if err != nil {
+		t.Fatalf("Complete() error: %v", err)
+	}
+	if fallback.calls != 1 {
+		t.Fatalf("expected fallback provider to be called")
 	}
 }

@@ -366,6 +366,11 @@ func (m *RuntimeManager) initProvider() error {
 			PreferLocal:     preferLocal,
 			LocalProviders:  localProviders,
 			Rules:           rules,
+			Fallback: routing.Target{
+				Provider: m.config.LLM.Routing.Fallback.Provider,
+				Model:    m.config.LLM.Routing.Fallback.Model,
+			},
+			FailureCooldown: m.config.LLM.Routing.UnhealthyCooldown,
 		}, providerMap)
 		m.llmProvider = router
 	} else {

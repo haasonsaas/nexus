@@ -676,6 +676,12 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 			metadata := map[string]any{
 				"cron_job_id": job.ID,
 			}
+			if len(job.Message.Tools) > 0 {
+				metadata["tool_policy"] = policy.Policy{
+					Profile: policy.ProfileMinimal,
+					Allow:   policy.NormalizeTools(job.Message.Tools),
+				}
+			}
 			switch channelType {
 			case models.ChannelTelegram:
 				metadata[MetaChatID] = channelID

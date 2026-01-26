@@ -12,6 +12,8 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/haasonsaas/nexus/internal/config"
 )
 
@@ -25,6 +27,7 @@ type Scheduler struct {
 	messageSender  MessageSender
 	agentRunner    AgentRunner
 	customHandlers map[string]CustomHandler
+	executionStore ExecutionStore
 	now            func() time.Time
 	tickInterval   time.Duration
 
@@ -79,6 +82,15 @@ func WithCustomHandler(name string, handler CustomHandler) Option {
 	}
 }
 
+// WithExecutionStore configures the execution history store.
+func WithExecutionStore(store ExecutionStore) Option {
+	return func(s *Scheduler) {
+		if store != nil {
+			s.executionStore = store
+		}
+	}
+}
+
 // WithNow overrides the clock for tests.
 func WithNow(now func() time.Time) Option {
 	return func(s *Scheduler) {
@@ -117,6 +129,16 @@ func (s *Scheduler) SetAgentRunner(runner AgentRunner) {
 	s.mu.Unlock()
 }
 
+// SetExecutionStore updates the execution store after initialization.
+func (s *Scheduler) SetExecutionStore(store ExecutionStore) {
+	if s == nil || store == nil {
+		return
+	}
+	s.mu.Lock()
+	s.executionStore = store
+	s.mu.Unlock()
+}
+
 // RegisterCustomHandler registers a handler for custom cron jobs.
 func (s *Scheduler) RegisterCustomHandler(name string, handler CustomHandler) {
 	if s == nil || handler == nil {
@@ -140,6 +162,7 @@ func NewScheduler(cfg config.CronConfig, opts ...Option) (*Scheduler, error) {
 		logger:         slog.Default().With("component", "cron"),
 		httpClient:     http.DefaultClient,
 		customHandlers: make(map[string]CustomHandler),
+		executionStore: NewMemoryExecutionStore(),
 		now:            time.Now,
 		tickInterval:   time.Second,
 	}
@@ -262,6 +285,66 @@ func (s *Scheduler) Jobs() []*Job {
 	return out
 }
 
+// RegisterJob adds or replaces a cron job at runtime.
+func (s *Scheduler) RegisterJob(cfg config.CronJobConfig) (*Job, error) {
+	if s == nil {
+		return nil, nil
+	}
+	job, err := s.buildJob(cfg, s.now())
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, existing := range s.jobs {
+		if existing != nil && existing.ID == job.ID {
+			s.jobs[i] = job
+			return job, nil
+		}
+	}
+	s.jobs = append(s.jobs, job)
+	return job, nil
+}
+
+// UnregisterJob removes a cron job by id.
+func (s *Scheduler) UnregisterJob(id string) bool {
+	if s == nil {
+		return false
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, job := range s.jobs {
+		if job != nil && job.ID == id {
+			s.jobs = append(s.jobs[:i], s.jobs[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+// Executions returns execution history for a job.
+func (s *Scheduler) Executions(ctx context.Context, jobID string, limit, offset int) ([]*JobExecution, error) {
+	if s == nil || s.executionStore == nil {
+		return nil, nil
+	}
+	return s.executionStore.List(ctx, strings.TrimSpace(jobID), limit, offset)
+}
+
+// PruneExecutions prunes execution history older than the provided duration.
+func (s *Scheduler) PruneExecutions(ctx context.Context, olderThan time.Duration) (int64, error) {
+	if s == nil || s.executionStore == nil {
+		return 0, nil
+	}
+	if olderThan <= 0 {
+		return 0, nil
+	}
+	return s.executionStore.Prune(ctx, olderThan)
+}
+
 // RunJob executes a specific cron job by id and updates its schedule metadata.
 func (s *Scheduler) RunJob(ctx context.Context, id string) error {
 	if s == nil {
@@ -272,7 +355,6 @@ func (s *Scheduler) RunJob(ctx context.Context, id string) error {
 		return errors.New("job id required")
 	}
 
-	now := s.now()
 	var target *Job
 	s.mu.Lock()
 	for _, job := range s.jobs {
@@ -281,36 +363,11 @@ func (s *Scheduler) RunJob(ctx context.Context, id string) error {
 			break
 		}
 	}
+	s.mu.Unlock()
 	if target == nil {
-		s.mu.Unlock()
 		return fmt.Errorf("job not found")
 	}
-	target.LastRun = now
-	schedule := target.Schedule
-	s.mu.Unlock()
-
-	err := s.executeJob(ctx, target)
-	next, ok, nextErr := schedule.Next(now)
-
-	s.mu.Lock()
-	if err != nil {
-		target.LastError = err.Error()
-	} else {
-		target.LastError = ""
-	}
-	if nextErr != nil {
-		target.LastError = nextErr.Error()
-		target.NextRun = time.Time{}
-		target.Enabled = false
-	} else if ok {
-		target.NextRun = next
-	} else {
-		target.NextRun = time.Time{}
-		target.Enabled = false
-	}
-	s.mu.Unlock()
-
-	return err
+	return s.runJob(ctx, target, s.now())
 }
 
 func (s *Scheduler) runDue(ctx context.Context) int {
@@ -330,38 +387,127 @@ func (s *Scheduler) runDue(ctx context.Context) int {
 			s.mu.Unlock()
 			continue
 		}
-		job.LastRun = now
-		schedule := job.Schedule
-		jobID := job.ID
 		s.mu.Unlock()
 
-		err := s.executeJob(ctx, job)
+		err := s.runJob(ctx, job, now)
 		if err != nil {
-			s.logger.Warn("cron job failed", "id", jobID, "error", err)
+			s.logger.Warn("cron job failed", "id", job.ID, "error", err)
 		}
-
-		next, ok, nextErr := schedule.Next(now)
-
-		s.mu.Lock()
-		if err != nil {
-			job.LastError = err.Error()
-		} else {
-			job.LastError = ""
-		}
-		if nextErr != nil {
-			job.LastError = nextErr.Error()
-			job.NextRun = time.Time{}
-			job.Enabled = false
-		} else if ok {
-			job.NextRun = next
-		} else {
-			job.NextRun = time.Time{}
-			job.Enabled = false
-		}
-		s.mu.Unlock()
 		count++
 	}
 	return count
+}
+
+func (s *Scheduler) runJob(ctx context.Context, job *Job, now time.Time) error {
+	if s == nil || job == nil {
+		return errors.New("job is nil")
+	}
+	s.mu.Lock()
+	job.LastRun = now
+	retryCount := job.RetryCount
+	schedule := job.Schedule
+	s.mu.Unlock()
+
+	exec := s.startExecution(ctx, job, retryCount, now)
+	err := s.executeJob(ctx, job)
+	s.finishExecution(ctx, exec, err, now)
+
+	s.mu.Lock()
+	if err != nil {
+		job.LastError = err.Error()
+	} else {
+		job.LastError = ""
+	}
+	next, disable, nextErr := s.nextRunForJob(job, schedule, now, err)
+	if nextErr != nil {
+		job.LastError = nextErr.Error()
+		job.NextRun = time.Time{}
+		job.Enabled = false
+	} else if disable {
+		job.NextRun = time.Time{}
+		job.Enabled = false
+	} else {
+		job.NextRun = next
+	}
+	s.mu.Unlock()
+
+	return err
+}
+
+func (s *Scheduler) startExecution(ctx context.Context, job *Job, retryCount int, startedAt time.Time) *JobExecution {
+	if s == nil || s.executionStore == nil || job == nil {
+		return nil
+	}
+	exec := &JobExecution{
+		ID:        uuid.NewString(),
+		JobID:     job.ID,
+		Status:    ExecutionRunning,
+		StartedAt: startedAt,
+		Retry:     retryCount,
+	}
+	if err := s.executionStore.Create(ctx, exec); err != nil && s.logger != nil {
+		s.logger.Warn("cron execution create failed", "job_id", job.ID, "error", err)
+	}
+	return exec
+}
+
+func (s *Scheduler) finishExecution(ctx context.Context, exec *JobExecution, err error, finishedAt time.Time) {
+	if s == nil || s.executionStore == nil || exec == nil {
+		return
+	}
+	exec.CompletedAt = finishedAt
+	exec.Duration = finishedAt.Sub(exec.StartedAt)
+	if err != nil {
+		exec.Status = ExecutionFailed
+		exec.Error = err.Error()
+	} else {
+		exec.Status = ExecutionSucceeded
+		exec.Error = ""
+	}
+	if updateErr := s.executionStore.Update(ctx, exec); updateErr != nil && s.logger != nil {
+		s.logger.Warn("cron execution update failed", "job_id", exec.JobID, "error", updateErr)
+	}
+}
+
+func (s *Scheduler) nextRunForJob(job *Job, schedule Schedule, now time.Time, err error) (time.Time, bool, error) {
+	if job == nil {
+		return time.Time{}, true, errors.New("job is nil")
+	}
+	if err != nil {
+		maxRetries := job.Retry.MaxRetries
+		if maxRetries > 0 && job.RetryCount < maxRetries {
+			job.RetryCount++
+			return now.Add(retryDelay(job.Retry, job.RetryCount)), false, nil
+		}
+	}
+	job.RetryCount = 0
+	next, ok, nextErr := schedule.Next(now)
+	if nextErr != nil {
+		return time.Time{}, true, nextErr
+	}
+	if ok {
+		return next, false, nil
+	}
+	return time.Time{}, true, nil
+}
+
+func retryDelay(cfg config.CronRetryConfig, attempt int) time.Duration {
+	if attempt <= 0 {
+		attempt = 1
+	}
+	backoff := cfg.Backoff
+	if backoff <= 0 {
+		backoff = 5 * time.Second
+	}
+	delay := backoff
+	if attempt > 1 {
+		factor := 1 << (attempt - 1)
+		delay = time.Duration(factor) * backoff
+	}
+	if cfg.MaxBackoff > 0 && delay > cfg.MaxBackoff {
+		return cfg.MaxBackoff
+	}
+	return delay
 }
 
 func (s *Scheduler) buildJob(cfg config.CronJobConfig, now time.Time) (*Job, error) {
@@ -390,6 +536,9 @@ func (s *Scheduler) buildJob(cfg config.CronJobConfig, now time.Time) (*Job, err
 		}
 		if strings.TrimSpace(cfg.Message.Content) == "" && strings.TrimSpace(cfg.Message.Template) == "" {
 			return nil, fmt.Errorf("message job missing content")
+		}
+		if len(cfg.Message.Tools) > 0 {
+			return nil, fmt.Errorf("message job cannot set tools")
 		}
 	case JobTypeAgent:
 		if cfg.Message == nil {
@@ -428,6 +577,7 @@ func (s *Scheduler) buildJob(cfg config.CronJobConfig, now time.Time) (*Job, err
 		Message:  cfg.Message,
 		Webhook:  cfg.Webhook,
 		Custom:   cfg.Custom,
+		Retry:    cfg.Retry,
 		NextRun:  next,
 	}, nil
 }
@@ -534,6 +684,9 @@ func (s *Scheduler) executeWebhook(ctx context.Context, job *Job) error {
 	for key, value := range cfg.Headers {
 		req.Header.Set(key, value)
 	}
+	if err := applyWebhookAuth(req, cfg.Auth); err != nil {
+		return err
+	}
 
 	client := s.httpClient
 	if client == nil {
@@ -558,6 +711,42 @@ func (s *Scheduler) executeWebhook(ctx context.Context, job *Job) error {
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("webhook returned status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func applyWebhookAuth(req *http.Request, auth *config.CronWebhookAuth) error {
+	if req == nil || auth == nil {
+		return nil
+	}
+	authType := strings.ToLower(strings.TrimSpace(auth.Type))
+	switch authType {
+	case "":
+		return errors.New("webhook auth type is required")
+	case "bearer":
+		token := strings.TrimSpace(auth.Token)
+		if token == "" {
+			return errors.New("webhook bearer token is required")
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+	case "basic":
+		user := strings.TrimSpace(auth.User)
+		if user == "" {
+			return errors.New("webhook basic auth user is required")
+		}
+		req.SetBasicAuth(user, auth.Pass)
+	case "api_key":
+		header := strings.TrimSpace(auth.Header)
+		if header == "" {
+			return errors.New("webhook api_key header is required")
+		}
+		token := strings.TrimSpace(auth.Token)
+		if token == "" {
+			return errors.New("webhook api_key token is required")
+		}
+		req.Header.Set(header, token)
+	default:
+		return fmt.Errorf("unsupported webhook auth type %q", auth.Type)
 	}
 	return nil
 }

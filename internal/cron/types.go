@@ -37,10 +37,12 @@ type Job struct {
 	Message *config.CronMessageConfig
 	Webhook *config.CronWebhookConfig
 	Custom  *config.CronCustomConfig
+	Retry   config.CronRetryConfig
 
-	NextRun   time.Time
-	LastRun   time.Time
-	LastError string
+	NextRun    time.Time
+	LastRun    time.Time
+	LastError  string
+	RetryCount int
 }
 
 // MessageSender executes outbound cron message jobs.

@@ -3,6 +3,8 @@ package cron
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +14,11 @@ import (
 )
 
 func testScheduler(t *testing.T) *croncore.Scheduler {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(server.Close)
+
 	cfg := config.CronConfig{
 		Enabled: true,
 		Jobs: []config.CronJobConfig{
@@ -25,12 +32,12 @@ func testScheduler(t *testing.T) *croncore.Scheduler {
 					Timezone: "UTC",
 				},
 				Webhook: &config.CronWebhookConfig{
-					URL: "http://example.com",
+					URL: server.URL,
 				},
 			},
 		},
 	}
-	scheduler, err := croncore.NewScheduler(cfg)
+	scheduler, err := croncore.NewScheduler(cfg, croncore.WithHTTPClient(server.Client()))
 	if err != nil {
 		t.Fatalf("scheduler: %v", err)
 	}
@@ -198,6 +205,79 @@ func TestCronToolRun_JobNotFound(t *testing.T) {
 	}
 	if !result.IsError {
 		t.Error("expected error for nonexistent job")
+	}
+}
+
+func TestCronToolRegisterAndUnregister(t *testing.T) {
+	scheduler := testScheduler(t)
+	tool := NewTool(scheduler)
+	now := time.Now().Add(1 * time.Hour).UTC().Format(time.RFC3339)
+	params, _ := json.Marshal(map[string]interface{}{
+		"action": "register",
+		"job": map[string]interface{}{
+			"id":      "job2",
+			"name":    "test",
+			"type":    "webhook",
+			"enabled": true,
+			"schedule": map[string]interface{}{
+				"at": now,
+			},
+			"webhook": map[string]interface{}{
+				"url": "http://example.com",
+			},
+		},
+	})
+	result, err := tool.Execute(context.Background(), params)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", result.Content)
+	}
+
+	unregisterParams, _ := json.Marshal(map[string]interface{}{
+		"action": "unregister",
+		"id":     "job2",
+	})
+	result, err = tool.Execute(context.Background(), unregisterParams)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", result.Content)
+	}
+}
+
+func TestCronToolExecutionsAndPrune(t *testing.T) {
+	scheduler := testScheduler(t)
+	tool := NewTool(scheduler)
+	_, _ = tool.Execute(context.Background(), json.RawMessage(`{"action":"run","id":"job1"}`))
+
+	listParams, _ := json.Marshal(map[string]interface{}{
+		"action": "executions",
+		"job_id": "job1",
+	})
+	result, err := tool.Execute(context.Background(), listParams)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", result.Content)
+	}
+	if !strings.Contains(result.Content, "job1") {
+		t.Fatalf("expected executions to include job1: %s", result.Content)
+	}
+
+	pruneParams, _ := json.Marshal(map[string]interface{}{
+		"action":     "prune",
+		"older_than": "1ms",
+	})
+	result, err = tool.Execute(context.Background(), pruneParams)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", result.Content)
 	}
 }
 

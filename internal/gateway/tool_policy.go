@@ -21,6 +21,17 @@ func toolPolicyFromAgent(agentModel *models.Agent) *policy.Policy {
 	return toolPolicy
 }
 
+func toolPolicyFromMessage(msg *models.Message) *policy.Policy {
+	if msg == nil || len(msg.Metadata) == 0 {
+		return nil
+	}
+	raw, ok := msg.Metadata["tool_policy"]
+	if !ok || raw == nil {
+		return nil
+	}
+	return parseToolPolicy(raw)
+}
+
 func parseAgentToolPolicy(cfg map[string]any) *policy.Policy {
 	if len(cfg) == 0 {
 		return nil
@@ -28,6 +39,27 @@ func parseAgentToolPolicy(cfg map[string]any) *policy.Policy {
 	raw, ok := cfg["tool_policy"]
 	if !ok || raw == nil {
 		return nil
+	}
+	return parseToolPolicy(raw)
+}
+
+func parseToolPolicy(raw any) *policy.Policy {
+	if raw == nil {
+		return nil
+	}
+	switch value := raw.(type) {
+	case policy.Policy:
+		return &value
+	case *policy.Policy:
+		return value
+	case map[string]any:
+		if len(value) == 0 {
+			return nil
+		}
+	case map[string]string:
+		if len(value) == 0 {
+			return nil
+		}
 	}
 	payload, err := json.Marshal(raw)
 	if err != nil {

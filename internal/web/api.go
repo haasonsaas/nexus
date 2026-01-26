@@ -156,6 +156,10 @@ type CronJobSummary struct {
 	LastError string    `json:"last_error,omitempty"`
 }
 
+type cronExecutionsResponse struct {
+	Executions []*cron.JobExecution `json:"executions"`
+}
+
 // SkillSummary is a UI-friendly skill snapshot.
 type SkillSummary struct {
 	Name        string `json:"name"`
@@ -686,6 +690,36 @@ func (h *Handler) apiCron(w http.ResponseWriter, r *http.Request) {
 		"enabled": h.config != nil && h.config.GatewayConfig != nil && h.config.GatewayConfig.Cron.Enabled,
 		"jobs":    jobs,
 	})
+}
+
+// apiCronExecutions handles GET /api/cron/executions.
+func (h *Handler) apiCronExecutions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h.config == nil || h.config.CronScheduler == nil {
+		h.jsonResponse(w, cronExecutionsResponse{})
+		return
+	}
+	jobID := strings.TrimSpace(r.URL.Query().Get("job_id"))
+	limit := parseIntParam(r, "limit", 50)
+	if limit < 1 || limit > 200 {
+		limit = 50
+	}
+	offset := parseIntParam(r, "offset", 0)
+	if offset < 0 {
+		offset = 0
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	executions, err := h.config.CronScheduler.Executions(ctx, jobID, limit, offset)
+	if err != nil {
+		h.jsonError(w, "Failed to fetch cron executions", http.StatusInternalServerError)
+		return
+	}
+	h.jsonResponse(w, cronExecutionsResponse{Executions: executions})
 }
 
 // apiSkills handles GET /api/skills.

@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/haasonsaas/nexus/internal/agent"
+	"github.com/haasonsaas/nexus/internal/config"
 	croncore "github.com/haasonsaas/nexus/internal/cron"
 )
 
@@ -23,7 +25,7 @@ func NewTool(scheduler *croncore.Scheduler) *Tool {
 func (t *Tool) Name() string { return "cron" }
 
 func (t *Tool) Description() string {
-	return "Inspect and trigger configured cron jobs (list/status/run)."
+	return "Inspect and manage cron jobs (list/status/run/register/unregister/executions/prune)."
 }
 
 func (t *Tool) Schema() json.RawMessage {
@@ -32,11 +34,31 @@ func (t *Tool) Schema() json.RawMessage {
 		"properties": map[string]interface{}{
 			"action": map[string]interface{}{
 				"type":        "string",
-				"description": "Action: list, status, run.",
+				"description": "Action: list, status, run, register, unregister, executions, prune.",
 			},
 			"id": map[string]interface{}{
 				"type":        "string",
-				"description": "Job id for run action.",
+				"description": "Job id for run/unregister actions.",
+			},
+			"job": map[string]interface{}{
+				"type":        "object",
+				"description": "Cron job configuration for register action.",
+			},
+			"job_id": map[string]interface{}{
+				"type":        "string",
+				"description": "Job id for executions action.",
+			},
+			"limit": map[string]interface{}{
+				"type":        "integer",
+				"description": "Limit for executions action.",
+			},
+			"offset": map[string]interface{}{
+				"type":        "integer",
+				"description": "Offset for executions action.",
+			},
+			"older_than": map[string]interface{}{
+				"type":        "string",
+				"description": "Duration (e.g. 24h) for pruning execution history.",
 			},
 		},
 		"required": []string{"action"},
@@ -53,8 +75,13 @@ func (t *Tool) Execute(ctx context.Context, params json.RawMessage) (*agent.Tool
 		return toolError("cron scheduler unavailable"), nil
 	}
 	var input struct {
-		Action string `json:"action"`
-		ID     string `json:"id"`
+		Action    string               `json:"action"`
+		ID        string               `json:"id"`
+		JobID     string               `json:"job_id"`
+		Job       config.CronJobConfig `json:"job"`
+		Limit     int                  `json:"limit"`
+		Offset    int                  `json:"offset"`
+		OlderThan string               `json:"older_than"`
 	}
 	if err := json.Unmarshal(params, &input); err != nil {
 		return toolError(fmt.Sprintf("Invalid parameters: %v", err)), nil
@@ -81,6 +108,58 @@ func (t *Tool) Execute(ctx context.Context, params json.RawMessage) (*agent.Tool
 		return jsonResult(map[string]interface{}{
 			"status": "ran",
 			"id":     id,
+		}), nil
+	case "register":
+		if strings.TrimSpace(input.Job.ID) == "" {
+			return toolError("job.id is required"), nil
+		}
+		job, err := t.scheduler.RegisterJob(input.Job)
+		if err != nil {
+			return toolError(fmt.Sprintf("register job: %v", err)), nil
+		}
+		return jsonResult(map[string]interface{}{
+			"status": "registered",
+			"job":    job,
+		}), nil
+	case "unregister":
+		id := strings.TrimSpace(input.ID)
+		if id == "" {
+			return toolError("id is required"), nil
+		}
+		removed := t.scheduler.UnregisterJob(id)
+		if !removed {
+			return toolError("job not found"), nil
+		}
+		return jsonResult(map[string]interface{}{
+			"status": "removed",
+			"id":     id,
+		}), nil
+	case "executions":
+		jobID := strings.TrimSpace(input.JobID)
+		execs, err := t.scheduler.Executions(ctx, jobID, input.Limit, input.Offset)
+		if err != nil {
+			return toolError(fmt.Sprintf("list executions: %v", err)), nil
+		}
+		return jsonResult(map[string]interface{}{
+			"job_id":     jobID,
+			"executions": execs,
+		}), nil
+	case "prune":
+		olderThan := strings.TrimSpace(input.OlderThan)
+		if olderThan == "" {
+			return toolError("older_than is required"), nil
+		}
+		duration, err := time.ParseDuration(olderThan)
+		if err != nil {
+			return toolError(fmt.Sprintf("invalid older_than: %v", err)), nil
+		}
+		count, err := t.scheduler.PruneExecutions(ctx, duration)
+		if err != nil {
+			return toolError(fmt.Sprintf("prune executions: %v", err)), nil
+		}
+		return jsonResult(map[string]interface{}{
+			"status": "pruned",
+			"count":  count,
 		}), nil
 	default:
 		return toolError("unsupported action"), nil

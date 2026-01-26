@@ -319,7 +319,11 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		promptCtx = agent.WithRuntimeOptions(promptCtx, override)
 	}
 	if s.toolPolicyResolver != nil {
-		if toolPolicy := toolPolicyFromAgent(agentModel); toolPolicy != nil {
+		toolPolicy := toolPolicyFromAgent(agentModel)
+		if msgPolicy := toolPolicyFromMessage(msg); msgPolicy != nil {
+			toolPolicy = msgPolicy
+		}
+		if toolPolicy != nil {
 			promptCtx = agent.WithToolPolicy(promptCtx, s.toolPolicyResolver, toolPolicy)
 		}
 	}

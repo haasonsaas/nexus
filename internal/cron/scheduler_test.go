@@ -222,6 +222,131 @@ func TestSchedulerRunsJobWithHeaders(t *testing.T) {
 	}
 }
 
+func TestSchedulerRunsWebhookWithAuth(t *testing.T) {
+	var authHeader string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	now := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	cfg := config.CronConfig{
+		Enabled: true,
+		Jobs: []config.CronJobConfig{
+			{
+				ID:      "job-auth",
+				Name:    "webhook",
+				Type:    "webhook",
+				Enabled: true,
+				Schedule: config.CronScheduleConfig{
+					At: now.Format(time.RFC3339),
+				},
+				Webhook: &config.CronWebhookConfig{
+					URL: server.URL,
+					Auth: &config.CronWebhookAuth{
+						Type:  "bearer",
+						Token: "secret-token",
+					},
+				},
+			},
+		},
+	}
+
+	scheduler, err := NewScheduler(cfg, WithNow(func() time.Time { return now }), WithHTTPClient(server.Client()))
+	if err != nil {
+		t.Fatalf("NewScheduler() error = %v", err)
+	}
+	count := scheduler.RunOnce(context.Background())
+	if count != 1 {
+		t.Fatalf("expected 1 job run, got %d", count)
+	}
+	if authHeader != "Bearer secret-token" {
+		t.Fatalf("expected bearer auth header, got %q", authHeader)
+	}
+}
+
+func TestSchedulerRegisterUnregisterJob(t *testing.T) {
+	scheduler, err := NewScheduler(config.CronConfig{})
+	if err != nil {
+		t.Fatalf("NewScheduler() error = %v", err)
+	}
+	jobCfg := config.CronJobConfig{
+		ID:      "job-1",
+		Name:    "dynamic",
+		Type:    "webhook",
+		Enabled: true,
+		Schedule: config.CronScheduleConfig{
+			Every: time.Hour,
+		},
+		Webhook: &config.CronWebhookConfig{URL: "http://example.com"},
+	}
+	job, err := scheduler.RegisterJob(jobCfg)
+	if err != nil {
+		t.Fatalf("RegisterJob() error = %v", err)
+	}
+	if job == nil || job.ID != "job-1" {
+		t.Fatalf("expected job to be registered")
+	}
+	if len(scheduler.Jobs()) != 1 {
+		t.Fatalf("expected 1 job, got %d", len(scheduler.Jobs()))
+	}
+	if !scheduler.UnregisterJob("job-1") {
+		t.Fatal("expected job to be removed")
+	}
+	if len(scheduler.Jobs()) != 0 {
+		t.Fatalf("expected 0 jobs after removal")
+	}
+}
+
+func TestSchedulerRetrySchedulesNextRun(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	cfg := config.CronConfig{
+		Enabled: true,
+		Jobs: []config.CronJobConfig{
+			{
+				ID:      "job-retry",
+				Name:    "retry",
+				Type:    "webhook",
+				Enabled: true,
+				Schedule: config.CronScheduleConfig{
+					At: now.Format(time.RFC3339),
+				},
+				Webhook: &config.CronWebhookConfig{URL: server.URL},
+				Retry: config.CronRetryConfig{
+					MaxRetries: 2,
+					Backoff:    time.Minute,
+				},
+			},
+		},
+	}
+
+	scheduler, err := NewScheduler(cfg, WithNow(func() time.Time { return now }), WithHTTPClient(server.Client()))
+	if err != nil {
+		t.Fatalf("NewScheduler() error = %v", err)
+	}
+	count := scheduler.RunOnce(context.Background())
+	if count != 1 {
+		t.Fatalf("expected 1 job run, got %d", count)
+	}
+	jobs := scheduler.Jobs()
+	if len(jobs) != 1 {
+		t.Fatalf("expected 1 job, got %d", len(jobs))
+	}
+	if jobs[0].RetryCount != 1 {
+		t.Fatalf("expected retry count 1, got %d", jobs[0].RetryCount)
+	}
+	expectedNext := now.Add(time.Minute)
+	if !jobs[0].NextRun.Equal(expectedNext) {
+		t.Fatalf("expected next run %v, got %v", expectedNext, jobs[0].NextRun)
+	}
+}
+
 func TestSchedulerRunOnce_NoReadyJobs(t *testing.T) {
 	now := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
 	cfg := config.CronConfig{

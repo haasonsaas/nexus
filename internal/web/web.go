@@ -165,6 +165,7 @@ func (h *Handler) setupRoutes() {
 	h.mux.HandleFunc("/api/providers", h.apiProviders)
 	h.mux.HandleFunc("/api/providers/", h.apiProvider)
 	h.mux.HandleFunc("/api/cron", h.apiCron)
+	h.mux.HandleFunc("/api/cron/executions", h.apiCronExecutions)
 	h.mux.HandleFunc("/api/skills", h.apiSkills)
 	h.mux.HandleFunc("/api/skills/refresh", h.apiSkillsRefresh)
 	h.mux.HandleFunc("/api/tools", h.apiTools)

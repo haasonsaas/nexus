@@ -771,11 +771,12 @@ type LLMConfig struct {
 
 // LLMRoutingConfig configures provider routing rules.
 type LLMRoutingConfig struct {
-	Enabled     bool          `yaml:"enabled"`
-	Classifier  string        `yaml:"classifier"`
-	PreferLocal bool          `yaml:"prefer_local"`
-	Rules       []RoutingRule `yaml:"rules"`
-	Fallback    RoutingTarget `yaml:"fallback"`
+	Enabled           bool          `yaml:"enabled"`
+	Classifier        string        `yaml:"classifier"`
+	PreferLocal       bool          `yaml:"prefer_local"`
+	UnhealthyCooldown time.Duration `yaml:"unhealthy_cooldown"`
+	Rules             []RoutingRule `yaml:"rules"`
+	Fallback          RoutingTarget `yaml:"fallback"`
 }
 
 // RoutingRule defines a routing rule.
@@ -1031,6 +1032,7 @@ type CronJobConfig struct {
 	Message  *CronMessageConfig `yaml:"message,omitempty"`
 	Webhook  *CronWebhookConfig `yaml:"webhook,omitempty"`
 	Custom   *CronCustomConfig  `yaml:"custom,omitempty"`
+	Retry    CronRetryConfig    `yaml:"retry"`
 }
 
 // CronScheduleConfig defines when a job runs.
@@ -1048,6 +1050,7 @@ type CronMessageConfig struct {
 	Content   string         `yaml:"content"`
 	Template  string         `yaml:"template"`
 	Data      map[string]any `yaml:"data"`
+	Tools     []string       `yaml:"tools,omitempty"`
 }
 
 // CronWebhookConfig defines a webhook job payload.
@@ -1057,12 +1060,29 @@ type CronWebhookConfig struct {
 	Headers map[string]string `yaml:"headers"`
 	Body    string            `yaml:"body"`
 	Timeout time.Duration     `yaml:"timeout"`
+	Auth    *CronWebhookAuth  `yaml:"auth,omitempty"`
+}
+
+// CronWebhookAuth defines authentication for webhook jobs.
+type CronWebhookAuth struct {
+	Type   string `yaml:"type"`
+	Token  string `yaml:"token,omitempty"`
+	User   string `yaml:"user,omitempty"`
+	Pass   string `yaml:"pass,omitempty"`
+	Header string `yaml:"header,omitempty"`
 }
 
 // CronCustomConfig defines a custom cron job payload.
 type CronCustomConfig struct {
 	Handler string         `yaml:"handler"`
 	Args    map[string]any `yaml:"args"`
+}
+
+// CronRetryConfig controls retry behavior for cron jobs.
+type CronRetryConfig struct {
+	MaxRetries int           `yaml:"max_retries"`
+	Backoff    time.Duration `yaml:"backoff"`
+	MaxBackoff time.Duration `yaml:"max_backoff"`
 }
 
 // TasksConfig configures the scheduled tasks system.
@@ -2599,10 +2619,43 @@ func validateConfig(cfg *Config) error {
 			if strings.TrimSpace(job.Schedule.Cron) == "" && job.Schedule.Every == 0 && strings.TrimSpace(job.Schedule.At) == "" {
 				issues = append(issues, fmt.Sprintf("cron.jobs[%d].schedule is required", i))
 			}
+			if job.Retry.MaxRetries < 0 {
+				issues = append(issues, fmt.Sprintf("cron.jobs[%d].retry.max_retries must be >= 0", i))
+			}
+			if job.Retry.Backoff < 0 {
+				issues = append(issues, fmt.Sprintf("cron.jobs[%d].retry.backoff must be >= 0", i))
+			}
+			if job.Retry.MaxBackoff < 0 {
+				issues = append(issues, fmt.Sprintf("cron.jobs[%d].retry.max_backoff must be >= 0", i))
+			}
 			switch strings.ToLower(strings.TrimSpace(job.Type)) {
 			case "webhook":
 				if job.Webhook == nil || strings.TrimSpace(job.Webhook.URL) == "" {
 					issues = append(issues, fmt.Sprintf("cron.jobs[%d].webhook.url is required for webhook jobs", i))
+				}
+				if job.Webhook != nil && job.Webhook.Auth != nil {
+					authType := strings.ToLower(strings.TrimSpace(job.Webhook.Auth.Type))
+					switch authType {
+					case "bearer":
+						if strings.TrimSpace(job.Webhook.Auth.Token) == "" {
+							issues = append(issues, fmt.Sprintf("cron.jobs[%d].webhook.auth.token is required for bearer auth", i))
+						}
+					case "basic":
+						if strings.TrimSpace(job.Webhook.Auth.User) == "" {
+							issues = append(issues, fmt.Sprintf("cron.jobs[%d].webhook.auth.user is required for basic auth", i))
+						}
+					case "api_key":
+						if strings.TrimSpace(job.Webhook.Auth.Token) == "" {
+							issues = append(issues, fmt.Sprintf("cron.jobs[%d].webhook.auth.token is required for api_key auth", i))
+						}
+						if strings.TrimSpace(job.Webhook.Auth.Header) == "" {
+							issues = append(issues, fmt.Sprintf("cron.jobs[%d].webhook.auth.header is required for api_key auth", i))
+						}
+					case "":
+						issues = append(issues, fmt.Sprintf("cron.jobs[%d].webhook.auth.type is required", i))
+					default:
+						issues = append(issues, fmt.Sprintf("cron.jobs[%d].webhook.auth.type must be bearer, basic, or api_key", i))
+					}
 				}
 			case "message":
 				if job.Message == nil {
@@ -2614,6 +2667,9 @@ func validateConfig(cfg *Config) error {
 				}
 				if strings.TrimSpace(job.Message.Content) == "" && strings.TrimSpace(job.Message.Template) == "" {
 					issues = append(issues, fmt.Sprintf("cron.jobs[%d].message.content or template is required for message jobs", i))
+				}
+				if len(job.Message.Tools) > 0 {
+					issues = append(issues, fmt.Sprintf("cron.jobs[%d].message.tools only applies to agent jobs", i))
 				}
 			case "agent":
 				if job.Message == nil {
@@ -2636,6 +2692,9 @@ func validateConfig(cfg *Config) error {
 				issues = append(issues, fmt.Sprintf("cron.jobs[%d].type must be message, agent, webhook, or custom", i))
 			}
 		}
+	}
+	if cfg.LLM.Routing.UnhealthyCooldown < 0 {
+		issues = append(issues, "llm.routing.unhealthy_cooldown must be >= 0")
 	}
 
 	if pluginIssues := pluginValidationIssues(cfg); len(pluginIssues) > 0 {

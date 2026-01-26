@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/haasonsaas/nexus/internal/agent"
 )
@@ -16,6 +18,10 @@ type Router struct {
 	preferLocal     bool
 	localProviders  map[string]struct{}
 	classifier      Classifier
+	fallback        Target
+	failureCooldown time.Duration
+	healthMu        sync.Mutex
+	unhealthy       map[string]time.Time
 }
 
 // Rule defines a routing rule.
@@ -49,6 +55,8 @@ type Config struct {
 	LocalProviders  []string
 	Rules           []Rule
 	Classifier      Classifier
+	Fallback        Target
+	FailureCooldown time.Duration
 }
 
 // NewRouter creates a new Router.
@@ -72,6 +80,9 @@ func NewRouter(cfg Config, providers map[string]agent.LLMProvider) *Router {
 		preferLocal:     cfg.PreferLocal,
 		localProviders:  lp,
 		classifier:      classifier,
+		fallback:        cfg.Fallback,
+		failureCooldown: cfg.FailureCooldown,
+		unhealthy:       make(map[string]time.Time),
 	}
 }
 
@@ -80,26 +91,27 @@ func (r *Router) Complete(ctx context.Context, req *agent.CompletionRequest) (<-
 	if req == nil {
 		return nil, errInvalidRequest("request is nil")
 	}
-	providerName, model := r.selectProvider(req)
-	provider := r.lookupProvider(providerName)
-	if provider == nil {
-		provider = r.lookupProvider(r.defaultProvider)
+	candidates, err := r.candidates(req)
+	if err != nil {
+		return nil, err
 	}
-	if provider == nil {
-		return nil, errInvalidRequest("no providers configured")
+	var lastErr error
+	for _, candidate := range candidates {
+		copyReq := *req
+		if copyReq.Model == "" && candidate.model != "" {
+			copyReq.Model = candidate.model
+		}
+		stream, err := candidate.provider.Complete(ctx, &copyReq)
+		if err == nil {
+			return stream, nil
+		}
+		r.markUnhealthy(candidate.name)
+		lastErr = err
 	}
-	if len(req.Tools) > 0 && !provider.SupportsTools() {
-		provider = r.findToolProvider()
+	if lastErr != nil {
+		return nil, lastErr
 	}
-	if provider == nil {
-		return nil, errInvalidRequest("no tool-capable providers available")
-	}
-
-	copyReq := *req
-	if copyReq.Model == "" && model != "" {
-		copyReq.Model = model
-	}
-	return provider.Complete(ctx, &copyReq)
+	return nil, errInvalidRequest("no providers configured")
 }
 
 // Name returns the router name.
@@ -134,6 +146,105 @@ func (r *Router) SupportsTools() bool {
 		}
 	}
 	return false
+}
+
+type candidate struct {
+	provider agent.LLMProvider
+	model    string
+	name     string
+}
+
+func (r *Router) candidates(req *agent.CompletionRequest) ([]candidate, error) {
+	if r == nil {
+		return nil, errInvalidRequest("no providers configured")
+	}
+	providerName, model := r.selectProvider(req)
+	seen := make(map[string]struct{})
+	var candidates []candidate
+	r.appendCandidate(&candidates, seen, providerName, model)
+	r.appendCandidate(&candidates, seen, r.fallback.Provider, r.fallback.Model)
+	r.appendCandidate(&candidates, seen, r.defaultProvider, "")
+
+	if len(req.Tools) > 0 {
+		filtered := make([]candidate, 0, len(candidates))
+		for _, candidate := range candidates {
+			if candidate.provider != nil && candidate.provider.SupportsTools() {
+				filtered = append(filtered, candidate)
+			}
+		}
+		if len(filtered) == 0 {
+			toolProvider := r.findToolProvider()
+			if toolProvider != nil {
+				filtered = append(filtered, candidate{provider: toolProvider, name: toolProvider.Name()})
+			}
+		}
+		candidates = filtered
+	}
+
+	if len(candidates) == 0 {
+		if len(req.Tools) > 0 {
+			return nil, errInvalidRequest("no tool-capable providers available")
+		}
+		return nil, errInvalidRequest("no providers configured")
+	}
+	return candidates, nil
+}
+
+func (r *Router) appendCandidate(list *[]candidate, seen map[string]struct{}, name string, model string) {
+	if r == nil {
+		return
+	}
+	normalized := normalizeID(name)
+	if normalized == "" {
+		return
+	}
+	if _, ok := seen[normalized]; ok {
+		return
+	}
+	if !r.isHealthy(normalized) {
+		return
+	}
+	provider := r.lookupProvider(normalized)
+	if provider == nil {
+		return
+	}
+	seen[normalized] = struct{}{}
+	*list = append(*list, candidate{provider: provider, model: model, name: normalized})
+}
+
+func (r *Router) isHealthy(name string) bool {
+	if r == nil || r.failureCooldown <= 0 {
+		return true
+	}
+	name = normalizeID(name)
+	if name == "" {
+		return true
+	}
+	cutoff := time.Now()
+	r.healthMu.Lock()
+	defer r.healthMu.Unlock()
+	until, ok := r.unhealthy[name]
+	if !ok {
+		return true
+	}
+	if cutoff.After(until) {
+		delete(r.unhealthy, name)
+		return true
+	}
+	return false
+}
+
+func (r *Router) markUnhealthy(name string) {
+	if r == nil || r.failureCooldown <= 0 {
+		return
+	}
+	name = normalizeID(name)
+	if name == "" {
+		return
+	}
+	r.healthMu.Lock()
+	r.unhealthy[name] = time.Now().Add(r.failureCooldown)
+	r.healthMu.Unlock()
 }
 
 func (r *Router) selectProvider(req *agent.CompletionRequest) (string, string) {

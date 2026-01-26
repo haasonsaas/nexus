@@ -472,6 +472,7 @@ llm:
     enabled: false
     classifier: heuristic
     prefer_local: false
+    # unhealthy_cooldown: 30s
     # rules:
     #   - name: quick
     #     match:
@@ -710,6 +711,13 @@ cron:
   #     channel: slack
   #     channel_id: C123456
   #     content: "Generate a weekly digest of key discussions and action items."
+  #     # tools:
+  #     #   - web_search
+  #     #   - read
+  #   # retry:
+  #   #   max_retries: 2
+  #   #   backoff: 30s
+  #   #   max_backoff: 5m
   #
   # - id: ping-webhook
   #   name: Ping webhook
@@ -724,6 +732,9 @@ cron:
   #       Content-Type: application/json
   #     body: '{"source":"nexus"}'
   #     timeout: 30s
+  #     # auth:
+  #     #   type: bearer
+  #     #   token: "${WEBHOOK_TOKEN}"
   #
   # - id: nightly-maintenance
   #   name: Custom maintenance job

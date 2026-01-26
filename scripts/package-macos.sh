@@ -57,7 +57,9 @@ TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 log "Building Swift binaries"
+swift build --package-path "$SWIFT_PACKAGE_DIR" -c release --arch arm64
 SWIFT_ARM_BIN_PATH="$(swift build --package-path "$SWIFT_PACKAGE_DIR" -c release --arch arm64 --show-bin-path)"
+swift build --package-path "$SWIFT_PACKAGE_DIR" -c release --arch x86_64
 SWIFT_X86_BIN_PATH="$(swift build --package-path "$SWIFT_PACKAGE_DIR" -c release --arch x86_64 --show-bin-path)"
 
 SWIFT_ARM_BIN="${SWIFT_ARM_BIN_PATH}/NexusMac"

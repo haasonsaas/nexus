@@ -45,11 +45,12 @@ Wrap plugin entrypoints in a sandbox runner that:
 - Enforces CPU/memory/timeouts
 
 ### Config
-Add a dedicated plugin isolation config (avoid colliding with legacy `plugins.sandbox -> tools.sandbox` migrations):
+Config lives under `plugins.isolation` (intentionally not `plugins.sandbox`):
 - `enabled`
-- `backend` (docker/firecracker)
+- `backend` (docker | firecracker)
 - `network_enabled`
-- `limits` (cpu, memory, timeout)
+- `timeout`
+- `limits` (`max_cpu`, `max_memory`)
 
 ### Failure Modes
 - If sandbox fails to start, skip plugin and log a warning.

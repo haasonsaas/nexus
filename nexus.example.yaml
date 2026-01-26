@@ -598,6 +598,15 @@ plugins:
   # Optional plugin manifest search paths
   load:
     paths: []
+  # Optional (future): run third-party plugins out-of-process (issue #97)
+  isolation:
+    enabled: false
+    backend: docker # docker | firecracker
+    network_enabled: false
+    timeout: 30s
+    limits:
+      max_cpu: 1000 # millicores
+      max_memory: 256MB
   # Example plugin entry
   # entries:
   #   voice-call:

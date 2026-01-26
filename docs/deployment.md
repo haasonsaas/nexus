@@ -332,6 +332,14 @@ data:
     plugins:
       load:
         paths: []
+      isolation:
+        enabled: false
+        backend: docker
+        network_enabled: false
+        timeout: 30s
+        limits:
+          max_cpu: 1000
+          max_memory: 256MB
       entries: {}
 
     logging:

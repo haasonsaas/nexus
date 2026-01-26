@@ -55,6 +55,11 @@ plugins:
 
 `path` may point at a directory containing the manifest + `.so`, the manifest file itself, or a direct `.so` path.
 
+### Isolation (Future)
+
+The `plugins.isolation` config block is reserved for out-of-process plugin execution (Docker / Firecracker). Today, it only
+controls config parsing; true isolation is still tracked in issue #97.
+
 ## Security Notes
 
 Capability allowlists do not provide isolation (plugins are still in-process). Issue #97 tracks true sandboxing (out-of-process

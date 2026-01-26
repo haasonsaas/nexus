@@ -372,8 +372,9 @@ type UserConfig struct {
 }
 
 type PluginsConfig struct {
-	Load    PluginLoadConfig             `yaml:"load"`
-	Entries map[string]PluginEntryConfig `yaml:"entries"`
+	Load      PluginLoadConfig             `yaml:"load"`
+	Entries   map[string]PluginEntryConfig `yaml:"entries"`
+	Isolation PluginIsolationConfig        `yaml:"isolation"`
 }
 
 type PluginLoadConfig struct {
@@ -384,6 +385,15 @@ type PluginEntryConfig struct {
 	Enabled bool           `yaml:"enabled"`
 	Path    string         `yaml:"path"`
 	Config  map[string]any `yaml:"config"`
+}
+
+// PluginIsolationConfig configures (future) out-of-process plugin execution.
+type PluginIsolationConfig struct {
+	Enabled        bool           `yaml:"enabled"`
+	Backend        string         `yaml:"backend"` // docker | firecracker
+	NetworkEnabled bool           `yaml:"network_enabled"`
+	Timeout        time.Duration  `yaml:"timeout"`
+	Limits         ResourceLimits `yaml:"limits"`
 }
 
 // MarketplaceConfig configures the plugin marketplace.

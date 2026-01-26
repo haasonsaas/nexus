@@ -247,7 +247,7 @@ func (g *grpcService) resolveSession(ctx context.Context, req *proto.SendMessage
 	if agentID == "" {
 		agentID = "main"
 	}
-	key := sessions.SessionKey(agentID, models.ChannelAPI, channelID)
+	key := g.server.buildSessionKeyForPeer(agentID, models.ChannelAPI, channelID)
 	session, err := g.server.sessions.GetOrCreate(ctx, key, agentID, models.ChannelAPI, channelID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to create session: %v", err)
@@ -270,7 +270,7 @@ func (g *grpcService) CreateSession(ctx context.Context, req *proto.CreateSessio
 	channelID := req.ChannelId
 	key := req.Key
 	if key == "" {
-		key = sessions.SessionKey(agentID, channel, channelID)
+		key = g.server.buildSessionKeyForPeer(agentID, channel, channelID)
 	}
 	session := &models.Session{
 		AgentID:   agentID,

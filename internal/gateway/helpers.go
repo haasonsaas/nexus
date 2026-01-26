@@ -142,6 +142,20 @@ func (s *Server) buildSessionKey(agentID string, msg *models.Message, channelID 
 	)
 }
 
+func (s *Server) buildSessionKeyForPeer(agentID string, channel models.ChannelType, peerID string) string {
+	if s == nil || s.config == nil || strings.TrimSpace(peerID) == "" {
+		return sessions.SessionKey(agentID, channel, peerID)
+	}
+	return sessions.BuildSessionKey(
+		agentID,
+		channel,
+		peerID,
+		false,
+		s.config.Session.Scoping.DMScope,
+		s.config.Session.Scoping.IdentityLinks,
+	)
+}
+
 // enrichMessageWithMedia processes media attachments and adds transcriptions.
 func (s *Server) enrichMessageWithMedia(ctx context.Context, msg *models.Message) {
 	if msg == nil || s.mediaAggregator == nil || s.config == nil || !s.config.Transcription.Enabled {

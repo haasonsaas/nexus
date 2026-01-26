@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/hooks"
+	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/tasks"
 )
 
@@ -269,6 +270,10 @@ func (s *Server) startTaskScheduler(ctx context.Context) error {
 	if s.channels != nil {
 		messageExecutor = NewMessageExecutor(s.channels, MessageExecutorConfig{
 			Sessions: s.sessions,
+			Scoping: sessions.ScopeConfig{
+				DMScope:       s.config.Session.Scoping.DMScope,
+				IdentityLinks: s.config.Session.Scoping.IdentityLinks,
+			},
 			Logger: func(format string, args ...any) {
 				s.logger.Info(fmt.Sprintf(format, args...), "component", "message-executor")
 			},

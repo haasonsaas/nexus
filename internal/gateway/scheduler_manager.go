@@ -99,6 +99,10 @@ func (m *SchedulerManager) StartTaskScheduler(ctx context.Context, runtime *agen
 	if m.channels != nil {
 		messageExecutor = NewMessageExecutor(m.channels, MessageExecutorConfig{
 			Sessions: sessionStore,
+			Scoping: sessions.ScopeConfig{
+				DMScope:       m.config.Session.Scoping.DMScope,
+				IdentityLinks: m.config.Session.Scoping.IdentityLinks,
+			},
 			Logger: func(format string, args ...any) {
 				m.Logger().Info(fmt.Sprintf(format, args...), "component", "message-executor")
 			},

@@ -6,6 +6,7 @@ package gateway
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -67,7 +68,7 @@ func (s *messageService) SendMessage(ctx context.Context, req *proto.ProactiveSe
 		if agentID == "" {
 			agentID = "default"
 		}
-		key := sessions.SessionKey(agentID, channelType, req.PeerId)
+		key := s.server.buildSessionKeyForPeer(agentID, channelType, req.PeerId)
 		session, err := s.server.sessions.GetOrCreate(ctx, key, agentID, channelType, req.PeerId)
 		if err != nil {
 			s.server.logger.Warn("failed to create session for proactive message",
@@ -279,12 +280,14 @@ func (s *Server) SendProactiveMessage(ctx context.Context, channel models.Channe
 type MessageExecutor struct {
 	registry *channels.Registry
 	sessions sessions.Store
+	scoping  sessions.ScopeConfig
 	logger   func(format string, args ...any)
 }
 
 // MessageExecutorConfig configures the message executor.
 type MessageExecutorConfig struct {
 	Sessions sessions.Store
+	Scoping  sessions.ScopeConfig
 	Logger   func(format string, args ...any)
 }
 
@@ -297,6 +300,7 @@ func NewMessageExecutor(registry *channels.Registry, config MessageExecutorConfi
 	return &MessageExecutor{
 		registry: registry,
 		sessions: config.Sessions,
+		scoping:  config.Scoping,
 		logger:   logger,
 	}
 }
@@ -357,6 +361,16 @@ func (e *MessageExecutor) Execute(ctx context.Context, task *tasks.ScheduledTask
 	// Store the message in session if we have a session store
 	if e.sessions != nil {
 		key := sessions.SessionKey(task.AgentID, channelType, peerID)
+		if strings.TrimSpace(peerID) != "" {
+			key = sessions.BuildSessionKey(
+				task.AgentID,
+				channelType,
+				peerID,
+				false,
+				e.scoping.DMScope,
+				e.scoping.IdentityLinks,
+			)
+		}
 		session, err := e.sessions.GetOrCreate(ctx, key, task.AgentID, channelType, peerID)
 		if err == nil {
 			msg.SessionID = session.ID

@@ -552,6 +552,11 @@ func (s *CronScheduler) executeMessageJob(ctx context.Context, job *Job) (string
 
 ### 4.2 Agent Job
 
+**MVP implementation note (as of 2026-01-26):**
+- Agent jobs are supported in the shipped scheduler and use the `message` payload (`content`, optional `channel`/`channel_id`) rather than a dedicated agent block.
+- The gateway `cron.AgentRunner` builds a synthetic inbound message and routes it through standard message handling (default channel is `api` with `cron:<job.ID>` when none is provided).
+- Template rendering and direct runtime invocation shown below are not implemented in the shipped MVP.
+
 ```go
 // internal/cron/executors/agent.go
 
@@ -961,8 +966,8 @@ func (s *DBStore) Save(exec *JobExecution) error {
 - [ ] Template rendering
 
 ### Phase 3: Agent Jobs (Week 3)
-- [ ] Agent job executor
-- [ ] Output routing
+- [x] Agent job executor
+- [x] Output routing
 - [ ] Tool allowlisting for jobs
 - [ ] Error handling & retry
 

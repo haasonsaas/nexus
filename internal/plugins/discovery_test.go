@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -45,5 +46,32 @@ func TestDiscoverManifestsCachesResults(t *testing.T) {
 	}
 	if _, ok := cached["alpha"]; !ok {
 		t.Fatalf("expected cached manifest alpha")
+	}
+}
+
+func TestValidatePluginPath_AllowsDotDotSubstring(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "foo..bar")
+
+	abs, err := ValidatePluginPath(path)
+	if err != nil {
+		t.Fatalf("ValidatePluginPath(%q) error = %v", path, err)
+	}
+	if !filepath.IsAbs(abs) {
+		t.Fatalf("ValidatePluginPath(%q) = %q; expected absolute path", path, abs)
+	}
+	if abs != filepath.Clean(abs) {
+		t.Fatalf("ValidatePluginPath(%q) = %q; expected cleaned path", path, abs)
+	}
+}
+
+func TestValidatePluginPath_RejectsTraversalSegment(t *testing.T) {
+	path := filepath.Join("..", "plugin.so")
+	_, err := ValidatePluginPath(path)
+	if err == nil {
+		t.Fatalf("ValidatePluginPath(%q) expected error", path)
+	}
+	if !errors.Is(err, ErrPathTraversal) {
+		t.Fatalf("ValidatePluginPath(%q) error = %v; expected ErrPathTraversal", path, err)
 	}
 }

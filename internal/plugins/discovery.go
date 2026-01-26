@@ -27,9 +27,9 @@ func ValidatePluginPath(path string) (string, error) {
 	// Clean the path to normalize it
 	cleaned := filepath.Clean(path)
 
-	// Check for path traversal attempts
-	// After cleaning, ".." should not appear in a safe path
-	if strings.Contains(cleaned, "..") {
+	// Check for path traversal attempts.
+	// After cleaning, ".." should not appear as a path segment in a safe path.
+	if containsPathTraversalSegment(cleaned) {
 		return "", fmt.Errorf("%w: path contains '..' after cleaning: %s", ErrPathTraversal, path)
 	}
 
@@ -40,11 +40,20 @@ func ValidatePluginPath(path string) (string, error) {
 	}
 
 	// Re-check the absolute path for any remaining traversal
-	if strings.Contains(absPath, "..") {
+	if containsPathTraversalSegment(absPath) {
 		return "", fmt.Errorf("%w: absolute path contains '..': %s", ErrPathTraversal, absPath)
 	}
 
 	return absPath, nil
+}
+
+func containsPathTraversalSegment(path string) bool {
+	for _, seg := range strings.FieldsFunc(path, func(r rune) bool { return r == '/' || r == '\\' }) {
+		if seg == ".." {
+			return true
+		}
+	}
+	return false
 }
 
 type ManifestInfo struct {

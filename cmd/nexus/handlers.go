@@ -51,6 +51,7 @@ import (
 	"github.com/haasonsaas/nexus/pkg/pluginsdk"
 	pb "github.com/haasonsaas/nexus/pkg/proto"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	"google.golang.org/grpc"
@@ -3755,8 +3756,14 @@ func runChannelsSetup(cmd *cobra.Command, configPath, serverAddr, channel, edgeI
 // promptPassword prompts for a password without showing input.
 func promptPassword(reader *bufio.Reader, label string) string {
 	fmt.Printf("%s: ", label)
-	// In a real implementation, we'd use terminal.ReadPassword
-	// For now, just use regular input (TODO: add terminal package)
+	fd := int(os.Stdin.Fd())
+	if term.IsTerminal(fd) {
+		text, err := term.ReadPassword(fd)
+		fmt.Println()
+		if err == nil {
+			return strings.TrimSpace(string(text))
+		}
+	}
 	text, err := reader.ReadString('\n')
 	if err != nil {
 		return ""

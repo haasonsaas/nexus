@@ -10,6 +10,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  GOMODCACHE: ${{ runner.temp }}/gomodcache
+  GOCACHE: ${{ runner.temp }}/gocache
+
 jobs:
   test:
     runs-on: ubuntu-latest

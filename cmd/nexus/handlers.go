@@ -934,6 +934,162 @@ func runMemoryCompact(cmd *cobra.Command, configPath string) error {
 }
 
 // =============================================================================
+// Sessions Command Handlers
+// =============================================================================
+
+func runSessionsBranchesList(cmd *cobra.Command, configPath, sessionID string, includeArchived bool, limit int) error {
+	configPath = resolveConfigPath(configPath)
+	if strings.TrimSpace(sessionID) == "" {
+		return fmt.Errorf("session-id is required")
+	}
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	store, closeFn, err := openBranchStore(cfg)
+	if err != nil {
+		return err
+	}
+	if closeFn != nil {
+		defer closeFn()
+	}
+
+	opts := sessions.DefaultBranchListOptions()
+	opts.IncludeArchived = includeArchived
+	if limit > 0 {
+		opts.Limit = limit
+	}
+
+	branches, err := store.ListBranches(cmd.Context(), sessionID, opts)
+	if err != nil {
+		return fmt.Errorf("list branches: %w", err)
+	}
+	if len(branches) == 0 {
+		fmt.Fprintln(cmd.OutOrStdout(), "No branches found.")
+		return nil
+	}
+
+	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
+	fmt.Fprintln(w, "ID\tNAME\tSTATUS\tPARENT\tPOINT\tPRIMARY\tUPDATED")
+	for _, branch := range branches {
+		parent := "-"
+		if branch.ParentBranchID != nil {
+			parent = *branch.ParentBranchID
+		}
+		updated := branch.UpdatedAt.Format(time.RFC3339)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%t\t%s\n",
+			branch.ID, branch.Name, branch.Status, parent, branch.BranchPoint, branch.IsPrimary, updated)
+	}
+	return w.Flush()
+}
+
+func runSessionsBranchesFork(cmd *cobra.Command, configPath, parentBranchID, name string, branchPoint int64) error {
+	configPath = resolveConfigPath(configPath)
+	if strings.TrimSpace(parentBranchID) == "" {
+		return fmt.Errorf("parent is required")
+	}
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("name is required")
+	}
+	if branchPoint < 0 {
+		return fmt.Errorf("point is required")
+	}
+
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	store, closeFn, err := openBranchStore(cfg)
+	if err != nil {
+		return err
+	}
+	if closeFn != nil {
+		defer closeFn()
+	}
+
+	branch, err := store.ForkBranch(cmd.Context(), parentBranchID, branchPoint, name)
+	if err != nil {
+		return fmt.Errorf("fork branch: %w", err)
+	}
+
+	fmt.Fprintf(cmd.OutOrStdout(), "Created branch %s (session %s)\n", branch.ID, branch.SessionID)
+	return nil
+}
+
+func runSessionsBranchesTree(cmd *cobra.Command, configPath, sessionID string) error {
+	configPath = resolveConfigPath(configPath)
+	if strings.TrimSpace(sessionID) == "" {
+		return fmt.Errorf("session-id is required")
+	}
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	store, closeFn, err := openBranchStore(cfg)
+	if err != nil {
+		return err
+	}
+	if closeFn != nil {
+		defer closeFn()
+	}
+
+	tree, err := store.GetBranchTree(cmd.Context(), sessionID)
+	if err != nil {
+		if errors.Is(err, sessions.ErrBranchNotFound) {
+			fmt.Fprintln(cmd.OutOrStdout(), "No branches found.")
+			return nil
+		}
+		return fmt.Errorf("get branch tree: %w", err)
+	}
+
+	printBranchTree(cmd.OutOrStdout(), tree, 0)
+	return nil
+}
+
+func openBranchStore(cfg *config.Config) (*sessions.CockroachBranchStore, func(), error) {
+	if cfg == nil {
+		return nil, nil, fmt.Errorf("config is required")
+	}
+	if strings.TrimSpace(cfg.Database.URL) == "" {
+		return nil, nil, fmt.Errorf("database.url is required")
+	}
+
+	store, err := sessions.NewCockroachStoreFromDSN(cfg.Database.URL, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("open session store: %w", err)
+	}
+	branchStore := sessions.NewCockroachBranchStore(store.DB())
+	return branchStore, func() {
+		_ = store.Close()
+	}, nil
+}
+
+func printBranchTree(w io.Writer, node *models.BranchTree, indent int) {
+	if node == nil || node.Branch == nil {
+		return
+	}
+	prefix := strings.Repeat("  ", indent)
+	primary := ""
+	if node.Branch.IsPrimary {
+		primary = " primary"
+	}
+	fmt.Fprintf(w, "%s- %s%s (%s) id=%s point=%d\n",
+		prefix,
+		node.Branch.Name,
+		primary,
+		node.Branch.Status,
+		node.Branch.ID,
+		node.Branch.BranchPoint,
+	)
+	for _, child := range node.Children {
+		printBranchTree(w, child, indent+1)
+	}
+}
+
+// =============================================================================
 // RAG Command Handlers
 // =============================================================================
 

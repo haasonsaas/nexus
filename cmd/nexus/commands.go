@@ -466,6 +466,92 @@ func buildMemoryCompactCmd() *cobra.Command {
 }
 
 // =============================================================================
+// Sessions Commands
+// =============================================================================
+
+// buildSessionsCmd creates the "sessions" command group for session tooling.
+func buildSessionsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "sessions",
+		Short: "Manage sessions and branches",
+	}
+	cmd.AddCommand(buildSessionsBranchesCmd())
+	return cmd
+}
+
+func buildSessionsBranchesCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "branches",
+		Short: "Manage session branches",
+	}
+	cmd.AddCommand(
+		buildSessionsBranchesListCmd(),
+		buildSessionsBranchesForkCmd(),
+		buildSessionsBranchesTreeCmd(),
+	)
+	return cmd
+}
+
+func buildSessionsBranchesListCmd() *cobra.Command {
+	var (
+		configPath      string
+		sessionID       string
+		includeArchived bool
+		limit           int
+	)
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List branches for a session",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runSessionsBranchesList(cmd, configPath, sessionID, includeArchived, limit)
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	cmd.Flags().StringVar(&sessionID, "session-id", "", "Session ID to list branches for")
+	cmd.Flags().BoolVar(&includeArchived, "include-archived", false, "Include archived branches")
+	cmd.Flags().IntVar(&limit, "limit", 50, "Max number of branches to return")
+	return cmd
+}
+
+func buildSessionsBranchesForkCmd() *cobra.Command {
+	var (
+		configPath     string
+		parentBranchID string
+		name           string
+		branchPoint    int64
+	)
+	cmd := &cobra.Command{
+		Use:   "fork",
+		Short: "Fork a branch at a sequence point",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runSessionsBranchesFork(cmd, configPath, parentBranchID, name, branchPoint)
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	cmd.Flags().StringVar(&parentBranchID, "parent", "", "Parent branch ID to fork from")
+	cmd.Flags().StringVar(&name, "name", "", "Name for the new branch")
+	cmd.Flags().Int64Var(&branchPoint, "point", -1, "Branch point sequence number in the parent branch")
+	return cmd
+}
+
+func buildSessionsBranchesTreeCmd() *cobra.Command {
+	var (
+		configPath string
+		sessionID  string
+	)
+	cmd := &cobra.Command{
+		Use:   "tree",
+		Short: "Show branch tree for a session",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runSessionsBranchesTree(cmd, configPath, sessionID)
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	cmd.Flags().StringVar(&sessionID, "session-id", "", "Session ID to show branch tree for")
+	return cmd
+}
+
+// =============================================================================
 // RAG Commands
 // =============================================================================
 

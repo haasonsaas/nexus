@@ -342,6 +342,10 @@ data:
           max_memory: 256MB
       entries: {}
 
+    cron:
+      enabled: false
+      jobs: []
+
     logging:
       level: info
       format: json

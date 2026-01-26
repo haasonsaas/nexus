@@ -13,6 +13,48 @@ This document specifies the design for a cron scheduling system in Nexus, suppor
 
 ---
 
+## Current Implementation (MVP, as of 2026-01-26)
+
+The shipped cron system in Nexus is config-driven and implemented in `internal/cron` and `internal/gateway`.
+
+- **Config schema**: `config.CronConfig` / `config.CronJobConfig` in `internal/config/config.go`.
+- **Supported job types**: `message`, `webhook` (agent jobs are parsed but not implemented).
+- **Message jobs**: executed via an injected `cron.MessageSender` (wired in `internal/gateway/server.go` via proactive messaging).
+- **Webhook jobs**: executed with an HTTP client; default method is `POST`; a default timeout of 30 seconds is enforced when `timeout` is unset.
+
+Example configuration:
+
+```yaml
+cron:
+  enabled: true
+  jobs:
+    - id: daily-reminder
+      name: Daily reminder
+      type: message
+      enabled: true
+      schedule:
+        cron: "0 9 * * 1-5"
+        timezone: "America/New_York"
+      message:
+        channel: slack
+        channel_id: U123456
+        content: "Standup in 10 minutes."
+
+    - id: ping-webhook
+      name: Ping webhook
+      type: webhook
+      enabled: true
+      schedule:
+        every: 1h
+      webhook:
+        url: https://example.com/ping
+        method: POST
+        headers:
+          Content-Type: application/json
+        body: "{\"source\":\"nexus\"}"
+        timeout: 30s
+```
+
 ## 1. Architecture
 
 ```
@@ -31,12 +73,12 @@ This document specifies the design for a cron scheduling system in Nexus, suppor
 
 ---
 
-## 2. Data Model
+## 2. Proposed Data Model (Future)
 
 ### 2.1 Job Definition
 
 ```go
-// internal/cron/types.go
+// Proposed shape (not the shipped MVP implementation).
 
 type Job struct {
     ID          string            `json:"id" yaml:"id"`
@@ -433,8 +475,12 @@ func (s *CronScheduler) RunNow(ctx context.Context, jobID string) (*JobExecution
 
 ### 4.1 Message Job
 
+**MVP implementation note (as of 2026-01-26):**
+- Message jobs are supported by the shipped scheduler (`internal/cron/scheduler.go`) but require a configured `MessageSender`.
+- Template rendering and direct channel adapter access shown below are not implemented in the shipped MVP.
+
 ```go
-// internal/cron/executors/message.go
+// Proposed: internal/cron/executors/message.go
 
 func (s *CronScheduler) executeMessageJob(ctx context.Context, job *Job) (string, error) {
     cfg := job.Config.Message
@@ -626,7 +672,7 @@ func (s *CronScheduler) executeWebhookJob(ctx context.Context, job *Job) (string
 
     method := cfg.Method
     if method == "" {
-        method = "GET"
+        method = "POST"
     }
 
     var bodyReader io.Reader
@@ -888,7 +934,7 @@ func (s *DBStore) Save(exec *JobExecution) error {
 - [x] Basic execution tracking (last run + last error)
 
 ### Phase 2: Job Executors (Week 2)
-- [ ] Message job executor
+- [x] Message job executor
 - [x] Webhook job executor
 - [ ] Custom handler system
 - [ ] Template rendering

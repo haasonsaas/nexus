@@ -209,7 +209,7 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		body, err := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
 		if err != nil {
 			body = []byte("(failed to read response body)")
 		}
@@ -315,7 +315,7 @@ func (a *Adapter) authenticate(ctx context.Context) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, err := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
 		if err != nil {
 			body = []byte("(failed to read response body)")
 		}
@@ -445,7 +445,7 @@ func (a *Adapter) getChats(ctx context.Context) ([]Chat, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, err := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
 		if err != nil {
 			body = []byte("(failed to read response body)")
 		}
@@ -502,7 +502,7 @@ func (a *Adapter) fetchChatMessages(ctx context.Context, chatID string, chatType
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, err := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
 		if err != nil {
 			body = []byte("(failed to read response body)")
 		}

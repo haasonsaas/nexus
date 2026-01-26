@@ -551,9 +551,13 @@ func (a *ZaloAdapter) callAPI(ctx context.Context, method string, params map[str
 	}
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	const maxAPIResponseBytes = 1 << 20
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxAPIResponseBytes+1))
 	if err != nil {
 		return fmt.Errorf("failed to read response: %w", err)
+	}
+	if len(respBody) > maxAPIResponseBytes {
+		return fmt.Errorf("response too large (%d bytes)", len(respBody))
 	}
 
 	if err := json.Unmarshal(respBody, result); err != nil {

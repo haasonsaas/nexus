@@ -17,6 +17,7 @@ import (
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 	"github.com/haasonsaas/nexus/internal/channels"
+	channelcontext "github.com/haasonsaas/nexus/internal/channels/context"
 	nexusmodels "github.com/haasonsaas/nexus/pkg/models"
 )
 
@@ -598,9 +599,21 @@ func (a *Adapter) DownloadAttachment(ctx context.Context, msg *nexusmodels.Messa
 	if resp.StatusCode != http.StatusOK {
 		return nil, "", "", channels.ErrConnection(fmt.Sprintf("download failed: HTTP %d", resp.StatusCode), nil)
 	}
-	data, err := io.ReadAll(resp.Body)
+
+	maxBytes := channelcontext.GetChannelInfo(string(nexusmodels.ChannelTelegram)).MaxAttachmentBytes
+	if maxBytes <= 0 {
+		maxBytes = 50 * 1024 * 1024
+	}
+	if attachment.Size > 0 && attachment.Size > maxBytes {
+		return nil, "", "", channels.ErrInvalidInput(fmt.Sprintf("attachment too large (%d bytes)", attachment.Size), nil)
+	}
+
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes+1))
 	if err != nil {
 		return nil, "", "", channels.ErrInternal("read response", err)
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, "", "", channels.ErrInvalidInput(fmt.Sprintf("attachment too large (%d bytes)", len(data)), nil)
 	}
 
 	mimeType := attachment.MimeType

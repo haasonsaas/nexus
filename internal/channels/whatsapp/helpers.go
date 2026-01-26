@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/channels"
+	channelcontext "github.com/haasonsaas/nexus/internal/channels/context"
 	"github.com/haasonsaas/nexus/internal/channels/personal"
 
 	"go.mau.fi/whatsmeow/types"
@@ -183,5 +184,17 @@ func downloadURL(url string) ([]byte, error) {
 		return nil, channels.ErrConnection(fmt.Sprintf("unexpected status code: %d", resp.StatusCode), nil)
 	}
 
-	return io.ReadAll(resp.Body)
+	maxBytes := channelcontext.GetChannelInfo("whatsapp").MaxAttachmentBytes
+	if maxBytes <= 0 {
+		maxBytes = 16 * 1024 * 1024
+	}
+
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, channels.ErrConnection(fmt.Sprintf("download too large (%d bytes)", len(data)), nil)
+	}
+	return data, nil
 }

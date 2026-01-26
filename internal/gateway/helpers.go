@@ -172,6 +172,11 @@ func (s *Server) enrichMessageWithMedia(ctx context.Context, msg *models.Message
 		}
 	}
 
+	opts := media.DefaultOptions()
+	opts.EnableVision = false
+	opts.EnableTranscription = true
+	opts.TranscriptionLanguage = s.config.Transcription.Language
+
 	mediaAttachments := make([]*media.Attachment, 0, len(msg.Attachments))
 	for i := range msg.Attachments {
 		att := msg.Attachments[i]
@@ -196,6 +201,10 @@ func (s *Server) enrichMessageWithMedia(ctx context.Context, msg *models.Message
 			Filename: att.Filename,
 			Size:     att.Size,
 			URL:      att.URL,
+		}
+
+		if opts.MaxFileSize > 0 && mediaAtt.Size > 0 && mediaAtt.Size > opts.MaxFileSize {
+			continue
 		}
 
 		if downloader != nil {
@@ -223,11 +232,6 @@ func (s *Server) enrichMessageWithMedia(ctx context.Context, msg *models.Message
 	if len(mediaAttachments) == 0 {
 		return
 	}
-
-	opts := media.DefaultOptions()
-	opts.EnableVision = false
-	opts.EnableTranscription = true
-	opts.TranscriptionLanguage = s.config.Transcription.Language
 
 	mediaCtx := ctx
 	if opts.Timeout > 0 {

@@ -181,18 +181,25 @@ func (t *OpenAITranscriber) TranscribeWithContext(ctx context.Context, audio io.
 	}
 	defer resp.Body.Close()
 
-	// Read response body
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response: %w", err)
-	}
-
 	// Check for errors
 	if resp.StatusCode != http.StatusOK {
+		respBody, err := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
+		if err != nil {
+			return "", fmt.Errorf("failed to read response: %w", err)
+		}
 		t.logger.Error("transcription API error",
 			"status", resp.StatusCode,
 			"response", string(respBody))
 		return "", fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(respBody))
+	}
+
+	const maxTranscriptionResponseBytes = 10 * 1024 * 1024
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxTranscriptionResponseBytes+1))
+	if err != nil {
+		return "", fmt.Errorf("failed to read response: %w", err)
+	}
+	if len(respBody) > maxTranscriptionResponseBytes {
+		return "", fmt.Errorf("transcription response too large (%d bytes)", len(respBody))
 	}
 
 	// Since we requested "text" format, response is plain text

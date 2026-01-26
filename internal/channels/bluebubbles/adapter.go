@@ -653,7 +653,7 @@ func (a *BlueBubblesAdapter) callAPI(ctx context.Context, path string, payload m
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, err := io.ReadAll(resp.Body)
+		respBody, err := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
 		if err != nil {
 			return fmt.Errorf("API error (%d) (read body failed: %w)", resp.StatusCode, err)
 		}

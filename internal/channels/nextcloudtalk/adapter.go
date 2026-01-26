@@ -430,7 +430,7 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		a.health.RecordMessageFailed()
-		bodyBytes, readErr := io.ReadAll(resp.Body)
+		bodyBytes, readErr := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
 		if readErr != nil {
 			a.logger.Error("message send failed",
 				"status", resp.StatusCode,

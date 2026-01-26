@@ -3,6 +3,7 @@ package plugins
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/haasonsaas/nexus/internal/agent"
@@ -17,9 +18,13 @@ type stubRuntimePlugin struct {
 	id            string
 	channelsCalls int
 	toolsCalls    int
+	manifest      *pluginsdk.Manifest
 }
 
 func (p *stubRuntimePlugin) Manifest() *pluginsdk.Manifest {
+	if p.manifest != nil {
+		return p.manifest
+	}
 	return &pluginsdk.Manifest{
 		ID:           p.id,
 		ConfigSchema: json.RawMessage(`{"type":"object","properties":{}}`),
@@ -143,5 +148,67 @@ func TestRuntimeRegistrySkipsDisabled(t *testing.T) {
 	}
 	if plugin.channelsCalls != 0 {
 		t.Fatalf("expected no channels registration, got %d", plugin.channelsCalls)
+	}
+}
+
+func TestRuntimeRegistryCapabilitiesAllowed(t *testing.T) {
+	registry := NewRuntimeRegistry()
+	manifest := &pluginsdk.Manifest{
+		ID:           "stub-plugin",
+		ConfigSchema: json.RawMessage(`{"type":"object","properties":{}}`),
+		Capabilities: &pluginsdk.Capabilities{
+			Required: []string{"channel:telegram", "tool:stub"},
+		},
+	}
+	plugin := &stubRuntimePlugin{id: "stub-plugin", manifest: manifest}
+	if err := registry.Register(plugin); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+
+	cfg := &config.Config{
+		Plugins: config.PluginsConfig{
+			Entries: map[string]config.PluginEntryConfig{
+				"stub-plugin": {Enabled: true, Config: map[string]any{}},
+			},
+		},
+	}
+
+	if err := registry.LoadChannels(cfg, channels.NewRegistry()); err != nil {
+		t.Fatalf("LoadChannels() error = %v", err)
+	}
+	runtime := agent.NewRuntime(stubProvider{}, stubStore{})
+	if err := registry.LoadTools(cfg, runtime); err != nil {
+		t.Fatalf("LoadTools() error = %v", err)
+	}
+}
+
+func TestRuntimeRegistryCapabilitiesDenied(t *testing.T) {
+	registry := NewRuntimeRegistry()
+	manifest := &pluginsdk.Manifest{
+		ID:           "stub-plugin",
+		ConfigSchema: json.RawMessage(`{"type":"object","properties":{}}`),
+		Capabilities: &pluginsdk.Capabilities{
+			Required: []string{"tool:stub"},
+		},
+	}
+	plugin := &stubRuntimePlugin{id: "stub-plugin", manifest: manifest}
+	if err := registry.Register(plugin); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+
+	cfg := &config.Config{
+		Plugins: config.PluginsConfig{
+			Entries: map[string]config.PluginEntryConfig{
+				"stub-plugin": {Enabled: true, Config: map[string]any{}},
+			},
+		},
+	}
+
+	err := registry.LoadChannels(cfg, channels.NewRegistry())
+	if err == nil {
+		t.Fatal("expected LoadChannels() to return an error")
+	}
+	if !strings.Contains(err.Error(), "capability") {
+		t.Fatalf("expected capability error, got %v", err)
 	}
 }

@@ -25,9 +25,16 @@ type Manifest struct {
 	Commands     []string        `json:"commands,omitempty"`
 	Services     []string        `json:"services,omitempty"`
 	Hooks        []string        `json:"hooks,omitempty"`
+	Capabilities *Capabilities   `json:"capabilities,omitempty"`
 	ConfigSchema json.RawMessage `json:"configSchema"`
 	Metadata     map[string]any  `json:"metadata,omitempty"`
 	UIHints      *UIHints        `json:"uiHints,omitempty"`
+}
+
+// Capabilities describes permission scopes requested by a plugin.
+type Capabilities struct {
+	Required []string `json:"required,omitempty"`
+	Optional []string `json:"optional,omitempty"`
 }
 
 // UIHints provides configuration hints for better onboarding UX.
@@ -139,6 +146,66 @@ type Requirement struct {
 
 	// Optional indicates if this is optional.
 	Optional bool `json:"optional,omitempty"`
+}
+
+// DeclaredCapabilities returns all requested capabilities.
+func (m *Manifest) DeclaredCapabilities() []string {
+	if m == nil || m.Capabilities == nil {
+		return nil
+	}
+	count := len(m.Capabilities.Required) + len(m.Capabilities.Optional)
+	if count == 0 {
+		return nil
+	}
+	result := make([]string, 0, count)
+	for _, cap := range m.Capabilities.Required {
+		if trimmed := strings.TrimSpace(cap); trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	for _, cap := range m.Capabilities.Optional {
+		if trimmed := strings.TrimSpace(cap); trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
+// HasCapability checks whether the manifest declares a matching capability.
+func (m *Manifest) HasCapability(requested string) bool {
+	if m == nil || m.Capabilities == nil {
+		return false
+	}
+	requested = strings.TrimSpace(requested)
+	if requested == "" {
+		return false
+	}
+	for _, allowed := range m.DeclaredCapabilities() {
+		if CapabilityMatches(allowed, requested) {
+			return true
+		}
+	}
+	return false
+}
+
+// CapabilityMatches reports whether an allowed capability matches a requested one.
+func CapabilityMatches(allowed, requested string) bool {
+	allowed = strings.TrimSpace(strings.ToLower(allowed))
+	requested = strings.TrimSpace(strings.ToLower(requested))
+	if allowed == "" || requested == "" {
+		return false
+	}
+	if allowed == "*" || allowed == requested {
+		return true
+	}
+	if strings.HasSuffix(allowed, "*") {
+		prefix := strings.TrimSuffix(allowed, "*")
+		return strings.HasPrefix(requested, prefix)
+	}
+	return false
 }
 
 func DecodeManifest(data []byte) (*Manifest, error) {

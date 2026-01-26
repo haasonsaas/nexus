@@ -21,10 +21,79 @@ var closedMessages <-chan *models.Message = func() <-chan *models.Message {
 	return ch
 }()
 
-type runtimeChannelRegistry struct {
-	registry *channels.Registry
+const (
+	capabilityChannelPrefix = "channel:"
+	capabilityToolPrefix    = "tool:"
+	capabilityCLIPrefix     = "cli:"
+	capabilityServicePrefix = "service:"
+	capabilityHookPrefix    = "hook:"
+)
+
+type capabilityGate struct {
 	pluginID string
-	allowed  map[string]struct{}
+	declared []string
+}
+
+func newCapabilityGate(pluginID string, manifest *pluginsdk.Manifest) *capabilityGate {
+	if manifest == nil {
+		return nil
+	}
+	declared := manifest.DeclaredCapabilities()
+	if len(declared) == 0 {
+		return nil
+	}
+	return &capabilityGate{pluginID: pluginID, declared: declared}
+}
+
+func (g *capabilityGate) require(capability string) error {
+	if g == nil {
+		return nil
+	}
+	capability = strings.TrimSpace(capability)
+	if capability == "" {
+		return fmt.Errorf("plugin %q missing capability for empty target", g.pluginID)
+	}
+	for _, allowed := range g.declared {
+		if pluginsdk.CapabilityMatches(allowed, capability) {
+			return nil
+		}
+	}
+	return fmt.Errorf("plugin %q missing capability %q", g.pluginID, capability)
+}
+
+func channelCapability(channel models.ChannelType) string {
+	return capabilityChannelPrefix + string(channel)
+}
+
+func toolCapability(name string) string {
+	return capabilityToolPrefix + strings.TrimSpace(name)
+}
+
+func serviceCapability(id string) string {
+	return capabilityServicePrefix + strings.TrimSpace(id)
+}
+
+func hookCapability(eventType string) string {
+	return capabilityHookPrefix + strings.TrimSpace(eventType)
+}
+
+func validateCLICapabilities(gate *capabilityGate, paths []string) error {
+	if gate == nil {
+		return nil
+	}
+	for _, path := range paths {
+		if err := gate.require(capabilityCLIPrefix + path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type runtimeChannelRegistry struct {
+	registry     *channels.Registry
+	pluginID     string
+	allowed      map[string]struct{}
+	capabilities *capabilityGate
 }
 
 func (r *runtimeChannelRegistry) RegisterChannel(adapter pluginsdk.ChannelAdapter) error {
@@ -34,20 +103,24 @@ func (r *runtimeChannelRegistry) RegisterChannel(adapter pluginsdk.ChannelAdapte
 	if adapter == nil {
 		return fmt.Errorf("plugin adapter is nil")
 	}
+	channelID := string(adapter.Type())
 	if len(r.allowed) > 0 {
-		channelID := string(adapter.Type())
 		if _, ok := r.allowed[channelID]; !ok {
 			return fmt.Errorf("plugin %q attempted to register undeclared channel %q", r.pluginID, channelID)
 		}
+	}
+	if err := r.capabilities.require(channelCapability(adapter.Type())); err != nil {
+		return err
 	}
 	r.registry.Register(pluginAdapterWrapper{adapter: adapter})
 	return nil
 }
 
 type runtimeToolRegistry struct {
-	runtime  *agent.Runtime
-	pluginID string
-	allowed  map[string]struct{}
+	runtime      *agent.Runtime
+	pluginID     string
+	allowed      map[string]struct{}
+	capabilities *capabilityGate
 }
 
 func (r *runtimeToolRegistry) RegisterTool(def pluginsdk.ToolDefinition, handler pluginsdk.ToolHandler) error {
@@ -64,6 +137,9 @@ func (r *runtimeToolRegistry) RegisterTool(def pluginsdk.ToolDefinition, handler
 		if _, ok := r.allowed[def.Name]; !ok {
 			return fmt.Errorf("plugin %q attempted to register undeclared tool %q", r.pluginID, def.Name)
 		}
+	}
+	if err := r.capabilities.require(toolCapability(def.Name)); err != nil {
+		return err
 	}
 	tool := &pluginTool{
 		definition: def,
@@ -182,9 +258,10 @@ func toChannelHealth(status pluginsdk.HealthStatus) channels.HealthStatus {
 
 // runtimeCLIRegistry adapts a cobra root command for plugin CLI registration.
 type runtimeCLIRegistry struct {
-	rootCmd  *cobra.Command
-	pluginID string
-	allowed  map[string]struct{}
+	rootCmd      *cobra.Command
+	pluginID     string
+	allowed      map[string]struct{}
+	capabilities *capabilityGate
 }
 
 func (r *runtimeCLIRegistry) RegisterCommand(cmd *pluginsdk.CLICommand) error {
@@ -197,6 +274,9 @@ func (r *runtimeCLIRegistry) RegisterCommand(cmd *pluginsdk.CLICommand) error {
 
 	paths, err := cliCommandPaths("", cmd)
 	if err != nil {
+		return err
+	}
+	if err := validateCLICapabilities(r.capabilities, paths); err != nil {
 		return err
 	}
 	if len(r.allowed) > 0 {
@@ -234,6 +314,9 @@ func (r *runtimeCLIRegistry) RegisterSubcommand(parent string, cmd *pluginsdk.CL
 	canonicalParent := strings.Join(splitCommandPath(parent), ".")
 	paths, err := cliCommandPaths(canonicalParent, cmd)
 	if err != nil {
+		return err
+	}
+	if err := validateCLICapabilities(r.capabilities, paths); err != nil {
 		return err
 	}
 	if len(r.allowed) > 0 {
@@ -457,9 +540,10 @@ func (m *ServiceManager) Services() []*pluginsdk.Service {
 
 // runtimeServiceRegistry adapts the service manager for plugin registration.
 type runtimeServiceRegistry struct {
-	manager  *ServiceManager
-	pluginID string
-	allowed  map[string]struct{}
+	manager      *ServiceManager
+	pluginID     string
+	allowed      map[string]struct{}
+	capabilities *capabilityGate
 }
 
 func (r *runtimeServiceRegistry) RegisterService(svc *pluginsdk.Service) error {
@@ -476,6 +560,9 @@ func (r *runtimeServiceRegistry) RegisterService(svc *pluginsdk.Service) error {
 		if _, ok := r.allowed[svc.ID]; !ok {
 			return fmt.Errorf("plugin %q attempted to register undeclared service %q", r.pluginID, svc.ID)
 		}
+	}
+	if err := r.capabilities.require(serviceCapability(svc.ID)); err != nil {
+		return err
 	}
 	if svc.Start == nil {
 		return fmt.Errorf("service Start function is required")
@@ -498,9 +585,10 @@ func (r *runtimeServiceRegistry) RegisterService(svc *pluginsdk.Service) error {
 
 // runtimeHookRegistry adapts the internal hooks.Registry for plugin registration.
 type runtimeHookRegistry struct {
-	registry *hooks.Registry
-	pluginID string
-	allowed  map[string]struct{}
+	registry     *hooks.Registry
+	pluginID     string
+	allowed      map[string]struct{}
+	capabilities *capabilityGate
 }
 
 func (r *runtimeHookRegistry) RegisterHook(reg *pluginsdk.HookRegistration) error {
@@ -518,8 +606,11 @@ func (r *runtimeHookRegistry) RegisterHook(reg *pluginsdk.HookRegistration) erro
 			return fmt.Errorf("plugin %q attempted to register undeclared hook %q", r.pluginID, reg.EventType)
 		}
 	}
-	if reg.Handler == nil {
-		return fmt.Errorf("handler is required")
+	if err := r.capabilities.require(hookCapability(reg.EventType)); err != nil {
+		return err
+	}
+	if err := r.capabilities.require(hookCapability(reg.EventType)); err != nil {
+		return err
 	}
 
 	eventType := reg.EventType

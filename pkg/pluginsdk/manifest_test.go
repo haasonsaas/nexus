@@ -3,6 +3,7 @@ package pluginsdk
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -181,6 +182,53 @@ func TestManifestValidate(t *testing.T) {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestManifestCapabilities(t *testing.T) {
+	manifest := &Manifest{
+		ID:           "cap-plugin",
+		ConfigSchema: []byte(`{}`),
+		Capabilities: &Capabilities{
+			Required: []string{"tool:echo", "channel:slack"},
+			Optional: []string{"cli:*", " "},
+		},
+	}
+
+	declared := manifest.DeclaredCapabilities()
+	expected := []string{"tool:echo", "channel:slack", "cli:*"}
+	if !reflect.DeepEqual(declared, expected) {
+		t.Errorf("DeclaredCapabilities() = %v, want %v", declared, expected)
+	}
+	if !manifest.HasCapability("tool:echo") {
+		t.Error("expected tool:echo to be allowed")
+	}
+	if !manifest.HasCapability("cli:search") {
+		t.Error("expected cli:* to allow cli:search")
+	}
+	if manifest.HasCapability("tool:other") {
+		t.Error("expected tool:other to be denied")
+	}
+}
+
+func TestCapabilityMatches(t *testing.T) {
+	tests := []struct {
+		allowed   string
+		requested string
+		want      bool
+	}{
+		{allowed: "tool:echo", requested: "tool:echo", want: true},
+		{allowed: "tool:*", requested: "tool:search", want: true},
+		{allowed: "cli:*", requested: "cli:", want: true},
+		{allowed: "*", requested: "hook:message", want: true},
+		{allowed: "channel:slack", requested: "channel:telegram", want: false},
+		{allowed: "", requested: "tool:echo", want: false},
+	}
+
+	for _, tt := range tests {
+		if got := CapabilityMatches(tt.allowed, tt.requested); got != tt.want {
+			t.Errorf("CapabilityMatches(%q, %q) = %v, want %v", tt.allowed, tt.requested, got, tt.want)
+		}
 	}
 }
 

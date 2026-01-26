@@ -105,14 +105,21 @@ func (r *RuntimeRegistry) LoadChannels(cfg *config.Config, registry *channels.Re
 			return err
 		}
 		pluginEntry.channelsOnce.Do(func() {
+			manifest := pluginEntry.manifest
+			if manifest == nil {
+				manifest = plugin.Manifest()
+				pluginEntry.manifest = manifest
+			}
 			var allowedChannels []string
-			if manifest := plugin.Manifest(); manifest != nil {
+			if manifest != nil {
 				allowedChannels = manifest.Channels
 			}
+			gate := newCapabilityGate(id, manifest)
 			api := &runtimeChannelRegistry{
-				registry: registry,
-				pluginID: id,
-				allowed:  allowSet(allowedChannels),
+				registry:     registry,
+				pluginID:     id,
+				allowed:      allowSet(allowedChannels),
+				capabilities: gate,
 			}
 			pluginEntry.channelsErr = plugin.RegisterChannels(api, normalizeConfig(entry.Config))
 		})
@@ -138,14 +145,21 @@ func (r *RuntimeRegistry) LoadTools(cfg *config.Config, runtime *agent.Runtime) 
 			return err
 		}
 		pluginEntry.toolsOnce.Do(func() {
+			manifest := pluginEntry.manifest
+			if manifest == nil {
+				manifest = plugin.Manifest()
+				pluginEntry.manifest = manifest
+			}
 			var allowedTools []string
-			if manifest := plugin.Manifest(); manifest != nil {
+			if manifest != nil {
 				allowedTools = manifest.Tools
 			}
+			gate := newCapabilityGate(id, manifest)
 			api := &runtimeToolRegistry{
-				runtime:  runtime,
-				pluginID: id,
-				allowed:  allowSet(allowedTools),
+				runtime:      runtime,
+				pluginID:     id,
+				allowed:      allowSet(allowedTools),
+				capabilities: gate,
 			}
 			pluginEntry.toolsErr = plugin.RegisterTools(api, normalizeConfig(entry.Config))
 		})
@@ -178,14 +192,21 @@ func (r *RuntimeRegistry) LoadCLI(cfg *config.Config, rootCmd *cobra.Command, lo
 		}
 
 		pluginEntry.cliOnce.Do(func() {
+			manifest := pluginEntry.manifest
+			if manifest == nil {
+				manifest = plugin.Manifest()
+				pluginEntry.manifest = manifest
+			}
 			var allowedCommands []string
-			if manifest := plugin.Manifest(); manifest != nil {
+			if manifest != nil {
 				allowedCommands = manifest.Commands
 			}
+			gate := newCapabilityGate(id, manifest)
 			api := &runtimeCLIRegistry{
-				rootCmd:  rootCmd,
-				pluginID: id,
-				allowed:  allowSet(allowedCommands),
+				rootCmd:      rootCmd,
+				pluginID:     id,
+				allowed:      allowSet(allowedCommands),
+				capabilities: gate,
 			}
 			pluginEntry.cliErr = extPlugin.RegisterCLI(api, normalizeConfig(entry.Config))
 		})
@@ -221,14 +242,21 @@ func (r *RuntimeRegistry) LoadServices(cfg *config.Config, manager *ServiceManag
 		}
 
 		pluginEntry.servicesOnce.Do(func() {
+			manifest := pluginEntry.manifest
+			if manifest == nil {
+				manifest = plugin.Manifest()
+				pluginEntry.manifest = manifest
+			}
 			var allowedServices []string
-			if manifest := plugin.Manifest(); manifest != nil {
+			if manifest != nil {
 				allowedServices = manifest.Services
 			}
+			gate := newCapabilityGate(id, manifest)
 			api := &runtimeServiceRegistry{
-				manager:  manager,
-				pluginID: id,
-				allowed:  allowSet(allowedServices),
+				manager:      manager,
+				pluginID:     id,
+				allowed:      allowSet(allowedServices),
+				capabilities: gate,
 			}
 			pluginEntry.servicesErr = extPlugin.RegisterServices(api, normalizeConfig(entry.Config))
 		})
@@ -263,14 +291,21 @@ func (r *RuntimeRegistry) LoadHooks(cfg *config.Config, registry *hooks.Registry
 		}
 
 		pluginEntry.hooksOnce.Do(func() {
+			manifest := pluginEntry.manifest
+			if manifest == nil {
+				manifest = plugin.Manifest()
+				pluginEntry.manifest = manifest
+			}
 			var allowedHooks []string
-			if manifest := plugin.Manifest(); manifest != nil {
+			if manifest != nil {
 				allowedHooks = manifest.Hooks
 			}
+			gate := newCapabilityGate(id, manifest)
 			api := &runtimeHookRegistry{
-				registry: registry,
-				pluginID: id,
-				allowed:  allowSet(allowedHooks),
+				registry:     registry,
+				pluginID:     id,
+				allowed:      allowSet(allowedHooks),
+				capabilities: gate,
 			}
 			pluginEntry.hooksErr = extPlugin.RegisterHooks(api, normalizeConfig(entry.Config))
 		})
@@ -304,7 +339,12 @@ func (r *RuntimeRegistry) LoadFullPlugins(cfg *config.Config, api *PluginAPIBuil
 			continue
 		}
 
-		pluginAPI := api.Build(id, normalizeConfig(entry.Config), plugin.Manifest())
+		manifest := pluginEntry.manifest
+		if manifest == nil {
+			manifest = plugin.Manifest()
+			pluginEntry.manifest = manifest
+		}
+		pluginAPI := api.Build(id, normalizeConfig(entry.Config), manifest)
 		if err := fullPlugin.Register(pluginAPI); err != nil {
 			if api.Logger != nil {
 				api.Logger.Warn("full plugin registration failed", "plugin_id", id, "error", err)
@@ -346,12 +386,14 @@ func (b *PluginAPIBuilder) Build(pluginID string, cfg map[string]any, manifest *
 		allowedHooks = manifest.Hooks
 	}
 
+	capabilities := newCapabilityGate(pluginID, manifest)
+
 	return &pluginsdk.PluginAPI{
-		Channels: &runtimeChannelRegistry{registry: b.Channels, pluginID: pluginID, allowed: allowSet(allowedChannels)},
-		Tools:    &runtimeToolRegistry{runtime: b.Tools, pluginID: pluginID, allowed: allowSet(allowedTools)},
-		CLI:      &runtimeCLIRegistry{rootCmd: b.RootCmd, pluginID: pluginID, allowed: allowSet(allowedCommands)},
-		Services: &runtimeServiceRegistry{manager: b.ServiceManager, pluginID: pluginID, allowed: allowSet(allowedServices)},
-		Hooks:    &runtimeHookRegistry{registry: b.HookRegistry, pluginID: pluginID, allowed: allowSet(allowedHooks)},
+		Channels: &runtimeChannelRegistry{registry: b.Channels, pluginID: pluginID, allowed: allowSet(allowedChannels), capabilities: capabilities},
+		Tools:    &runtimeToolRegistry{runtime: b.Tools, pluginID: pluginID, allowed: allowSet(allowedTools), capabilities: capabilities},
+		CLI:      &runtimeCLIRegistry{rootCmd: b.RootCmd, pluginID: pluginID, allowed: allowSet(allowedCommands), capabilities: capabilities},
+		Services: &runtimeServiceRegistry{manager: b.ServiceManager, pluginID: pluginID, allowed: allowSet(allowedServices), capabilities: capabilities},
+		Hooks:    &runtimeHookRegistry{registry: b.HookRegistry, pluginID: pluginID, allowed: allowSet(allowedHooks), capabilities: capabilities},
 		Config:   cfg,
 		Logger:   &pluginLoggerAdapter{logger: pluginLogger},
 		ResolvePath: func(path string) string {
@@ -384,6 +426,9 @@ func (e *runtimeEntry) load(path string) (pluginsdk.RuntimePlugin, error) {
 	e.loadOnce.Do(func() {
 		if e.plugin != nil {
 			e.loaded = e.plugin
+			if e.manifest == nil {
+				e.manifest = e.plugin.Manifest()
+			}
 			return
 		}
 		if e.loader == nil {
@@ -391,6 +436,9 @@ func (e *runtimeEntry) load(path string) (pluginsdk.RuntimePlugin, error) {
 			return
 		}
 		e.loaded, e.loadErr = e.loader()
+		if e.loadErr == nil && e.loaded != nil && e.manifest == nil {
+			e.manifest = e.loaded.Manifest()
+		}
 	})
 	if e.loadErr != nil {
 		return nil, e.loadErr

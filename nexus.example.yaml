@@ -594,6 +594,49 @@ tts:
     stability: 0.5
     similarity_boost: 0.75
 
+cron:
+  # Config-driven cron scheduler (job types: message, webhook).
+  enabled: false
+  jobs: []
+  # Example jobs:
+  # - id: daily-reminder
+  #   name: Daily reminder
+  #   type: message
+  #   enabled: true
+  #   schedule:
+  #     cron: "0 9 * * 1-5"
+  #     timezone: "America/New_York"
+  #   message:
+  #     channel: slack
+  #     channel_id: U123456
+  #     content: "Standup in 10 minutes."
+  #
+  # - id: ping-webhook
+  #   name: Ping webhook
+  #   type: webhook
+  #   enabled: true
+  #   schedule:
+  #     every: 1h
+  #   webhook:
+  #     url: https://example.com/ping
+  #     method: POST
+  #     headers:
+  #       Content-Type: application/json
+  #     body: '{"source":"nexus"}'
+  #     timeout: 30s
+
+tasks:
+  # Scheduled task system (DB-backed task definitions + executions).
+  enabled: false
+  worker_id: ""
+  poll_interval: 10s
+  acquire_interval: 1s
+  lock_duration: 10m
+  max_concurrency: 5
+  cleanup_interval: 1m
+  stale_timeout: 30m
+  default_timeout: 5m
+
 plugins:
   # Optional plugin manifest search paths
   load:

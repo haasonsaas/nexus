@@ -7,16 +7,18 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/haasonsaas/nexus/internal/config"
 )
 
 func TestWebhookHooksRejectsLargeBody(t *testing.T) {
 	t.Parallel()
 
-	hooks, err := NewWebhookHooks(&WebhookConfig{
+	hooks, err := NewWebhookHooks(&config.WebhookHooksConfig{
 		Enabled:      true,
 		Token:        "token",
 		MaxBodyBytes: 10,
-		Mappings: []WebhookMapping{
+		Mappings: []config.WebhookHookMapping{
 			{
 				Path:    "foo",
 				Handler: webhookHandlerCustom,
@@ -27,7 +29,7 @@ func TestWebhookHooksRejectsLargeBody(t *testing.T) {
 		t.Fatalf("NewWebhookHooks: %v", err)
 	}
 
-	hooks.RegisterHandler(webhookHandlerCustom, WebhookHandlerFunc(func(ctx context.Context, payload *WebhookPayload, mapping *WebhookMapping) (*WebhookResponse, error) {
+	hooks.RegisterHandler(webhookHandlerCustom, WebhookHandlerFunc(func(ctx context.Context, payload *WebhookPayload, mapping *config.WebhookHookMapping) (*WebhookResponse, error) {
 		return &WebhookResponse{OK: true}, nil
 	}))
 
@@ -45,10 +47,10 @@ func TestWebhookHooksRejectsLargeBody(t *testing.T) {
 func TestWebhookHooksAcceptsValidPayload(t *testing.T) {
 	t.Parallel()
 
-	hooks, err := NewWebhookHooks(&WebhookConfig{
+	hooks, err := NewWebhookHooks(&config.WebhookHooksConfig{
 		Enabled: true,
 		Token:   "token",
-		Mappings: []WebhookMapping{
+		Mappings: []config.WebhookHookMapping{
 			{
 				Path:    "foo",
 				Handler: webhookHandlerCustom,
@@ -60,7 +62,7 @@ func TestWebhookHooksAcceptsValidPayload(t *testing.T) {
 	}
 
 	var got *WebhookPayload
-	hooks.RegisterHandler(webhookHandlerCustom, WebhookHandlerFunc(func(ctx context.Context, payload *WebhookPayload, mapping *WebhookMapping) (*WebhookResponse, error) {
+	hooks.RegisterHandler(webhookHandlerCustom, WebhookHandlerFunc(func(ctx context.Context, payload *WebhookPayload, mapping *config.WebhookHookMapping) (*WebhookResponse, error) {
 		got = payload
 		return &WebhookResponse{OK: true}, nil
 	}))

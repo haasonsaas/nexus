@@ -25,6 +25,14 @@ func (s *Server) startHTTPServer(ctx context.Context) error {
 
 	mux.Handle("/metrics", promhttp.Handler())
 	mux.HandleFunc("/healthz", s.handleHealthz)
+	if s.webhookHooks != nil {
+		basePath := s.webhookHooks.Config().BasePath
+		if basePath == "" {
+			basePath = "/hooks"
+		}
+		mux.Handle(basePath, s.webhookHooks)
+		mux.Handle(basePath+"/", s.webhookHooks)
+	}
 
 	if s.config.Channels.HomeAssistant.Enabled {
 		var haHandler http.Handler = http.HandlerFunc(s.handleHomeAssistantConversation)

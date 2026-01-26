@@ -115,6 +115,9 @@ type Server struct {
 
 	broadcastManager *BroadcastManager
 	hooksRegistry    *hooks.Registry
+	webhookHooks     *WebhookHooks
+	webhookMu        sync.RWMutex
+	webhookHandlers  map[string]WebhookHandler
 
 	edgeManager *edge.Manager
 	edgeService *edge.Service
@@ -599,6 +602,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		toolPolicyResolver: toolPolicyResolver,
 		jobStore:           jobStore,
 		hooksRegistry:      hooksRegistry,
+		webhookHandlers:    make(map[string]WebhookHandler),
 		edgeManager:        edgeManager,
 		edgeService:        edgeService,
 		edgeTOFU:           edgeTOFU,
@@ -624,6 +628,9 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		integration:        integration,
 		sessionLocker:      sessions.NewLocalLocker(sessions.DefaultLockTimeout),
 		nodeID:             cfg.Cluster.NodeID,
+	}
+	if err := server.initWebhookHooks(); err != nil {
+		return nil, err
 	}
 	if server.cronScheduler != nil {
 		messageSvc := newMessageService(server)

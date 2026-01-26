@@ -181,6 +181,11 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 	if s.config != nil && s.config.Session.DefaultAgentID != "" {
 		agentID = s.config.Session.DefaultAgentID
 	}
+	if msg != nil && msg.Channel == models.ChannelAPI && msg.Metadata != nil {
+		if override, ok := msg.Metadata["agent_id"].(string); ok && strings.TrimSpace(override) != "" {
+			agentID = strings.TrimSpace(override)
+		}
+	}
 	key := s.buildSessionKey(agentID, msg, channelID)
 	session, err := s.sessions.GetOrCreate(ctx, key, agentID, msg.Channel, channelID)
 	if err != nil {

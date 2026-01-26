@@ -20,6 +20,27 @@ cluster:
     acquire_timeout: 10s
     poll_interval: 200ms
 
+gateway:
+  broadcast:
+    # Strategy for broadcast group processing: parallel or sequential.
+    strategy: parallel
+    # Peer ID -> agent IDs for broadcast routing.
+    groups: {}
+  webhook_hooks:
+    enabled: false
+    base_path: /hooks
+    token: ${WEBHOOK_HOOKS_TOKEN}
+    max_body_bytes: 262144
+    mappings:
+      - path: agent
+        name: agent-webhook
+        handler: agent
+        agent_id: main
+      - path: wake
+        name: wake-webhook
+        handler: wake
+        agent_id: main
+
 canvas_host:
   # Dedicated canvas host for local HTML/JS canvas files.
   # When enabled, the canvas is available at http://<host>:<port>/__nexus__/canvas/
@@ -657,7 +678,7 @@ tts:
     similarity_boost: 0.75
 
 cron:
-  # Config-driven cron scheduler (job types: message, webhook, agent).
+  # Config-driven cron scheduler (job types: message, webhook, agent, custom).
   enabled: false
   jobs: []
   # Example jobs:
@@ -672,6 +693,9 @@ cron:
   #     channel: slack
   #     channel_id: U123456
   #     content: "Standup in 10 minutes."
+  #     # template: "Standup in 10 minutes on {{.date}} for {{.team}}."
+  #     # data:
+  #     #   team: Eng
   #
   # - id: weekly-digest
   #   name: Weekly digest
@@ -700,6 +724,17 @@ cron:
   #       Content-Type: application/json
   #     body: '{"source":"nexus"}'
   #     timeout: 30s
+  #
+  # - id: nightly-maintenance
+  #   name: Custom maintenance job
+  #   type: custom
+  #   enabled: true
+  #   schedule:
+  #     at: "02:00"
+  #   custom:
+  #     handler: maintenance
+  #     args:
+  #       scope: sessions
 
 tasks:
   # Scheduled task system (DB-backed task definitions + executions).

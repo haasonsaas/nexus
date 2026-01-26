@@ -1,6 +1,7 @@
 package cron
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"text/template"
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/config"
@@ -17,13 +19,14 @@ var defaultWebhookTimeout = 30 * time.Second
 
 // Scheduler runs cron jobs from configuration.
 type Scheduler struct {
-	jobs          []*Job
-	logger        *slog.Logger
-	httpClient    *http.Client
-	messageSender MessageSender
-	agentRunner   AgentRunner
-	now           func() time.Time
-	tickInterval  time.Duration
+	jobs           []*Job
+	logger         *slog.Logger
+	httpClient     *http.Client
+	messageSender  MessageSender
+	agentRunner    AgentRunner
+	customHandlers map[string]CustomHandler
+	now            func() time.Time
+	tickInterval   time.Duration
 
 	mu      sync.Mutex
 	started bool
@@ -69,6 +72,13 @@ func WithAgentRunner(runner AgentRunner) Option {
 	}
 }
 
+// WithCustomHandler registers a custom handler by name.
+func WithCustomHandler(name string, handler CustomHandler) Option {
+	return func(s *Scheduler) {
+		s.RegisterCustomHandler(name, handler)
+	}
+}
+
 // WithNow overrides the clock for tests.
 func WithNow(now func() time.Time) Option {
 	return func(s *Scheduler) {
@@ -107,13 +117,31 @@ func (s *Scheduler) SetAgentRunner(runner AgentRunner) {
 	s.mu.Unlock()
 }
 
+// RegisterCustomHandler registers a handler for custom cron jobs.
+func (s *Scheduler) RegisterCustomHandler(name string, handler CustomHandler) {
+	if s == nil || handler == nil {
+		return
+	}
+	name = strings.ToLower(strings.TrimSpace(name))
+	if name == "" {
+		return
+	}
+	s.mu.Lock()
+	if s.customHandlers == nil {
+		s.customHandlers = make(map[string]CustomHandler)
+	}
+	s.customHandlers[name] = handler
+	s.mu.Unlock()
+}
+
 // NewScheduler creates a scheduler from config.
 func NewScheduler(cfg config.CronConfig, opts ...Option) (*Scheduler, error) {
 	scheduler := &Scheduler{
-		logger:       slog.Default().With("component", "cron"),
-		httpClient:   http.DefaultClient,
-		now:          time.Now,
-		tickInterval: time.Second,
+		logger:         slog.Default().With("component", "cron"),
+		httpClient:     http.DefaultClient,
+		customHandlers: make(map[string]CustomHandler),
+		now:            time.Now,
+		tickInterval:   time.Second,
 	}
 	for _, opt := range opts {
 		opt(scheduler)
@@ -217,6 +245,17 @@ func (s *Scheduler) Jobs() []*Job {
 				webhookCopy.Headers = headers
 			}
 			copyJob.Webhook = &webhookCopy
+		}
+		if job.Custom != nil {
+			customCopy := *job.Custom
+			if job.Custom.Args != nil {
+				args := make(map[string]any, len(job.Custom.Args))
+				for k, v := range job.Custom.Args {
+					args[k] = v
+				}
+				customCopy.Args = args
+			}
+			copyJob.Custom = &customCopy
 		}
 		out = append(out, &copyJob)
 	}
@@ -349,20 +388,24 @@ func (s *Scheduler) buildJob(cfg config.CronJobConfig, now time.Time) (*Job, err
 		if strings.TrimSpace(cfg.Message.Channel) == "" || strings.TrimSpace(cfg.Message.ChannelID) == "" {
 			return nil, fmt.Errorf("message job missing channel")
 		}
-		if strings.TrimSpace(cfg.Message.Content) == "" {
+		if strings.TrimSpace(cfg.Message.Content) == "" && strings.TrimSpace(cfg.Message.Template) == "" {
 			return nil, fmt.Errorf("message job missing content")
 		}
 	case JobTypeAgent:
 		if cfg.Message == nil {
 			return nil, fmt.Errorf("agent job missing payload")
 		}
-		if strings.TrimSpace(cfg.Message.Content) == "" {
+		if strings.TrimSpace(cfg.Message.Content) == "" && strings.TrimSpace(cfg.Message.Template) == "" {
 			return nil, fmt.Errorf("agent job missing content")
 		}
 		channel := strings.TrimSpace(cfg.Message.Channel)
 		channelID := strings.TrimSpace(cfg.Message.ChannelID)
 		if (channel == "" && channelID != "") || (channel != "" && channelID == "") {
 			return nil, fmt.Errorf("agent job missing channel")
+		}
+	case JobTypeCustom:
+		if cfg.Custom == nil || strings.TrimSpace(cfg.Custom.Handler) == "" {
+			return nil, fmt.Errorf("custom job missing handler")
 		}
 	default:
 		return nil, fmt.Errorf("unsupported job type %q", cfg.Type)
@@ -384,6 +427,7 @@ func (s *Scheduler) buildJob(cfg config.CronJobConfig, now time.Time) (*Job, err
 		Schedule: schedule,
 		Message:  cfg.Message,
 		Webhook:  cfg.Webhook,
+		Custom:   cfg.Custom,
 		NextRun:  next,
 	}, nil
 }
@@ -399,6 +443,8 @@ func (s *Scheduler) executeJob(ctx context.Context, job *Job) error {
 		return s.executeMessage(ctx, job)
 	case JobTypeAgent:
 		return s.executeAgent(ctx, job)
+	case JobTypeCustom:
+		return s.executeCustom(ctx, job)
 	default:
 		return fmt.Errorf("job type %s not implemented", job.Type)
 	}
@@ -416,10 +462,16 @@ func (s *Scheduler) executeMessage(ctx context.Context, job *Job) error {
 	if channel == "" || channelID == "" {
 		return errors.New("message payload missing channel")
 	}
-	if strings.TrimSpace(job.Message.Content) == "" {
+	content, err := s.renderMessageContent(job.Message)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(content) == "" {
 		return errors.New("message payload missing content")
 	}
-	return s.messageSender.Send(ctx, job.Message)
+	messageCopy := *job.Message
+	messageCopy.Content = content
+	return s.messageSender.Send(ctx, &messageCopy)
 }
 
 func (s *Scheduler) executeAgent(ctx context.Context, job *Job) error {
@@ -429,7 +481,11 @@ func (s *Scheduler) executeAgent(ctx context.Context, job *Job) error {
 	if job.Message == nil {
 		return errors.New("missing agent payload")
 	}
-	if strings.TrimSpace(job.Message.Content) == "" {
+	content, err := s.renderMessageContent(job.Message)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(content) == "" {
 		return errors.New("agent payload missing content")
 	}
 	channel := strings.TrimSpace(job.Message.Channel)
@@ -437,7 +493,28 @@ func (s *Scheduler) executeAgent(ctx context.Context, job *Job) error {
 	if (channel == "" && channelID != "") || (channel != "" && channelID == "") {
 		return errors.New("agent payload missing channel")
 	}
-	return s.agentRunner.Run(ctx, job)
+	jobCopy := *job
+	msgCopy := *job.Message
+	msgCopy.Content = content
+	jobCopy.Message = &msgCopy
+	return s.agentRunner.Run(ctx, &jobCopy)
+}
+
+func (s *Scheduler) executeCustom(ctx context.Context, job *Job) error {
+	if job.Custom == nil {
+		return errors.New("missing custom payload")
+	}
+	handlerName := strings.ToLower(strings.TrimSpace(job.Custom.Handler))
+	if handlerName == "" {
+		return errors.New("custom handler missing")
+	}
+	s.mu.Lock()
+	handler := s.customHandlers[handlerName]
+	s.mu.Unlock()
+	if handler == nil {
+		return fmt.Errorf("custom handler not registered: %s", job.Custom.Handler)
+	}
+	return handler.Handle(ctx, job, job.Custom.Args)
 }
 
 func (s *Scheduler) executeWebhook(ctx context.Context, job *Job) error {
@@ -483,4 +560,35 @@ func (s *Scheduler) executeWebhook(ctx context.Context, job *Job) error {
 		return fmt.Errorf("webhook returned status %d", resp.StatusCode)
 	}
 	return nil
+}
+
+func (s *Scheduler) renderMessageContent(message *config.CronMessageConfig) (string, error) {
+	if message == nil {
+		return "", errors.New("missing message payload")
+	}
+	templateText := strings.TrimSpace(message.Template)
+	if templateText == "" {
+		return message.Content, nil
+	}
+	now := time.Now()
+	if s != nil && s.now != nil {
+		now = s.now()
+	}
+	data := make(map[string]any, len(message.Data)+3)
+	for k, v := range message.Data {
+		data[k] = v
+	}
+	data["now"] = now
+	data["date"] = now.Format("2006-01-02")
+	data["time"] = now.Format("15:04")
+
+	tmpl, err := template.New("cron").Option("missingkey=zero").Parse(templateText)
+	if err != nil {
+		return "", fmt.Errorf("parse template: %w", err)
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", fmt.Errorf("execute template: %w", err)
+	}
+	return buf.String(), nil
 }

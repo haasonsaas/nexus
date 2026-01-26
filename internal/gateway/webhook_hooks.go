@@ -12,43 +12,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/haasonsaas/nexus/internal/config"
 )
-
-// WebhookConfig configures the webhook hook system.
-type WebhookConfig struct {
-	// Enabled turns on webhook handling.
-	Enabled bool `json:"enabled" yaml:"enabled"`
-
-	// BasePath is the URL path prefix for webhooks (default: /hooks).
-	BasePath string `json:"base_path" yaml:"base_path"`
-
-	// Token is the required authentication token.
-	Token string `json:"token" yaml:"token"`
-
-	// MaxBodyBytes limits request body size (default: 256KB).
-	MaxBodyBytes int64 `json:"max_body_bytes" yaml:"max_body_bytes"`
-
-	// Mappings define webhook endpoints and their handlers.
-	Mappings []WebhookMapping `json:"mappings" yaml:"mappings"`
-}
-
-// WebhookMapping defines a webhook endpoint.
-type WebhookMapping struct {
-	// Path is the endpoint path (appended to BasePath).
-	Path string `json:"path" yaml:"path"`
-
-	// Name is a human-readable name for this webhook.
-	Name string `json:"name" yaml:"name"`
-
-	// Handler is the handler type (agent, wake, custom).
-	Handler string `json:"handler" yaml:"handler"`
-
-	// AgentID targets a specific agent (optional).
-	AgentID string `json:"agent_id" yaml:"agent_id"`
-
-	// ChannelID targets a specific channel (optional).
-	ChannelID string `json:"channel_id" yaml:"channel_id"`
-}
 
 const (
 	defaultWebhookPath   = "/hooks"
@@ -114,21 +80,21 @@ type WebhookResponse struct {
 
 // WebhookHandler processes webhook requests.
 type WebhookHandler interface {
-	Handle(ctx context.Context, payload *WebhookPayload, mapping *WebhookMapping) (*WebhookResponse, error)
+	Handle(ctx context.Context, payload *WebhookPayload, mapping *config.WebhookHookMapping) (*WebhookResponse, error)
 }
 
 // WebhookHandlerFunc is a function that implements WebhookHandler.
-type WebhookHandlerFunc func(ctx context.Context, payload *WebhookPayload, mapping *WebhookMapping) (*WebhookResponse, error)
+type WebhookHandlerFunc func(ctx context.Context, payload *WebhookPayload, mapping *config.WebhookHookMapping) (*WebhookResponse, error)
 
 // Handle implements WebhookHandler.
-func (f WebhookHandlerFunc) Handle(ctx context.Context, payload *WebhookPayload, mapping *WebhookMapping) (*WebhookResponse, error) {
+func (f WebhookHandlerFunc) Handle(ctx context.Context, payload *WebhookPayload, mapping *config.WebhookHookMapping) (*WebhookResponse, error) {
 	return f(ctx, payload, mapping)
 }
 
 // WebhookHooks manages webhook handlers and routing.
 type WebhookHooks struct {
 	mu       sync.RWMutex
-	config   *WebhookConfig
+	config   *config.WebhookHooksConfig
 	handlers map[string]WebhookHandler
 	stats    *WebhookStats
 }
@@ -144,7 +110,7 @@ type WebhookStats struct {
 }
 
 // NewWebhookHooks creates a new webhook hooks manager.
-func NewWebhookHooks(config *WebhookConfig) (*WebhookHooks, error) {
+func NewWebhookHooks(config *config.WebhookHooksConfig) (*WebhookHooks, error) {
 	if config == nil || !config.Enabled {
 		return nil, nil
 	}
@@ -289,7 +255,7 @@ func (h *WebhookHooks) validateToken(token string) bool {
 }
 
 // findMapping finds the matching webhook mapping for a path.
-func (h *WebhookHooks) findMapping(path string) *WebhookMapping {
+func (h *WebhookHooks) findMapping(path string) *config.WebhookHookMapping {
 	path = strings.TrimPrefix(path, "/")
 	for i := range h.config.Mappings {
 		mappingPath := strings.TrimPrefix(h.config.Mappings[i].Path, "/")
@@ -371,13 +337,13 @@ func (h *WebhookHooks) Stats() *WebhookStats {
 }
 
 // Config returns the webhook configuration.
-func (h *WebhookHooks) Config() *WebhookConfig {
+func (h *WebhookHooks) Config() *config.WebhookHooksConfig {
 	return h.config
 }
 
 // DefaultAgentHandler returns a handler that sends messages to agents.
 func DefaultAgentHandler(sendFn func(ctx context.Context, agentID, message, sessionKey string) error) WebhookHandler {
-	return WebhookHandlerFunc(func(ctx context.Context, payload *WebhookPayload, mapping *WebhookMapping) (*WebhookResponse, error) {
+	return WebhookHandlerFunc(func(ctx context.Context, payload *WebhookPayload, mapping *config.WebhookHookMapping) (*WebhookResponse, error) {
 		if payload.Message == "" {
 			return &WebhookResponse{
 				OK:    false,
@@ -410,7 +376,7 @@ func DefaultAgentHandler(sendFn func(ctx context.Context, agentID, message, sess
 
 // DefaultWakeHandler returns a handler that triggers agent wakeup.
 func DefaultWakeHandler(wakeFn func(ctx context.Context, agentID, text string, mode string) error) WebhookHandler {
-	return WebhookHandlerFunc(func(ctx context.Context, payload *WebhookPayload, mapping *WebhookMapping) (*WebhookResponse, error) {
+	return WebhookHandlerFunc(func(ctx context.Context, payload *WebhookPayload, mapping *config.WebhookHookMapping) (*WebhookResponse, error) {
 		if payload.Message == "" {
 			return &WebhookResponse{
 				OK:    false,

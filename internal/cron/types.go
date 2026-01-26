@@ -14,6 +14,7 @@ const (
 	JobTypeMessage JobType = "message"
 	JobTypeAgent   JobType = "agent"
 	JobTypeWebhook JobType = "webhook"
+	JobTypeCustom  JobType = "custom"
 )
 
 // Schedule represents a parsed schedule.
@@ -35,6 +36,7 @@ type Job struct {
 
 	Message *config.CronMessageConfig
 	Webhook *config.CronWebhookConfig
+	Custom  *config.CronCustomConfig
 
 	NextRun   time.Time
 	LastRun   time.Time
@@ -65,4 +67,17 @@ type AgentRunnerFunc func(ctx context.Context, job *Job) error
 // Run executes the agent runner function.
 func (f AgentRunnerFunc) Run(ctx context.Context, job *Job) error {
 	return f(ctx, job)
+}
+
+// CustomHandler executes custom cron jobs.
+type CustomHandler interface {
+	Handle(ctx context.Context, job *Job, args map[string]any) error
+}
+
+// CustomHandlerFunc adapts a function to a CustomHandler.
+type CustomHandlerFunc func(ctx context.Context, job *Job, args map[string]any) error
+
+// Handle executes the custom handler function.
+func (f CustomHandlerFunc) Handle(ctx context.Context, job *Job, args map[string]any) error {
+	return f(ctx, job, args)
 }

@@ -61,6 +61,8 @@ type Config struct {
 // GatewayConfig configures gateway-level message routing and processing.
 type GatewayConfig struct {
 	Broadcast BroadcastConfig `yaml:"broadcast"`
+	// WebhookHooks configures inbound webhook handlers.
+	WebhookHooks WebhookHooksConfig `yaml:"webhook_hooks"`
 }
 
 // ClusterConfig controls multi-gateway behavior.
@@ -176,6 +178,42 @@ type BroadcastConfig struct {
 	// When a message arrives from a peer in this map, it will be routed to all
 	// specified agents instead of the default single agent.
 	Groups map[string][]string `yaml:"groups"`
+}
+
+// WebhookHooksConfig configures inbound webhook hook handling.
+type WebhookHooksConfig struct {
+	// Enabled turns on webhook hooks.
+	Enabled bool `yaml:"enabled"`
+
+	// BasePath is the URL path prefix for webhook hooks (default: /hooks).
+	BasePath string `yaml:"base_path"`
+
+	// Token is the required authentication token.
+	Token string `yaml:"token"`
+
+	// MaxBodyBytes limits the request body size (default: 256KB).
+	MaxBodyBytes int64 `yaml:"max_body_bytes"`
+
+	// Mappings define webhook endpoints and their handlers.
+	Mappings []WebhookHookMapping `yaml:"mappings"`
+}
+
+// WebhookHookMapping defines a webhook hook endpoint.
+type WebhookHookMapping struct {
+	// Path is the endpoint path (appended to BasePath).
+	Path string `yaml:"path"`
+
+	// Name is a human-readable name for this webhook.
+	Name string `yaml:"name"`
+
+	// Handler is the handler type (agent, wake, custom).
+	Handler string `yaml:"handler"`
+
+	// AgentID targets a specific agent (optional).
+	AgentID string `yaml:"agent_id"`
+
+	// ChannelID targets a specific channel (optional).
+	ChannelID string `yaml:"channel_id"`
 }
 
 type ServerConfig struct {
@@ -992,6 +1030,7 @@ type CronJobConfig struct {
 	Schedule CronScheduleConfig `yaml:"schedule"`
 	Message  *CronMessageConfig `yaml:"message,omitempty"`
 	Webhook  *CronWebhookConfig `yaml:"webhook,omitempty"`
+	Custom   *CronCustomConfig  `yaml:"custom,omitempty"`
 }
 
 // CronScheduleConfig defines when a job runs.
@@ -1004,9 +1043,11 @@ type CronScheduleConfig struct {
 
 // CronMessageConfig defines a message job payload.
 type CronMessageConfig struct {
-	Channel   string `yaml:"channel"`
-	ChannelID string `yaml:"channel_id"`
-	Content   string `yaml:"content"`
+	Channel   string         `yaml:"channel"`
+	ChannelID string         `yaml:"channel_id"`
+	Content   string         `yaml:"content"`
+	Template  string         `yaml:"template"`
+	Data      map[string]any `yaml:"data"`
 }
 
 // CronWebhookConfig defines a webhook job payload.
@@ -1016,6 +1057,12 @@ type CronWebhookConfig struct {
 	Headers map[string]string `yaml:"headers"`
 	Body    string            `yaml:"body"`
 	Timeout time.Duration     `yaml:"timeout"`
+}
+
+// CronCustomConfig defines a custom cron job payload.
+type CronCustomConfig struct {
+	Handler string         `yaml:"handler"`
+	Args    map[string]any `yaml:"args"`
 }
 
 // TasksConfig configures the scheduled tasks system.
@@ -2521,6 +2568,26 @@ func validateConfig(cfg *Config) error {
 		}
 	}
 
+	if cfg.Gateway.WebhookHooks.Enabled {
+		if strings.TrimSpace(cfg.Gateway.WebhookHooks.Token) == "" {
+			issues = append(issues, "gateway.webhook_hooks.token is required when webhook hooks are enabled")
+		}
+		if cfg.Gateway.WebhookHooks.MaxBodyBytes < 0 {
+			issues = append(issues, "gateway.webhook_hooks.max_body_bytes must be >= 0")
+		}
+		for i, mapping := range cfg.Gateway.WebhookHooks.Mappings {
+			if strings.TrimSpace(mapping.Path) == "" {
+				issues = append(issues, fmt.Sprintf("gateway.webhook_hooks.mappings[%d].path is required", i))
+			}
+			handler := strings.ToLower(strings.TrimSpace(mapping.Handler))
+			switch handler {
+			case "agent", "wake", "custom":
+			default:
+				issues = append(issues, fmt.Sprintf("gateway.webhook_hooks.mappings[%d].handler must be agent, wake, or custom", i))
+			}
+		}
+	}
+
 	if cfg.Cron.Enabled {
 		for i, job := range cfg.Cron.Jobs {
 			if strings.TrimSpace(job.ID) == "" {
@@ -2537,9 +2604,36 @@ func validateConfig(cfg *Config) error {
 				if job.Webhook == nil || strings.TrimSpace(job.Webhook.URL) == "" {
 					issues = append(issues, fmt.Sprintf("cron.jobs[%d].webhook.url is required for webhook jobs", i))
 				}
-			case "message", "agent":
+			case "message":
+				if job.Message == nil {
+					issues = append(issues, fmt.Sprintf("cron.jobs[%d].message is required for message jobs", i))
+					break
+				}
+				if strings.TrimSpace(job.Message.Channel) == "" || strings.TrimSpace(job.Message.ChannelID) == "" {
+					issues = append(issues, fmt.Sprintf("cron.jobs[%d].message.channel and channel_id are required for message jobs", i))
+				}
+				if strings.TrimSpace(job.Message.Content) == "" && strings.TrimSpace(job.Message.Template) == "" {
+					issues = append(issues, fmt.Sprintf("cron.jobs[%d].message.content or template is required for message jobs", i))
+				}
+			case "agent":
+				if job.Message == nil {
+					issues = append(issues, fmt.Sprintf("cron.jobs[%d].message is required for agent jobs", i))
+					break
+				}
+				channel := strings.TrimSpace(job.Message.Channel)
+				channelID := strings.TrimSpace(job.Message.ChannelID)
+				if (channel == "" && channelID != "") || (channel != "" && channelID == "") {
+					issues = append(issues, fmt.Sprintf("cron.jobs[%d].message.channel and channel_id must both be set or empty for agent jobs", i))
+				}
+				if strings.TrimSpace(job.Message.Content) == "" && strings.TrimSpace(job.Message.Template) == "" {
+					issues = append(issues, fmt.Sprintf("cron.jobs[%d].message.content or template is required for agent jobs", i))
+				}
+			case "custom":
+				if job.Custom == nil || strings.TrimSpace(job.Custom.Handler) == "" {
+					issues = append(issues, fmt.Sprintf("cron.jobs[%d].custom.handler is required for custom jobs", i))
+				}
 			default:
-				issues = append(issues, fmt.Sprintf("cron.jobs[%d].type must be message, agent, or webhook", i))
+				issues = append(issues, fmt.Sprintf("cron.jobs[%d].type must be message, agent, webhook, or custom", i))
 			}
 		}
 	}

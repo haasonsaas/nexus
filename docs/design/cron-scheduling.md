@@ -18,8 +18,9 @@ This document specifies the design for a cron scheduling system in Nexus, suppor
 The shipped cron system in Nexus is config-driven and implemented in `internal/cron` and `internal/gateway`.
 
 - **Config schema**: `config.CronConfig` / `config.CronJobConfig` in `internal/config/config.go`.
-- **Supported job types**: `message`, `webhook` (agent jobs are parsed but not implemented).
+- **Supported job types**: `message`, `webhook`, `agent`.
 - **Message jobs**: executed via an injected `cron.MessageSender` (wired in `internal/gateway/server.go` via proactive messaging).
+- **Agent jobs**: executed via an injected `cron.AgentRunner` (wired in `internal/gateway/server.go` by injecting an inbound message into the runtime). For `agent` jobs, `message.channel`/`message.channel_id` are optional; when both are omitted, the gateway defaults to `channel=api` and `channel_id=cron:<job-id>`.
 - **Webhook jobs**: executed with an HTTP client; default method is `POST`; a default timeout of 30 seconds is enforced when `timeout` is unset.
 
 Example configuration:
@@ -39,6 +40,18 @@ cron:
         channel: slack
         channel_id: U123456
         content: "Standup in 10 minutes."
+
+    - id: weekly-digest
+      name: Weekly digest
+      type: agent
+      enabled: true
+      schedule:
+        cron: "0 18 * * 5"
+        timezone: "America/New_York"
+      message:
+        channel: slack
+        channel_id: C123456
+        content: "Generate a weekly digest of key discussions and action items."
 
     - id: ping-webhook
       name: Ping webhook

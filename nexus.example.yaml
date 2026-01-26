@@ -595,7 +595,7 @@ tts:
     similarity_boost: 0.75
 
 cron:
-  # Config-driven cron scheduler (job types: message, webhook).
+  # Config-driven cron scheduler (job types: message, webhook, agent).
   enabled: false
   jobs: []
   # Example jobs:
@@ -610,6 +610,20 @@ cron:
   #     channel: slack
   #     channel_id: U123456
   #     content: "Standup in 10 minutes."
+  #
+  # - id: weekly-digest
+  #   name: Weekly digest
+  #   type: agent
+  #   enabled: true
+  #   schedule:
+  #     cron: "0 18 * * 5"
+  #     timezone: "America/New_York"
+  #   message:
+  #     # channel/channel_id are optional for agent jobs. When omitted, the gateway
+  #     # defaults to `channel=api` and `channel_id=cron:<job-id>`.
+  #     channel: slack
+  #     channel_id: C123456
+  #     content: "Generate a weekly digest of key discussions and action items."
   #
   # - id: ping-webhook
   #   name: Ping webhook

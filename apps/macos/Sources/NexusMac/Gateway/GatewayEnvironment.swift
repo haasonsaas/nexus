@@ -51,7 +51,7 @@ enum GatewayEnvironment {
                 status: GatewayEnvironmentStatus(
                     kind: .missingBinary,
                     binaryPath: nil,
-                    message: "nexus binary not found in PATH; install the CLI."),
+                    message: "nexus binary not found in app bundle or PATH; install the CLI."),
                 command: nil)
         }
 
@@ -74,6 +74,10 @@ enum GatewayEnvironment {
             if FileManager.default.isExecutableFile(atPath: trimmed) {
                 return trimmed
             }
+        }
+
+        if let bundled = BundledBinaryLocator.path(for: "nexus") {
+            return bundled
         }
 
         // Search in PATH

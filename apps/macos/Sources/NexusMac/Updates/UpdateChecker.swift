@@ -83,9 +83,21 @@ final class UpdateChecker {
             releaseNotes = release.body
             downloadURL = URL(string: release.htmlUrl)
 
-            // Find macOS asset
-            if let macAsset = release.assets.first(where: { $0.name.contains("mac") || $0.name.hasSuffix(".dmg") }) {
-                downloadURL = URL(string: macAsset.browserDownloadUrl)
+            // Find macOS asset (prefer DMG over ZIP)
+            let assets = release.assets
+            let dmgAsset = assets.first { $0.name.lowercased().hasSuffix(".dmg") }
+            let zipAsset = assets.first {
+                let lower = $0.name.lowercased()
+                return lower.hasSuffix(".zip") && lower.contains("mac")
+            }
+            let pkgAsset = assets.first {
+                let lower = $0.name.lowercased()
+                return lower.hasSuffix(".pkg") && lower.contains("mac")
+            }
+            let macAsset = assets.first { $0.name.lowercased().contains("mac") }
+
+            if let asset = dmgAsset ?? zipAsset ?? pkgAsset ?? macAsset {
+                downloadURL = URL(string: asset.browserDownloadUrl)
             }
 
             updateAvailable = isNewerVersion(latestVersion ?? "", than: currentVersion)

@@ -72,7 +72,10 @@ final class NodeServiceManager: ObservableObject {
     // MARK: - Init
 
     init(edgeBinary: String? = nil) {
-        self.edgeBinary = edgeBinary ?? ProcessInfo.processInfo.environment["NEXUS_EDGE_BIN"] ?? "nexus-edge"
+        self.edgeBinary = edgeBinary
+            ?? ProcessInfo.processInfo.environment["NEXUS_EDGE_BIN"]
+            ?? BundledBinaryLocator.path(for: "nexus-edge")
+            ?? "nexus-edge"
     }
 
     // MARK: - Public Methods

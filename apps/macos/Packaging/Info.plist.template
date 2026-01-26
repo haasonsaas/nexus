@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleDisplayName</key>
+    <string>Nexus</string>
+    <key>CFBundleExecutable</key>
+    <string>NexusMac</string>
+    <key>CFBundleIdentifier</key>
+    <string>__BUNDLE_ID__</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>Nexus</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>__VERSION_SHORT__</string>
+    <key>CFBundleVersion</key>
+    <string>__VERSION_BUILD__</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>__BUNDLE_ID__</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>nexus</string>
+            </array>
+        </dict>
+    </array>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.productivity</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSUserActivityTypes</key>
+    <array>
+        <string>com.nexus.conversation</string>
+        <string>com.nexus.prompt</string>
+        <string>com.nexus.context</string>
+    </array>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Nexus uses Apple Events to open Terminal windows for CLI actions.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>Nexus accesses calendars to schedule events.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>Nexus uses the camera for image capture.</string>
+    <key>NSContactsUsageDescription</key>
+    <string>Nexus accesses contacts for messaging features.</string>
+    <key>NSLocationUsageDescription</key>
+    <string>Nexus uses your location to provide context-aware features.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Nexus uses your location to provide context-aware features.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Nexus uses the microphone for voice input.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Nexus accesses photos for media tasks.</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>Nexus records the screen for automation and sharing.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Nexus uses speech recognition to transcribe voice input.</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright © 2026 Haason SaaS. All rights reserved.</string>
+</dict>
+</plist>

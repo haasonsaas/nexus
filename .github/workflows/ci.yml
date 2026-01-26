@@ -224,3 +224,38 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  macos-release:
+    needs: release
+    runs-on: macos-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Determine Go toolchain version
+        id: go-toolchain
+        shell: bash
+        run: |
+          toolchain="$(awk '/^toolchain /{print $2; exit}' go.mod)"
+          if [ -n "${toolchain}" ]; then
+            echo "version=${toolchain#go}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$(awk '/^go /{print $2; exit}' go.mod)" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ steps.go-toolchain.outputs.version }}
+          cache: true
+      - name: Build macOS release artifacts
+        run: ./scripts/package-macos.sh
+        env:
+          BUNDLE_ID: com.haasonsaas.nexus.mac
+      - name: Upload macOS release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/macos/*.dmg
+            dist/macos/*.zip

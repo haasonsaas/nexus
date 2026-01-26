@@ -53,7 +53,9 @@ final class AppModel: ObservableObject {
         baseURL = Self.normalizeBaseURL(rawBaseURL)
         apiKey = keychain.read() ?? ""
         configPath = AppModel.defaultConfigPath()
-        edgeBinary = ProcessInfo.processInfo.environment["NEXUS_EDGE_BIN"] ?? "nexus-edge"
+        edgeBinary = ProcessInfo.processInfo.environment["NEXUS_EDGE_BIN"]
+            ?? BundledBinaryLocator.path(for: "nexus-edge")
+            ?? "nexus-edge"
 
         // Request notification permission on first launch
         notificationService.requestPermission()

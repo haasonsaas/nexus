@@ -12,8 +12,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Check Go version
-GO_VERSION=$(go version 2>/dev/null | awk '{print $3}' | sed 's/go//')
+# Minimum Go version for this repo
 REQUIRED_GO="1.24"
 
 check_command() {
@@ -37,6 +36,39 @@ install_go_tool() {
     echo -e "${GREEN}✓${NC} Installed $name"
 }
 
+version_ge() {
+    # returns 0 if $1 >= $2 (semver-ish numeric compare)
+    local version_a=$1
+    local version_b=$2
+
+    local IFS=.
+    local -a parts_a
+    local -a parts_b
+    parts_a=($version_a)
+    parts_b=($version_b)
+
+    local i
+    for ((i=${#parts_a[@]}; i<${#parts_b[@]}; i++)); do
+        parts_a[i]=0
+    done
+    for ((i=${#parts_b[@]}; i<${#parts_a[@]}; i++)); do
+        parts_b[i]=0
+    done
+
+    for ((i=0; i<${#parts_a[@]}; i++)); do
+        local a=${parts_a[i]}
+        local b=${parts_b[i]}
+        if ((10#$a > 10#$b)); then
+            return 0
+        fi
+        if ((10#$a < 10#$b)); then
+            return 1
+        fi
+    done
+
+    return 0
+}
+
 # Check prerequisites
 echo ""
 echo "==> Checking prerequisites..."
@@ -46,7 +78,12 @@ check_command "go" || {
     exit 1
 }
 
+GO_VERSION=$(go version | awk '{print $3}' | sed 's/go//')
 echo -e "${GREEN}✓${NC} Go version: $GO_VERSION"
+if ! version_ge "$GO_VERSION" "$REQUIRED_GO"; then
+    echo -e "${RED}Error: Go $REQUIRED_GO or later is required (found Go $GO_VERSION).${NC}"
+    exit 1
+fi
 
 check_command "git" || {
     echo -e "${RED}Error: git is required.${NC}"

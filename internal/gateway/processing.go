@@ -15,7 +15,6 @@ import (
 
 	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/haasonsaas/nexus/internal/config"
-	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/pkg/models"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -182,7 +181,7 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 	if s.config != nil && s.config.Session.DefaultAgentID != "" {
 		agentID = s.config.Session.DefaultAgentID
 	}
-	key := sessions.SessionKey(agentID, msg.Channel, channelID)
+	key := s.buildSessionKey(agentID, msg, channelID)
 	session, err := s.sessions.GetOrCreate(ctx, key, agentID, msg.Channel, channelID)
 	if err != nil {
 		s.logger.Error("failed to get or create session", "error", err)

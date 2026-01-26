@@ -124,3 +124,72 @@ func TestResolveConversationIDDiscordScopeThread(t *testing.T) {
 		t.Fatalf("expected thread scope id thread-1, got %q", id)
 	}
 }
+
+func TestBuildSessionKey_DMScoping(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	cfg := &config.Config{
+		Session: config.SessionConfig{
+			Scoping: config.SessionScopeConfig{
+				DMScope: "per-peer",
+				IdentityLinks: map[string][]string{
+					"jonathan": {"slack:U123"},
+				},
+			},
+		},
+	}
+	server, err := NewServer(cfg, logger)
+	if err != nil {
+		t.Fatalf("NewServer() error = %v", err)
+	}
+
+	msg := &models.Message{
+		Channel: models.ChannelSlack,
+		Metadata: map[string]any{
+			MetaUserID:      "U123",
+			"slack_channel": "D123",
+		},
+	}
+
+	channelID, err := server.resolveConversationID(msg)
+	if err != nil {
+		t.Fatalf("resolveConversationID() error = %v", err)
+	}
+
+	key := server.buildSessionKey("agent1", msg, channelID)
+	if key != "agent1:dm:jonathan" {
+		t.Fatalf("expected key agent1:dm:jonathan, got %q", key)
+	}
+}
+
+func TestBuildSessionKey_DMScopingMain(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	cfg := &config.Config{
+		Session: config.SessionConfig{
+			Scoping: config.SessionScopeConfig{
+				DMScope: "main",
+			},
+		},
+	}
+	server, err := NewServer(cfg, logger)
+	if err != nil {
+		t.Fatalf("NewServer() error = %v", err)
+	}
+
+	msg := &models.Message{
+		Channel: models.ChannelSlack,
+		Metadata: map[string]any{
+			MetaUserID:      "U999",
+			"slack_channel": "D999",
+		},
+	}
+
+	channelID, err := server.resolveConversationID(msg)
+	if err != nil {
+		t.Fatalf("resolveConversationID() error = %v", err)
+	}
+
+	key := server.buildSessionKey("agent1", msg, channelID)
+	if key != "agent1:dm:main" {
+		t.Fatalf("expected key agent1:dm:main, got %q", key)
+	}
+}

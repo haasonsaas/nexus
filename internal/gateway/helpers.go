@@ -15,6 +15,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/media"
+	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/storage"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
@@ -99,6 +100,46 @@ func (s *Server) resolveConversationID(msg *models.Message) (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported channel %q", msg.Channel)
 	}
+}
+
+func (s *Server) buildSessionKey(agentID string, msg *models.Message, channelID string) string {
+	if msg == nil {
+		return sessions.SessionKey(agentID, models.ChannelType(""), channelID)
+	}
+	if s == nil || s.config == nil {
+		return sessions.SessionKey(agentID, msg.Channel, channelID)
+	}
+	convType := conversationTypeForMessage(msg)
+	if convType != "dm" {
+		return sessions.SessionKey(agentID, msg.Channel, channelID)
+	}
+
+	peerID := ""
+	if msg.Metadata != nil {
+		if id, ok := msg.Metadata[MetaUserID].(string); ok && id != "" {
+			peerID = id
+		}
+		if peerID == "" {
+			if id, ok := msg.Metadata[MetaPeerID].(string); ok && id != "" {
+				peerID = id
+			}
+		}
+	}
+	if peerID == "" {
+		peerID = s.extractPeerID(msg)
+	}
+	if peerID == "" {
+		peerID = channelID
+	}
+
+	return sessions.BuildSessionKey(
+		agentID,
+		msg.Channel,
+		peerID,
+		false,
+		s.config.Session.Scoping.DMScope,
+		s.config.Session.Scoping.IdentityLinks,
+	)
 }
 
 // enrichMessageWithMedia processes media attachments and adds transcriptions.

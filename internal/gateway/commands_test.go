@@ -165,7 +165,7 @@ func TestHandleMessageCommandModelSetsOverride(t *testing.T) {
 		t.Fatalf("expected runtime not to run for /model, got calls=%d", calls)
 	}
 
-	sessionKey := sessions.SessionKey("agent-test", models.ChannelTelegram, "99")
+	sessionKey := server.buildSessionKey("agent-test", cmdMsg, "99")
 	session, err := store.GetByKey(context.Background(), sessionKey)
 	if err != nil {
 		t.Fatalf("failed to load session: %v", err)
@@ -307,7 +307,7 @@ func TestHandleMessageCommandNewSetsModelForNewSession(t *testing.T) {
 		t.Fatalf("expected runtime not to run for /new, got calls=%d", calls)
 	}
 
-	sessionKey := sessions.SessionKey("agent-test", models.ChannelTelegram, "55")
+	sessionKey := server.buildSessionKey("agent-test", cmdMsg, "55")
 	session, err := store.GetByKey(context.Background(), sessionKey)
 	if err != nil {
 		t.Fatalf("failed to load session: %v", err)
@@ -410,7 +410,7 @@ func TestHandleMessageInlineCommandStripsAndRuns(t *testing.T) {
 		t.Fatalf("expected runtime to run once, got calls=%d", calls)
 	}
 
-	sessionKey := sessions.SessionKey("main", models.ChannelTelegram, "77")
+	sessionKey := server.buildSessionKey("main", msg, "77")
 	session, err := store.GetByKey(context.Background(), sessionKey)
 	if err != nil {
 		t.Fatalf("failed to load session: %v", err)
@@ -495,7 +495,7 @@ func TestHandleMessageInlineCommandIgnoredWithoutAllowlist(t *testing.T) {
 		t.Fatalf("expected runtime to run once, got calls=%d", calls)
 	}
 
-	sessionKey := sessions.SessionKey("main", models.ChannelTelegram, "88")
+	sessionKey := server.buildSessionKey("main", msg, "88")
 	session, err := store.GetByKey(context.Background(), sessionKey)
 	if err != nil {
 		t.Fatalf("failed to load session: %v", err)

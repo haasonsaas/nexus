@@ -52,3 +52,4 @@ nexus trace replay ./traces/<run_id>.jsonl
 
 - Trace files are written synchronously for crash safety.
 - If `NEXUS_TRACE_DIR` is not set, `nexus events show` falls back to the in‑memory event store.
+- For GitHub Actions CI debugging, see `docs/ci.md`.

@@ -610,6 +610,11 @@ func (s *CronScheduler) routeOutput(ctx context.Context, cfg *OutputConfig, outp
 
 ### 4.3 Webhook Job
 
+**MVP implementation note (as of 2026-01-26):**
+- The shipped cron scheduler lives in `internal/cron/scheduler.go` and uses `config.CronWebhookConfig` (url/method/headers/body/timeout).
+- Auth helpers in this design doc are not implemented yet for cron webhooks.
+- Webhook calls enforce a default timeout (currently 30s) when `timeout` is not set.
+
 ```go
 // internal/cron/executors/webhook.go
 

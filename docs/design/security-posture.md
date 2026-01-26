@@ -123,3 +123,12 @@ Emit a custom event with:
 - Remediation policies per environment (dev/staging/prod).
 - Alerting integrations (webhooks, Slack, PagerDuty).
 
+---
+
+## 6. Gateway Hardening Checks (Suggested)
+
+When `include_gateway` is enabled, audits should include basic request/response safety checks that reduce DoS risk:
+
+- **Request size limits**: verify HTTP handlers that accept untrusted payloads enforce reasonable caps (e.g., webhooks, JSON APIs).
+- **Bounded reads**: ensure error paths do not `ReadAll` large upstream responses without limits.
+- **Timeouts**: ensure outbound calls from gateway subsystems (webhooks, usage fetchers, integrations) have sane defaults.

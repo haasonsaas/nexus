@@ -182,6 +182,7 @@ If you can't resolve the issue:
 
 ## See Also
 
+- [CI Debugging](./ci.md)
 - [Observability Overview](./overview.md#observability)
 - [Edge Daemon Guide](./components.md#edge-daemon)
 - [Tool Execution](./components.md#tool-execution)

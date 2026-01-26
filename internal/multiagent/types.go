@@ -74,6 +74,15 @@ type AgentDefinition struct {
 	// MaxIterations limits the agent's agentic loop iterations.
 	MaxIterations int `json:"max_iterations,omitempty" yaml:"max_iterations"`
 
+	// SwarmRole configures how this agent participates in swarm execution (optional).
+	SwarmRole SwarmRole `json:"swarm_role,omitempty" yaml:"swarm_role,omitempty"`
+
+	// DependsOn lists agent IDs that must complete before this agent runs (swarm mode).
+	DependsOn []string `json:"depends_on,omitempty" yaml:"depends_on,omitempty"`
+
+	// CanTrigger lists agent IDs that this agent can trigger (swarm mode).
+	CanTrigger []string `json:"can_trigger,omitempty" yaml:"can_trigger,omitempty"`
+
 	// Metadata contains additional agent configuration.
 	Metadata map[string]any `json:"metadata,omitempty" yaml:"metadata"`
 }
@@ -326,6 +335,9 @@ type MultiAgentConfig struct {
 	// EnablePeerHandoffs allows agents to hand off directly to each other.
 	EnablePeerHandoffs bool `json:"enable_peer_handoffs" yaml:"enable_peer_handoffs"`
 
+	// Swarm configures optional swarm-mode execution.
+	Swarm SwarmConfig `json:"swarm,omitempty" yaml:"swarm,omitempty"`
+
 	// Metadata contains additional configuration.
 	Metadata map[string]any `json:"metadata,omitempty" yaml:"metadata"`
 }
@@ -411,6 +423,14 @@ func (a *AgentDefinition) Clone() *AgentDefinition {
 	if a.HandoffRules != nil {
 		clone.HandoffRules = make([]HandoffRule, len(a.HandoffRules))
 		copy(clone.HandoffRules, a.HandoffRules)
+	}
+	if a.DependsOn != nil {
+		clone.DependsOn = make([]string, len(a.DependsOn))
+		copy(clone.DependsOn, a.DependsOn)
+	}
+	if a.CanTrigger != nil {
+		clone.CanTrigger = make([]string, len(a.CanTrigger))
+		copy(clone.CanTrigger, a.CanTrigger)
 	}
 	if a.Metadata != nil {
 		clone.Metadata = make(map[string]any)

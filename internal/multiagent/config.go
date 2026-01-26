@@ -40,6 +40,15 @@ func ParseConfigYAML(data []byte) (*MultiAgentConfig, error) {
 	if config.DefaultContextMode == "" {
 		config.DefaultContextMode = ContextFull
 	}
+	if config.Swarm.MaxParallelAgents <= 0 {
+		config.Swarm.MaxParallelAgents = 5
+	}
+	if strings.TrimSpace(config.Swarm.SharedContext.Backend) == "" {
+		config.Swarm.SharedContext.Backend = "memory"
+	}
+	if config.Swarm.SharedContext.TTL <= 0 {
+		config.Swarm.SharedContext.TTL = time.Hour
+	}
 
 	// Validate agents
 	for i := range config.Agents {

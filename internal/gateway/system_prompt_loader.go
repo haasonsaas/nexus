@@ -16,9 +16,9 @@ import (
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
-func (s *Server) systemPromptForMessage(ctx context.Context, session *models.Session, msg *models.Message) string {
+func (s *Server) systemPromptForMessage(ctx context.Context, session *models.Session, msg *models.Message) (string, []SteeringRuleTrace) {
 	if s.config == nil {
-		return ""
+		return "", nil
 	}
 
 	opts := SystemPromptOptions{
@@ -30,6 +30,11 @@ func (s *Server) systemPromptForMessage(ctx context.Context, session *models.Ses
 	}
 	if summary := s.attentionSummary(); summary != "" {
 		opts.AttentionSummary = summary
+	}
+
+	steeringDirectives, steeringTrace := s.steeringForMessage(session, msg)
+	if steeringDirectives != "" {
+		opts.SteeringDirectives = steeringDirectives
 	}
 
 	if overrides := s.experimentOverrides(session, msg); overrides.SystemPrompt != "" {
@@ -60,7 +65,7 @@ func (s *Server) systemPromptForMessage(ctx context.Context, session *models.Ses
 		opts.VectorMemoryResults = s.loadVectorMemoryContext(ctx, session, msg)
 	}
 
-	return buildSystemPrompt(s.config, opts)
+	return buildSystemPrompt(s.config, opts), steeringTrace
 }
 
 func (s *Server) attentionSummary() string {

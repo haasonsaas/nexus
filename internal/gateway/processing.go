@@ -287,7 +287,8 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 	}
 
 	promptCtx := ctx
-	if systemPrompt := s.systemPromptForMessage(ctx, session, msg); systemPrompt != "" {
+	systemPrompt, steeringTrace := s.systemPromptForMessage(ctx, session, msg)
+	if systemPrompt != "" {
 		promptCtx = agent.WithSystemPrompt(promptCtx, systemPrompt)
 	}
 	if overrides := s.experimentOverrides(session, msg); overrides.Model != "" {
@@ -348,6 +349,12 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		Role:      models.RoleAssistant,
 		Metadata:  s.buildReplyMetadata(msg),
 		CreatedAt: time.Now(),
+	}
+	if len(steeringTrace) > 0 {
+		if outboundMsg.Metadata == nil {
+			outboundMsg.Metadata = map[string]any{}
+		}
+		outboundMsg.Metadata["steering_rules"] = steeringTrace
 	}
 
 	// Streaming state - use atomic for hasStreaming to avoid race conditions

@@ -217,6 +217,16 @@ attention:
   inject_in_prompt: true
   max_items: 5
 
+steering:
+  enabled: false
+  rules:
+    - id: "priority-accounts"
+      name: "Priority account tone"
+      prompt: "When responding to priority accounts, be extra concise and confirm next steps."
+      priority: 10
+      tags: ["priority"]
+      channels: ["slack", "discord"]
+
 channels:
   telegram:
     enabled: true

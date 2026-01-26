@@ -125,7 +125,8 @@ func (g *grpcService) handleSendMessage(ctx context.Context, stream proto.NexusG
 	}
 
 	promptCtx := ctx
-	if systemPrompt := g.server.systemPromptForMessage(ctx, session, msg); systemPrompt != "" {
+	systemPrompt, steeringTrace := g.server.systemPromptForMessage(ctx, session, msg)
+	if systemPrompt != "" {
 		promptCtx = agent.WithSystemPrompt(promptCtx, systemPrompt)
 	}
 	if overrides := g.server.experimentOverrides(session, msg); overrides.Model != "" {
@@ -194,6 +195,11 @@ func (g *grpcService) handleSendMessage(ctx context.Context, stream proto.NexusG
 		Content:     response.String(),
 		ToolResults: toolResults,
 		CreatedAt:   time.Now(),
+	}
+	if len(steeringTrace) > 0 {
+		outbound.Metadata = map[string]any{
+			"steering_rules": steeringTrace,
+		}
 	}
 
 	if err := g.server.sessions.AppendMessage(ctx, session.ID, outbound); err != nil {

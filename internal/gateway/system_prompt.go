@@ -15,6 +15,7 @@ type SystemPromptOptions struct {
 	VectorMemoryResults []VectorMemoryResult // Results from semantic memory search
 	Heartbeat           string
 	AttentionSummary    string
+	SteeringDirectives  string
 	WorkspaceSections   []PromptSection
 	MemoryFlush         string
 	SkillContent        []SkillSection
@@ -111,6 +112,10 @@ func buildSystemPrompt(cfg *config.Config, opts SystemPromptOptions) string {
 
 	if attention := strings.TrimSpace(opts.AttentionSummary); attention != "" {
 		lines = append(lines, fmt.Sprintf("Attention feed (active items):\n%s", attention))
+	}
+
+	if steering := strings.TrimSpace(opts.SteeringDirectives); steering != "" {
+		lines = append(lines, fmt.Sprintf("Steering directives:\n%s", steering))
 	}
 
 	if flush := strings.TrimSpace(opts.MemoryFlush); flush != "" {

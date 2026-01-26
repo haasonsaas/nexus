@@ -652,11 +652,11 @@ func TestBroadcastManager_WithSystemPrompt(t *testing.T) {
 	promptCalls := make(map[string]int)
 	var promptMu sync.Mutex
 
-	getSystemPrompt := func(ctx context.Context, session *models.Session, msg *models.Message) string {
+	getSystemPrompt := func(ctx context.Context, session *models.Session, msg *models.Message) (string, []SteeringRuleTrace) {
 		promptMu.Lock()
 		promptCalls[session.AgentID]++
 		promptMu.Unlock()
-		return fmt.Sprintf("You are %s", session.AgentID)
+		return fmt.Sprintf("You are %s", session.AgentID), nil
 	}
 
 	results, err := manager.ProcessBroadcast(context.Background(), "peer1", msg, resolveID, getSystemPrompt)

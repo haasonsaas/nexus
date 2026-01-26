@@ -39,6 +39,7 @@ type Config struct {
 	Experiments   experiments.Config        `yaml:"experiments"`
 	VectorMemory  memory.Config             `yaml:"vector_memory"`
 	Attention     AttentionConfig           `yaml:"attention"`
+	Steering      SteeringConfig            `yaml:"steering"`
 	RAG           RAGConfig                 `yaml:"rag"`
 	MCP           mcp.Config                `yaml:"mcp"`
 	Edge          EdgeConfig                `yaml:"edge"`
@@ -100,6 +101,50 @@ type AttentionConfig struct {
 	InjectInPrompt bool `yaml:"inject_in_prompt"`
 	// MaxItems limits how many items are injected into the prompt.
 	MaxItems int `yaml:"max_items"`
+}
+
+// SteeringConfig controls conditional prompt injection rules.
+type SteeringConfig struct {
+	// Enabled toggles steering rule evaluation.
+	Enabled bool `yaml:"enabled"`
+	// Rules define conditional prompt injections.
+	Rules []SteeringRule `yaml:"rules"`
+}
+
+// SteeringRule defines a conditional prompt injection.
+type SteeringRule struct {
+	// ID is an optional stable identifier for the rule.
+	ID string `yaml:"id"`
+	// Name is a human-readable label for observability.
+	Name string `yaml:"name"`
+	// Prompt is the injected text when the rule matches.
+	Prompt string `yaml:"prompt"`
+	// Enabled toggles this rule. Defaults to true when omitted.
+	Enabled *bool `yaml:"enabled"`
+	// Priority controls ordering when multiple rules match (higher first).
+	Priority int `yaml:"priority"`
+	// Roles restrict matches to specific message roles.
+	Roles []string `yaml:"roles"`
+	// Channels restrict matches to specific channel types.
+	Channels []string `yaml:"channels"`
+	// Agents restrict matches to specific agent IDs.
+	Agents []string `yaml:"agents"`
+	// Tags restrict matches to metadata tags (any match).
+	Tags []string `yaml:"tags"`
+	// Contains restricts matches to messages containing any of the substrings.
+	Contains []string `yaml:"contains"`
+	// Metadata requires specific metadata key/value pairs.
+	Metadata map[string]string `yaml:"metadata"`
+	// TimeWindow restricts matches to a time range.
+	TimeWindow SteeringTimeWindow `yaml:"time_window"`
+}
+
+// SteeringTimeWindow restricts rule matching by absolute time.
+type SteeringTimeWindow struct {
+	// After is an RFC3339 timestamp; now must be after this to match.
+	After string `yaml:"after"`
+	// Before is an RFC3339 timestamp; now must be before this to match.
+	Before string `yaml:"before"`
 }
 
 // CommandsConfig configures gateway command handling.
@@ -1282,6 +1327,7 @@ func applyDefaults(cfg *Config) {
 	applyWorkspaceDefaults(&cfg.Workspace)
 	applyToolsDefaults(cfg)
 	applyAttentionDefaults(&cfg.Attention)
+	applySteeringDefaults(&cfg.Steering)
 	applyLLMDefaults(&cfg.LLM)
 	applyLoggingDefaults(&cfg.Logging)
 	applyObservabilityDefaults(&cfg.Observability)
@@ -1505,6 +1551,19 @@ func applyAttentionDefaults(cfg *AttentionConfig) {
 	}
 	if cfg.MaxItems == 0 {
 		cfg.MaxItems = 5
+	}
+}
+
+func applySteeringDefaults(cfg *SteeringConfig) {
+	if cfg == nil {
+		return
+	}
+	for i := range cfg.Rules {
+		rule := &cfg.Rules[i]
+		if rule.Enabled == nil {
+			enabled := true
+			rule.Enabled = &enabled
+		}
 	}
 }
 
@@ -2063,6 +2122,7 @@ func validateConfig(cfg *Config) error {
 	if cfg.Session.MemoryFlush.Threshold < 0 {
 		issues = append(issues, "session.memory_flush.threshold must be >= 0")
 	}
+	validateSteeringConfig(&issues, cfg.Steering)
 	if !validDMScope(cfg.Session.Scoping.DMScope) {
 		issues = append(issues, "session.scoping.dm_scope must be \"main\", \"per-peer\", or \"per-channel-peer\"")
 	}
@@ -2427,6 +2487,31 @@ func validResetMode(mode string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func validateSteeringConfig(issues *[]string, cfg SteeringConfig) {
+	if !cfg.Enabled {
+		return
+	}
+	for i, rule := range cfg.Rules {
+		label := rule.ID
+		if label == "" {
+			label = fmt.Sprintf("index %d", i)
+		}
+		if strings.TrimSpace(rule.Prompt) == "" {
+			*issues = append(*issues, fmt.Sprintf("steering.rules[%s].prompt is required", label))
+		}
+		if rule.TimeWindow.After != "" {
+			if _, err := time.Parse(time.RFC3339, strings.TrimSpace(rule.TimeWindow.After)); err != nil {
+				*issues = append(*issues, fmt.Sprintf("steering.rules[%s].time_window.after must be RFC3339", label))
+			}
+		}
+		if rule.TimeWindow.Before != "" {
+			if _, err := time.Parse(time.RFC3339, strings.TrimSpace(rule.TimeWindow.Before)); err != nil {
+				*issues = append(*issues, fmt.Sprintf("steering.rules[%s].time_window.before must be RFC3339", label))
+			}
+		}
 	}
 }
 

@@ -94,7 +94,7 @@ func (m *BroadcastManager) ProcessBroadcast(
 	peerID string,
 	msg *models.Message,
 	resolveConversationID func(*models.Message) (string, error),
-	getSystemPrompt func(context.Context, *models.Session, *models.Message) string,
+	getSystemPrompt func(context.Context, *models.Session, *models.Message) (string, []SteeringRuleTrace),
 ) ([]BroadcastResult, error) {
 	agents := m.GetAgentsForPeer(peerID)
 	if len(agents) == 0 {
@@ -129,7 +129,7 @@ func (m *BroadcastManager) processParallel(
 	agents []string,
 	msg *models.Message,
 	channelID string,
-	getSystemPrompt func(context.Context, *models.Session, *models.Message) string,
+	getSystemPrompt func(context.Context, *models.Session, *models.Message) (string, []SteeringRuleTrace),
 ) ([]BroadcastResult, error) {
 	results := make([]BroadcastResult, len(agents))
 	var wg sync.WaitGroup
@@ -164,7 +164,7 @@ func (m *BroadcastManager) processSequential(
 	agents []string,
 	msg *models.Message,
 	channelID string,
-	getSystemPrompt func(context.Context, *models.Session, *models.Message) string,
+	getSystemPrompt func(context.Context, *models.Session, *models.Message) (string, []SteeringRuleTrace),
 ) ([]BroadcastResult, error) {
 	results := make([]BroadcastResult, 0, len(agents))
 
@@ -196,7 +196,7 @@ func (m *BroadcastManager) processForAgent(
 	agentID string,
 	msg *models.Message,
 	channelID string,
-	getSystemPrompt func(context.Context, *models.Session, *models.Message) string,
+	getSystemPrompt func(context.Context, *models.Session, *models.Message) (string, []SteeringRuleTrace),
 ) BroadcastResult {
 	result := BroadcastResult{
 		AgentID: agentID,
@@ -222,7 +222,7 @@ func (m *BroadcastManager) processForAgent(
 	// Apply system prompt if available
 	promptCtx := ctx
 	if getSystemPrompt != nil {
-		if systemPrompt := getSystemPrompt(ctx, session, &msgCopy); systemPrompt != "" {
+		if systemPrompt, _ := getSystemPrompt(ctx, session, &msgCopy); systemPrompt != "" {
 			promptCtx = agent.WithSystemPrompt(promptCtx, systemPrompt)
 		}
 	}

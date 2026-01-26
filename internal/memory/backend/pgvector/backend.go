@@ -16,7 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/haasonsaas/nexus/internal/memory/backend"
 	"github.com/haasonsaas/nexus/pkg/models"
-	_ "github.com/lib/pq" // PostgreSQL driver
+	pq "github.com/lib/pq" // PostgreSQL driver
 )
 
 //go:embed migrations/*.sql
@@ -484,15 +484,7 @@ func (b *Backend) Delete(ctx context.Context, ids []string) error {
 		return nil
 	}
 
-	placeholders := make([]string, len(ids))
-	args := make([]any, len(ids))
-	for i, id := range ids {
-		placeholders[i] = fmt.Sprintf("$%d", i+1)
-		args[i] = id
-	}
-
-	query := fmt.Sprintf("DELETE FROM memories WHERE id IN (%s)", strings.Join(placeholders, ","))
-	_, err := b.db.ExecContext(ctx, query, args...)
+	_, err := b.db.ExecContext(ctx, "DELETE FROM memories WHERE id = ANY($1::uuid[])", pq.Array(ids))
 	return err
 }
 

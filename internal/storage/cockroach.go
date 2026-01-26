@@ -124,13 +124,15 @@ func (s *cockroachAgentStore) Get(ctx context.Context, id string) (*models.Agent
 
 func (s *cockroachAgentStore) List(ctx context.Context, userID string, limit, offset int) ([]*models.Agent, int, error) {
 	args := []any{}
-	where := ""
-	if userID != "" {
-		where = "WHERE user_id = $1"
+	hasUserFilter := userID != ""
+	if hasUserFilter {
 		args = append(args, userID)
 	}
 
-	countQuery := "SELECT count(*) FROM agents " + where
+	countQuery := "SELECT count(*) FROM agents"
+	if hasUserFilter {
+		countQuery = "SELECT count(*) FROM agents WHERE user_id = $1"
+	}
 	var total int
 	if err := s.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count agents: %w", err)
@@ -147,8 +149,15 @@ func (s *cockroachAgentStore) List(ctx context.Context, userID string, limit, of
 		limitClause += fmt.Sprintf(" OFFSET $%d", len(argsList))
 	}
 
-	query := `SELECT id, user_id, name, system_prompt, model, provider, tools, config, created_at, updated_at
-		FROM agents ` + where + ` ORDER BY created_at DESC` + limitClause
+	var queryBuilder strings.Builder
+	queryBuilder.WriteString(`SELECT id, user_id, name, system_prompt, model, provider, tools, config, created_at, updated_at
+		FROM agents`)
+	if hasUserFilter {
+		queryBuilder.WriteString(" WHERE user_id = $1")
+	}
+	queryBuilder.WriteString(" ORDER BY created_at DESC")
+	queryBuilder.WriteString(limitClause)
+	query := queryBuilder.String()
 
 	rows, err := s.db.QueryContext(ctx, query, argsList...)
 	if err != nil {
@@ -312,13 +321,15 @@ func (s *cockroachChannelConnectionStore) Get(ctx context.Context, id string) (*
 
 func (s *cockroachChannelConnectionStore) List(ctx context.Context, userID string, limit, offset int) ([]*models.ChannelConnection, int, error) {
 	args := []any{}
-	where := ""
-	if userID != "" {
-		where = "WHERE user_id = $1"
+	hasUserFilter := userID != ""
+	if hasUserFilter {
 		args = append(args, userID)
 	}
 
-	countQuery := "SELECT count(*) FROM channel_connections " + where
+	countQuery := "SELECT count(*) FROM channel_connections"
+	if hasUserFilter {
+		countQuery = "SELECT count(*) FROM channel_connections WHERE user_id = $1"
+	}
 	var total int
 	if err := s.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count channel connections: %w", err)
@@ -335,8 +346,15 @@ func (s *cockroachChannelConnectionStore) List(ctx context.Context, userID strin
 		limitClause += fmt.Sprintf(" OFFSET $%d", len(argsList))
 	}
 
-	query := `SELECT id, user_id, channel_type, channel_id, status, config, connected_at, last_activity_at
-		FROM channel_connections ` + where + ` ORDER BY connected_at DESC` + limitClause
+	var queryBuilder strings.Builder
+	queryBuilder.WriteString(`SELECT id, user_id, channel_type, channel_id, status, config, connected_at, last_activity_at
+		FROM channel_connections`)
+	if hasUserFilter {
+		queryBuilder.WriteString(" WHERE user_id = $1")
+	}
+	queryBuilder.WriteString(" ORDER BY connected_at DESC")
+	queryBuilder.WriteString(limitClause)
+	query := queryBuilder.String()
 
 	rows, err := s.db.QueryContext(ctx, query, argsList...)
 	if err != nil {

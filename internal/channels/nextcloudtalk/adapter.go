@@ -162,8 +162,13 @@ func (a *Adapter) Start(ctx context.Context) error {
 
 	addr := fmt.Sprintf("%s:%d", a.cfg.WebhookHost, a.cfg.WebhookPort)
 	a.server = &http.Server{
-		Addr:    addr,
-		Handler: mux,
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 20,
 	}
 
 	// Start server in goroutine

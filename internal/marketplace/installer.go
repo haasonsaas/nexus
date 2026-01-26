@@ -27,6 +27,12 @@ type Installer struct {
 	logger   *slog.Logger
 }
 
+const (
+	maxArtifactExtractFiles            = 2048
+	maxArtifactExtractTotalBytes int64 = 512 << 20
+	maxArtifactExtractFileBytes  int64 = 256 << 20
+)
+
 // InstallerOption configures an Installer.
 type InstallerOption func(*Installer)
 
@@ -416,14 +422,18 @@ func rollbackInstall(liveDir, backupPath string, hadExisting bool) error {
 // extractTarGz extracts a .tar.gz archive.
 func (i *Installer) extractTarGz(destDir string, data []byte) (string, error) {
 	destDir = filepath.Clean(destDir)
-	gzr, err := gzip.NewReader(bytes.NewReader(data))
+	gzr, err := gzip.NewReader(bytes.NewReader(data)) // #nosec G110 -- extraction is bounded by max bytes/files below
 	if err != nil {
 		return "", fmt.Errorf("open gzip: %w", err)
 	}
 	defer gzr.Close()
 
 	tr := tar.NewReader(gzr)
-	var binaryPath string
+	var (
+		binaryPath     string
+		extractedBytes int64
+		entries        int
+	)
 
 	for {
 		header, err := tr.Next()
@@ -432,6 +442,11 @@ func (i *Installer) extractTarGz(destDir string, data []byte) (string, error) {
 		}
 		if err != nil {
 			return "", fmt.Errorf("read tar: %w", err)
+		}
+
+		entries++
+		if entries > maxArtifactExtractFiles {
+			return "", fmt.Errorf("archive contains too many entries")
 		}
 
 		// Sanitize path
@@ -448,6 +463,17 @@ func (i *Installer) extractTarGz(destDir string, data []byte) (string, error) {
 			}
 
 		case tar.TypeReg:
+			if header.Size < 0 {
+				return "", fmt.Errorf("invalid archive entry size for %q", header.Name)
+			}
+			if header.Size > maxArtifactExtractFileBytes {
+				return "", fmt.Errorf("archive entry %q exceeds maximum file size", header.Name)
+			}
+			if header.Size > maxArtifactExtractTotalBytes-extractedBytes {
+				return "", fmt.Errorf("archive exceeds maximum extracted size")
+			}
+			extractedBytes += header.Size
+
 			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 				return "", fmt.Errorf("create parent directory: %w", err)
 			}
@@ -461,7 +487,7 @@ func (i *Installer) extractTarGz(destDir string, data []byte) (string, error) {
 				return "", fmt.Errorf("create file: %w", err)
 			}
 
-			if _, err := io.Copy(f, tr); err != nil {
+			if _, err := io.CopyN(f, tr, header.Size); err != nil {
 				_ = f.Close()
 				return "", fmt.Errorf("extract file: %w", err)
 			}
@@ -490,14 +516,23 @@ func (i *Installer) extractTarGz(destDir string, data []byte) (string, error) {
 // extractZip extracts a .zip archive.
 func (i *Installer) extractZip(destDir string, data []byte) (string, error) {
 	destDir = filepath.Clean(destDir)
-	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data))) // #nosec G110 -- extraction is bounded by max bytes/files below
 	if err != nil {
 		return "", fmt.Errorf("open zip: %w", err)
 	}
 
-	var binaryPath string
+	var (
+		binaryPath     string
+		extractedBytes int64
+		entries        int
+	)
 
 	for _, f := range zr.File {
+		entries++
+		if entries > maxArtifactExtractFiles {
+			return "", fmt.Errorf("archive contains too many entries")
+		}
+
 		// Sanitize path
 		target := filepath.Join(destDir, filepath.Clean(f.Name))
 		rel, err := filepath.Rel(destDir, target)
@@ -516,6 +551,18 @@ func (i *Installer) extractZip(destDir string, data []byte) (string, error) {
 			return "", fmt.Errorf("create parent directory: %w", err)
 		}
 
+		if f.UncompressedSize64 > uint64(maxArtifactExtractFileBytes) {
+			return "", fmt.Errorf("archive entry %q exceeds maximum file size", f.Name)
+		}
+		if extractedBytes >= maxArtifactExtractTotalBytes {
+			return "", fmt.Errorf("archive exceeds maximum extracted size")
+		}
+		remaining := maxArtifactExtractTotalBytes - extractedBytes
+		fileLimit := maxArtifactExtractFileBytes
+		if remaining < fileLimit {
+			fileLimit = remaining
+		}
+
 		rc, err := f.Open()
 		if err != nil {
 			return "", fmt.Errorf("open file in zip: %w", err)
@@ -531,11 +578,19 @@ func (i *Installer) extractZip(destDir string, data []byte) (string, error) {
 			return "", fmt.Errorf("create file: %w", err)
 		}
 
-		if _, err := io.Copy(outFile, rc); err != nil {
+		limitedReader := io.LimitReader(rc, fileLimit+1)
+		written, err := io.Copy(outFile, limitedReader)
+		if err != nil {
 			_ = rc.Close()
 			_ = outFile.Close()
 			return "", fmt.Errorf("extract file: %w", err)
 		}
+		if written > fileLimit {
+			_ = rc.Close()
+			_ = outFile.Close()
+			return "", fmt.Errorf("archive entry %q exceeds maximum file size", f.Name)
+		}
+		extractedBytes += written
 
 		if err := rc.Close(); err != nil {
 			_ = outFile.Close()

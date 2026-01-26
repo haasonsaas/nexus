@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -221,16 +220,30 @@ func (b *Backend) Delete(ctx context.Context, ids []string) error {
 		return nil
 	}
 
-	placeholders := make([]string, len(ids))
-	args := make([]any, len(ids))
-	for i, id := range ids {
-		placeholders[i] = "?"
-		args[i] = id
+	tx, err := b.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
 	}
 
-	query := fmt.Sprintf("DELETE FROM memories WHERE id IN (%s)", strings.Join(placeholders, ","))
-	_, err := b.db.ExecContext(ctx, query, args...)
-	return err
+	stmt, err := tx.PrepareContext(ctx, "DELETE FROM memories WHERE id = ?")
+	if err != nil {
+		if rbErr := tx.Rollback(); rbErr != nil {
+			return fmt.Errorf("prepare delete statement: %w (rollback: %v)", err, rbErr)
+		}
+		return fmt.Errorf("prepare delete statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, id := range ids {
+		if _, err := stmt.ExecContext(ctx, id); err != nil {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				return fmt.Errorf("delete memory %s: %w (rollback: %v)", id, err, rbErr)
+			}
+			return fmt.Errorf("delete memory %s: %w", id, err)
+		}
+	}
+
+	return tx.Commit()
 }
 
 // Count returns the number of entries matching the scope.

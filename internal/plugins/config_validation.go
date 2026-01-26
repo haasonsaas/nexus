@@ -26,8 +26,16 @@ func validateManifest(manifest *pluginsdk.Manifest) error {
 
 // ValidationIssues returns plugin validation issues for config validation hooks.
 func ValidationIssues(cfg *config.Config) []string {
-	if cfg == nil || len(cfg.Plugins.Entries) == 0 {
+	if cfg == nil {
 		return nil
+	}
+
+	var issues []string
+	if cfg.Plugins.Isolation.Enabled {
+		issues = append(issues, "plugins.isolation.enabled is not implemented yet (issue #97)")
+	}
+	if len(cfg.Plugins.Entries) == 0 {
+		return issues
 	}
 
 	paths := append([]string{}, cfg.Plugins.Load.Paths...)
@@ -42,7 +50,6 @@ func ValidationIssues(cfg *config.Config) []string {
 		return []string{fmt.Sprintf("plugin manifest discovery failed: %v", err)}
 	}
 
-	var issues []string
 	for id, entry := range cfg.Plugins.Entries {
 		var info ManifestInfo
 		var ok bool

@@ -111,6 +111,27 @@ llm:
 	}
 }
 
+func TestValidateConfigRejectsPluginIsolationEnabled(t *testing.T) {
+	cfg := writeConfigFile(t, `
+plugins:
+  isolation:
+    enabled: true
+llm:
+  default_provider: anthropic
+  providers:
+    anthropic: {}
+`)
+
+	parsed, err := config.Load(cfg)
+	if err == nil {
+		t.Fatalf("expected load error")
+	}
+	if !strings.Contains(err.Error(), "plugins.isolation.enabled is not implemented yet") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	_ = parsed
+}
+
 func writeConfigFile(t *testing.T, contents string) string {
 	t.Helper()
 	dir := t.TempDir()

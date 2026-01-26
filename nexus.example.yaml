@@ -563,6 +563,37 @@ transcription:
   model: whisper-1
   language: ""
 
+tts:
+  # When enabled, Nexus can generate audio responses (e.g., for voice messages).
+  enabled: false
+  # provider: macos | edge | openai | elevenlabs
+  provider: macos
+  # fallback_chain: [edge, openai]
+  fallback_chain: [edge]
+  max_text_length: 4096
+  timeout_seconds: 30
+  # output_dir: /tmp/nexus-tts
+  macos:
+    voice: ""
+    rate: 0
+  edge:
+    voice: en-US-AriaNeural
+    output_format: audio-24khz-48kbitrate-mono-mp3
+  openai:
+    api_key: ${OPENAI_API_KEY}
+    model: tts-1
+    voice: alloy
+    response_format: mp3
+    speed: 1.0
+    base_url: https://api.openai.com/v1
+  elevenlabs:
+    api_key: ${ELEVENLABS_API_KEY}
+    voice_id: 21m00Tcm4TlvDq8ikWAM
+    model_id: eleven_monolingual_v1
+    output_format: mp3_44100_128
+    stability: 0.5
+    similarity_boost: 0.75
+
 plugins:
   # Optional plugin manifest search paths
   load:

@@ -16,6 +16,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/ratelimit"
 	"github.com/haasonsaas/nexus/internal/skills"
 	"github.com/haasonsaas/nexus/internal/templates"
+	"github.com/haasonsaas/nexus/internal/tts"
 )
 
 // Config is the main configuration structure for Nexus.
@@ -54,6 +55,7 @@ type Config struct {
 	Observability ObservabilityConfig       `yaml:"observability"`
 	Security      SecurityConfig            `yaml:"security"`
 	Transcription TranscriptionConfig       `yaml:"transcription"`
+	TTS           tts.Config                `yaml:"tts"`
 }
 
 // GatewayConfig configures gateway-level message routing and processing.
@@ -1452,6 +1454,7 @@ func applyDefaults(cfg *Config) {
 	applyObservabilityDefaults(&cfg.Observability)
 	applySecurityDefaults(&cfg.Security)
 	applyTranscriptionDefaults(&cfg.Transcription)
+	applyTTSDefaults(&cfg.TTS)
 	applyMarketplaceDefaults(&cfg.Marketplace)
 	applyRAGDefaults(&cfg.RAG)
 	applyEdgeDefaults(&cfg.Edge)
@@ -1977,6 +1980,16 @@ func applyTranscriptionDefaults(cfg *TranscriptionConfig) {
 	if cfg.Model == "" {
 		cfg.Model = "whisper-1"
 	}
+}
+
+func applyTTSDefaults(cfg *tts.Config) {
+	if cfg == nil {
+		return
+	}
+	if cfg.Provider == "" {
+		cfg.Provider = tts.ProviderEdge
+	}
+	cfg.ApplyDefaults()
 }
 
 func applyMarketplaceDefaults(cfg *MarketplaceConfig) {

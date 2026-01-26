@@ -465,6 +465,8 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 	outboundMsg.Content = response.String()
 	outboundMsg.ToolResults = toolResults
 	outboundMsg.Attachments = attachments
+	ttsCleanup := s.maybeAttachTTSAudio(ctx, msg, outboundMsg)
+	defer ttsCleanup()
 
 	// Final update or send
 	mu.Lock()
@@ -482,6 +484,23 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 			}); err != nil {
 				s.logger.Error("failed to send outbound message", "error", err)
 				return
+			}
+		} else if len(outboundMsg.Attachments) > 0 {
+			// Streaming adapters typically only update message text; send any attachments separately.
+			attachmentMsg := &models.Message{
+				SessionID:   outboundMsg.SessionID,
+				Channel:     outboundMsg.Channel,
+				Direction:   outboundMsg.Direction,
+				Role:        outboundMsg.Role,
+				Content:     "",
+				Attachments: outboundMsg.Attachments,
+				Metadata:    outboundMsg.Metadata,
+				CreatedAt:   time.Now(),
+			}
+			if err := s.sendWithCircuitBreaker(ctx, msg.Channel, func() error {
+				return outboundAdapter.Send(ctx, attachmentMsg)
+			}); err != nil {
+				s.logger.Error("failed to send streaming attachments", "error", err)
 			}
 		}
 	} else {

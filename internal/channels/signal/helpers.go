@@ -2,10 +2,13 @@ package signal
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/channels"
@@ -154,11 +157,58 @@ type signalContact struct {
 
 // downloadURL downloads content from a URL.
 func downloadURL(url string) ([]byte, error) {
+	raw := strings.TrimSpace(url)
+	if raw == "" {
+		return nil, channels.ErrInvalidInput("missing attachment url", nil)
+	}
+
+	maxBytes := channelcontext.GetChannelInfo("signal").MaxAttachmentBytes
+	if maxBytes <= 0 {
+		maxBytes = 100 * 1024 * 1024
+	}
+
+	if strings.HasPrefix(raw, "data:") {
+		payload, err := decodeDataURL(raw)
+		if err != nil {
+			return nil, err
+		}
+		if int64(len(payload)) > maxBytes {
+			return nil, channels.ErrConnection(fmt.Sprintf("download too large (%d bytes)", len(payload)), nil)
+		}
+		return payload, nil
+	}
+
+	path := raw
+	if strings.HasPrefix(path, "file://") {
+		path = strings.TrimPrefix(path, "file://")
+	}
+	if strings.TrimSpace(path) != "" {
+		if info, err := os.Stat(path); err == nil && !info.IsDir() {
+			if info.Size() > maxBytes {
+				return nil, channels.ErrConnection(fmt.Sprintf("download too large (%d bytes)", info.Size()), nil)
+			}
+			f, err := os.Open(path)
+			if err != nil {
+				return nil, channels.ErrConnection("failed to open attachment file", err)
+			}
+			defer f.Close()
+
+			payload, err := io.ReadAll(io.LimitReader(f, maxBytes+1))
+			if err != nil {
+				return nil, err
+			}
+			if int64(len(payload)) > maxBytes {
+				return nil, channels.ErrConnection(fmt.Sprintf("download too large (%d bytes)", len(payload)), nil)
+			}
+			return payload, nil
+		}
+	}
+
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 	}
 
-	resp, err := client.Get(url)
+	resp, err := client.Get(raw)
 	if err != nil {
 		return nil, err
 	}
@@ -166,11 +216,6 @@ func downloadURL(url string) ([]byte, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, channels.ErrConnection(fmt.Sprintf("unexpected status code: %d", resp.StatusCode), nil)
-	}
-
-	maxBytes := channelcontext.GetChannelInfo("signal").MaxAttachmentBytes
-	if maxBytes <= 0 {
-		maxBytes = 100 * 1024 * 1024
 	}
 
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes+1))
@@ -181,4 +226,31 @@ func downloadURL(url string) ([]byte, error) {
 		return nil, channels.ErrConnection(fmt.Sprintf("download too large (%d bytes)", len(data)), nil)
 	}
 	return data, nil
+}
+
+func decodeDataURL(raw string) ([]byte, error) {
+	parts := strings.SplitN(raw, ",", 2)
+	if len(parts) != 2 {
+		return nil, channels.ErrInvalidInput("invalid data url format", nil)
+	}
+
+	meta := strings.TrimPrefix(parts[0], "data:")
+	payload := parts[1]
+
+	base64Encoded := false
+	for _, seg := range strings.Split(meta, ";") {
+		if strings.EqualFold(strings.TrimSpace(seg), "base64") {
+			base64Encoded = true
+			break
+		}
+	}
+	if !base64Encoded {
+		return nil, channels.ErrInvalidInput("data url must be base64 encoded", nil)
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil {
+		return nil, channels.ErrInvalidInput("decode data url", err)
+	}
+	return decoded, nil
 }

@@ -1,13 +1,16 @@
 package telegram
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"mime"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -355,6 +358,7 @@ func (a *Adapter) Stop(ctx context.Context) error {
 // Send delivers a message to Telegram with rate limiting and error handling.
 func (a *Adapter) Send(ctx context.Context, msg *nexusmodels.Message) error {
 	startTime := time.Now()
+	hasText := strings.TrimSpace(msg.Content) != ""
 
 	// Apply rate limiting
 	if err := a.rateLimiter.Wait(ctx); err != nil {
@@ -382,53 +386,56 @@ func (a *Adapter) Send(ctx context.Context, msg *nexusmodels.Message) error {
 
 	a.logger.Debug("sending message",
 		"chat_id", chatID,
-		"content_length", len(msg.Content))
+		"content_length", len(msg.Content),
+		"attachments", len(msg.Attachments))
 
-	// Handle message with inline keyboard if present
-	params := &bot.SendMessageParams{
-		ChatID: chatID,
-		Text:   msg.Content,
-	}
-	if hasThread {
-		if sendThreadID, ok := threadIDForSend(threadID); ok {
-			params.MessageThreadID = sendThreadID
+	if hasText {
+		// Handle message with inline keyboard if present
+		params := &bot.SendMessageParams{
+			ChatID: chatID,
+			Text:   msg.Content,
 		}
-	}
-
-	// Check for inline keyboard in metadata
-	if keyboard, ok := msg.Metadata["inline_keyboard"]; ok {
-		params.ReplyMarkup = keyboard
-	}
-
-	// Check for reply to message
-	if replyToID, ok := msg.Metadata["reply_to_message_id"]; ok {
-		if id, ok := replyToID.(int); ok {
-			params.ReplyParameters = &models.ReplyParameters{
-				MessageID: id,
+		if hasThread {
+			if sendThreadID, ok := threadIDForSend(threadID); ok {
+				params.MessageThreadID = sendThreadID
 			}
 		}
-	}
 
-	// Send the message
-	sentMsg, err := a.botClient.SendMessage(ctx, params)
-	if err != nil {
-		a.logger.Error("failed to send message",
-			"error", err,
-			"chat_id", chatID)
-		a.health.RecordMessageFailed()
-
-		// Classify the error
-		if isRateLimitError(err) {
-			a.health.RecordError(channels.ErrCodeRateLimit)
-			return channels.ErrRateLimit("telegram rate limit exceeded", err)
+		// Check for inline keyboard in metadata
+		if keyboard, ok := msg.Metadata["inline_keyboard"]; ok {
+			params.ReplyMarkup = keyboard
 		}
 
-		a.health.RecordError(channels.ErrCodeInternal)
-		return channels.ErrInternal("failed to send message", err)
-	}
+		// Check for reply to message
+		if replyToID, ok := msg.Metadata["reply_to_message_id"]; ok {
+			if id, ok := replyToID.(int); ok {
+				params.ReplyParameters = &models.ReplyParameters{
+					MessageID: id,
+				}
+			}
+		}
 
-	// Update message with sent message ID
-	msg.ChannelID = strconv.FormatInt(int64(sentMsg.ID), 10)
+		// Send the message
+		sentMsg, err := a.botClient.SendMessage(ctx, params)
+		if err != nil {
+			a.logger.Error("failed to send message",
+				"error", err,
+				"chat_id", chatID)
+			a.health.RecordMessageFailed()
+
+			// Classify the error
+			if isRateLimitError(err) {
+				a.health.RecordError(channels.ErrCodeRateLimit)
+				return channels.ErrRateLimit("telegram rate limit exceeded", err)
+			}
+
+			a.health.RecordError(channels.ErrCodeInternal)
+			return channels.ErrInternal("failed to send message", err)
+		}
+
+		// Update message with sent message ID
+		msg.ChannelID = strconv.FormatInt(int64(sentMsg.ID), 10)
+	}
 
 	// Handle attachments
 	if err := a.sendAttachments(ctx, chatID, threadID, msg.Attachments); err != nil {
@@ -444,10 +451,97 @@ func (a *Adapter) Send(ctx context.Context, msg *nexusmodels.Message) error {
 
 	a.logger.Debug("message sent successfully",
 		"chat_id", chatID,
-		"message_id", sentMsg.ID,
+		"message_id", msg.ChannelID,
 		"latency_ms", time.Since(startTime).Milliseconds())
 
 	return nil
+}
+
+func inputFileForAttachment(att nexusmodels.Attachment) (models.InputFile, func(), error) {
+	url := strings.TrimSpace(att.URL)
+	if url == "" {
+		return nil, nil, channels.ErrInvalidInput("attachment url is required", nil)
+	}
+	if strings.HasPrefix(url, "data:") {
+		payload, mimeType, err := decodeDataURL(url)
+		if err != nil {
+			return nil, nil, err
+		}
+		filename := strings.TrimSpace(att.Filename)
+		if filename == "" {
+			filename = "attachment"
+			if mimeType != "" {
+				if exts, err := mime.ExtensionsByType(mimeType); err == nil && len(exts) > 0 {
+					filename += exts[0]
+				}
+			}
+		}
+		return &models.InputFileUpload{
+			Filename: filename,
+			Data:     bytes.NewReader(payload),
+		}, func() {}, nil
+	}
+
+	path := url
+	if strings.HasPrefix(path, "file://") {
+		path = strings.TrimPrefix(path, "file://")
+	}
+	if strings.TrimSpace(path) != "" {
+		if info, err := os.Stat(path); err == nil && !info.IsDir() {
+			f, err := os.Open(path)
+			if err != nil {
+				return nil, nil, channels.ErrInternal("open attachment file", err)
+			}
+			filename := strings.TrimSpace(att.Filename)
+			if filename == "" {
+				filename = filepath.Base(path)
+			}
+			cleanup := func() {
+				_ = f.Close()
+			}
+			return &models.InputFileUpload{
+				Filename: filename,
+				Data:     f,
+			}, cleanup, nil
+		}
+	}
+
+	return &models.InputFileString{Data: url}, func() {}, nil
+}
+
+func decodeDataURL(raw string) ([]byte, string, error) {
+	if !strings.HasPrefix(raw, "data:") {
+		return nil, "", channels.ErrInvalidInput("data url must start with data:", nil)
+	}
+	parts := strings.SplitN(raw, ",", 2)
+	if len(parts) != 2 {
+		return nil, "", channels.ErrInvalidInput("invalid data url format", nil)
+	}
+
+	meta := strings.TrimPrefix(parts[0], "data:")
+	payload := parts[1]
+
+	mimeType := ""
+	segments := strings.Split(meta, ";")
+	if len(segments) > 0 {
+		mimeType = strings.TrimSpace(segments[0])
+	}
+	base64Encoded := false
+	for _, seg := range segments[1:] {
+		if strings.EqualFold(strings.TrimSpace(seg), "base64") {
+			base64Encoded = true
+			break
+		}
+	}
+	if !base64Encoded {
+		return nil, mimeType, channels.ErrInvalidInput("data url must be base64 encoded", nil)
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil {
+		return nil, mimeType, channels.ErrInvalidInput("decode data url", err)
+	}
+	return decoded, mimeType, nil
 }
 
 // SendTypingIndicator shows a "typing" indicator in the chat.
@@ -660,16 +754,21 @@ func (a *Adapter) sendAttachments(ctx context.Context, chatID int64, threadID in
 
 // sendPhoto sends a photo attachment.
 func (a *Adapter) sendPhoto(ctx context.Context, chatID int64, threadID int, attachment nexusmodels.Attachment) error {
+	inputFile, cleanup, err := inputFileForAttachment(attachment)
+	if err != nil {
+		a.health.RecordError(channels.ErrCodeInvalidInput)
+		return err
+	}
+	defer cleanup()
+
 	params := &bot.SendPhotoParams{
 		ChatID: chatID,
-		Photo: &models.InputFileString{
-			Data: attachment.URL,
-		},
+		Photo:  inputFile,
 	}
 	if sendThreadID, ok := threadIDForSend(threadID); ok {
 		params.MessageThreadID = sendThreadID
 	}
-	_, err := a.botClient.SendPhoto(ctx, params)
+	_, err = a.botClient.SendPhoto(ctx, params)
 	if err != nil {
 		a.health.RecordError(channels.ErrCodeInternal)
 	}
@@ -678,16 +777,21 @@ func (a *Adapter) sendPhoto(ctx context.Context, chatID int64, threadID int, att
 
 // sendDocument sends a document attachment.
 func (a *Adapter) sendDocument(ctx context.Context, chatID int64, threadID int, attachment nexusmodels.Attachment) error {
+	inputFile, cleanup, err := inputFileForAttachment(attachment)
+	if err != nil {
+		a.health.RecordError(channels.ErrCodeInvalidInput)
+		return err
+	}
+	defer cleanup()
+
 	params := &bot.SendDocumentParams{
-		ChatID: chatID,
-		Document: &models.InputFileString{
-			Data: attachment.URL,
-		},
+		ChatID:   chatID,
+		Document: inputFile,
 	}
 	if sendThreadID, ok := threadIDForSend(threadID); ok {
 		params.MessageThreadID = sendThreadID
 	}
-	_, err := a.botClient.SendDocument(ctx, params)
+	_, err = a.botClient.SendDocument(ctx, params)
 	if err != nil {
 		a.health.RecordError(channels.ErrCodeInternal)
 	}
@@ -696,16 +800,21 @@ func (a *Adapter) sendDocument(ctx context.Context, chatID int64, threadID int, 
 
 // sendAudio sends an audio attachment.
 func (a *Adapter) sendAudio(ctx context.Context, chatID int64, threadID int, attachment nexusmodels.Attachment) error {
+	inputFile, cleanup, err := inputFileForAttachment(attachment)
+	if err != nil {
+		a.health.RecordError(channels.ErrCodeInvalidInput)
+		return err
+	}
+	defer cleanup()
+
 	params := &bot.SendAudioParams{
 		ChatID: chatID,
-		Audio: &models.InputFileString{
-			Data: attachment.URL,
-		},
+		Audio:  inputFile,
 	}
 	if sendThreadID, ok := threadIDForSend(threadID); ok {
 		params.MessageThreadID = sendThreadID
 	}
-	_, err := a.botClient.SendAudio(ctx, params)
+	_, err = a.botClient.SendAudio(ctx, params)
 	if err != nil {
 		a.health.RecordError(channels.ErrCodeInternal)
 	}

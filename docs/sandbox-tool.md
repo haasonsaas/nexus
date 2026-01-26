@@ -445,11 +445,13 @@ params.MemLimit = 1024 // 1 GB
 │  │ Language Pool (Bash)             │   │
 │  └──────────────────────────────────┘   │
 ├─────────────────────────────────────────┤
-│   Docker / Firecracker Runtime Executor  │
+│   Docker* / Firecracker Runtime Executor │
 ├─────────────────────────────────────────┤
-│      Docker Engine / Firecracker         │
+│      Docker Engine* / Firecracker        │
 └─────────────────────────────────────────┘
 ```
+
+Docker is the default backend; Firecracker is optional (Linux-only).
 
 ## Future Roadmap
 

@@ -2,6 +2,9 @@ package web
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -9,6 +12,51 @@ import (
 	"github.com/haasonsaas/nexus/internal/edge"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
+
+func TestDecodeJSONRequest(t *testing.T) {
+	previousMax := maxAPIRequestBodyBytes
+	maxAPIRequestBodyBytes = 64
+	t.Cleanup(func() { maxAPIRequestBodyBytes = previousMax })
+
+	t.Run("valid", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"message":"hi"}`))
+		rec := httptest.NewRecorder()
+
+		var payload struct {
+			Message string `json:"message"`
+		}
+		status, err := decodeJSONRequest(rec, req, &payload)
+		if err != nil || status != 0 {
+			t.Fatalf("decodeJSONRequest() status=%d err=%v", status, err)
+		}
+		if payload.Message != "hi" {
+			t.Fatalf("payload.Message=%q, want %q", payload.Message, "hi")
+		}
+	})
+
+	t.Run("invalid json", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("{"))
+		rec := httptest.NewRecorder()
+
+		var payload map[string]any
+		status, err := decodeJSONRequest(rec, req, &payload)
+		if err == nil || status != http.StatusBadRequest {
+			t.Fatalf("decodeJSONRequest() status=%d err=%v, want status=%d err!=nil", status, err, http.StatusBadRequest)
+		}
+	})
+
+	t.Run("too large", func(t *testing.T) {
+		body := `{"message":"` + strings.Repeat("a", int(maxAPIRequestBodyBytes)) + `"}`
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+		rec := httptest.NewRecorder()
+
+		var payload map[string]any
+		status, err := decodeJSONRequest(rec, req, &payload)
+		if err == nil || status != http.StatusRequestEntityTooLarge {
+			t.Fatalf("decodeJSONRequest() status=%d err=%v, want status=%d err!=nil", status, err, http.StatusRequestEntityTooLarge)
+		}
+	})
+}
 
 func TestIsSensitiveKey(t *testing.T) {
 	tests := []struct {

@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -27,6 +28,28 @@ import (
 	"github.com/haasonsaas/nexus/internal/tools/naming"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
+
+var maxAPIRequestBodyBytes int64 = 10 * 1024 * 1024
+
+func decodeJSONRequest(w http.ResponseWriter, r *http.Request, dst any) (int, error) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxAPIRequestBodyBytes)
+	defer r.Body.Close()
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			return http.StatusRequestEntityTooLarge, err
+		}
+		return http.StatusBadRequest, err
+	}
+
+	if err := json.Unmarshal(body, dst); err != nil {
+		return http.StatusBadRequest, err
+	}
+
+	return 0, nil
+}
 
 // SystemStatus holds system health information.
 type SystemStatus struct {
@@ -385,8 +408,13 @@ func (h *Handler) apiSessionPatch(w http.ResponseWriter, r *http.Request, sessio
 
 	var req apiSessionPatchRequest
 	if strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			h.jsonError(w, "Invalid JSON body", http.StatusBadRequest)
+		status, err := decodeJSONRequest(w, r, &req)
+		if err != nil {
+			msg := "Invalid JSON body"
+			if status == http.StatusRequestEntityTooLarge {
+				msg = "Request entity too large"
+			}
+			h.jsonError(w, msg, status)
 			return
 		}
 	} else {
@@ -554,8 +582,13 @@ func (h *Handler) apiProviderTest(w http.ResponseWriter, r *http.Request, provid
 	}
 
 	var req providerTestRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.jsonError(w, "Invalid request body", http.StatusBadRequest)
+	status, err := decodeJSONRequest(w, r, &req)
+	if err != nil {
+		msg := "Invalid request body"
+		if status == http.StatusRequestEntityTooLarge {
+			msg = "Request entity too large"
+		}
+		h.jsonError(w, msg, status)
 		return
 	}
 
@@ -580,7 +613,7 @@ func (h *Handler) apiProviderTest(w http.ResponseWriter, r *http.Request, provid
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	err := adapter.Send(ctx, &models.Message{
+	sendErr := adapter.Send(ctx, &models.Message{
 		Channel:   channelType,
 		ChannelID: channelID,
 		Direction: models.DirectionOutbound,
@@ -591,11 +624,11 @@ func (h *Handler) apiProviderTest(w http.ResponseWriter, r *http.Request, provid
 		},
 		CreatedAt: time.Now(),
 	})
-	if err != nil {
+	if sendErr != nil {
 		h.jsonResponse(w, providerTestResponse{
 			Success: false,
 			Message: message,
-			Error:   err.Error(),
+			Error:   sendErr.Error(),
 		})
 		return
 	}
@@ -909,8 +942,13 @@ func (h *Handler) apiNodeTools(w http.ResponseWriter, r *http.Request, nodeID st
 			RunID          string            `json:"run_id,omitempty"`
 			Metadata       map[string]string `json:"metadata,omitempty"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			h.jsonError(w, "Invalid JSON body", http.StatusBadRequest)
+		status, err := decodeJSONRequest(w, r, &payload)
+		if err != nil {
+			msg := "Invalid JSON body"
+			if status == http.StatusRequestEntityTooLarge {
+				msg = "Request entity too large"
+			}
+			h.jsonError(w, msg, status)
 			return
 		}
 		input = payload.Input
@@ -956,8 +994,13 @@ func (h *Handler) apiConfigPatch(w http.ResponseWriter, r *http.Request) {
 
 	if strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
 		var payload map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			h.jsonError(w, "Invalid JSON body", http.StatusBadRequest)
+		status, err := decodeJSONRequest(w, r, &payload)
+		if err != nil {
+			msg := "Invalid JSON body"
+			if status == http.StatusRequestEntityTooLarge {
+				msg = "Request entity too large"
+			}
+			h.jsonError(w, msg, status)
 			return
 		}
 		if apply, ok := payload["apply"].(bool); ok && apply {

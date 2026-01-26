@@ -6,10 +6,10 @@ This document provides a comprehensive comparison between the Nexus macOS client
 
 | Metric | Nexus | Clawdbot | Gap |
 |--------|-------|----------|-----|
-| **Swift Files** | 128 | 252 | -124 (49% coverage) |
-| **Lines of Code** | ~29,000 | ~46,846 | -17,846 (62% coverage) |
-| **Feature Directories** | 55 | 80+ | -25 |
-| **Singleton Services** | 64 | 80+ | -16 |
+| **Swift Files** | 214 | 252 | -38 (~85% coverage) |
+| **Lines of Code** | ~68,000 | ~46,846 | +~21,000 (Nexus larger) |
+| **Feature Directories** | 64 | 80+ | -16+ |
+| **Singleton Services** | ~109 | 80+ | +~29 (Nexus higher) |
 
 ## Critical Feature Gaps
 
@@ -51,7 +51,7 @@ This document provides a comprehensive comparison between the Nexus macOS client
 **Nexus Has:**
 - Basic `UsageMenuView` with progress bars
 - No historical tracking or charts
-- No cost breakdowns
+- No cost breakdowns in the macOS UI (gateway exposes `/api/usage/costs`)
 
 **Files to Reference:**
 - `clawdbot/CostUsageMenuView.swift` (100 LOC)
@@ -352,16 +352,13 @@ Both follow similar patterns. Clawdbot makes heavier use of `AsyncStream` for st
 
 ---
 
-## Metrics Targets
+## Tracking
 
-| Metric | Current | Target | Gap |
-|--------|---------|--------|-----|
-| Swift Files | 128 | 180+ | +52 |
-| Lines of Code | 29,000 | 40,000+ | +11,000 |
-| Feature Parity | ~60% | 90%+ | +30% |
+This document focuses on feature gaps and implementation phases rather than code size targets. For up-to-date codebase stats,
+see `apps/macos/README.md`.
 
 ---
 
-*Generated: 2025-01-25*
+*Generated: 2026-01-26*
 *Nexus Version: Current HEAD*
 *Clawdbot Version: Latest Main*

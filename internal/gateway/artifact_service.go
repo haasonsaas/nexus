@@ -57,9 +57,17 @@ func (g *grpcService) GetArtifact(ctx context.Context, req *proto.GetArtifactReq
 
 	resp := &proto.GetArtifactResponse{Artifact: artifact}
 	if req.IncludeData {
-		data, err := io.ReadAll(reader)
+		maxBytes := artifacts.MaxInlineDataBytes
+		if artifact != nil && artifact.Size > 0 && artifact.Size > maxBytes {
+			return nil, status.Errorf(codes.ResourceExhausted, "artifact data too large to include (max %d bytes)", maxBytes)
+		}
+
+		data, err := io.ReadAll(io.LimitReader(reader, maxBytes+1))
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "read artifact data: %v", err)
+		}
+		if int64(len(data)) > maxBytes {
+			return nil, status.Errorf(codes.ResourceExhausted, "artifact data too large to include (max %d bytes)", maxBytes)
 		}
 		resp.Data = data
 	}

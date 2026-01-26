@@ -450,7 +450,7 @@ func (t *HTTPTransport) Call(ctx context.Context, method string, params any) (js
     defer resp.Body.Close()
 
     if resp.StatusCode != http.StatusOK {
-        body, _ := io.ReadAll(resp.Body)
+        body, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
         return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, body)
     }
 

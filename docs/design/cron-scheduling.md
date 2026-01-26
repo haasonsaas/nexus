@@ -666,7 +666,7 @@ func (s *CronScheduler) executeWebhookJob(ctx context.Context, job *Job) (string
     }
     defer resp.Body.Close()
 
-    body, _ := io.ReadAll(resp.Body)
+    body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20)) // 1MB safety cap
 
     if resp.StatusCode >= 400 {
         return string(body), fmt.Errorf("HTTP %d: %s", resp.StatusCode, body)

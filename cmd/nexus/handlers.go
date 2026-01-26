@@ -4714,12 +4714,14 @@ func runArtifactsGet(cmd *cobra.Command, configPath, artifactID, outputPath stri
 
 	// Save to file if output path specified
 	if outputPath != "" {
-		content, err := io.ReadAll(data)
+		f, err := os.OpenFile(outputPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 		if err != nil {
-			return fmt.Errorf("read artifact data: %w", err)
+			return fmt.Errorf("open output file: %w", err)
 		}
-		if err := os.WriteFile(outputPath, content, 0644); err != nil {
-			return fmt.Errorf("write file: %w", err)
+		defer f.Close()
+
+		if _, err := io.Copy(f, data); err != nil {
+			return fmt.Errorf("write artifact data: %w", err)
 		}
 		fmt.Fprintf(out, "\nSaved to: %s\n", outputPath)
 	} else {

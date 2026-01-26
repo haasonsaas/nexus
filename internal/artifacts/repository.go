@@ -79,8 +79,7 @@ func (r *MemoryRepository) StoreArtifact(ctx context.Context, artifact *pb.Artif
 	}
 
 	// For small artifacts (<1MB), store inline
-	const maxInlineSize = 1024 * 1024
-	if artifact.Size < maxInlineSize && artifact.Size > 0 {
+	if artifact.Size < MaxInlineDataBytes && artifact.Size > 0 {
 		buf := make([]byte, artifact.Size)
 		n, err := io.ReadFull(data, buf)
 		if err != nil && err != io.ErrUnexpectedEOF {

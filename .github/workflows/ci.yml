@@ -19,9 +19,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Determine Go toolchain version
+        id: go-toolchain
+        shell: bash
+        run: |
+          toolchain="$(awk '/^toolchain /{print $2; exit}' go.mod)"
+          if [ -n "${toolchain}" ]; then
+            echo "version=${toolchain#go}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$(awk '/^go /{print $2; exit}' go.mod)" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ steps.go-toolchain.outputs.version }}
           cache: true
       - name: Run tests with coverage
         run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
@@ -42,9 +52,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Determine Go toolchain version
+        id: go-toolchain
+        shell: bash
+        run: |
+          toolchain="$(awk '/^toolchain /{print $2; exit}' go.mod)"
+          if [ -n "${toolchain}" ]; then
+            echo "version=${toolchain#go}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$(awk '/^go /{print $2; exit}' go.mod)" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ steps.go-toolchain.outputs.version }}
           cache: true
       - name: Verify gofmt
         run: |
@@ -81,9 +101,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Determine Go toolchain version
+        id: go-toolchain
+        shell: bash
+        run: |
+          toolchain="$(awk '/^toolchain /{print $2; exit}' go.mod)"
+          if [ -n "${toolchain}" ]; then
+            echo "version=${toolchain#go}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$(awk '/^go /{print $2; exit}' go.mod)" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ steps.go-toolchain.outputs.version }}
           cache: true
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@latest
@@ -96,9 +126,19 @@ jobs:
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
+      - name: Determine Go toolchain version
+        id: go-toolchain
+        shell: bash
+        run: |
+          toolchain="$(awk '/^toolchain /{print $2; exit}' go.mod)"
+          if [ -n "${toolchain}" ]; then
+            echo "version=${toolchain#go}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$(awk '/^go /{print $2; exit}' go.mod)" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ steps.go-toolchain.outputs.version }}
           cache: true
       - name: Run benchmarks
         run: go test -bench=. -benchmem -run=^$ ./... | tee benchmark-results.txt
@@ -124,9 +164,19 @@ jobs:
             goarch: arm64
     steps:
       - uses: actions/checkout@v4
+      - name: Determine Go toolchain version
+        id: go-toolchain
+        shell: bash
+        run: |
+          toolchain="$(awk '/^toolchain /{print $2; exit}' go.mod)"
+          if [ -n "${toolchain}" ]; then
+            echo "version=${toolchain#go}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$(awk '/^go /{print $2; exit}' go.mod)" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ steps.go-toolchain.outputs.version }}
           cache: true
       - name: Build for ${{ matrix.goos }}/${{ matrix.goarch }}
         env:
@@ -152,9 +202,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Determine Go toolchain version
+        id: go-toolchain
+        shell: bash
+        run: |
+          toolchain="$(awk '/^toolchain /{print $2; exit}' go.mod)"
+          if [ -n "${toolchain}" ]; then
+            echo "version=${toolchain#go}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$(awk '/^go /{print $2; exit}' go.mod)" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ steps.go-toolchain.outputs.version }}
           cache: true
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6

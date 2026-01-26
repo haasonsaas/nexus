@@ -11,8 +11,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GOMODCACHE: ${{ runner.temp }}/gomodcache
-  GOCACHE: ${{ runner.temp }}/gocache
+  GOMODCACHE: /tmp/nexus-gomodcache
+  GOCACHE: /tmp/nexus-gocache
 
 jobs:
   test:

@@ -1049,6 +1049,131 @@ func runSessionsBranchesTree(cmd *cobra.Command, configPath, sessionID string) e
 	return nil
 }
 
+func runSessionsBranchesMerge(cmd *cobra.Command, configPath, sourceID, targetID, strategy string) error {
+	configPath = resolveConfigPath(configPath)
+	if strings.TrimSpace(sourceID) == "" || strings.TrimSpace(targetID) == "" {
+		return fmt.Errorf("source and target are required")
+	}
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	store, closeFn, err := openBranchStore(cfg)
+	if err != nil {
+		return err
+	}
+	if closeFn != nil {
+		defer closeFn()
+	}
+
+	strategy = strings.ToLower(strings.TrimSpace(strategy))
+	if strategy == "" {
+		strategy = string(models.MergeStrategyContinue)
+	}
+	var mergeStrategy models.MergeStrategy
+	switch strategy {
+	case string(models.MergeStrategyReplace):
+		mergeStrategy = models.MergeStrategyReplace
+	case string(models.MergeStrategyInterleave):
+		mergeStrategy = models.MergeStrategyInterleave
+	default:
+		mergeStrategy = models.MergeStrategyContinue
+	}
+
+	merge, err := store.MergeBranch(cmd.Context(), sourceID, targetID, mergeStrategy)
+	if err != nil {
+		return fmt.Errorf("merge branch: %w", err)
+	}
+
+	fmt.Fprintf(cmd.OutOrStdout(), "Merged %s into %s (strategy=%s, messages=%d)\n",
+		merge.SourceBranchID, merge.TargetBranchID, merge.Strategy, merge.MessageCount)
+	return nil
+}
+
+func runSessionsBranchesCompare(cmd *cobra.Command, configPath, sourceID, targetID string) error {
+	configPath = resolveConfigPath(configPath)
+	if strings.TrimSpace(sourceID) == "" || strings.TrimSpace(targetID) == "" {
+		return fmt.Errorf("source and target are required")
+	}
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	store, closeFn, err := openBranchStore(cfg)
+	if err != nil {
+		return err
+	}
+	if closeFn != nil {
+		defer closeFn()
+	}
+
+	compare, err := store.CompareBranches(cmd.Context(), sourceID, targetID)
+	if err != nil {
+		return fmt.Errorf("compare branches: %w", err)
+	}
+
+	out := cmd.OutOrStdout()
+	fmt.Fprintf(out, "Source: %s (%s)\n", compare.SourceBranch.ID, compare.SourceBranch.Name)
+	fmt.Fprintf(out, "Target: %s (%s)\n", compare.TargetBranch.ID, compare.TargetBranch.Name)
+	if compare.CommonAncestor != nil {
+		fmt.Fprintf(out, "Common ancestor: %s (%s)\n", compare.CommonAncestor.ID, compare.CommonAncestor.Name)
+	}
+	fmt.Fprintf(out, "Divergence point: %d\n", compare.DivergencePoint)
+	fmt.Fprintf(out, "Source ahead: %d\n", compare.SourceAhead)
+	fmt.Fprintf(out, "Target ahead: %d\n", compare.TargetAhead)
+	return nil
+}
+
+func runSessionsBranchesHistory(cmd *cobra.Command, configPath, branchID string, limit int, fromSeq int64) error {
+	configPath = resolveConfigPath(configPath)
+	if strings.TrimSpace(branchID) == "" {
+		return fmt.Errorf("branch-id is required")
+	}
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	store, closeFn, err := openBranchStore(cfg)
+	if err != nil {
+		return err
+	}
+	if closeFn != nil {
+		defer closeFn()
+	}
+
+	if limit <= 0 {
+		limit = 50
+	}
+
+	var msgs []*models.Message
+	if fromSeq >= 0 {
+		msgs, err = store.GetBranchHistoryFromSequence(cmd.Context(), branchID, fromSeq, limit)
+	} else {
+		msgs, err = store.GetBranchHistory(cmd.Context(), branchID, limit)
+	}
+	if err != nil {
+		return fmt.Errorf("get branch history: %w", err)
+	}
+	if len(msgs) == 0 {
+		fmt.Fprintln(cmd.OutOrStdout(), "No messages found.")
+		return nil
+	}
+
+	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
+	fmt.Fprintln(w, "SEQ\tROLE\tCONTENT")
+	for _, msg := range msgs {
+		content := strings.TrimSpace(msg.Content)
+		if len(content) > 120 {
+			content = content[:117] + "..."
+		}
+		fmt.Fprintf(w, "%d\t%s\t%s\n", msg.SequenceNum, msg.Role, content)
+	}
+	return w.Flush()
+}
+
 func openBranchStore(cfg *config.Config) (*sessions.CockroachBranchStore, func(), error) {
 	if cfg == nil {
 		return nil, nil, fmt.Errorf("config is required")

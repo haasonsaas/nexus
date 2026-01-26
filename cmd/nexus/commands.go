@@ -487,6 +487,9 @@ func buildSessionsBranchesCmd() *cobra.Command {
 	cmd.AddCommand(
 		buildSessionsBranchesListCmd(),
 		buildSessionsBranchesForkCmd(),
+		buildSessionsBranchesMergeCmd(),
+		buildSessionsBranchesCompareCmd(),
+		buildSessionsBranchesHistoryCmd(),
 		buildSessionsBranchesTreeCmd(),
 	)
 	return cmd
@@ -548,6 +551,67 @@ func buildSessionsBranchesTreeCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
 	cmd.Flags().StringVar(&sessionID, "session-id", "", "Session ID to show branch tree for")
+	return cmd
+}
+
+func buildSessionsBranchesMergeCmd() *cobra.Command {
+	var (
+		configPath string
+		sourceID   string
+		targetID   string
+		strategy   string
+	)
+	cmd := &cobra.Command{
+		Use:   "merge",
+		Short: "Merge a source branch into a target branch",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runSessionsBranchesMerge(cmd, configPath, sourceID, targetID, strategy)
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	cmd.Flags().StringVar(&sourceID, "source", "", "Source branch ID")
+	cmd.Flags().StringVar(&targetID, "target", "", "Target branch ID")
+	cmd.Flags().StringVar(&strategy, "strategy", "continue", "Merge strategy (replace, continue, interleave)")
+	return cmd
+}
+
+func buildSessionsBranchesCompareCmd() *cobra.Command {
+	var (
+		configPath string
+		sourceID   string
+		targetID   string
+	)
+	cmd := &cobra.Command{
+		Use:   "compare",
+		Short: "Compare two branches",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runSessionsBranchesCompare(cmd, configPath, sourceID, targetID)
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	cmd.Flags().StringVar(&sourceID, "source", "", "Source branch ID")
+	cmd.Flags().StringVar(&targetID, "target", "", "Target branch ID")
+	return cmd
+}
+
+func buildSessionsBranchesHistoryCmd() *cobra.Command {
+	var (
+		configPath string
+		branchID   string
+		limit      int
+		fromSeq    int64
+	)
+	cmd := &cobra.Command{
+		Use:   "history",
+		Short: "Show branch message history",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runSessionsBranchesHistory(cmd, configPath, branchID, limit, fromSeq)
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
+	cmd.Flags().StringVar(&branchID, "branch-id", "", "Branch ID to fetch history for")
+	cmd.Flags().IntVar(&limit, "limit", 50, "Max number of messages to return")
+	cmd.Flags().Int64Var(&fromSeq, "from-sequence", -1, "Start from sequence number (inclusive)")
 	return cmd
 }
 

@@ -94,7 +94,11 @@ func (s *Server) runMemoryConsolidation(ctx context.Context) {
 			continue
 		}
 
-		summary, err := s.summarizeSession(ctx, history, cfg, s.defaultModel)
+		model := strings.TrimSpace(cfg.Model)
+		if model == "" {
+			model = s.defaultModel
+		}
+		summary, err := s.summarizeSession(ctx, history, cfg, model)
 		if err != nil {
 			s.logger.Warn("memory consolidation: summarize failed", "session", sess.ID, "error", err)
 			continue

@@ -1,7 +1,3 @@
 package plugins
 
-import "errors"
-
-const pluginIsolationNotImplementedMessage = "plugins.isolation.enabled is not implemented yet"
-
-var errPluginIsolationNotImplemented = errors.New(pluginIsolationNotImplementedMessage)
+const pluginIsolationFallbackMessage = "plugins.isolation.enabled is set; falling back to in-process plugins"

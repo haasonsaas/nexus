@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -876,9 +877,33 @@ func (w *wsStream) Send(msg *proto.ServerMessage) error {
 	}
 	return w.send(msg)
 }
-func (w *wsStream) Recv() (*proto.ClientMessage, error) { return nil, errors.New("not implemented") }
-func (w *wsStream) SendMsg(m any) error                 { return nil }
-func (w *wsStream) RecvMsg(m any) error                 { return nil }
+func (w *wsStream) Recv() (*proto.ClientMessage, error) {
+	if w.ctx != nil {
+		select {
+		case <-w.ctx.Done():
+			return nil, w.ctx.Err()
+		default:
+		}
+	}
+	return nil, io.EOF
+}
+func (w *wsStream) SendMsg(m any) error {
+	msg, ok := m.(*proto.ServerMessage)
+	if !ok {
+		return nil
+	}
+	return w.Send(msg)
+}
+func (w *wsStream) RecvMsg(m any) error {
+	if w.ctx != nil {
+		select {
+		case <-w.ctx.Done():
+			return w.ctx.Err()
+		default:
+		}
+	}
+	return io.EOF
+}
 
 var _ proto.NexusGateway_StreamServer = (*wsStream)(nil)
 var _ grpc.ServerStream = (*wsStream)(nil)

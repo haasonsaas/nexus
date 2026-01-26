@@ -477,15 +477,20 @@ func (inProcessRuntimePluginLoader) Load(pluginID string, path string) (pluginsd
 	return loadRuntimePlugin(resolvePluginBinary(path, pluginID))
 }
 
-type unsupportedIsolationRuntimePluginLoader struct{}
+type fallbackIsolationRuntimePluginLoader struct{}
 
-func (unsupportedIsolationRuntimePluginLoader) Load(_ string, _ string) (pluginsdk.RuntimePlugin, error) {
-	return nil, errPluginIsolationNotImplemented
+var isolationFallbackOnce sync.Once
+
+func (fallbackIsolationRuntimePluginLoader) Load(pluginID string, path string) (pluginsdk.RuntimePlugin, error) {
+	isolationFallbackOnce.Do(func() {
+		slog.Warn(pluginIsolationFallbackMessage)
+	})
+	return loadRuntimePlugin(resolvePluginBinary(path, pluginID))
 }
 
 func runtimePluginLoaderForConfig(cfg *config.Config) runtimePluginLoader {
 	if cfg != nil && cfg.Plugins.Isolation.Enabled {
-		return unsupportedIsolationRuntimePluginLoader{}
+		return fallbackIsolationRuntimePluginLoader{}
 	}
 	return inProcessRuntimePluginLoader{}
 }

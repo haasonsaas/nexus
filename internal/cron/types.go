@@ -53,3 +53,16 @@ type MessageSenderFunc func(ctx context.Context, message *config.CronMessageConf
 func (f MessageSenderFunc) Send(ctx context.Context, message *config.CronMessageConfig) error {
 	return f(ctx, message)
 }
+
+// AgentRunner executes agent cron jobs.
+type AgentRunner interface {
+	Run(ctx context.Context, job *Job) error
+}
+
+// AgentRunnerFunc adapts a function to an AgentRunner.
+type AgentRunnerFunc func(ctx context.Context, job *Job) error
+
+// Run executes the agent runner function.
+func (f AgentRunnerFunc) Run(ctx context.Context, job *Job) error {
+	return f(ctx, job)
+}

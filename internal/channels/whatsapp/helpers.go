@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/haasonsaas/nexus/internal/channels"
 	channelcontext "github.com/haasonsaas/nexus/internal/channels/context"
 	"github.com/haasonsaas/nexus/internal/channels/personal"
@@ -87,19 +88,115 @@ type mediaHandler struct {
 }
 
 func (m *mediaHandler) Download(ctx context.Context, mediaID string) ([]byte, string, error) {
-	// WhatsApp media download requires the full media message
-	// This is a simplified stub - real implementation would need message history
-	return nil, "", channels.ErrUnavailable("media download not implemented", nil)
+	if m == nil || m.adapter == nil {
+		return nil, "", channels.ErrUnavailable("media handler unavailable", nil)
+	}
+	mediaID = strings.TrimSpace(mediaID)
+	if mediaID == "" {
+		return nil, "", channels.ErrInvalidInput("media id required", nil)
+	}
+	entry, ok := m.adapter.getMedia(mediaID)
+	if !ok {
+		return nil, "", channels.ErrNotFound("media not found", nil)
+	}
+	data := entry.data
+	if len(data) == 0 && entry.path != "" {
+		payload, err := os.ReadFile(entry.path)
+		if err != nil {
+			return nil, "", channels.ErrConnection("failed to read media", err)
+		}
+		data = payload
+		m.adapter.mediaMu.Lock()
+		entry.data = payload
+		m.adapter.mediaCache[mediaID] = entry
+		m.adapter.mediaMu.Unlock()
+	}
+	if len(data) == 0 {
+		return nil, "", channels.ErrNotFound("media not found", nil)
+	}
+	mimeType := entry.mimeType
+	if mimeType == "" {
+		mimeType = detectMimeType(data, entry.filename, entry.path)
+	}
+	return data, mimeType, nil
 }
 
 func (m *mediaHandler) Upload(ctx context.Context, data []byte, mimeType string, filename string) (string, error) {
-	// WhatsApp media upload is done inline with sending
-	// This is a simplified stub
-	return "", channels.ErrUnavailable("standalone media upload not supported", nil)
+	if m == nil || m.adapter == nil {
+		return "", channels.ErrUnavailable("media handler unavailable", nil)
+	}
+	if len(data) == 0 {
+		return "", channels.ErrInvalidInput("media data required", nil)
+	}
+	mediaID := uuid.NewString()
+	if mimeType == "" {
+		mimeType = detectMimeType(data, filename, "")
+	}
+	if _, err := m.adapter.storeMedia(mediaID, data, mimeType, filename); err != nil {
+		return "", channels.ErrConnection("failed to store media", err)
+	}
+	return mediaID, nil
 }
 
 func (m *mediaHandler) GetURL(ctx context.Context, mediaID string) (string, error) {
-	return "", channels.ErrUnavailable("media URL not available", nil)
+	if m == nil || m.adapter == nil {
+		return "", channels.ErrUnavailable("media handler unavailable", nil)
+	}
+	mediaID = strings.TrimSpace(mediaID)
+	if mediaID == "" {
+		return "", channels.ErrInvalidInput("media id required", nil)
+	}
+	entry, ok := m.adapter.getMedia(mediaID)
+	if !ok {
+		return "", channels.ErrNotFound("media not found", nil)
+	}
+	if entry.path == "" {
+		return "", channels.ErrUnavailable("media URL not available", nil)
+	}
+	return "file://" + entry.path, nil
+}
+
+func detectMimeType(data []byte, filename string, path string) string {
+	if filename != "" {
+		if mimeType := mimeTypeForName(filename); mimeType != "" {
+			return mimeType
+		}
+	}
+	if path != "" {
+		if mimeType := mimeTypeForName(path); mimeType != "" {
+			return mimeType
+		}
+	}
+	if len(data) > 0 {
+		return http.DetectContentType(data)
+	}
+	return ""
+}
+
+func mimeTypeForName(name string) string {
+	lower := strings.ToLower(name)
+	switch {
+	case strings.HasSuffix(lower, ".png"):
+		return "image/png"
+	case strings.HasSuffix(lower, ".jpg"), strings.HasSuffix(lower, ".jpeg"):
+		return "image/jpeg"
+	case strings.HasSuffix(lower, ".gif"):
+		return "image/gif"
+	case strings.HasSuffix(lower, ".webp"):
+		return "image/webp"
+	case strings.HasSuffix(lower, ".pdf"):
+		return "application/pdf"
+	case strings.HasSuffix(lower, ".mp3"), strings.HasSuffix(lower, ".mpeg"):
+		return "audio/mpeg"
+	case strings.HasSuffix(lower, ".wav"):
+		return "audio/wav"
+	case strings.HasSuffix(lower, ".mp4"):
+		return "video/mp4"
+	case strings.HasSuffix(lower, ".mov"):
+		return "video/quicktime"
+	default:
+		return ""
+	}
 }
 
 // presenceManager implements personal.PresenceManager for WhatsApp.

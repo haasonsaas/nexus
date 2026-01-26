@@ -21,6 +21,7 @@ type Scheduler struct {
 	logger        *slog.Logger
 	httpClient    *http.Client
 	messageSender MessageSender
+	agentRunner   AgentRunner
 	now           func() time.Time
 	tickInterval  time.Duration
 
@@ -59,6 +60,15 @@ func WithMessageSender(sender MessageSender) Option {
 	}
 }
 
+// WithAgentRunner configures the agent runner used for agent jobs.
+func WithAgentRunner(runner AgentRunner) Option {
+	return func(s *Scheduler) {
+		if runner != nil {
+			s.agentRunner = runner
+		}
+	}
+}
+
 // WithNow overrides the clock for tests.
 func WithNow(now func() time.Time) Option {
 	return func(s *Scheduler) {
@@ -84,6 +94,16 @@ func (s *Scheduler) SetMessageSender(sender MessageSender) {
 	}
 	s.mu.Lock()
 	s.messageSender = sender
+	s.mu.Unlock()
+}
+
+// SetAgentRunner updates the runner for agent jobs after initialization.
+func (s *Scheduler) SetAgentRunner(runner AgentRunner) {
+	if s == nil || runner == nil {
+		return
+	}
+	s.mu.Lock()
+	s.agentRunner = runner
 	s.mu.Unlock()
 }
 
@@ -333,7 +353,17 @@ func (s *Scheduler) buildJob(cfg config.CronJobConfig, now time.Time) (*Job, err
 			return nil, fmt.Errorf("message job missing content")
 		}
 	case JobTypeAgent:
-		return nil, fmt.Errorf("job type %s not implemented", jobType)
+		if cfg.Message == nil {
+			return nil, fmt.Errorf("agent job missing payload")
+		}
+		if strings.TrimSpace(cfg.Message.Content) == "" {
+			return nil, fmt.Errorf("agent job missing content")
+		}
+		channel := strings.TrimSpace(cfg.Message.Channel)
+		channelID := strings.TrimSpace(cfg.Message.ChannelID)
+		if (channel == "" && channelID != "") || (channel != "" && channelID == "") {
+			return nil, fmt.Errorf("agent job missing channel")
+		}
 	default:
 		return nil, fmt.Errorf("unsupported job type %q", cfg.Type)
 	}
@@ -367,6 +397,8 @@ func (s *Scheduler) executeJob(ctx context.Context, job *Job) error {
 		return s.executeWebhook(ctx, job)
 	case JobTypeMessage:
 		return s.executeMessage(ctx, job)
+	case JobTypeAgent:
+		return s.executeAgent(ctx, job)
 	default:
 		return fmt.Errorf("job type %s not implemented", job.Type)
 	}
@@ -388,6 +420,24 @@ func (s *Scheduler) executeMessage(ctx context.Context, job *Job) error {
 		return errors.New("message payload missing content")
 	}
 	return s.messageSender.Send(ctx, job.Message)
+}
+
+func (s *Scheduler) executeAgent(ctx context.Context, job *Job) error {
+	if s.agentRunner == nil {
+		return errors.New("agent runner not configured")
+	}
+	if job.Message == nil {
+		return errors.New("missing agent payload")
+	}
+	if strings.TrimSpace(job.Message.Content) == "" {
+		return errors.New("agent payload missing content")
+	}
+	channel := strings.TrimSpace(job.Message.Channel)
+	channelID := strings.TrimSpace(job.Message.ChannelID)
+	if (channel == "" && channelID != "") || (channel != "" && channelID == "") {
+		return errors.New("agent payload missing channel")
+	}
+	return s.agentRunner.Run(ctx, job)
 }
 
 func (s *Scheduler) executeWebhook(ctx context.Context, job *Job) error {

@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
@@ -646,6 +647,49 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 				}
 				return fmt.Errorf("%s", errMsg)
 			}
+			return nil
+		}))
+		server.cronScheduler.SetAgentRunner(cron.AgentRunnerFunc(func(ctx context.Context, job *cron.Job) error {
+			if job == nil || job.Message == nil {
+				return fmt.Errorf("missing agent payload")
+			}
+			content := strings.TrimSpace(job.Message.Content)
+			if content == "" {
+				return fmt.Errorf("missing agent content")
+			}
+			channel := strings.TrimSpace(job.Message.Channel)
+			channelID := strings.TrimSpace(job.Message.ChannelID)
+			if channel == "" && channelID == "" {
+				channel = string(models.ChannelAPI)
+				channelID = fmt.Sprintf("cron:%s", job.ID)
+			} else if channel == "" || channelID == "" {
+				return fmt.Errorf("agent payload missing channel")
+			}
+			channelType := models.ChannelType(channel)
+			metadata := map[string]any{
+				"cron_job_id": job.ID,
+			}
+			switch channelType {
+			case models.ChannelTelegram:
+				metadata[MetaChatID] = channelID
+			case models.ChannelSlack:
+				metadata["slack_channel"] = channelID
+			case models.ChannelDiscord:
+				metadata["discord_channel_id"] = channelID
+			case models.ChannelWhatsApp, models.ChannelSignal, models.ChannelIMessage, models.ChannelMatrix:
+				metadata[MetaPeerID] = channelID
+			}
+			msg := &models.Message{
+				ID:        uuid.NewString(),
+				Channel:   channelType,
+				ChannelID: channelID,
+				Direction: models.DirectionInbound,
+				Role:      models.RoleUser,
+				Content:   content,
+				Metadata:  metadata,
+				CreatedAt: time.Now(),
+			}
+			server.handleMessage(ctx, msg)
 			return nil
 		}))
 	}

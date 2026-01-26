@@ -111,7 +111,7 @@ llm:
 	}
 }
 
-func TestValidateConfigRejectsPluginIsolationEnabled(t *testing.T) {
+func TestValidateConfigAllowsPluginIsolationEnabled(t *testing.T) {
 	cfg := writeConfigFile(t, `
 plugins:
   isolation:
@@ -123,13 +123,12 @@ llm:
 `)
 
 	parsed, err := config.Load(cfg)
-	if err == nil {
-		t.Fatalf("expected load error")
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
 	}
-	if !strings.Contains(err.Error(), "plugins.isolation.enabled is not implemented yet") {
-		t.Fatalf("unexpected error: %v", err)
+	if err := ValidateConfig(parsed); err != nil {
+		t.Fatalf("expected validation to pass, got %v", err)
 	}
-	_ = parsed
 }
 
 func writeConfigFile(t *testing.T, contents string) string {

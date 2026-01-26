@@ -2,6 +2,7 @@ package whatsapp
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -46,6 +47,9 @@ type Adapter struct {
 	// Conversation tracking for ListConversations
 	conversations   map[string]*trackedConversation
 	conversationsMu sync.RWMutex
+
+	mediaCache map[string]mediaEntry
+	mediaMu    sync.RWMutex
 }
 
 // trackedConversation tracks metadata about a conversation.
@@ -54,6 +58,13 @@ type trackedConversation struct {
 	Type        personal.ConversationType
 	LastMessage time.Time
 	Name        string
+}
+
+type mediaEntry struct {
+	data     []byte
+	mimeType string
+	filename string
+	path     string
 }
 
 // New creates a new WhatsApp adapter.
@@ -85,6 +96,7 @@ func New(cfg *Config, logger *slog.Logger) (*Adapter, error) {
 		store:         container,
 		qrChan:        make(chan string, 1),
 		conversations: make(map[string]*trackedConversation),
+		mediaCache:    make(map[string]mediaEntry),
 	}
 
 	return adapter, nil
@@ -629,6 +641,80 @@ func (a *Adapter) sendAttachment(ctx context.Context, jid types.JID, att models.
 	return nil
 }
 
+func (a *Adapter) cacheMedia(att *personal.RawAttachment) {
+	if att == nil || att.ID == "" || len(att.Data) == 0 {
+		return
+	}
+	if att.Size == 0 {
+		att.Size = int64(len(att.Data))
+	}
+	_, err := a.storeMedia(att.ID, att.Data, att.MIMEType, att.Filename)
+	if err != nil {
+		a.Logger().Warn("failed to store media", "error", err, "media_id", att.ID)
+	}
+}
+
+func (a *Adapter) storeMedia(mediaID string, data []byte, mimeType string, filename string) (string, error) {
+	if a == nil || mediaID == "" || len(data) == 0 {
+		return "", fmt.Errorf("invalid media data")
+	}
+	entry := mediaEntry{
+		data:     data,
+		mimeType: strings.TrimSpace(mimeType),
+		filename: filename,
+	}
+	path, err := a.persistMedia(mediaID, data, filename)
+	if err == nil {
+		entry.path = path
+	}
+	a.mediaMu.Lock()
+	if a.mediaCache == nil {
+		a.mediaCache = make(map[string]mediaEntry)
+	}
+	a.mediaCache[mediaID] = entry
+	a.mediaMu.Unlock()
+	return path, err
+}
+
+func (a *Adapter) persistMedia(mediaID string, data []byte, filename string) (string, error) {
+	if a == nil || a.config == nil {
+		return "", nil
+	}
+	root := strings.TrimSpace(a.config.MediaPath)
+	if root == "" {
+		return "", nil
+	}
+	root = expandPath(root)
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		return "", err
+	}
+	name := mediaFilename(mediaID, filename)
+	path := filepath.Join(root, name)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func mediaFilename(mediaID string, filename string) string {
+	encoded := base64.RawURLEncoding.EncodeToString([]byte(mediaID))
+	ext := filepath.Ext(filename)
+	if ext != "" {
+		return encoded + ext
+	}
+	return encoded
+}
+
+func (a *Adapter) getMedia(mediaID string) (mediaEntry, bool) {
+	if a == nil {
+		return mediaEntry{}, false
+	}
+	a.mediaMu.RLock()
+	entry, ok := a.mediaCache[mediaID]
+	a.mediaMu.RUnlock()
+	return entry, ok
+}
+
 // downloadImage downloads an image attachment.
 func (a *Adapter) downloadImage(evt *events.Message) *personal.RawAttachment {
 	img := evt.Message.ImageMessage
@@ -646,11 +732,13 @@ func (a *Adapter) downloadImage(evt *events.Message) *personal.RawAttachment {
 		return nil
 	}
 
-	return &personal.RawAttachment{
+	att := &personal.RawAttachment{
 		ID:       evt.Info.ID,
 		MIMEType: img.GetMimetype(),
 		Data:     data,
 	}
+	a.cacheMedia(att)
+	return att
 }
 
 // downloadDocument downloads a document attachment.
@@ -670,12 +758,14 @@ func (a *Adapter) downloadDocument(evt *events.Message) *personal.RawAttachment 
 		return nil
 	}
 
-	return &personal.RawAttachment{
+	att := &personal.RawAttachment{
 		ID:       evt.Info.ID,
 		MIMEType: doc.GetMimetype(),
 		Filename: doc.GetFileName(),
 		Data:     data,
 	}
+	a.cacheMedia(att)
+	return att
 }
 
 // downloadAudio downloads an audio attachment.
@@ -695,11 +785,13 @@ func (a *Adapter) downloadAudio(evt *events.Message) *personal.RawAttachment {
 		return nil
 	}
 
-	return &personal.RawAttachment{
+	att := &personal.RawAttachment{
 		ID:       evt.Info.ID,
 		MIMEType: audio.GetMimetype(),
 		Data:     data,
 	}
+	a.cacheMedia(att)
+	return att
 }
 
 // downloadVideo downloads a video attachment.
@@ -719,11 +811,13 @@ func (a *Adapter) downloadVideo(evt *events.Message) *personal.RawAttachment {
 		return nil
 	}
 
-	return &personal.RawAttachment{
+	att := &personal.RawAttachment{
 		ID:       evt.Info.ID,
 		MIMEType: video.GetMimetype(),
 		Data:     data,
 	}
+	a.cacheMedia(att)
+	return att
 }
 
 // expandPath expands ~ to home directory.

@@ -213,8 +213,12 @@ func TestRuntimeRegistryCapabilitiesDenied(t *testing.T) {
 	}
 }
 
-func TestRuntimeRegistryRejectsIsolationEnabled(t *testing.T) {
+func TestRuntimeRegistryAllowsIsolationEnabled(t *testing.T) {
 	registry := NewRuntimeRegistry()
+	plugin := &stubRuntimePlugin{id: "stub-plugin"}
+	if err := registry.Register(plugin); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
 
 	cfg := &config.Config{
 		Plugins: config.PluginsConfig{
@@ -222,17 +226,16 @@ func TestRuntimeRegistryRejectsIsolationEnabled(t *testing.T) {
 				Enabled: true,
 			},
 			Entries: map[string]config.PluginEntryConfig{
-				"stub-plugin": {Enabled: true, Path: "./stub-plugin.so", Config: map[string]any{}},
+				"stub-plugin": {Enabled: true, Config: map[string]any{}},
 			},
 		},
 	}
 
 	runtime := agent.NewRuntime(stubProvider{}, stubStore{})
-	err := registry.LoadTools(cfg, runtime)
-	if err == nil {
-		t.Fatalf("expected error, got nil")
+	if err := registry.LoadTools(cfg, runtime); err != nil {
+		t.Fatalf("LoadTools() error = %v", err)
 	}
-	if !strings.Contains(err.Error(), pluginIsolationNotImplementedMessage) {
-		t.Fatalf("expected error to contain %q, got %q", pluginIsolationNotImplementedMessage, err.Error())
+	if plugin.toolsCalls != 1 {
+		t.Fatalf("expected tools to register once, got %d", plugin.toolsCalls)
 	}
 }

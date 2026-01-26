@@ -2,10 +2,16 @@ package providers
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
+	"net/http"
+	"os"
+	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -18,6 +24,11 @@ import (
 	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/haasonsaas/nexus/internal/agent/toolconv"
 	"github.com/haasonsaas/nexus/pkg/models"
+)
+
+const (
+	bedrockImageMaxBytes = 20 * 1024 * 1024
+	bedrockImageTimeout  = 30 * time.Second
 )
 
 // BedrockProvider implements the agent.LLMProvider interface for AWS Bedrock.
@@ -185,7 +196,7 @@ func (p *BedrockProvider) Complete(ctx context.Context, req *agent.CompletionReq
 	}
 
 	// Convert messages to Bedrock format
-	messages, err := p.convertMessages(req.Messages)
+	messages, err := p.convertMessages(ctx, req.Messages)
 	if err != nil {
 		return nil, fmt.Errorf("bedrock: failed to convert messages: %w", err)
 	}
@@ -323,8 +334,11 @@ func (p *BedrockProvider) processStream(ctx context.Context, stream *bedrockrunt
 }
 
 // convertMessages converts internal messages to Bedrock Converse format.
-func (p *BedrockProvider) convertMessages(messages []agent.CompletionMessage) ([]types.Message, error) {
+func (p *BedrockProvider) convertMessages(ctx context.Context, messages []agent.CompletionMessage) ([]types.Message, error) {
 	result := make([]types.Message, 0, len(messages))
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
 	for _, msg := range messages {
 		if msg.Role == "system" {
@@ -338,9 +352,17 @@ func (p *BedrockProvider) convertMessages(messages []agent.CompletionMessage) ([
 			content = append(content, &types.ContentBlockMemberText{Value: msg.Content})
 		}
 
-		// Note: Image attachments would need to be fetched from URL and converted to bytes
-		// This is not implemented as it requires HTTP fetching which should be done by the caller
-		// For now, we skip image attachments - callers should pre-process images into base64
+		// Add image attachments
+		for _, attachment := range msg.Attachments {
+			if attachment.Type != "image" {
+				continue
+			}
+			imageBlock, err := p.convertImageAttachment(ctx, attachment)
+			if err != nil {
+				continue
+			}
+			content = append(content, imageBlock)
+		}
 
 		// Add tool results
 		for _, tr := range msg.ToolResults {
@@ -385,6 +407,194 @@ func (p *BedrockProvider) convertMessages(messages []agent.CompletionMessage) ([
 	}
 
 	return result, nil
+}
+
+func (p *BedrockProvider) convertImageAttachment(ctx context.Context, attachment models.Attachment) (*types.ContentBlockMemberImage, error) {
+	data, mimeType, err := fetchImageAttachment(ctx, attachment)
+	if err != nil {
+		return nil, err
+	}
+	format, ok := bedrockImageFormat(mimeType, attachment.URL, attachment.Filename)
+	if !ok {
+		return nil, fmt.Errorf("unsupported image format")
+	}
+	return &types.ContentBlockMemberImage{
+		Value: types.ImageBlock{
+			Format: format,
+			Source: &types.ImageSourceMemberBytes{Value: data},
+		},
+	}, nil
+}
+
+func fetchImageAttachment(ctx context.Context, attachment models.Attachment) ([]byte, string, error) {
+	url := strings.TrimSpace(attachment.URL)
+	if url == "" {
+		return nil, "", fmt.Errorf("attachment url is required")
+	}
+	if strings.HasPrefix(url, "data:") {
+		data, mimeType, err := decodeBedrockDataURL(url)
+		if err != nil {
+			return nil, "", err
+		}
+		if int64(len(data)) > bedrockImageMaxBytes {
+			return nil, "", fmt.Errorf("attachment too large (%d bytes)", len(data))
+		}
+		if attachment.MimeType != "" {
+			mimeType = attachment.MimeType
+		}
+		return data, normalizeMimeType(mimeType), nil
+	}
+
+	pathValue := strings.TrimPrefix(url, "file://")
+	if pathValue != "" {
+		if info, err := os.Stat(pathValue); err == nil && !info.IsDir() {
+			if info.Size() > bedrockImageMaxBytes {
+				return nil, "", fmt.Errorf("attachment too large (%d bytes)", info.Size())
+			}
+			payload, err := os.ReadFile(pathValue)
+			if err != nil {
+				return nil, "", fmt.Errorf("read attachment: %w", err)
+			}
+			mimeType := attachment.MimeType
+			if mimeType == "" {
+				mimeType = guessImageMimeType(pathValue, attachment.Filename)
+			}
+			return payload, normalizeMimeType(mimeType), nil
+		}
+	}
+
+	requestCtx := ctx
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		requestCtx, cancel = context.WithTimeout(ctx, bedrockImageTimeout)
+		defer cancel()
+	}
+	req, err := http.NewRequestWithContext(requestCtx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, "", fmt.Errorf("create request: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, "", fmt.Errorf("fetch attachment: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return nil, "", fmt.Errorf("fetch attachment returned status %d", resp.StatusCode)
+	}
+	if resp.ContentLength > bedrockImageMaxBytes {
+		return nil, "", fmt.Errorf("attachment too large (%d bytes)", resp.ContentLength)
+	}
+	limited := io.LimitReader(resp.Body, bedrockImageMaxBytes+1)
+	data, err := io.ReadAll(limited)
+	if err != nil {
+		return nil, "", fmt.Errorf("read attachment: %w", err)
+	}
+	if int64(len(data)) > bedrockImageMaxBytes {
+		return nil, "", fmt.Errorf("attachment too large (%d bytes)", len(data))
+	}
+	mimeType := attachment.MimeType
+	if mimeType == "" {
+		mimeType = resp.Header.Get("Content-Type")
+	}
+	if mimeType == "" {
+		mimeType = guessImageMimeType(url, attachment.Filename)
+	}
+	return data, normalizeMimeType(mimeType), nil
+}
+
+func decodeBedrockDataURL(raw string) ([]byte, string, error) {
+	parts := strings.SplitN(raw, ",", 2)
+	if len(parts) != 2 {
+		return nil, "", fmt.Errorf("invalid data url")
+	}
+	meta := strings.TrimPrefix(parts[0], "data:")
+	mimeType := "image/jpeg"
+	if meta != "" {
+		metaParts := strings.Split(meta, ";")
+		if len(metaParts) > 0 && metaParts[0] != "" {
+			mimeType = metaParts[0]
+		}
+	}
+	data, err := base64.StdEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil, "", fmt.Errorf("decode data url: %w", err)
+	}
+	return data, mimeType, nil
+}
+
+func normalizeMimeType(mimeType string) string {
+	if mimeType == "" {
+		return ""
+	}
+	parts := strings.Split(mimeType, ";")
+	return strings.TrimSpace(parts[0])
+}
+
+func bedrockImageFormat(mimeType, url, filename string) (types.ImageFormat, bool) {
+	normalized := strings.ToLower(normalizeMimeType(mimeType))
+	switch normalized {
+	case "image/png":
+		return types.ImageFormatPng, true
+	case "image/jpeg", "image/jpg":
+		return types.ImageFormatJpeg, true
+	case "image/gif":
+		return types.ImageFormatGif, true
+	case "image/webp":
+		return types.ImageFormatWebp, true
+	}
+	if ext := strings.ToLower(path.Ext(url)); ext != "" {
+		return bedrockFormatFromExt(ext)
+	}
+	if ext := strings.ToLower(filepath.Ext(filename)); ext != "" {
+		return bedrockFormatFromExt(ext)
+	}
+	if ext := strings.ToLower(filepath.Ext(url)); ext != "" {
+		return bedrockFormatFromExt(ext)
+	}
+	return "", false
+}
+
+func bedrockFormatFromExt(ext string) (types.ImageFormat, bool) {
+	switch ext {
+	case ".png":
+		return types.ImageFormatPng, true
+	case ".jpg", ".jpeg":
+		return types.ImageFormatJpeg, true
+	case ".gif":
+		return types.ImageFormatGif, true
+	case ".webp":
+		return types.ImageFormatWebp, true
+	default:
+		return "", false
+	}
+}
+
+func guessImageMimeType(url, filename string) string {
+	if ext := strings.ToLower(path.Ext(url)); ext != "" {
+		return mimeTypeFromExt(ext)
+	}
+	if ext := strings.ToLower(filepath.Ext(filename)); ext != "" {
+		return mimeTypeFromExt(ext)
+	}
+	if ext := strings.ToLower(filepath.Ext(url)); ext != "" {
+		return mimeTypeFromExt(ext)
+	}
+	return ""
+}
+
+func mimeTypeFromExt(ext string) string {
+	switch ext {
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	default:
+		return ""
+	}
 }
 
 // isRetryableError determines if an error should trigger a retry.

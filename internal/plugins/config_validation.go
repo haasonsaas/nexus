@@ -31,9 +31,6 @@ func ValidationIssues(cfg *config.Config) []string {
 	}
 
 	var issues []string
-	if cfg.Plugins.Isolation.Enabled {
-		issues = append(issues, pluginIsolationNotImplementedMessage)
-	}
 	if len(cfg.Plugins.Entries) == 0 {
 		return issues
 	}

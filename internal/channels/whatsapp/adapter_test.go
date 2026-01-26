@@ -292,49 +292,82 @@ func TestDownloadURLInvalidURL(t *testing.T) {
 // Media Handler Tests
 // =============================================================================
 
-func TestMediaHandlerDownloadNotImplemented(t *testing.T) {
+func newTestMediaHandler(t *testing.T) *mediaHandler {
+	t.Helper()
+	cfg := DefaultConfig()
+	cfg.MediaPath = t.TempDir()
+	adapter := &Adapter{
+		BaseAdapter: personal.NewBaseAdapter(models.ChannelWhatsApp, &cfg.Personal, nil),
+		config:      cfg,
+		mediaCache:  make(map[string]mediaEntry),
+	}
+	return &mediaHandler{adapter: adapter}
+}
+
+func TestMediaHandlerDownloadMissingAdapter(t *testing.T) {
 	handler := &mediaHandler{}
 
 	_, _, err := handler.Download(nil, "media123")
 	if err == nil {
-		t.Error("expected error for unimplemented download")
+		t.Error("expected error for missing adapter")
 	}
 }
 
-func TestMediaHandlerUploadNotSupported(t *testing.T) {
+func TestMediaHandlerUploadMissingAdapter(t *testing.T) {
 	handler := &mediaHandler{}
 
 	_, err := handler.Upload(nil, []byte("data"), "image/png", "test.png")
 	if err == nil {
-		t.Error("expected error for unsupported upload")
+		t.Error("expected error for missing adapter")
 	}
 }
 
-func TestMediaHandlerGetURLNotAvailable(t *testing.T) {
+func TestMediaHandlerGetURLMissingAdapter(t *testing.T) {
 	handler := &mediaHandler{}
 
 	_, err := handler.GetURL(nil, "media123")
 	if err == nil {
-		t.Error("expected error for unavailable URL")
+		t.Error("expected error for missing adapter")
 	}
 }
 
 func TestMediaHandlerDownloadWithContext(t *testing.T) {
-	handler := &mediaHandler{}
+	handler := newTestMediaHandler(t)
 	ctx := context.Background()
 
 	_, _, err := handler.Download(ctx, "any-media-id")
 	if err == nil {
 		t.Error("expected error")
 	}
-	// Verify the error message indicates not implemented
-	if !strings.Contains(err.Error(), "media download not implemented") {
-		t.Errorf("unexpected error message: %s", err.Error())
+}
+
+func TestMediaHandlerUploadAndDownload(t *testing.T) {
+	handler := newTestMediaHandler(t)
+	ctx := context.Background()
+	data := []byte("data")
+
+	mediaID, err := handler.Upload(ctx, data, "image/png", "test.png")
+	if err != nil {
+		t.Fatalf("upload failed: %v", err)
+	}
+	if mediaID == "" {
+		t.Fatal("expected media ID")
+	}
+
+	payload, mimeType, err := handler.Download(ctx, mediaID)
+	if err != nil {
+		t.Fatalf("download failed: %v", err)
+	}
+	if string(payload) != string(data) {
+		t.Fatalf("unexpected payload")
+	}
+	if mimeType != "image/png" {
+		t.Fatalf("unexpected mime type: %s", mimeType)
 	}
 }
 
 func TestMediaHandlerUploadWithDifferentTypes(t *testing.T) {
-	handler := &mediaHandler{}
+	handler := newTestMediaHandler(t)
 	ctx := context.Background()
 
 	tests := []struct {
@@ -351,12 +384,37 @@ func TestMediaHandlerUploadWithDifferentTypes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := handler.Upload(ctx, []byte("data"), tt.mimeType, tt.filename)
-			if err == nil {
-				t.Error("expected error for unsupported upload")
+			mediaID, err := handler.Upload(ctx, []byte("data"), tt.mimeType, tt.filename)
+			if err != nil {
+				t.Fatalf("upload failed: %v", err)
+			}
+			_, mimeType, err := handler.Download(ctx, mediaID)
+			if err != nil {
+				t.Fatalf("download failed: %v", err)
+			}
+			if mimeType != tt.mimeType {
+				t.Fatalf("mime type mismatch: %s", mimeType)
 			}
 		})
 	}
+}
+
+func TestMediaHandlerGetURL(t *testing.T) {
+	handler := newTestMediaHandler(t)
+	ctx := context.Background()
+
+	mediaID, err := handler.Upload(ctx, []byte("data"), "image/png", "image.png")
+	if err != nil {
+		t.Fatalf("upload failed: %v", err)
+	}
+	url, err := handler.GetURL(ctx, mediaID)
+	if err != nil {
+		t.Fatalf("GetURL failed: %v", err)
+	}
+	if !strings.HasPrefix(url, "file://") {
+		t.Fatalf("unexpected url: %s", url)
+	}
+
 }
 
 // =============================================================================

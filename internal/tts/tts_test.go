@@ -103,6 +103,14 @@ func TestValidateConfig(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "valid macos config",
+			cfg: &Config{
+				Enabled:  true,
+				Provider: ProviderMacOS,
+			},
+			wantErr: false,
+		},
+		{
 			name: "valid openai config with key",
 			cfg: &Config{
 				Enabled:  true,
@@ -172,6 +180,17 @@ func TestValidateConfig(t *testing.T) {
 				Enabled:        true,
 				Provider:       ProviderEdge,
 				TimeoutSeconds: -1,
+			},
+			wantErr: true,
+		},
+		{
+			name: "negative macos rate",
+			cfg: &Config{
+				Enabled:  true,
+				Provider: ProviderMacOS,
+				MacOS: MacOSConfig{
+					Rate: -5,
+				},
 			},
 			wantErr: true,
 		},
@@ -370,6 +389,9 @@ func TestCleanup(t *testing.T) {
 func TestProviderConstants(t *testing.T) {
 	if ProviderEdge != "edge" {
 		t.Errorf("ProviderEdge = %q, want %q", ProviderEdge, "edge")
+	}
+	if ProviderMacOS != "macos" {
+		t.Errorf("ProviderMacOS = %q, want %q", ProviderMacOS, "macos")
 	}
 	if ProviderOpenAI != "openai" {
 		t.Errorf("ProviderOpenAI = %q, want %q", ProviderOpenAI, "openai")

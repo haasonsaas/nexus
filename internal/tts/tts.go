@@ -1,5 +1,5 @@
 // Package tts provides text-to-speech functionality with multiple provider support.
-// It supports Edge TTS (free Microsoft service), OpenAI TTS, and ElevenLabs,
+// It supports Edge TTS (free Microsoft service), macOS say, OpenAI TTS, and ElevenLabs,
 // with automatic fallback between providers.
 package tts
 
@@ -14,6 +14,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,6 +28,9 @@ type Provider string
 const (
 	// ProviderEdge uses Microsoft's Edge TTS service (free).
 	ProviderEdge Provider = "edge"
+
+	// ProviderMacOS uses the macOS say command.
+	ProviderMacOS Provider = "macos"
 
 	// ProviderOpenAI uses OpenAI's TTS API.
 	ProviderOpenAI Provider = "openai"
@@ -67,6 +72,9 @@ type Config struct {
 
 	// ElevenLabs configures the ElevenLabs TTS provider.
 	ElevenLabs ElevenLabsConfig `yaml:"elevenlabs"`
+
+	// MacOS configures the macOS say provider.
+	MacOS MacOSConfig `yaml:"macos"`
 }
 
 // EdgeConfig configures Edge TTS.
@@ -80,6 +88,15 @@ type EdgeConfig struct {
 	// Example: "audio-24khz-48kbitrate-mono-mp3", "audio-24khz-96kbitrate-mono-mp3"
 	// Default: "audio-24khz-48kbitrate-mono-mp3"
 	OutputFormat string `yaml:"output_format"`
+}
+
+// MacOSConfig configures the macOS say provider.
+type MacOSConfig struct {
+	// Voice is the macOS voice to use (optional).
+	Voice string `yaml:"voice"`
+
+	// Rate is the speech rate in words per minute (optional).
+	Rate int `yaml:"rate"`
 }
 
 // OpenAIConfig configures OpenAI TTS.
@@ -316,6 +333,8 @@ func synthesize(ctx context.Context, cfg *Config, text, channel string, provider
 	switch provider {
 	case ProviderEdge:
 		result, err = edgeTTS(ctx, cfg, text)
+	case ProviderMacOS:
+		result, err = macosTTS(ctx, cfg, text)
 	case ProviderOpenAI:
 		result, err = openaiTTS(ctx, cfg, text, channel)
 	case ProviderElevenLabs:
@@ -384,6 +403,57 @@ func edgeTTS(ctx context.Context, cfg *Config, text string) (*Result, error) {
 		Success:      true,
 		AudioPath:    outputPath,
 		OutputFormat: "mp3",
+	}, nil
+}
+
+func macosTTS(ctx context.Context, cfg *Config, text string) (*Result, error) {
+	if runtime.GOOS != "darwin" {
+		return nil, errors.New("tts: macos provider requires darwin")
+	}
+	if _, err := exec.LookPath("say"); err != nil {
+		return nil, errors.New("tts: say not installed")
+	}
+
+	outputDir := cfg.OutputDir
+	if outputDir == "" {
+		outputDir = os.TempDir()
+	}
+
+	outputPath := filepath.Join(outputDir, fmt.Sprintf("tts_%s.aiff", uuid.New().String()))
+	args := []string{"-o", outputPath}
+	if strings.TrimSpace(cfg.MacOS.Voice) != "" {
+		args = append(args, "-v", strings.TrimSpace(cfg.MacOS.Voice))
+	}
+	if cfg.MacOS.Rate > 0 {
+		args = append(args, "-r", strconv.Itoa(cfg.MacOS.Rate))
+	}
+	args = append(args, text)
+
+	cmd := exec.CommandContext(ctx, "say", args...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return &Result{
+			Success: false,
+			Error:   fmt.Sprintf("say failed: %v: %s", err, stderr.String()),
+		}, err
+	}
+
+	if _, err := os.Stat(outputPath); err != nil {
+		return &Result{
+			Success: false,
+			Error:   "say: output file not created",
+		}, errors.New("tts: say output file not created")
+	}
+
+	return &Result{
+		Success:      true,
+		AudioPath:    outputPath,
+		OutputFormat: "aiff",
 	}, nil
 }
 
@@ -655,7 +725,7 @@ func ValidateConfig(cfg *Config) error {
 
 	// Validate primary provider
 	switch cfg.Provider {
-	case ProviderEdge, ProviderOpenAI, ProviderElevenLabs:
+	case ProviderEdge, ProviderMacOS, ProviderOpenAI, ProviderElevenLabs:
 		// Valid
 	default:
 		return fmt.Errorf("tts: invalid provider: %s", cfg.Provider)
@@ -676,7 +746,7 @@ func ValidateConfig(cfg *Config) error {
 	// Validate fallback chain
 	for _, p := range cfg.FallbackChain {
 		switch p {
-		case ProviderEdge, ProviderOpenAI, ProviderElevenLabs:
+		case ProviderEdge, ProviderMacOS, ProviderOpenAI, ProviderElevenLabs:
 			// Valid
 		default:
 			return fmt.Errorf("tts: invalid fallback provider: %s", p)
@@ -689,6 +759,10 @@ func ValidateConfig(cfg *Config) error {
 
 	if cfg.TimeoutSeconds < 0 {
 		return errors.New("tts: timeout_seconds must be >= 0")
+	}
+
+	if cfg.MacOS.Rate < 0 {
+		return errors.New("tts: macos rate must be >= 0")
 	}
 
 	if cfg.OpenAI.Speed < 0 || cfg.OpenAI.Speed > 4.0 {

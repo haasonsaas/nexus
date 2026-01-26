@@ -19,6 +19,9 @@
             <li class="nav-item{{if eq .CurrentPath "/sessions"}} active{{end}}">
                 <a href="/ui/sessions">Sessions</a>
             </li>
+            <li class="nav-item{{if eq .CurrentPath "/analytics"}} active{{end}}">
+                <a href="/ui/analytics">Analytics</a>
+            </li>
             <li class="nav-item{{if eq .CurrentPath "/providers"}} active{{end}}">
                 <a href="/ui/providers">Providers</a>
             </li>
@@ -67,6 +70,8 @@
         {{/* Render the appropriate content based on the page */}}
         {{if eq .CurrentPath "/sessions"}}
             {{template "sessions/list.html" .}}
+        {{else if eq .CurrentPath "/analytics"}}
+            {{template "analytics/page.html" .}}
         {{else if eq .CurrentPath "/providers"}}
             {{template "providers/page.html" .}}
         {{else if eq .CurrentPath "/cron"}}

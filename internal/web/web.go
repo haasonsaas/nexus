@@ -142,6 +142,7 @@ func (h *Handler) setupRoutes() {
 	h.mux.HandleFunc("/", h.handleIndex)
 	h.mux.HandleFunc("/sessions", h.handleSessionList)
 	h.mux.HandleFunc("/sessions/", h.handleSessionDetail)
+	h.mux.HandleFunc("/analytics", h.handleAnalytics)
 	h.mux.HandleFunc("/status", h.handleStatusDashboard)
 	h.mux.HandleFunc("/providers", h.handleProviders)
 	h.mux.HandleFunc("/cron", h.handleCron)
@@ -167,6 +168,9 @@ func (h *Handler) setupRoutes() {
 	h.mux.HandleFunc("/api/config/schema", h.apiConfigSchema)
 	h.mux.HandleFunc("/api/artifacts", h.apiArtifacts)
 	h.mux.HandleFunc("/api/artifacts/", h.apiArtifact)
+
+	// Versioned API routes (JSON + optional htmx partials)
+	h.mux.HandleFunc("/api/v1/analytics/overview", h.apiAnalyticsOverview)
 }
 
 // ServeHTTP implements http.Handler.

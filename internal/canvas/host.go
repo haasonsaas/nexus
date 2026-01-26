@@ -1315,8 +1315,18 @@ func (h *Host) actionsHandler() http.Handler {
 			Context           json.RawMessage `json:"context"`
 			UserID            string          `json:"user_id"`
 		}
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
-		if err := decoder.Decode(&req); err != nil {
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			var maxErr *http.MaxBytesError
+			if errors.As(err, &maxErr) {
+				http.Error(w, "request entity too large", http.StatusRequestEntityTooLarge)
+				return
+			}
+			http.Error(w, "invalid payload", http.StatusBadRequest)
+			return
+		}
+		if err := json.Unmarshal(body, &req); err != nil {
 			http.Error(w, "invalid payload", http.StatusBadRequest)
 			return
 		}

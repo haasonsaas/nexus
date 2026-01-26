@@ -455,7 +455,7 @@ func getDockerImage(language string) string {
 	case "nodejs":
 		return "node:20-alpine"
 	case "go":
-		return "golang:1.22-alpine"
+		return "golang:1.24-alpine"
 	case "bash":
 		return "bash:5-alpine"
 	default:

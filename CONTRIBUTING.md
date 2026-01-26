@@ -16,7 +16,7 @@ Please be respectful and constructive in all interactions. We aim to maintain a 
 - Playwright system dependencies (for browser tool tests)
 
 Optional integration test requirements:
-- Docker images: `python:3.11-alpine`, `node:20-alpine`, `golang:1.22-alpine`, `bash:5-alpine`
+- Docker images: `python:3.11-alpine`, `node:20-alpine`, `golang:1.24-alpine`, `bash:5-alpine`
 - Playwright browser dependencies (GTK/GStreamer/etc.)
 
 ### Development Setup

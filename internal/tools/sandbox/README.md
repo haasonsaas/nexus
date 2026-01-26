@@ -175,7 +175,7 @@ type Tool interface {
 - Command: `node main.js`
 
 ### Go
-- Image: `golang:1.22-alpine`
+- Image: `golang:1.24-alpine`
 - File: `main.go`
 - Command: `go run main.go`
 

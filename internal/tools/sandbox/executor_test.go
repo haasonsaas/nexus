@@ -41,7 +41,7 @@ func requireDocker(t *testing.T) {
 			return
 		}
 
-		images := []string{"python:3.11-alpine", "node:20-alpine", "golang:1.22-alpine", "bash:5-alpine"}
+			images := []string{"python:3.11-alpine", "node:20-alpine", "golang:1.24-alpine", "bash:5-alpine"}
 		for _, image := range images {
 			if err := exec.CommandContext(ctx, "docker", "image", "inspect", image).Run(); err != nil {
 				if !allowPull {
@@ -974,7 +974,7 @@ func TestGetDockerImage(t *testing.T) {
 	}{
 		{"python", "python:3.11-alpine"},
 		{"nodejs", "node:20-alpine"},
-		{"go", "golang:1.22-alpine"},
+		{"go", "golang:1.24-alpine"},
 		{"bash", "bash:5-alpine"},
 		{"unknown", "alpine:latest"},
 	}

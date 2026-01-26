@@ -24,6 +24,7 @@ import (
 	exectools "github.com/haasonsaas/nexus/internal/tools/exec"
 	"github.com/haasonsaas/nexus/internal/tools/files"
 	gatewaytools "github.com/haasonsaas/nexus/internal/tools/gateway"
+	"github.com/haasonsaas/nexus/internal/tools/homeassistant"
 	jobtools "github.com/haasonsaas/nexus/internal/tools/jobs"
 	"github.com/haasonsaas/nexus/internal/tools/memorysearch"
 	"github.com/haasonsaas/nexus/internal/tools/message"
@@ -530,6 +531,22 @@ func (s *Server) registerTools(ctx context.Context, runtime *agent.Runtime) erro
 		runtime.RegisterTool(servicenow.NewResolveTicketTool(snowClient))
 		runtime.RegisterTool(servicenow.NewUpdateTicketTool(snowClient))
 		s.logger.Info("registered ServiceNow tools")
+	}
+
+	// Register Home Assistant tools if enabled
+	if s.config.Channels.HomeAssistant.Enabled {
+		haClient, err := homeassistant.NewClient(homeassistant.Config{
+			BaseURL: s.config.Channels.HomeAssistant.BaseURL,
+			Token:   s.config.Channels.HomeAssistant.Token,
+			Timeout: s.config.Channels.HomeAssistant.Timeout,
+		})
+		if err != nil {
+			return fmt.Errorf("home assistant client: %w", err)
+		}
+		runtime.RegisterTool(homeassistant.NewCallServiceTool(haClient))
+		runtime.RegisterTool(homeassistant.NewGetStateTool(haClient))
+		runtime.RegisterTool(homeassistant.NewListEntitiesTool(haClient))
+		s.logger.Info("registered Home Assistant tools")
 	}
 
 	if s.config.MCP.Enabled && s.mcpManager != nil {

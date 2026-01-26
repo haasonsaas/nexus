@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -430,6 +431,8 @@ type ChannelsConfig struct {
 	NextcloudTalk NextcloudTalkConfig `yaml:"nextcloud_talk"`
 	Zalo          ZaloConfig          `yaml:"zalo"`
 	BlueBubbles   BlueBubblesConfig   `yaml:"bluebubbles"`
+
+	HomeAssistant HomeAssistantConfig `yaml:"homeassistant"`
 }
 
 type ChannelPolicyConfig struct {
@@ -518,6 +521,19 @@ type TelegramConfig struct {
 	Group ChannelPolicyConfig `yaml:"group"`
 
 	Markdown ChannelMarkdownConfig `yaml:"markdown"`
+}
+
+type HomeAssistantConfig struct {
+	Enabled bool `yaml:"enabled"`
+
+	// BaseURL is the Home Assistant instance URL (e.g., http://homeassistant:8123).
+	BaseURL string `yaml:"base_url"`
+
+	// Token is a long-lived access token.
+	Token string `yaml:"token"`
+
+	// Timeout is the request timeout when calling Home Assistant APIs.
+	Timeout time.Duration `yaml:"timeout"`
 }
 
 type DiscordConfig struct {
@@ -2170,6 +2186,22 @@ func validateConfig(cfg *Config) error {
 	validateChannelPolicy(&issues, "channels.zalo.group", cfg.Channels.Zalo.Group)
 	validateChannelPolicy(&issues, "channels.bluebubbles.dm", cfg.Channels.BlueBubbles.DM)
 	validateChannelPolicy(&issues, "channels.bluebubbles.group", cfg.Channels.BlueBubbles.Group)
+	if cfg.Channels.HomeAssistant.Enabled {
+		baseURL := strings.TrimSpace(cfg.Channels.HomeAssistant.BaseURL)
+		if baseURL == "" {
+			issues = append(issues, "channels.homeassistant.base_url is required when enabled")
+		} else if parsed, err := url.Parse(baseURL); err != nil || parsed == nil || strings.TrimSpace(parsed.Scheme) == "" || strings.TrimSpace(parsed.Host) == "" {
+			issues = append(issues, "channels.homeassistant.base_url must be a valid URL")
+		} else if parsed.Scheme != "http" && parsed.Scheme != "https" {
+			issues = append(issues, "channels.homeassistant.base_url scheme must be http or https")
+		}
+		if strings.TrimSpace(cfg.Channels.HomeAssistant.Token) == "" {
+			issues = append(issues, "channels.homeassistant.token is required when enabled")
+		}
+		if cfg.Channels.HomeAssistant.Timeout < 0 {
+			issues = append(issues, "channels.homeassistant.timeout must be >= 0")
+		}
+	}
 	if cfg.Channels.Slack.Canvas.Enabled {
 		command := strings.TrimSpace(cfg.Channels.Slack.Canvas.Command)
 		if command == "" {

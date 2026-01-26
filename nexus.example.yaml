@@ -277,6 +277,13 @@ channels:
       #   T1234567890:
       #     U1234567890: viewer
 
+  # Optional: Home Assistant conversation + tools integration
+  homeassistant:
+    enabled: false
+    base_url: http://homeassistant:8123
+    token: ${HOME_ASSISTANT_TOKEN}
+    # timeout: 10s
+
   teams:
     enabled: false
     tenant_id: ${TEAMS_TENANT_ID}

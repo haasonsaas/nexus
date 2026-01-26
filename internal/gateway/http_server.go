@@ -26,6 +26,12 @@ func (s *Server) startHTTPServer(ctx context.Context) error {
 	mux.Handle("/metrics", promhttp.Handler())
 	mux.HandleFunc("/healthz", s.handleHealthz)
 
+	if s.config.Channels.HomeAssistant.Enabled {
+		var haHandler http.Handler = http.HandlerFunc(s.handleHomeAssistantConversation)
+		haHandler = web.AuthMiddleware(s.authService, s.logger)(haHandler)
+		mux.Handle("/api/v1/ha/conversation", haHandler)
+	}
+
 	mux.Handle("/ws", s.newWSControlPlane())
 
 	webHandler, err := web.NewHandler(&web.Config{

@@ -21,6 +21,7 @@ import (
 	exectools "github.com/haasonsaas/nexus/internal/tools/exec"
 	"github.com/haasonsaas/nexus/internal/tools/facts"
 	"github.com/haasonsaas/nexus/internal/tools/files"
+	"github.com/haasonsaas/nexus/internal/tools/homeassistant"
 	jobtools "github.com/haasonsaas/nexus/internal/tools/jobs"
 	"github.com/haasonsaas/nexus/internal/tools/memorysearch"
 	"github.com/haasonsaas/nexus/internal/tools/policy"
@@ -307,6 +308,21 @@ func (m *ToolManager) RegisterTools(ctx context.Context, runtime *agent.Runtime)
 		m.registerCoreTool(runtime, attention.NewHandleAttentionTool(m.attentionFeed))
 		m.registerCoreTool(runtime, attention.NewSnoozeAttentionTool(m.attentionFeed))
 		m.registerCoreTool(runtime, attention.NewStatsAttentionTool(m.attentionFeed))
+	}
+
+	// Register Home Assistant tools if enabled
+	if cfg.Channels.HomeAssistant.Enabled {
+		haClient, err := homeassistant.NewClient(homeassistant.Config{
+			BaseURL: cfg.Channels.HomeAssistant.BaseURL,
+			Token:   cfg.Channels.HomeAssistant.Token,
+			Timeout: cfg.Channels.HomeAssistant.Timeout,
+		})
+		if err != nil {
+			return fmt.Errorf("home assistant client: %w", err)
+		}
+		m.registerCoreTool(runtime, homeassistant.NewCallServiceTool(haClient))
+		m.registerCoreTool(runtime, homeassistant.NewGetStateTool(haClient))
+		m.registerCoreTool(runtime, homeassistant.NewListEntitiesTool(haClient))
 	}
 
 	// Register MCP tools

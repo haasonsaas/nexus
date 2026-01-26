@@ -46,6 +46,7 @@ func (s *Server) startHTTPServer(ctx context.Context) error {
 		ToolSummaryProvider: s.toolManager,
 		GatewayConfig:       s.config,
 		EventStore:          s.eventStore,
+		UsageCache:          s.integration.UsageCache(),
 		ConfigManager:       s,
 		ConfigPath:          s.configPath,
 		DefaultAgentID:      s.config.Session.DefaultAgentID,

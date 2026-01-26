@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"mime"
 	"net/http"
 	"os"
@@ -29,6 +30,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/status"
 	"github.com/haasonsaas/nexus/internal/tools/naming"
+	"github.com/haasonsaas/nexus/internal/usage"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
@@ -98,6 +100,27 @@ type ProviderStatus struct {
 	HealthDegraded bool   `json:"health_degraded,omitempty"`
 	QRAvailable    bool   `json:"qr_available,omitempty"`
 	QRUpdatedAt    string `json:"qr_updated_at,omitempty"`
+}
+
+const usageBaselineTokens int64 = 1_000_000
+
+type usageWindowResponse struct {
+	Label       string  `json:"label"`
+	UsedPercent float64 `json:"usedPercent"`
+	ResetAt     *int64  `json:"resetAt,omitempty"`
+}
+
+type usageProviderResponse struct {
+	Provider    string                `json:"provider"`
+	DisplayName string                `json:"displayName"`
+	Windows     []usageWindowResponse `json:"windows"`
+	Plan        string                `json:"plan,omitempty"`
+	Error       string                `json:"error,omitempty"`
+}
+
+type usageSummaryResponse struct {
+	UpdatedAt int64                   `json:"updatedAt"`
+	Providers []usageProviderResponse `json:"providers"`
 }
 
 type costUsageEntry struct {
@@ -688,6 +711,74 @@ func (h *Handler) apiTools(w http.ResponseWriter, r *http.Request) {
 	h.jsonResponse(w, map[string]any{"tools": tools})
 }
 
+// apiUsage handles GET /api/usage.
+func (h *Handler) apiUsage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h.config == nil || h.config.UsageCache == nil {
+		h.jsonError(w, "Usage data unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	providerIDs, providerConfigs := usageProviderIDs(h.config.GatewayConfig)
+	usageByProvider := make(map[string]*usage.ProviderUsage)
+	if len(providerIDs) == 0 {
+		for _, entry := range h.config.UsageCache.GetAll(ctx) {
+			if entry == nil {
+				continue
+			}
+			providerID := strings.ToLower(strings.TrimSpace(entry.Provider))
+			if providerID == "" {
+				continue
+			}
+			if _, ok := usageByProvider[providerID]; ok {
+				continue
+			}
+			providerIDs = append(providerIDs, providerID)
+			usageByProvider[providerID] = entry
+		}
+	}
+
+	for _, providerID := range providerIDs {
+		if _, ok := usageByProvider[providerID]; ok {
+			continue
+		}
+		entry, err := h.config.UsageCache.Get(ctx, providerID)
+		if err != nil {
+			entry = &usage.ProviderUsage{
+				Provider:  providerID,
+				FetchedAt: time.Now().UnixMilli(),
+				Error:     err.Error(),
+			}
+		} else if entry == nil {
+			entry = &usage.ProviderUsage{
+				Provider:  providerID,
+				FetchedAt: time.Now().UnixMilli(),
+				Error:     "no usage data",
+			}
+		}
+		usageByProvider[providerID] = entry
+	}
+
+	sort.Strings(providerIDs)
+	response := usageSummaryResponse{
+		UpdatedAt: time.Now().UnixMilli(),
+		Providers: make([]usageProviderResponse, 0, len(providerIDs)),
+	}
+	for _, providerID := range providerIDs {
+		entry := usageByProvider[providerID]
+		providerCfg, ok := providerConfigs[providerID]
+		response.Providers = append(response.Providers, buildUsageProvider(providerID, providerCfg, ok, entry))
+	}
+
+	h.jsonResponse(w, response)
+}
+
 // apiUsageCosts handles GET /api/usage/costs.
 func (h *Handler) apiUsageCosts(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -749,6 +840,129 @@ func (h *Handler) apiUsageCosts(w http.ResponseWriter, r *http.Request) {
 	})
 
 	h.jsonResponse(w, costUsageResponse{Entries: entries})
+}
+
+func usageProviderIDs(cfg *config.Config) ([]string, map[string]config.LLMProviderConfig) {
+	configs := make(map[string]config.LLMProviderConfig)
+	if cfg == nil {
+		return nil, configs
+	}
+	providers := make([]string, 0, len(cfg.LLM.Providers))
+	for id, providerCfg := range cfg.LLM.Providers {
+		providerID := strings.ToLower(strings.TrimSpace(id))
+		if providerID == "" {
+			continue
+		}
+		if _, ok := configs[providerID]; ok {
+			continue
+		}
+		providers = append(providers, providerID)
+		configs[providerID] = providerCfg
+	}
+	return providers, configs
+}
+
+func buildUsageProvider(providerID string, providerCfg config.LLMProviderConfig, hasConfig bool, entry *usage.ProviderUsage) usageProviderResponse {
+	errMsg := ""
+	if entry != nil && entry.Error != "" {
+		errMsg = entry.Error
+	}
+	if hasConfig && strings.TrimSpace(providerCfg.APIKey) == "" {
+		if errMsg == "" || errMsg == "provider not configured" {
+			errMsg = "no API key configured"
+		}
+	}
+	label := "Current period"
+	if entry != nil {
+		if period := strings.TrimSpace(entry.Period); period != "" {
+			label = period
+		}
+	}
+	usedPercent := usagePercent(entry, errMsg)
+	return usageProviderResponse{
+		Provider:    providerID,
+		DisplayName: providerDisplayName(providerID),
+		Windows: []usageWindowResponse{{
+			Label:       label,
+			UsedPercent: usedPercent,
+		}},
+		Plan:  "",
+		Error: errMsg,
+	}
+}
+
+func usagePercent(entry *usage.ProviderUsage, errMsg string) float64 {
+	if errMsg != "" || entry == nil || entry.TotalTokens <= 0 || usageBaselineTokens <= 0 {
+		return 0
+	}
+	percent := float64(entry.TotalTokens) / float64(usageBaselineTokens) * 100
+	if percent < 0 {
+		return 0
+	}
+	return math.Min(100, percent)
+}
+
+func providerDisplayName(provider string) string {
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	switch provider {
+	case "openai":
+		return "OpenAI"
+	case "anthropic":
+		return "Anthropic"
+	case "google":
+		return "Google"
+	case "gemini":
+		return "Gemini"
+	case "bedrock":
+		return "AWS Bedrock"
+	case "azure", "azure-openai":
+		return "Azure OpenAI"
+	case "cohere":
+		return "Cohere"
+	case "mistral":
+		return "Mistral"
+	case "groq":
+		return "Groq"
+	case "ollama":
+		return "Ollama"
+	case "venice":
+		return "Venice"
+	case "deepseek":
+		return "DeepSeek"
+	case "perplexity":
+		return "Perplexity"
+	case "xai", "x-ai":
+		return "xAI"
+	case "openrouter":
+		return "OpenRouter"
+	case "together":
+		return "Together"
+	case "huggingface", "hf":
+		return "Hugging Face"
+	case "fireworks":
+		return "Fireworks"
+	case "replicate":
+		return "Replicate"
+	case "ai21":
+		return "AI21"
+	case "claude":
+		return "Claude"
+	case "amazon":
+		return "Amazon"
+	}
+	if provider == "" {
+		return "Unknown"
+	}
+	parts := strings.FieldsFunc(provider, func(r rune) bool {
+		return r == '-' || r == '_'
+	})
+	for i, part := range parts {
+		if part == "" {
+			continue
+		}
+		parts[i] = strings.ToUpper(part[:1]) + part[1:]
+	}
+	return strings.Join(parts, " ")
 }
 
 // apiSkillsRefresh triggers skill discovery.

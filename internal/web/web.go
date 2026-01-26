@@ -23,6 +23,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/observability"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/skills"
+	"github.com/haasonsaas/nexus/internal/usage"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
@@ -52,6 +53,8 @@ type Config struct {
 	EdgeManager *edge.Manager
 	// EventStore for usage and observability data
 	EventStore observability.EventStore
+	// UsageCache provides provider usage data (optional)
+	UsageCache *usage.UsageCache
 	// ToolSummaryProvider supplies core + MCP tool metadata (optional)
 	ToolSummaryProvider ToolSummaryProvider
 	// GatewayConfig is the active runtime configuration (for summary views)
@@ -165,6 +168,7 @@ func (h *Handler) setupRoutes() {
 	h.mux.HandleFunc("/api/skills", h.apiSkills)
 	h.mux.HandleFunc("/api/skills/refresh", h.apiSkillsRefresh)
 	h.mux.HandleFunc("/api/tools", h.apiTools)
+	h.mux.HandleFunc("/api/usage", h.apiUsage)
 	h.mux.HandleFunc("/api/usage/costs", h.apiUsageCosts)
 	h.mux.HandleFunc("/api/nodes", h.apiNodes)
 	h.mux.HandleFunc("/api/nodes/", h.apiNode)

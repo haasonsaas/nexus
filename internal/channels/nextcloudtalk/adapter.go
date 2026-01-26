@@ -157,7 +157,9 @@ func (a *Adapter) Start(ctx context.Context) error {
 	mux.HandleFunc(a.cfg.WebhookPath, a.handleWebhook)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
+		if _, err := w.Write([]byte("ok")); err != nil {
+			a.logger.Debug("healthz write failed", "error", err)
+		}
 	})
 
 	addr := fmt.Sprintf("%s:%d", a.cfg.WebhookHost, a.cfg.WebhookPort)
@@ -419,7 +421,13 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		a.health.RecordMessageFailed()
-		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyBytes, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			a.logger.Error("message send failed",
+				"status", resp.StatusCode,
+				"read_error", readErr)
+			return channels.ErrInternal(fmt.Sprintf("API error: %d", resp.StatusCode), readErr)
+		}
 		a.logger.Error("message send failed",
 			"status", resp.StatusCode,
 			"body", string(bodyBytes))
@@ -556,13 +564,6 @@ func (a *Adapter) updateLastPing() {
 		return
 	}
 	a.health.UpdateLastPing()
-}
-
-func (a *Adapter) setDegraded(degraded bool) {
-	if a.health == nil {
-		return
-	}
-	a.health.SetDegraded(degraded)
 }
 
 func (a *Adapter) isDegraded() bool {

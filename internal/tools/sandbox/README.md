@@ -7,7 +7,7 @@ A secure code execution sandbox for the Nexus project that implements the `agent
 - **Multiple Runtime Support**: Python 3, Node.js, Go, and Bash
 - **Resource Limits**: CPU, memory, and time constraints
 - **Network Isolation**: No network access by default
-- **Secure Execution**: Docker-based sandboxing (with Firecracker fallback support)
+- **Secure Execution**: Docker-based sandboxing (default) with optional Firecracker microVM backend (Linux-only)
 - **VM Pool Management**: Pre-warmed container pool for fast execution
 - **Stream Capture**: Full stdout, stderr, and exit code capture
 - **File Mounting**: Support for mounting additional files
@@ -22,8 +22,8 @@ A secure code execution sandbox for the Nexus project that implements the `agent
 
 ### Backends
 
-- **Docker** (default): Uses Docker containers with gVisor for isolation
-- **Firecracker**: Lightweight VM-based execution (auto-fallback to Docker if unavailable)
+- **Docker** (default): Uses Docker containers with restricted resources and networking
+- **Firecracker**: Optional microVM-based execution (Linux-only; falls back to Docker if unavailable)
 
 ## Usage
 
@@ -333,7 +333,7 @@ func main() {
 
 ## Future Enhancements
 
-- [ ] Firecracker integration for faster cold starts
+- [ ] Firecracker snapshots/warm pool for faster cold starts
 - [ ] Support for additional languages (Ruby, PHP, Rust)
 - [ ] Package installation support (pip, npm, etc.)
 - [ ] Persistent workspace for multi-step execution

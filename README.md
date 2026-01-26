@@ -46,7 +46,7 @@
 - **Web Search** - SearXNG-powered web search with content extraction
 - **Browser Automation** - Playwright-based web browsing and scraping
 - **Memory Search** - Semantic search across conversation history
-- **Code Sandbox** - Container-based execution + Firecracker microVM isolation
+- **Code Sandbox** - Docker-based execution (default) with optional Firecracker microVM backend (Linux-only)
 - **Voice Transcription** - OpenAI Whisper for audio message processing
 
 ### Edge Clients
@@ -359,7 +359,7 @@ nexus/
 │   │   ├── browser/        # Playwright automation
 │   │   ├── websearch/      # SearXNG integration
 │   │   ├── memorysearch/   # Semantic memory search
-│   │   ├── sandbox/        # Code execution (Docker + Firecracker)
+│   │   ├── sandbox/        # Code execution (Docker default; optional Firecracker backend)
 │   │   └── policy/         # Tool access control
 │   ├── web/                # Web UI dashboard
 │   ├── sessions/           # Session & message persistence
@@ -465,7 +465,7 @@ Prometheus metrics at `/metrics`:
 
 ### Completed
 
-- [x] Firecracker microVM sandbox - Secure code execution with real isolation
+- [x] Sandbox code execution - Docker backend (default) with optional Firecracker microVM backend (Linux-only)
 - [x] LanceDB vector backend - Fast, embedded vector storage
 - [x] pgvector backend - PostgreSQL-native vectors for CockroachDB/Postgres
 - [x] Voice message transcription - OpenAI Whisper integration

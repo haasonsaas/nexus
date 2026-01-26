@@ -280,7 +280,7 @@ func (r *RuntimeRegistry) LoadFullPlugins(cfg *config.Config, api *PluginAPIBuil
 			continue
 		}
 
-		pluginAPI := api.Build(id, normalizeConfig(entry.Config))
+		pluginAPI := api.Build(id, normalizeConfig(entry.Config), plugin.Manifest())
 		if err := fullPlugin.Register(pluginAPI); err != nil {
 			if api.Logger != nil {
 				api.Logger.Warn("full plugin registration failed", "plugin_id", id, "error", err)
@@ -302,16 +302,23 @@ type PluginAPIBuilder struct {
 }
 
 // Build creates a PluginAPI for a specific plugin.
-func (b *PluginAPIBuilder) Build(pluginID string, cfg map[string]any) *pluginsdk.PluginAPI {
+func (b *PluginAPIBuilder) Build(pluginID string, cfg map[string]any, manifest *pluginsdk.Manifest) *pluginsdk.PluginAPI {
 	pluginLogger := b.Logger
 	if pluginLogger == nil {
 		pluginLogger = slog.Default()
 	}
 	pluginLogger = pluginLogger.With("plugin_id", pluginID)
 
+	var allowedChannels []string
+	var allowedTools []string
+	if manifest != nil {
+		allowedChannels = manifest.Channels
+		allowedTools = manifest.Tools
+	}
+
 	return &pluginsdk.PluginAPI{
-		Channels: &runtimeChannelRegistry{registry: b.Channels},
-		Tools:    &runtimeToolRegistry{runtime: b.Tools},
+		Channels: &runtimeChannelRegistry{registry: b.Channels, pluginID: pluginID, allowed: allowSet(allowedChannels)},
+		Tools:    &runtimeToolRegistry{runtime: b.Tools, pluginID: pluginID, allowed: allowSet(allowedTools)},
 		CLI:      &runtimeCLIRegistry{rootCmd: b.RootCmd, pluginID: pluginID},
 		Services: &runtimeServiceRegistry{manager: b.ServiceManager, pluginID: pluginID},
 		Hooks:    &runtimeHookRegistry{registry: b.HookRegistry, pluginID: pluginID},

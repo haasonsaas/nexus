@@ -108,13 +108,17 @@ func (t *OpenAITranscriber) Transcribe(audio io.Reader, mimeType string, languag
 // TranscribeWithContext transcribes audio with a custom context for cancellation.
 func (t *OpenAITranscriber) TranscribeWithContext(ctx context.Context, audio io.Reader, mimeType string, language string) (string, error) {
 	// Read all audio data
-	audioData, err := io.ReadAll(audio)
+	const maxAudioBytes = 25 * 1024 * 1024
+	audioData, err := io.ReadAll(io.LimitReader(audio, maxAudioBytes+1))
 	if err != nil {
 		return "", fmt.Errorf("failed to read audio data: %w", err)
 	}
 
 	if len(audioData) == 0 {
 		return "", fmt.Errorf("audio data is empty")
+	}
+	if len(audioData) > maxAudioBytes {
+		return "", fmt.Errorf("audio data too large (%d bytes)", len(audioData))
 	}
 
 	t.logger.Debug("transcribing audio",

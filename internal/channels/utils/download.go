@@ -15,6 +15,7 @@ type DownloadOptions struct {
 	Timeout time.Duration
 
 	// MaxSize limits the download size in bytes (0 = unlimited).
+	// If the response is larger than MaxSize, the returned data is truncated.
 	MaxSize int64
 
 	// Headers to include in the request.

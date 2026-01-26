@@ -30,8 +30,12 @@ func TestDecodeManifest(t *testing.T) {
 				"name": "Test Plugin",
 				"description": "A test plugin",
 				"version": "1.0.0",
+				"tools": ["search", "fetch"],
 				"channels": ["slack", "telegram"],
 				"providers": ["openai"],
+				"commands": ["plugins.install", "plugins.list"],
+				"services": ["cron-worker"],
+				"hooks": ["session.created", "message.received"],
 				"configSchema": {"type": "object"},
 				"metadata": {"key": "value"}
 			}`,
@@ -45,8 +49,20 @@ func TestDecodeManifest(t *testing.T) {
 				if m.Version != "1.0.0" {
 					t.Errorf("Version = %q, want %q", m.Version, "1.0.0")
 				}
+				if len(m.Tools) != 2 {
+					t.Errorf("len(Tools) = %d, want 2", len(m.Tools))
+				}
 				if len(m.Channels) != 2 {
 					t.Errorf("len(Channels) = %d, want 2", len(m.Channels))
+				}
+				if len(m.Commands) != 2 {
+					t.Errorf("len(Commands) = %d, want 2", len(m.Commands))
+				}
+				if len(m.Services) != 1 {
+					t.Errorf("len(Services) = %d, want 1", len(m.Services))
+				}
+				if len(m.Hooks) != 2 {
+					t.Errorf("len(Hooks) = %d, want 2", len(m.Hooks))
 				}
 			},
 		},

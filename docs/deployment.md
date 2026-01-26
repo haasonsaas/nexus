@@ -342,6 +342,7 @@ data:
 Notes:
 - Config parsing is strict; unknown keys will fail validation.
 - Plugin entries require a manifest file (`nexus.plugin.json` or `clawdbot.plugin.json`) with a JSON schema.
+- Plugin manifests may optionally declare allowlists (`tools`, `channels`, `commands`, `services`, `hooks`). When present, the gateway rejects any undeclared runtime registrations.
 
 Validate configuration:
 ```bash

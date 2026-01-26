@@ -277,6 +277,57 @@ channels:
       #   T1234567890:
       #     U1234567890: viewer
 
+  whatsapp:
+    enabled: false
+    session_path: ~/.nexus/whatsapp/session.db
+    media_path: ~/.nexus/whatsapp/media
+    sync_contacts: true
+    dm:
+      policy: pairing
+    group:
+      policy: allowlist
+    presence:
+      send_read_receipts: true
+      send_typing: true
+      broadcast_online: false
+
+  signal:
+    enabled: false
+    account: ${SIGNAL_ACCOUNT} # +15555550123
+    signal_cli_path: signal-cli
+    config_dir: ~/.config/signal-cli
+    dm:
+      policy: pairing
+    group:
+      policy: allowlist
+    presence:
+      send_read_receipts: true
+      send_typing: true
+
+  imessage:
+    enabled: false
+    # macOS only (requires local Messages DB access)
+    database_path: ~/Library/Messages/chat.db
+    poll_interval: 3s
+    dm:
+      policy: pairing
+    group:
+      policy: allowlist
+
+  matrix:
+    enabled: false
+    homeserver: ${MATRIX_HOMESERVER:-https://matrix.org}
+    user_id: ${MATRIX_USER_ID:-}
+    access_token: ${MATRIX_ACCESS_TOKEN:-}
+    device_id: ${MATRIX_DEVICE_ID:-}
+    allowed_rooms: []
+    allowed_users: []
+    join_on_invite: false
+    dm:
+      policy: pairing
+    group:
+      policy: allowlist
+
   # Optional: Home Assistant conversation + tools integration
   homeassistant:
     enabled: false
@@ -297,6 +348,17 @@ channels:
       policy: pairing
     group:
       policy: allowlist
+
+  email:
+    enabled: false
+    tenant_id: ${EMAIL_TENANT_ID}
+    client_id: ${EMAIL_CLIENT_ID}
+    client_secret: ${EMAIL_CLIENT_SECRET}
+    user_email: ${EMAIL_USER_EMAIL}
+    folder_id: "" # default: inbox
+    include_read: false
+    auto_mark_read: true
+    poll_interval: 30s
 
   mattermost:
     enabled: false
@@ -655,7 +717,8 @@ plugins:
   # Optional plugin manifest search paths
   load:
     paths: []
-  # Optional (future): run third-party plugins out-of-process (not implemented yet)
+  # Optional (future): run third-party plugins out-of-process. Today this only
+  # logs a warning and plugins still run in-process.
   isolation:
     enabled: false
     backend: docker # docker | firecracker

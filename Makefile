@@ -373,7 +373,7 @@ install-tools:
 	@go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 	@go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 	@echo "Installing golangci-lint..."
-	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+	@GOTOOLCHAIN=$$(go env GOVERSION) go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 	@echo "Installing air (hot reload)..."
 	@go install github.com/air-verse/air@latest
 	@echo "Installing govulncheck..."

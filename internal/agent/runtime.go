@@ -1296,6 +1296,8 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 		assistantMsg := &models.Message{
 			ID:        assistantMsgID,
 			SessionID: session.ID,
+			Channel:   session.Channel,
+			ChannelID: session.ChannelID,
 			Role:      models.RoleAssistant,
 			Direction: models.DirectionOutbound,
 			Content:   textBuilder.String(),
@@ -1562,6 +1564,9 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 		toolMsg := &models.Message{
 			ID:          uuid.NewString(),
 			SessionID:   session.ID,
+			Channel:     session.Channel,
+			ChannelID:   session.ChannelID,
+			Direction:   models.DirectionInbound,
 			Role:        models.RoleTool,
 			ToolResults: resultsForStorage,
 			CreatedAt:   time.Now(),

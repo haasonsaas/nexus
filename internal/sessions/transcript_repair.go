@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
@@ -50,7 +51,7 @@ func RepairToolCallPairing(messages []*models.Message) TranscriptRepairReport {
 			if msg.Role == models.RoleTool && len(msg.ToolResults) > 0 {
 				// Tool results should only appear directly after matching assistant tool call
 				// Drop orphan tool results
-				report.DroppedOrphanCount++
+				report.DroppedOrphanCount += len(msg.ToolResults)
 				changed = true
 				continue
 			}
@@ -66,14 +67,42 @@ func RepairToolCallPairing(messages []*models.Message) TranscriptRepairReport {
 
 		// Build map of tool call IDs for this assistant turn
 		toolCallIDs := make(map[string]*models.ToolCall)
+		pending := make(map[string]struct{}, len(msg.ToolCalls))
+		pendingOrder := make([]string, 0, len(msg.ToolCalls))
 		for idx := range msg.ToolCalls {
 			tc := &msg.ToolCalls[idx]
 			toolCallIDs[tc.ID] = tc
+			if tc.ID != "" {
+				pending[tc.ID] = struct{}{}
+				pendingOrder = append(pendingOrder, tc.ID)
+			}
 		}
 
 		// Collect tool results from following messages until next assistant turn
 		toolResults := make(map[string]*models.Message)
 		remainder := make([]*models.Message, 0)
+
+		removePending := func(id string) {
+			delete(pending, id)
+			for idx, pendingID := range pendingOrder {
+				if pendingID == id {
+					copy(pendingOrder[idx:], pendingOrder[idx+1:])
+					pendingOrder = pendingOrder[:len(pendingOrder)-1]
+					return
+				}
+			}
+		}
+		assignPending := func() string {
+			for len(pendingOrder) > 0 {
+				id := pendingOrder[0]
+				pendingOrder = pendingOrder[1:]
+				if _, ok := pending[id]; ok {
+					delete(pending, id)
+					return id
+				}
+			}
+			return ""
+		}
 
 		j := i + 1
 		for ; j < len(messages); j++ {
@@ -89,21 +118,59 @@ func RepairToolCallPairing(messages []*models.Message) TranscriptRepairReport {
 
 			// Collect tool results that match our tool calls
 			if next.Role == models.RoleTool && len(next.ToolResults) > 0 {
+				needsClone := false
+				kept := make([]models.ToolResult, 0, len(next.ToolResults))
 				for _, tr := range next.ToolResults {
+					toolCallID := tr.ToolCallID
+					if toolCallID == "" {
+						toolCallID = assignPending()
+						if toolCallID != "" {
+							needsClone = true
+							tr.ToolCallID = toolCallID
+						}
+					}
+
+					// If we still can't determine the tool call, drop it as orphan.
+					if toolCallID == "" {
+						report.DroppedOrphanCount++
+						needsClone = true
+						changed = true
+						continue
+					}
+
 					// Check if this result matches a tool call we're looking for
-					if _, ok := toolCallIDs[tr.ToolCallID]; ok {
+					if _, ok := toolCallIDs[toolCallID]; ok {
 						// Check for duplicate
-						if seenToolResultIDs[tr.ToolCallID] {
+						if seenToolResultIDs[toolCallID] {
 							report.DroppedDuplicateCount++
 							changed = true
+							needsClone = true
 							continue
 						}
-						seenToolResultIDs[tr.ToolCallID] = true
-						toolResults[tr.ToolCallID] = next
+						removePending(toolCallID)
+						seenToolResultIDs[toolCallID] = true
+						kept = append(kept, tr)
 					} else {
 						// Orphan tool result - drop it
 						report.DroppedOrphanCount++
 						changed = true
+						needsClone = true
+					}
+				}
+				if len(kept) == 0 {
+					continue
+				}
+
+				processed := next
+				if needsClone {
+					copied := *next
+					copied.ToolResults = kept
+					processed = &copied
+					changed = true
+				}
+				for _, tr := range kept {
+					if tr.ToolCallID != "" {
+						toolResults[tr.ToolCallID] = processed
 					}
 				}
 				continue
@@ -123,12 +190,22 @@ func RepairToolCallPairing(messages []*models.Message) TranscriptRepairReport {
 		}
 
 		// Emit tool results in order of tool calls, inserting synthetic ones if missing
+		emitted := make(map[*models.Message]bool)
 		for _, tc := range msg.ToolCalls {
-			if result, ok := toolResults[tc.ID]; ok {
-				report.Messages = append(report.Messages, result)
+			if resultMsg, ok := toolResults[tc.ID]; ok {
+				if resultMsg != nil && !emitted[resultMsg] {
+					report.Messages = append(report.Messages, resultMsg)
+					emitted[resultMsg] = true
+				}
 			} else if !seenToolResultIDs[tc.ID] {
 				// Insert synthetic error result
 				synthetic := makeMissingToolResult(tc.ID, tc.Name)
+				synthetic.SessionID = msg.SessionID
+				synthetic.Channel = msg.Channel
+				synthetic.ChannelID = msg.ChannelID
+				if !msg.CreatedAt.IsZero() {
+					synthetic.CreatedAt = msg.CreatedAt.Add(time.Nanosecond)
+				}
 				report.Added = append(report.Added, synthetic)
 				report.Messages = append(report.Messages, synthetic)
 				seenToolResultIDs[tc.ID] = true
@@ -157,7 +234,7 @@ func makeMissingToolResult(toolCallID, toolName string) *models.Message {
 	}
 
 	return &models.Message{
-		ID:        "synthetic-" + toolCallID,
+		ID:        uuid.NewString(),
 		Role:      models.RoleTool,
 		Direction: models.DirectionInbound,
 		ToolResults: []models.ToolResult{

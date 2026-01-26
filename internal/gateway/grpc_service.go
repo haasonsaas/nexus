@@ -288,6 +288,7 @@ func (g *grpcService) CreateSession(ctx context.Context, req *proto.CreateSessio
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
+	ensureSessionOriginMetadata(session, nil)
 	if err := g.server.sessions.Create(ctx, session); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to create session: %v", err)
 	}

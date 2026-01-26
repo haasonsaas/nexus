@@ -223,6 +223,12 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		defer s.sessionLocker.Unlock(session.ID)
 	}
 
+	if ensureSessionOriginMetadata(session, msg) {
+		if err := s.sessions.Update(ctx, session); err != nil {
+			s.logger.Debug("failed to persist session origin metadata", "error", err, "session_id", session.ID)
+		}
+	}
+
 	s.enrichMessageWithMedia(ctx, msg)
 
 	// Note: inbound message persistence is handled by runtime.Process()

@@ -144,11 +144,11 @@ Sources/NexusMac/
 
 ## Codebase Stats
 
-- **128 Swift files**
-- **29,000+ lines of code**
-- **55 feature directories**
-- **64 singleton services**
-- **1 TODO comment** (very low technical debt)
+- **214 Swift files**
+- **68,000+ lines of code**
+- **64 feature directories**
+- **~109 singleton services**
+- Low technical debt
 
 ## Development
 

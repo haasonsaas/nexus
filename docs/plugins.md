@@ -83,9 +83,9 @@ plugins:
 ### Isolation (Future)
 
 The `plugins.isolation` config block is reserved for out-of-process plugin execution (Docker / Firecracker). Today, it only
-controls config parsing; true isolation is still tracked in issue #97.
+controls config parsing; true isolation is not implemented yet.
 
 ## Security Notes
 
-Capability allowlists do not provide isolation (plugins are still in-process). Issue #97 tracks true sandboxing (out-of-process
-execution with an allowlisted API surface).
+Registration allowlists and manifest capabilities do not provide isolation (plugins are still in-process). True sandboxing
+(out-of-process execution with an allowlisted API surface) is planned.

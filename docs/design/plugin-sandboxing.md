@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document addresses issue #97: isolating third-party plugin execution.
+This document describes isolating third-party plugin execution.
 
 ## Goals
 

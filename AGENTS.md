@@ -22,8 +22,8 @@
 - LLM provider retries should use `BaseProvider` helpers (linear `Retry` or exponential `RetryWithBackoff`).
 
 ## Open Issues Plan
-- The open-issues execution tracker lives in `docs/plan-2026-01-25-open-issues.md`.
-- Design docs referenced there should be kept in sync with implementation progress.
+- `docs/plan-2026-01-25-open-issues.md` is a historical snapshot (as of 2026-01-26 there are no open GitHub issues).
+- Use `gh issue list` to confirm the current issue queue before starting work.
 
 ## CI Notes
 - `go test ./...` is the baseline expectation.

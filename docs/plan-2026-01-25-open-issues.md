@@ -1,5 +1,7 @@
 # Nexus Open Issues Plan (2026-01-25)
 
+> Note: Historical snapshot. As of 2026-01-26 there are no open GitHub issues in this repo.
+
 ## Context
 All open issues as of 2026-01-25 should receive design docs and follow-on implementation. This plan maps issues to design docs and groups related work to reduce duplication while keeping scope traceable.
 
@@ -110,4 +112,4 @@ All open issues as of 2026-01-25 should receive design docs and follow-on implem
 - Closed: #80 (edge mesh routing), #81 (Home Assistant integration), #82 (knowledge packs), #94 (capability-based edge routing).
 - Closed: #78 (local TTS voice loop) — add `tts` config + gateway TTS audio attachments + streaming attachment follow-up send; improve attachment delivery for local/data URLs on Telegram/WhatsApp/Signal.
 - Closed: #92 (agent swarm scaffolding), #93 (analytics MVP dashboard).
-- Remaining open: #97 (plugin sandboxing).
+- Remaining open: none.

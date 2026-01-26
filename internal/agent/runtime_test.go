@@ -1028,6 +1028,16 @@ func TestToolRegistryGet(t *testing.T) {
 	}
 }
 
+func TestToolRegistryUnregister(t *testing.T) {
+	registry := NewToolRegistry()
+	registry.Register(&testTool{name: "tool1"})
+
+	registry.Unregister("tool1")
+	if _, ok := registry.Get("tool1"); ok {
+		t.Fatal("expected tool to be removed")
+	}
+}
+
 func TestToolRegistryExecuteNotFound(t *testing.T) {
 	registry := NewToolRegistry()
 

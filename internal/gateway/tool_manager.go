@@ -324,6 +324,44 @@ func (m *ToolManager) RegisterTools(ctx context.Context, runtime *agent.Runtime)
 	return nil
 }
 
+// ReloadMCPTools refreshes MCP tool registrations and policy aliases.
+func (m *ToolManager) ReloadMCPTools(runtime *agent.Runtime, cfg *config.Config) error {
+	if cfg == nil {
+		return nil
+	}
+
+	m.mu.Lock()
+	m.config = cfg
+	previous := append([]string(nil), m.mcpTools...)
+	m.mcpTools = nil
+	mcpManager := m.mcpManager
+	resolver := m.policyResolver
+	m.mu.Unlock()
+
+	if runtime != nil {
+		for _, name := range previous {
+			runtime.UnregisterTool(name)
+		}
+	}
+
+	if resolver != nil {
+		resolver.ResetMCP()
+	}
+
+	if runtime == nil || !cfg.MCP.Enabled || mcpManager == nil {
+		return nil
+	}
+
+	tools := mcp.RegisterToolsWithRegistrar(runtime, mcpManager, resolver)
+
+	m.mu.Lock()
+	m.mcpTools = tools
+	m.mu.Unlock()
+
+	m.Logger().Info("reloaded MCP tools", "count", len(tools))
+	return nil
+}
+
 // registerSandboxTool sets up and registers the sandbox tool.
 func (m *ToolManager) registerSandboxTool(ctx context.Context, runtime *agent.Runtime) error {
 	cfg := m.config.Tools.Sandbox

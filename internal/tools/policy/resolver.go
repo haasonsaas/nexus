@@ -63,6 +63,22 @@ func (r *Resolver) RegisterAlias(alias string, canonical string) {
 	r.aliases[alias] = canonical
 }
 
+// ResetMCP clears MCP server registrations and aliases.
+func (r *Resolver) ResetMCP() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for id := range r.mcpServers {
+		delete(r.mcpServers, id)
+		delete(r.groups, "mcp:"+id)
+	}
+	for alias, canonical := range r.aliases {
+		if strings.HasPrefix(alias, "mcp.") || strings.HasPrefix(canonical, "mcp:") {
+			delete(r.aliases, alias)
+		}
+	}
+}
+
 // CanonicalName resolves a tool name to its canonical form via registered aliases.
 func (r *Resolver) CanonicalName(name string) string {
 	r.mu.RLock()

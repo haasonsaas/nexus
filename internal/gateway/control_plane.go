@@ -94,7 +94,7 @@ func (s *Server) ApplyConfig(ctx context.Context, raw string, baseHash string) (
 	oldCfg := s.config
 	s.config = cfg
 
-	restartRequired, warnings := applyRuntimeConfigUpdates(s, cfg, oldCfg)
+	restartRequired, warnings := applyRuntimeConfigUpdates(ctx, s, cfg, oldCfg)
 	return &controlplane.ConfigApplyResult{
 		Applied:         true,
 		RestartRequired: restartRequired,
@@ -142,13 +142,28 @@ func marshalConfig(cfg *config.Config) ([]byte, error) {
 	return payload, nil
 }
 
-func applyRuntimeConfigUpdates(s *Server, cfg *config.Config, oldCfg *config.Config) (bool, []string) {
+func applyRuntimeConfigUpdates(ctx context.Context, s *Server, cfg *config.Config, oldCfg *config.Config) (bool, []string) {
 	warnings := configRestartWarnings(oldCfg, cfg)
-	restartRequired := len(warnings) > 0
 
 	if s == nil {
-		return restartRequired, warnings
+		return len(warnings) > 0, warnings
 	}
+
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	if cfg != nil && s.mcpManager != nil && (oldCfg == nil || !reflect.DeepEqual(oldCfg.MCP, cfg.MCP)) {
+		if err := s.mcpManager.Reload(ctx, &cfg.MCP); err != nil {
+			warnings = append(warnings, fmt.Sprintf("mcp reload failed; restart required (%v)", err))
+		} else if s.toolManager != nil {
+			if err := s.toolManager.ReloadMCPTools(s.runtime, cfg); err != nil {
+				warnings = append(warnings, fmt.Sprintf("mcp tools reload failed; restart required (%v)", err))
+			}
+		}
+	}
+
+	restartRequired := len(warnings) > 0
 
 	// Update runtime options when possible.
 	if s.runtime != nil && cfg != nil {
@@ -192,13 +207,11 @@ func applyRuntimeConfigUpdates(s *Server, cfg *config.Config, oldCfg *config.Con
 		}
 	}
 
-	if s != nil {
-		s.postureMu.Lock()
-		lockdownRequested := s.postureLockdownRequested && !s.postureLockdownApplied
-		s.postureMu.Unlock()
-		if lockdownRequested {
-			s.applyPostureLockdown(context.Background())
-		}
+	s.postureMu.Lock()
+	lockdownRequested := s.postureLockdownRequested && !s.postureLockdownApplied
+	s.postureMu.Unlock()
+	if lockdownRequested {
+		s.applyPostureLockdown(context.Background())
 	}
 
 	return restartRequired, warnings
@@ -266,7 +279,6 @@ func configRestartWarnings(oldCfg *config.Config, newCfg *config.Config) []strin
 	})
 	addWarning("cron", oldCfg.Cron, newCfg.Cron)
 	addWarning("tasks", oldCfg.Tasks, newCfg.Tasks)
-	addWarning("mcp", oldCfg.MCP, newCfg.MCP)
 	addWarning("edge", oldCfg.Edge, newCfg.Edge)
 	addWarning("artifacts", oldCfg.Artifacts, newCfg.Artifacts)
 

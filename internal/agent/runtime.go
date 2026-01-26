@@ -862,6 +862,11 @@ func (r *Runtime) RegisterTool(tool Tool) {
 	r.tools.Register(tool)
 }
 
+// UnregisterTool removes a tool from the runtime by name.
+func (r *Runtime) UnregisterTool(name string) {
+	r.tools.Unregister(name)
+}
+
 // Process handles an incoming message and streams the response.
 //
 // This is the main entry point for agent interactions. It:
@@ -1853,6 +1858,13 @@ func (r *ToolRegistry) Register(tool Tool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.tools[tool.Name()] = tool
+}
+
+// Unregister removes a tool from the registry by name.
+func (r *ToolRegistry) Unregister(name string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.tools, name)
 }
 
 // Get returns a tool by name and a boolean indicating if it was found.

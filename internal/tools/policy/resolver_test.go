@@ -13,6 +13,30 @@ func TestResolverAllowsMCPAlias(t *testing.T) {
 	}
 }
 
+func TestResolverResetMCP(t *testing.T) {
+	resolver := NewResolver()
+	resolver.RegisterMCPServer("github", []string{"search"})
+	resolver.RegisterAlias("mcp.github.search", "mcp:github.search")
+
+	expanded := resolver.ExpandGroups([]string{"mcp:github.*"})
+	if len(expanded) != 1 || expanded[0] != "mcp:github.search" {
+		t.Fatalf("expected MCP tools before reset, got %v", expanded)
+	}
+	if got := resolver.CanonicalName("mcp.github.search"); got != "mcp:github.search" {
+		t.Fatalf("expected alias to resolve, got %q", got)
+	}
+
+	resolver.ResetMCP()
+
+	expanded = resolver.ExpandGroups([]string{"mcp:github.*"})
+	if len(expanded) != 0 {
+		t.Fatalf("expected MCP tools cleared after reset, got %v", expanded)
+	}
+	if got := resolver.CanonicalName("mcp.github.search"); got != "mcp.github.search" {
+		t.Fatalf("expected alias to be cleared, got %q", got)
+	}
+}
+
 func TestResolverAllowsMCPAliasViaWildcard(t *testing.T) {
 	resolver := NewResolver()
 	resolver.RegisterMCPServer("github", []string{"search"})

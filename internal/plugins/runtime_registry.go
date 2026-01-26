@@ -105,7 +105,15 @@ func (r *RuntimeRegistry) LoadChannels(cfg *config.Config, registry *channels.Re
 			return err
 		}
 		pluginEntry.channelsOnce.Do(func() {
-			api := &runtimeChannelRegistry{registry: registry}
+			var allowedChannels []string
+			if manifest := plugin.Manifest(); manifest != nil {
+				allowedChannels = manifest.Channels
+			}
+			api := &runtimeChannelRegistry{
+				registry: registry,
+				pluginID: id,
+				allowed:  allowSet(allowedChannels),
+			}
 			pluginEntry.channelsErr = plugin.RegisterChannels(api, normalizeConfig(entry.Config))
 		})
 		if pluginEntry.channelsErr != nil {
@@ -130,7 +138,15 @@ func (r *RuntimeRegistry) LoadTools(cfg *config.Config, runtime *agent.Runtime) 
 			return err
 		}
 		pluginEntry.toolsOnce.Do(func() {
-			api := &runtimeToolRegistry{runtime: runtime}
+			var allowedTools []string
+			if manifest := plugin.Manifest(); manifest != nil {
+				allowedTools = manifest.Tools
+			}
+			api := &runtimeToolRegistry{
+				runtime:  runtime,
+				pluginID: id,
+				allowed:  allowSet(allowedTools),
+			}
 			pluginEntry.toolsErr = plugin.RegisterTools(api, normalizeConfig(entry.Config))
 		})
 		if pluginEntry.toolsErr != nil {
@@ -401,4 +417,19 @@ func normalizeConfig(cfg map[string]any) map[string]any {
 		return map[string]any{}
 	}
 	return cfg
+}
+
+func allowSet(values []string) map[string]struct{} {
+	out := make(map[string]struct{})
+	for _, v := range values {
+		key := strings.TrimSpace(v)
+		if key == "" {
+			continue
+		}
+		out[key] = struct{}{}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }

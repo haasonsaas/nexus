@@ -22,6 +22,8 @@ var closedMessages <-chan *models.Message = func() <-chan *models.Message {
 
 type runtimeChannelRegistry struct {
 	registry *channels.Registry
+	pluginID string
+	allowed  map[string]struct{}
 }
 
 func (r *runtimeChannelRegistry) RegisterChannel(adapter pluginsdk.ChannelAdapter) error {
@@ -31,12 +33,20 @@ func (r *runtimeChannelRegistry) RegisterChannel(adapter pluginsdk.ChannelAdapte
 	if adapter == nil {
 		return fmt.Errorf("plugin adapter is nil")
 	}
+	if len(r.allowed) > 0 {
+		channelID := string(adapter.Type())
+		if _, ok := r.allowed[channelID]; !ok {
+			return fmt.Errorf("plugin %q attempted to register undeclared channel %q", r.pluginID, channelID)
+		}
+	}
 	r.registry.Register(pluginAdapterWrapper{adapter: adapter})
 	return nil
 }
 
 type runtimeToolRegistry struct {
-	runtime *agent.Runtime
+	runtime  *agent.Runtime
+	pluginID string
+	allowed  map[string]struct{}
 }
 
 func (r *runtimeToolRegistry) RegisterTool(def pluginsdk.ToolDefinition, handler pluginsdk.ToolHandler) error {
@@ -48,6 +58,11 @@ func (r *runtimeToolRegistry) RegisterTool(def pluginsdk.ToolDefinition, handler
 	}
 	if def.Name == "" {
 		return fmt.Errorf("tool name is required")
+	}
+	if len(r.allowed) > 0 {
+		if _, ok := r.allowed[def.Name]; !ok {
+			return fmt.Errorf("plugin %q attempted to register undeclared tool %q", r.pluginID, def.Name)
+		}
 	}
 	tool := &pluginTool{
 		definition: def,

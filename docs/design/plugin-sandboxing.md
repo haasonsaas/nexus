@@ -19,6 +19,16 @@ This document addresses issue #97: isolating third-party plugin execution.
 
 ## Proposed Architecture
 
+### Phase 0: Capability Declaration + Enforcement (Implemented)
+Runtime plugin registration is now gated by its manifest:
+
+- `nexus.plugin.json` supports an optional `tools` allowlist.
+- Channel/tool registration rejects undeclared capabilities when an allowlist is present.
+  - Empty allowlists continue to allow all (backwards compatible).
+
+This does **not** provide strong isolation (plugins are still in-process), but it reduces surprise and
+makes “what this plugin can do” explicit and enforceable.
+
 ### Sandbox Wrapper
 Wrap plugin entrypoints in a sandbox runner that:
 - Starts the plugin in a container/VM
@@ -27,7 +37,7 @@ Wrap plugin entrypoints in a sandbox runner that:
 - Enforces CPU/memory/timeouts
 
 ### Config
-Add `plugins.sandbox` config:
+Add a dedicated plugin isolation config (avoid colliding with legacy `plugins.sandbox -> tools.sandbox` migrations):
 - `enabled`
 - `backend` (docker/firecracker)
 - `network_enabled`
@@ -41,6 +51,7 @@ Add `plugins.sandbox` config:
 
 ## Rollout
 
-1. Add config + runner abstraction.
-2. Implement Docker backend.
-3. Extend with Firecracker backend.
+1. Enforce manifest-declared capabilities (tools/channels) for runtime plugin registration. ✅
+2. Add config + runner abstraction.
+3. Implement Docker backend (out-of-process plugin host).
+4. Extend with Firecracker backend + snapshots (reuse existing sandbox pool patterns).

@@ -19,6 +19,7 @@ type Manifest struct {
 	Name         string          `json:"name,omitempty"`
 	Description  string          `json:"description,omitempty"`
 	Version      string          `json:"version,omitempty"`
+	Tools        []string        `json:"tools,omitempty"`
 	Channels     []string        `json:"channels,omitempty"`
 	Providers    []string        `json:"providers,omitempty"`
 	ConfigSchema json.RawMessage `json:"configSchema"`

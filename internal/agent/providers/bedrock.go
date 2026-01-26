@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/document"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
 	"github.com/haasonsaas/nexus/internal/agent"
+	"github.com/haasonsaas/nexus/internal/agent/toolconv"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
@@ -211,7 +212,7 @@ func (p *BedrockProvider) Complete(ctx context.Context, req *agent.CompletionReq
 
 	// Add tool configuration
 	if len(req.Tools) > 0 {
-		converseReq.ToolConfig = p.convertTools(req.Tools)
+		converseReq.ToolConfig = toolconv.ToBedrockTools(req.Tools)
 	}
 
 	// Create stream with retries
@@ -391,30 +392,6 @@ func (p *BedrockProvider) convertMessages(messages []agent.CompletionMessage) ([
 	}
 
 	return result, nil
-}
-
-// convertTools converts internal tool definitions to Bedrock format.
-func (p *BedrockProvider) convertTools(tools []agent.Tool) *types.ToolConfiguration {
-	bedrockTools := make([]types.Tool, len(tools))
-
-	for i, tool := range tools {
-		var schema any
-		if err := json.Unmarshal(tool.Schema(), &schema); err != nil {
-			schema = map[string]any{"type": "object", "properties": map[string]any{}}
-		}
-
-		bedrockTools[i] = &types.ToolMemberToolSpec{
-			Value: types.ToolSpecification{
-				Name:        aws.String(tool.Name()),
-				Description: aws.String(tool.Description()),
-				InputSchema: &types.ToolInputSchemaMemberJson{Value: document.NewLazyDocument(schema)},
-			},
-		}
-	}
-
-	return &types.ToolConfiguration{
-		Tools: bedrockTools,
-	}
 }
 
 // isRetryableError determines if an error should trigger a retry.

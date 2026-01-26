@@ -1,6 +1,6 @@
 # Clawdbot Patterns for Nexus Adoption
 
-Analysis date: 2026-01-22
+Analysis date: 2026-01-22 (updated 2026-01-26)
 
 ## Summary
 
@@ -88,6 +88,8 @@ Track where sessions came from for debugging and UI display:
 - `accountId`: Provider account
 - `threadId`: Thread/topic ID
 
+**Status:** Implemented at `internal/gateway/session_origin.go` (`ensureSessionOriginMetadata`).
+
 ### 7. Runtime Commands ✅
 
 **Status:** Implemented at `internal/commands/builtin.go`
@@ -149,6 +151,7 @@ UI clients querying gateway for session state.
 | Event-Driven Hooks | ✅ Done | `internal/hooks/` |
 | Broadcast Groups | ✅ Done | `internal/gateway/broadcast.go` |
 | Session Scoping | ✅ Done | `internal/sessions/scoping.go` |
+| Session Origin Metadata | ✅ Done | `internal/gateway/session_origin.go` |
 | Tool Groups | ✅ Done | `internal/tools/policy/groups.go` |
 | Sandbox Modes | ✅ Done | `internal/tools/sandbox/modes.go` |
 | Runtime Commands | ✅ Done | `internal/commands/builtin.go` |

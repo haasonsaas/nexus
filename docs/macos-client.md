@@ -190,10 +190,10 @@ Key components:
 
 ### Codebase Stats
 
-- **128 Swift files**
-- **29,000+ lines of code**
-- **55 feature directories**
-- **64 singleton services**
+- **215 Swift files**
+- **69,000+ lines of code**
+- **64 feature directories**
+- **110 singleton services**
 
 ## Troubleshooting
 

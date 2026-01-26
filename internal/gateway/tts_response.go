@@ -68,7 +68,9 @@ func (s *Server) maybeAttachTTSAudio(ctx context.Context, inbound *models.Messag
 	outbound.Metadata["tts_provider"] = string(result.Provider)
 
 	return func() {
-		_ = tts.Cleanup(result)
+		if err := tts.Cleanup(result); err != nil && s.logger != nil {
+			s.logger.Debug("tts cleanup failed", "error", err)
+		}
 	}
 }
 

@@ -178,10 +178,7 @@ func downloadURL(url string) ([]byte, error) {
 		return payload, nil
 	}
 
-	path := raw
-	if strings.HasPrefix(path, "file://") {
-		path = strings.TrimPrefix(path, "file://")
-	}
+	path := strings.TrimPrefix(raw, "file://")
 	if strings.TrimSpace(path) != "" {
 		if info, err := os.Stat(path); err == nil && !info.IsDir() {
 			if info.Size() > maxBytes {

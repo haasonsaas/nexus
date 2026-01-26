@@ -482,10 +482,7 @@ func inputFileForAttachment(att nexusmodels.Attachment) (models.InputFile, func(
 		}, func() {}, nil
 	}
 
-	path := url
-	if strings.HasPrefix(path, "file://") {
-		path = strings.TrimPrefix(path, "file://")
-	}
+	path := strings.TrimPrefix(url, "file://")
 	if strings.TrimSpace(path) != "" {
 		if info, err := os.Stat(path); err == nil && !info.IsDir() {
 			f, err := os.Open(path)

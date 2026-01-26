@@ -191,7 +191,7 @@ extension NotificationBridge: UNUserNotificationCenterDelegate {
 
         let captured = CapturedNotification(
             id: response.notification.request.identifier,
-            appBundleId: "com.nexus.mac",
+            appBundleId: Bundle.main.bundleIdentifier ?? "com.haasonsaas.nexus.mac",
             appName: "Nexus",
             title: content.title,
             body: content.body,

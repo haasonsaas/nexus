@@ -109,7 +109,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func isDuplicateInstance() -> Bool {
         let runningApps = NSWorkspace.shared.runningApplications
-        let bundleId = Bundle.main.bundleIdentifier ?? "com.nexus.mac"
+        let bundleId = Bundle.main.bundleIdentifier ?? "com.haasonsaas.nexus.mac"
         let instances = runningApps.filter { $0.bundleIdentifier == bundleId }
         return instances.count > 1
     }

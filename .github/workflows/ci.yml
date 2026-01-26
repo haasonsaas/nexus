@@ -253,6 +253,8 @@ jobs:
         run: ./scripts/package-macos.sh
         env:
           BUNDLE_ID: com.haasonsaas.nexus.mac
+          SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          NOTARIZE_PROFILE: ${{ secrets.MACOS_NOTARIZE_PROFILE }}
       - name: Upload macOS release assets
         uses: softprops/action-gh-release@v2
         with:

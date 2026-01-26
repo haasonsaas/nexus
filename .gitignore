@@ -36,6 +36,8 @@ nexus.yaml
 # Build artifacts
 dist/
 build/
+apps/macos/.build/
+apps/macos/Package.resolved
 
 # Logs
 *.log

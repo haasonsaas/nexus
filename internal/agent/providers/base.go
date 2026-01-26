@@ -29,6 +29,12 @@ func NewBaseProvider(name string, maxRetries int, retryDelay time.Duration) Base
 
 // Retry executes op with linear backoff if isRetryable returns true.
 func (b *BaseProvider) Retry(ctx context.Context, isRetryable func(error) bool, op func() error) error {
+	return b.RetryWithBackoff(ctx, isRetryable, op, nil)
+}
+
+// RetryWithBackoff executes op with custom backoff per attempt.
+// If backoff is nil, a linear backoff of retryDelay * attempt is used.
+func (b *BaseProvider) RetryWithBackoff(ctx context.Context, isRetryable func(error) bool, op func() error, backoff func(int) time.Duration) error {
 	if op == nil {
 		return nil
 	}
@@ -47,10 +53,14 @@ func (b *BaseProvider) Retry(ctx context.Context, isRetryable func(error) bool, 
 			if attempt >= b.maxRetries {
 				break
 			}
+			delay := b.retryDelay * time.Duration(attempt)
+			if backoff != nil {
+				delay = backoff(attempt)
+			}
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-time.After(b.retryDelay * time.Duration(attempt)):
+			case <-time.After(delay):
 			}
 		}
 	}

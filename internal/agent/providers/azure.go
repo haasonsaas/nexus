@@ -33,6 +33,7 @@ type AzureOpenAIProvider struct {
 	defaultModel string
 	maxRetries   int
 	retryDelay   time.Duration
+	base         BaseProvider
 }
 
 // AzureOpenAIConfig holds configuration for the Azure OpenAI provider.
@@ -106,6 +107,7 @@ func NewAzureOpenAIProvider(cfg AzureOpenAIConfig) (*AzureOpenAIProvider, error)
 		defaultModel: cfg.DefaultModel,
 		maxRetries:   cfg.MaxRetries,
 		retryDelay:   cfg.RetryDelay,
+		base:         NewBaseProvider("azure", cfg.MaxRetries, cfg.RetryDelay),
 	}, nil
 }
 
@@ -169,28 +171,19 @@ func (p *AzureOpenAIProvider) Complete(ctx context.Context, req *agent.Completio
 	// Create stream with retries
 	var stream *openai.ChatCompletionStream
 	var lastErr error
-
-	for attempt := 0; attempt < p.maxRetries; attempt++ {
-		if attempt > 0 {
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(p.retryDelay * time.Duration(attempt)):
-			}
-		}
-
+	err = p.base.Retry(ctx, p.isRetryableError, func() error {
 		stream, lastErr = p.client.CreateChatCompletionStream(ctx, chatReq)
-		if lastErr == nil {
-			break
+		if lastErr != nil {
+			lastErr = p.wrapError(lastErr, model)
+			return lastErr
 		}
-
-		if !p.isRetryableError(lastErr) {
-			return nil, p.wrapError(lastErr, model)
+		return nil
+	})
+	if err != nil {
+		if p.isRetryableError(err) {
+			return nil, fmt.Errorf("azure: max retries exceeded: %w", err)
 		}
-	}
-
-	if lastErr != nil {
-		return nil, fmt.Errorf("azure: max retries exceeded: %w", p.wrapError(lastErr, model))
+		return nil, err
 	}
 
 	chunks := make(chan *agent.CompletionChunk)

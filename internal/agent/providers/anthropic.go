@@ -133,6 +133,8 @@ type AnthropicProvider struct {
 	// defaultModel is used when CompletionRequest.Model is empty.
 	// Default: "claude-sonnet-4-20250514"
 	defaultModel string
+
+	base BaseProvider
 }
 
 // AnthropicConfig holds configuration parameters for creating an AnthropicProvider.
@@ -235,6 +237,7 @@ func NewAnthropicProvider(config AnthropicConfig) (*AnthropicProvider, error) {
 		maxRetries:   config.MaxRetries,
 		retryDelay:   config.RetryDelay,
 		defaultModel: config.DefaultModel,
+		base:         NewBaseProvider("anthropic", config.MaxRetries, config.RetryDelay),
 	}, nil
 }
 
@@ -468,42 +471,31 @@ func (p *AnthropicProvider) Complete(ctx context.Context, req *agent.CompletionR
 		var betaStream *ssestream.Stream[anthropic.BetaRawMessageStreamEventUnion]
 		var err error
 
-		// Retry loop with exponential backoff for transient failures
-		for attempt := 0; attempt <= p.maxRetries; attempt++ {
+		err = p.base.RetryWithBackoff(ctx, p.isRetryableError, func() error {
 			if useBeta {
 				betaStream, err = p.createBetaStream(ctx, req, betaTools)
 			} else {
 				stream, err = p.createStream(ctx, req)
 			}
-			if err == nil {
-				break
+			if err != nil {
+				err = p.wrapError(err, p.getModel(req.Model))
+				return err
 			}
-
-			// Check if error is retryable (rate limits, server errors, etc.)
-			wrappedErr := p.wrapError(err, p.getModel(req.Model))
-			if !p.isRetryableError(wrappedErr) {
-				chunks <- &agent.CompletionChunk{Error: wrappedErr}
-				return
-			}
-
-			// Exponential backoff: delay = baseDelay * 2^attempt
-			// Example with 1s base: 1s, 2s, 4s, 8s
-			if attempt < p.maxRetries {
-				backoff := p.retryDelay * time.Duration(math.Pow(2, float64(attempt)))
-				select {
-				case <-ctx.Done():
-					// Context cancelled or timed out during retry
-					chunks <- &agent.CompletionChunk{Error: ctx.Err()}
-					return
-				case <-time.After(backoff):
-					// Wait for backoff period before next retry
-					continue
-				}
-			}
-		}
+			return nil
+		}, func(attempt int) time.Duration {
+			return p.retryDelay * time.Duration(math.Pow(2, float64(attempt-1)))
+		})
 
 		if err != nil {
-			chunks <- &agent.CompletionChunk{Error: fmt.Errorf("anthropic: max retries exceeded: %w", p.wrapError(err, p.getModel(req.Model)))}
+			if ctx.Err() != nil {
+				chunks <- &agent.CompletionChunk{Error: ctx.Err()}
+				return
+			}
+			if p.isRetryableError(err) {
+				chunks <- &agent.CompletionChunk{Error: fmt.Errorf("anthropic: max retries exceeded: %w", err)}
+				return
+			}
+			chunks <- &agent.CompletionChunk{Error: err}
 			return
 		}
 

@@ -76,6 +76,8 @@ type OpenAIProvider struct {
 	// Actual delay is: retryDelay * attempt (linear backoff).
 	// Default: 1 second
 	retryDelay time.Duration
+
+	base BaseProvider
 }
 
 // OpenAIConfig holds optional configuration for the OpenAI provider.
@@ -130,6 +132,7 @@ func NewOpenAIProviderWithConfig(cfg OpenAIConfig) *OpenAIProvider {
 			apiKey:     "",
 			maxRetries: maxRetries,
 			retryDelay: retryDelay,
+			base:       NewBaseProvider("openai", maxRetries, retryDelay),
 		}
 	}
 
@@ -143,6 +146,7 @@ func NewOpenAIProviderWithConfig(cfg OpenAIConfig) *OpenAIProvider {
 		apiKey:     cfg.APIKey,
 		maxRetries: maxRetries,
 		retryDelay: retryDelay,
+		base:       NewBaseProvider("openai", maxRetries, retryDelay),
 	}
 }
 
@@ -371,32 +375,19 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req *agent.CompletionRequ
 	// Create streaming request with retry logic
 	var stream *openai.ChatCompletionStream
 	var lastErr error
-
-	// Linear backoff retry loop (delay increases linearly: 0s, 1s, 2s, 3s)
-	for attempt := 0; attempt < p.maxRetries; attempt++ {
-		if attempt > 0 {
-			// Wait with linear backoff before retry
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(p.retryDelay * time.Duration(attempt)):
-			}
-		}
-
+	err = p.base.Retry(ctx, p.isRetryableError, func() error {
 		stream, lastErr = p.client.CreateChatCompletionStream(ctx, chatReq)
-		if lastErr == nil {
-			break
+		if lastErr != nil {
+			lastErr = p.wrapError(lastErr, req.Model)
+			return lastErr
 		}
-
-		// Check if error is retryable (rate limits, server errors)
-		wrappedErr := p.wrapError(lastErr, req.Model)
-		if !p.isRetryableError(wrappedErr) {
-			return nil, fmt.Errorf("non-retryable error: %w", wrappedErr)
+		return nil
+	})
+	if err != nil {
+		if p.isRetryableError(err) {
+			return nil, fmt.Errorf("max retries exceeded: %w", err)
 		}
-	}
-
-	if lastErr != nil {
-		return nil, fmt.Errorf("max retries exceeded: %w", p.wrapError(lastErr, req.Model))
+		return nil, fmt.Errorf("non-retryable error: %w", err)
 	}
 
 	// Spawn goroutine to process stream and send chunks

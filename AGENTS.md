@@ -19,6 +19,7 @@
 - Keep changes minimal and backwards-compatible unless requested.
 - Prefer smaller, testable increments with explicit config defaults.
 - Update `nexus.example.yaml` when adding new config fields.
+- LLM provider retries should use `BaseProvider` helpers (linear `Retry` or exponential `RetryWithBackoff`).
 
 ## Open Issues Plan
 - The open-issues execution tracker lives in `docs/plan-2026-01-25-open-issues.md`.

@@ -86,6 +86,8 @@ type GoogleProvider struct {
 	// defaultModel is used when CompletionRequest.Model is empty.
 	// Default: "gemini-2.0-flash"
 	defaultModel string
+
+	base BaseProvider
 }
 
 // GoogleConfig holds configuration parameters for creating a GoogleProvider.
@@ -186,6 +188,7 @@ func NewGoogleProvider(config GoogleConfig) (*GoogleProvider, error) {
 		maxRetries:   config.MaxRetries,
 		retryDelay:   config.RetryDelay,
 		defaultModel: config.DefaultModel,
+		base:         NewBaseProvider("google", config.MaxRetries, config.RetryDelay),
 	}, nil
 }
 
@@ -350,58 +353,39 @@ func (p *GoogleProvider) Complete(ctx context.Context, req *agent.CompletionRequ
 	go func() {
 		defer close(chunks)
 
-		// Retry loop with exponential backoff for transient failures
-		var lastErr error
-		for attempt := 0; attempt <= p.maxRetries; attempt++ {
-			// Convert messages to Gemini format
-			contents, err := p.convertMessages(req.Messages)
-			if err != nil {
-				chunks <- &agent.CompletionChunk{Error: p.wrapError(err, p.getModel(req.Model))}
-				return
-			}
+		model := p.getModel(req.Model)
+		contents, err := p.convertMessages(req.Messages)
+		if err != nil {
+			chunks <- &agent.CompletionChunk{Error: p.wrapError(err, model)}
+			return
+		}
 
-			// Build generation config
-			config := p.buildConfig(req)
+		config := p.buildConfig(req)
 
-			// Get model name
-			model := p.getModel(req.Model)
-
-			// Create streaming request
+		err = p.base.RetryWithBackoff(ctx, p.isRetryableError, func() error {
 			streamIter := p.client.Models.GenerateContentStream(ctx, model, contents, config)
+			if err := p.processStreamResponse(ctx, streamIter, chunks, model); err != nil {
+				return p.wrapError(err, model)
+			}
+			return nil
+		}, func(attempt int) time.Duration {
+			return p.retryDelay * time.Duration(math.Pow(2, float64(attempt-1)))
+		})
 
-			// Process the stream
-			err = p.processStreamResponse(ctx, streamIter, chunks, model)
-			if err == nil {
-				// Success - send done chunk
-				chunks <- &agent.CompletionChunk{Done: true}
+		if err != nil {
+			if ctx.Err() != nil {
+				chunks <- &agent.CompletionChunk{Error: ctx.Err()}
 				return
 			}
-
-			lastErr = err
-
-			// Check if error is retryable
-			wrappedErr := p.wrapError(err, model)
-			if !p.isRetryableError(wrappedErr) {
-				chunks <- &agent.CompletionChunk{Error: wrappedErr}
+			if p.isRetryableError(err) {
+				chunks <- &agent.CompletionChunk{Error: fmt.Errorf("google: max retries exceeded: %w", err)}
 				return
 			}
-
-			// Exponential backoff: delay = baseDelay * 2^attempt
-			if attempt < p.maxRetries {
-				backoff := p.retryDelay * time.Duration(math.Pow(2, float64(attempt)))
-				select {
-				case <-ctx.Done():
-					chunks <- &agent.CompletionChunk{Error: ctx.Err()}
-					return
-				case <-time.After(backoff):
-					continue
-				}
-			}
+			chunks <- &agent.CompletionChunk{Error: err}
+			return
 		}
 
-		if lastErr != nil {
-			chunks <- &agent.CompletionChunk{Error: fmt.Errorf("google: max retries exceeded: %w", p.wrapError(lastErr, p.getModel(req.Model)))}
-		}
+		chunks <- &agent.CompletionChunk{Done: true}
 	}()
 
 	return chunks, nil

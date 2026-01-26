@@ -35,6 +35,7 @@ type BedrockProvider struct {
 	maxRetries   int
 	retryDelay   time.Duration
 	region       string
+	base         BaseProvider
 }
 
 // BedrockConfig holds configuration for the Bedrock provider.
@@ -133,6 +134,7 @@ func NewBedrockProvider(cfg BedrockConfig) (*BedrockProvider, error) {
 		maxRetries:   cfg.MaxRetries,
 		retryDelay:   cfg.RetryDelay,
 		region:       cfg.Region,
+		base:         NewBaseProvider("bedrock", cfg.MaxRetries, cfg.RetryDelay),
 	}, nil
 }
 
@@ -218,28 +220,19 @@ func (p *BedrockProvider) Complete(ctx context.Context, req *agent.CompletionReq
 	// Create stream with retries
 	var stream *bedrockruntime.ConverseStreamOutput
 	var lastErr error
-
-	for attempt := 0; attempt < p.maxRetries; attempt++ {
-		if attempt > 0 {
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(p.retryDelay * time.Duration(attempt)):
-			}
-		}
-
+	err = p.base.Retry(ctx, p.isRetryableError, func() error {
 		stream, lastErr = p.client.ConverseStream(ctx, converseReq)
-		if lastErr == nil {
-			break
+		if lastErr != nil {
+			lastErr = p.wrapError(lastErr, model)
+			return lastErr
 		}
-
-		if !p.isRetryableError(lastErr) {
-			return nil, p.wrapError(lastErr, model)
+		return nil
+	})
+	if err != nil {
+		if p.isRetryableError(err) {
+			return nil, fmt.Errorf("bedrock: max retries exceeded: %w", err)
 		}
-	}
-
-	if lastErr != nil {
-		return nil, fmt.Errorf("bedrock: max retries exceeded: %w", p.wrapError(lastErr, model))
+		return nil, err
 	}
 
 	chunks := make(chan *agent.CompletionChunk)

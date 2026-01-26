@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -216,8 +217,13 @@ func (h *WebhookHooks) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.stats.mu.Unlock()
 
 	// Read and parse body
-	payload, err := h.readPayload(r)
+	payload, err := h.readPayload(w, r)
 	if err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			h.respondError(w, http.StatusRequestEntityTooLarge, "Request entity too large")
+			return
+		}
 		h.respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -295,9 +301,9 @@ func (h *WebhookHooks) findMapping(path string) *WebhookMapping {
 }
 
 // readPayload reads and parses the request body.
-func (h *WebhookHooks) readPayload(r *http.Request) (*WebhookPayload, error) {
+func (h *WebhookHooks) readPayload(w http.ResponseWriter, r *http.Request) (*WebhookPayload, error) {
 	// Limit body size
-	r.Body = http.MaxBytesReader(nil, r.Body, h.config.MaxBodyBytes)
+	r.Body = http.MaxBytesReader(w, r.Body, h.config.MaxBodyBytes)
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {

@@ -376,6 +376,8 @@ nexus/
     └── plugins/echo/       # Example plugin
 ```
 
+Plugins and manifests: see `docs/plugins.md`.
+
 ### Testing
 
 ```bash

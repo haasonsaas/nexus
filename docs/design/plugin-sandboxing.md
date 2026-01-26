@@ -35,6 +35,8 @@ Runtime plugin registration is now gated by its manifest:
 This does **not** provide strong isolation (plugins are still in-process), but it reduces surprise and
 makes “what this plugin can do” explicit and enforceable.
 
+See `docs/plugins.md` for manifest structure and allowlist details.
+
 ### Sandbox Wrapper
 Wrap plugin entrypoints in a sandbox runner that:
 - Starts the plugin in a container/VM

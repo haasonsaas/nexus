@@ -2,6 +2,8 @@
 
 The Nexus sandbox tool provides secure, isolated code execution for multiple programming languages.
 
+Backends: Docker (default) with an optional Firecracker microVM backend on supported Linux hosts.
+
 ## Quick Start
 
 ### Registering the Tool
@@ -443,15 +445,15 @@ params.MemLimit = 1024 // 1 GB
 │  │ Language Pool (Bash)             │   │
 │  └──────────────────────────────────┘   │
 ├─────────────────────────────────────────┤
-│        Docker Runtime Executor          │
+│   Docker / Firecracker Runtime Executor  │
 ├─────────────────────────────────────────┤
-│          Docker Engine                   │
+│      Docker Engine / Firecracker         │
 └─────────────────────────────────────────┘
 ```
 
 ## Future Roadmap
 
-- [ ] Firecracker integration for ultra-fast startup
+- [x] Firecracker backend (experimental; Linux-only)
 - [ ] Support for Rust, Ruby, and PHP
 - [ ] Package installation (pip, npm, go get)
 - [ ] Persistent workspaces for multi-step execution

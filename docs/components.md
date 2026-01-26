@@ -369,9 +369,10 @@ internal/tools/
 ├── registry.go         # Tool registration and dispatch
 ├── schema.go           # JSON Schema generation
 ├── sandbox/
-│   ├── executor.go     # Firecracker orchestration
-│   ├── pool.go         # VM pool management
-│   └── snapshot.go     # VM snapshot management
+│   ├── executor.go     # Sandbox tool (Docker default; Firecracker optional)
+│   ├── pool.go         # Executor pool management
+│   ├── modes.go        # Backend selection/modes
+│   └── firecracker/    # Firecracker backend (Linux-only)
 ├── browser/
 │   ├── browser.go      # Playwright wrapper
 │   ├── actions.go      # Browser actions
@@ -384,62 +385,18 @@ internal/tools/
 
 ### Code Execution (Sandbox)
 
-The sandbox uses Firecracker microVMs for secure code execution:
+The sandbox executes untrusted code with strong resource limits and network isolation.
+
+- Default backend: Docker containers (no network by default).
+- Optional backend: Firecracker microVMs (supported Linux hosts).
 
 ```go
-type SandboxExecutor struct {
-    pool     *VMPool
-    timeout  time.Duration
-    limits   ResourceLimits
-}
-
-type ResourceLimits struct {
-    MaxCPU      int           // vCPUs
-    MaxMemory   int64         // bytes
-    MaxTime     time.Duration // execution timeout
-    MaxOutput   int64         // stdout/stderr bytes
-    NetworkMode NetworkMode   // none, restricted, full
-}
-
-func (s *SandboxExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*ExecuteResult, error) {
-    // 1. Acquire VM from pool
-    vm, err := s.pool.Acquire(ctx)
-    if err != nil {
-        return nil, fmt.Errorf("failed to acquire VM: %w", err)
-    }
-    defer s.pool.Release(vm)
-
-    // 2. Configure VM with resource limits
-    if err := vm.Configure(s.limits); err != nil {
-        return nil, fmt.Errorf("failed to configure VM: %w", err)
-    }
-
-    // 3. Copy code to VM
-    if err := vm.WriteFile("/code/main"+req.Extension, req.Code); err != nil {
-        return nil, fmt.Errorf("failed to write code: %w", err)
-    }
-
-    // 4. Execute with timeout
-    execCtx, cancel := context.WithTimeout(ctx, s.timeout)
-    defer cancel()
-
-    output, err := vm.Exec(execCtx, req.Command, req.Args...)
-    if err != nil {
-        if errors.Is(err, context.DeadlineExceeded) {
-            return &ExecuteResult{
-                ExitCode: -1,
-                Stderr:   "Execution timed out",
-            }, nil
-        }
-        return nil, err
-    }
-
-    return &ExecuteResult{
-        ExitCode: output.ExitCode,
-        Stdout:   output.Stdout,
-        Stderr:   output.Stderr,
-    }, nil
-}
+executor, err := sandbox.NewExecutor(
+    sandbox.WithBackend(sandbox.BackendDocker), // default
+    sandbox.WithNetworkEnabled(false),
+)
+_ = executor
+_ = err
 ```
 
 ### Browser Automation

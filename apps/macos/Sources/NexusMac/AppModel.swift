@@ -42,6 +42,7 @@ final class AppModel: ObservableObject {
     private let keychain = KeychainStore()
     private let edgeBinary: String
     private let notificationService = NotificationService.shared
+    private var defaultsObserver: NSObjectProtocol?
 
     // Track previous states for change detection
     private var previousGatewayConnected: Bool?
@@ -49,7 +50,8 @@ final class AppModel: ObservableObject {
     private var webSocketObservation: Task<Void, Never>?
 
     init() {
-        let rawBaseURL = UserDefaults.standard.string(forKey: "NexusBaseURL") ?? "http://localhost:8080"
+        let defaultPort = GatewayEnvironment.gatewayPort()
+        let rawBaseURL = UserDefaults.standard.string(forKey: "NexusBaseURL") ?? "http://localhost:\(defaultPort)"
         baseURL = Self.normalizeBaseURL(rawBaseURL)
         apiKey = keychain.read() ?? ""
         configPath = AppModel.defaultConfigPath()
@@ -66,9 +68,16 @@ final class AppModel: ObservableObject {
 
         // Initialize WebSocket service
         setupWebSocketService()
+        startDefaultsObservation()
 
         Task {
             await refreshAll()
+        }
+    }
+
+    deinit {
+        if let observer = defaultsObserver {
+            NotificationCenter.default.removeObserver(observer)
         }
     }
 
@@ -92,6 +101,31 @@ final class AppModel: ObservableObject {
 
         // Connect automatically
         service.connect()
+    }
+
+    private func startDefaultsObservation() {
+        defaultsObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.syncDefaults()
+        }
+    }
+
+    private func syncDefaults() {
+        let defaultPort = GatewayEnvironment.gatewayPort()
+        let rawBaseURL = UserDefaults.standard.string(forKey: "NexusBaseURL") ?? "http://localhost:\(defaultPort)"
+        let normalized = Self.normalizeBaseURL(rawBaseURL)
+        let storedKey = keychain.read() ?? ""
+
+        let shouldReconnect = normalized != baseURL || storedKey != apiKey
+        baseURL = normalized
+        apiKey = storedKey
+
+        if shouldReconnect {
+            reconnectWebSocket()
+        }
     }
 
     private func startWebSocketObservation() {

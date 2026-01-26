@@ -54,7 +54,7 @@ final class AppStateStore {
 
     // MARK: - Gateway Settings
 
-    var gatewayPort: Int = 3000 {
+    var gatewayPort: Int = 8080 {
         didSet {
             if oldValue != gatewayPort {
                 save(Keys.gatewayPort, gatewayPort)
@@ -294,7 +294,7 @@ final class AppStateStore {
         isPaused = defaults.bool(forKey: Keys.isPaused)
 
         // Gateway
-        gatewayPort = defaults.integer(forKey: Keys.gatewayPort).nonZero ?? 3000
+        gatewayPort = defaults.integer(forKey: Keys.gatewayPort).nonZero ?? 8080
         gatewayAutostart = defaults.object(forKey: Keys.gatewayAutostart) == nil ? true : defaults.bool(forKey: Keys.gatewayAutostart)
 
         // Remote
@@ -353,7 +353,7 @@ final class AppStateStore {
     func resetToDefaults() {
         connectionMode = .unconfigured
         isPaused = false
-        gatewayPort = 3000
+        gatewayPort = 8080
         gatewayAutostart = true
         remoteHost = nil
         remoteUser = "root"

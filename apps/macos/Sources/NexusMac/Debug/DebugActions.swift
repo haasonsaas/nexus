@@ -4,7 +4,6 @@ import Foundation
 /// Centralized debug operations for the Nexus macOS app.
 enum DebugActions {
     private static let verboseDefaultsKey = "nexus.debug.verboseMain"
-    private static let onboardingSeenKey = "nexus.onboardingSeen"
 
     // MARK: - File/Folder Operations
 
@@ -111,7 +110,7 @@ enum DebugActions {
     /// Resets the onboarding state so the onboarding flow is shown again.
     @MainActor
     static func restartOnboarding() {
-        UserDefaults.standard.set(false, forKey: onboardingSeenKey)
+        AppStateStore.shared.hasCompletedOnboarding = false
     }
 
     // MARK: - Private Helpers

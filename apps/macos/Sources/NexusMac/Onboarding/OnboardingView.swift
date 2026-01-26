@@ -67,13 +67,20 @@ struct OnboardingView: View {
         ),
         OnboardingStep(
             id: 5,
+            title: "Speech Recognition",
+            subtitle: "Allow speech-to-text for voice interactions",
+            icon: "waveform",
+            action: .requestPermission(.speechRecognition)
+        ),
+        OnboardingStep(
+            id: 6,
             title: "Voice Wake",
             subtitle: "Say \"Hey Nexus\" to activate",
             icon: "waveform",
             action: .enableVoiceWake
         ),
         OnboardingStep(
-            id: 6,
+            id: 7,
             title: "You're All Set!",
             subtitle: "Nexus is ready to help you",
             icon: "checkmark.circle.fill",
@@ -292,6 +299,7 @@ struct PermissionRequestView: View {
 
     @State private var permissions = PermissionManager.shared
     @State private var hasCheckedInitially = false
+    @State private var hasAutoAdvanced = false
 
     private var isGranted: Bool {
         permissions.status(for: permissionType)
@@ -385,13 +393,25 @@ struct PermissionRequestView: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            permissions.refreshAllStatuses()
+        }
+        .onChange(of: isGranted) { _, granted in
+            guard granted, !hasAutoAdvanced else { return }
+            hasAutoAdvanced = true
+            Task {
+                try? await Task.sleep(for: .milliseconds(300))
+                onGranted()
+            }
+        }
         .task {
             // Check permission status on appear
             if !hasCheckedInitially {
                 hasCheckedInitially = true
                 permissions.refreshAllStatuses()
-                if isGranted {
+                if isGranted, !hasAutoAdvanced {
                     // Auto-advance if already granted
+                    hasAutoAdvanced = true
                     try? await Task.sleep(for: .milliseconds(500))
                     if isGranted {
                         onGranted()
@@ -439,9 +459,14 @@ struct GatewaySetupView: View {
     let onComplete: () -> Void
 
     @State private var appState = AppStateStore.shared
+    @State private var coordinator = ConnectionModeCoordinator.shared
     @State private var isConnecting = false
     @State private var connectionError: String?
     @State private var isConnected = false
+    @State private var apiKey = ""
+    @State private var hasLoadedApiKey = false
+
+    private let keychain = KeychainStore()
 
     var body: some View {
         OnboardingCard {
@@ -500,6 +525,20 @@ struct GatewaySetupView: View {
 
                 Divider()
 
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("API Key")
+                        .font(.headline)
+
+                    SecureField("X-API-Key", text: $apiKey)
+                        .textFieldStyle(.roundedBorder)
+
+                    Text("Stored in Keychain")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Divider()
+
                 // Skip option
                 ConnectionModeButton(
                     title: "Configure Later",
@@ -547,10 +586,18 @@ struct GatewaySetupView: View {
                     Spacer()
 
                     Button("Continue") {
-                        onComplete()
+                        Task { @MainActor in
+                            await completeGatewaySetup()
+                        }
                     }
                     .buttonStyle(.borderedProminent)
                 }
+            }
+        }
+        .onAppear {
+            if !hasLoadedApiKey {
+                apiKey = keychain.read() ?? ""
+                hasLoadedApiKey = true
             }
         }
     }
@@ -560,20 +607,89 @@ struct GatewaySetupView: View {
         connectionError = nil
         isConnected = false
 
-        Task {
-            do {
-                try await GatewayConnection.shared.refresh()
-                let healthy = try await GatewayConnection.shared.healthOK()
-                if healthy {
-                    isConnected = true
-                } else {
-                    connectionError = "Gateway health check failed"
-                }
-            } catch {
-                connectionError = error.localizedDescription
+        Task { @MainActor in
+            if let error = validateConfiguration(requireAPIKey: true, allowUnconfigured: false) {
+                connectionError = error
+                isConnecting = false
+                return
             }
+
+            persistApiKey()
+            await coordinator.apply(mode: appState.connectionMode, paused: appState.isPaused)
+
+            let connected = await waitForConnection(timeout: 15)
+            if connected {
+                isConnected = true
+            } else if let error = coordinator.errorMessage {
+                connectionError = error
+            } else {
+                connectionError = "Gateway did not respond"
+            }
+
             isConnecting = false
         }
+    }
+
+    private func completeGatewaySetup() async {
+        if let error = validateConfiguration(requireAPIKey: false, allowUnconfigured: true) {
+            connectionError = error
+            return
+        }
+
+        persistApiKey()
+        await coordinator.apply(mode: appState.connectionMode, paused: appState.isPaused)
+        onComplete()
+    }
+
+    private func validateConfiguration(requireAPIKey: Bool, allowUnconfigured: Bool) -> String? {
+        switch appState.connectionMode {
+        case .unconfigured:
+            if allowUnconfigured { return nil }
+            return "Select a connection mode or choose Configure Later"
+        case .remote:
+            let host = (appState.remoteHost ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if host.isEmpty {
+                return "Enter a remote host or switch to local mode"
+            }
+        case .local:
+            break
+        }
+
+        if requireAPIKey {
+            let trimmed = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty {
+                return "Enter your API key to test the connection"
+            }
+        }
+
+        return nil
+    }
+
+    private func persistApiKey() {
+        let trimmed = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed != apiKey {
+            apiKey = trimmed
+        }
+
+        if trimmed.isEmpty {
+            keychain.delete()
+        } else {
+            _ = keychain.write(trimmed)
+        }
+    }
+
+    private func waitForConnection(timeout: TimeInterval) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if coordinator.isConnected {
+                return true
+            }
+            if coordinator.errorMessage != nil {
+                return false
+            }
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+        return coordinator.isConnected
     }
 }
 
@@ -587,6 +703,7 @@ struct VoiceWakeSetupView: View {
     @State private var appState = AppStateStore.shared
     @State private var permissions = PermissionManager.shared
     @State private var isEnabled = false
+    @State private var hasSeededState = false
     @State private var isTestingVoice = false
     @State private var testStatus: String?
 
@@ -669,10 +786,8 @@ struct VoiceWakeSetupView: View {
                     Spacer()
 
                     Button("Continue") {
-                        if isEnabled {
-                            Task {
-                                await appState.setVoiceWakeEnabled(true)
-                            }
+                        Task {
+                            await appState.setVoiceWakeEnabled(isEnabled)
                         }
                         onComplete()
                     }
@@ -685,6 +800,12 @@ struct VoiceWakeSetupView: View {
                 startVoiceTest()
             } else {
                 stopVoiceTest()
+            }
+        }
+        .task {
+            if !hasSeededState {
+                hasSeededState = true
+                isEnabled = appState.voiceWakeEnabled
             }
         }
     }

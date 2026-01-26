@@ -7,7 +7,7 @@ struct GatewaySettingsView: View {
     @State private var coordinator = ConnectionModeCoordinator.shared
 
     @State private var manualHost = ""
-    @State private var manualPort = "3000"
+    @State private var manualPort = "8080"
     @State private var showingManualEntry = false
 
     var body: some View {

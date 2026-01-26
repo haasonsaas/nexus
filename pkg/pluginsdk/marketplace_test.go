@@ -76,7 +76,7 @@ func TestMarketplaceManifestStruct(t *testing.T) {
 func TestPluginRequirementsStruct(t *testing.T) {
 	reqs := PluginRequirements{
 		NexusVersion: ">=2.0.0",
-		Go:           "1.22",
+			Go:           "1.24",
 		OS:           []string{"linux"},
 		Arch:         []string{"amd64"},
 		Dependencies: []PluginDependency{

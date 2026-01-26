@@ -14,7 +14,7 @@ NC='\033[0m' # No Color
 
 # Check Go version
 GO_VERSION=$(go version 2>/dev/null | awk '{print $3}' | sed 's/go//')
-REQUIRED_GO="1.22"
+REQUIRED_GO="1.24"
 
 check_command() {
     if command -v "$1" &> /dev/null; then

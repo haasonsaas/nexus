@@ -2,6 +2,8 @@ package templates
 
 import (
 	"bytes"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -159,6 +161,40 @@ func TestImporterImportFromReader(t *testing.T) {
 			t.Errorf("Name = %q, want %q", tmpl.Name, "reader-yaml")
 		}
 	})
+
+	t.Run("too large", func(t *testing.T) {
+		previousMax := maxTemplateImportBytes
+		maxTemplateImportBytes = 64
+		t.Cleanup(func() { maxTemplateImportBytes = previousMax })
+
+		reader := bytes.NewReader(bytes.Repeat([]byte("a"), int(maxTemplateImportBytes)+1))
+		opts := DefaultImportOptions()
+
+		if _, err := importer.ImportFromReader(reader, ".json", opts); err == nil {
+			t.Fatal("expected error for oversized template")
+		}
+	})
+}
+
+func TestImporterImportFromURL_TooLarge(t *testing.T) {
+	registry, err := NewRegistry(nil, "")
+	if err != nil {
+		t.Fatalf("NewRegistry() error = %v", err)
+	}
+	importer := NewImporter(registry)
+
+	previousMax := maxTemplateImportBytes
+	maxTemplateImportBytes = 64
+	t.Cleanup(func() { maxTemplateImportBytes = previousMax })
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(bytes.Repeat([]byte("a"), int(maxTemplateImportBytes)+1))
+	}))
+	t.Cleanup(server.Close)
+
+	if _, err := importer.ImportFromURL(server.URL, DefaultImportOptions()); err == nil {
+		t.Fatal("expected error for oversized template")
+	}
 }
 
 func TestImporterImportFromJSON(t *testing.T) {

@@ -17,6 +17,8 @@ import (
 // execCommand is a variable to allow mocking in tests.
 var execCommand = exec.Command
 
+var maxTemplateImportBytes int64 = 10 * 1024 * 1024
+
 // ImportOptions configures template import behavior.
 type ImportOptions struct {
 	// Overwrite allows overwriting existing templates.
@@ -115,7 +117,11 @@ func (i *Importer) ImportFromURL(url string, opts ImportOptions) (*AgentTemplate
 		return nil, fmt.Errorf("HTTP error: %s", resp.Status)
 	}
 
-	data, err := io.ReadAll(resp.Body)
+	if maxTemplateImportBytes > 0 && resp.ContentLength > maxTemplateImportBytes {
+		return nil, fmt.Errorf("template exceeds max size of %d bytes", maxTemplateImportBytes)
+	}
+
+	data, err := readAllWithLimit(resp.Body, maxTemplateImportBytes)
 	if err != nil {
 		return nil, fmt.Errorf("read response: %w", err)
 	}
@@ -140,7 +146,7 @@ func (i *Importer) ImportFromURL(url string, opts ImportOptions) (*AgentTemplate
 
 // ImportFromReader imports a template from an io.Reader.
 func (i *Importer) ImportFromReader(r io.Reader, format string, opts ImportOptions) (*AgentTemplate, error) {
-	data, err := io.ReadAll(r)
+	data, err := readAllWithLimit(r, maxTemplateImportBytes)
 	if err != nil {
 		return nil, fmt.Errorf("read data: %w", err)
 	}
@@ -158,6 +164,21 @@ func (i *Importer) ImportFromReader(r io.Reader, format string, opts ImportOptio
 	}
 
 	return tmpl, nil
+}
+
+func readAllWithLimit(r io.Reader, maxBytes int64) ([]byte, error) {
+	if maxBytes <= 0 {
+		return io.ReadAll(r)
+	}
+
+	data, err := io.ReadAll(io.LimitReader(r, maxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, fmt.Errorf("data exceeds max size of %d bytes", maxBytes)
+	}
+	return data, nil
 }
 
 // ImportFromJSON imports a template from JSON data.

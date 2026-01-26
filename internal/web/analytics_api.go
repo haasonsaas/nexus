@@ -39,4 +39,3 @@ func (h *Handler) apiAnalyticsOverview(w http.ResponseWriter, r *http.Request) {
 
 	h.jsonResponse(w, overview)
 }
-

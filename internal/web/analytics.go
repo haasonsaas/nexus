@@ -22,16 +22,16 @@ type AnalyticsOverview struct {
 	Since   time.Time `json:"since"`
 	Until   time.Time `json:"until"`
 
-	TotalConversations        int64   `json:"total_conversations"`
-	TotalMessages             int64   `json:"total_messages"`
+	TotalConversations         int64   `json:"total_conversations"`
+	TotalMessages              int64   `json:"total_messages"`
 	AvgMessagesPerConversation float64 `json:"avg_messages_per_conversation"`
 
-	MessagesPerDay []TimeSeriesPoint  `json:"messages_per_day,omitempty"`
-	TopTools       []ToolUsageCount   `json:"top_tools,omitempty"`
-	ToolCalls      int64              `json:"tool_calls"`
-	ToolResults    int64              `json:"tool_results"`
-	ToolErrors     int64              `json:"tool_errors"`
-	ToolErrorRatePct float64          `json:"tool_error_rate_pct"`
+	MessagesPerDay   []TimeSeriesPoint `json:"messages_per_day,omitempty"`
+	TopTools         []ToolUsageCount  `json:"top_tools,omitempty"`
+	ToolCalls        int64             `json:"tool_calls"`
+	ToolResults      int64             `json:"tool_results"`
+	ToolErrors       int64             `json:"tool_errors"`
+	ToolErrorRatePct float64           `json:"tool_error_rate_pct"`
 }
 
 type TimeSeriesPoint struct {
@@ -160,19 +160,19 @@ func analyticsOverviewFromDB(ctx context.Context, db *sql.DB, agentID string, pe
 	}
 
 	return &AnalyticsOverview{
-		Period:                  period,
-		AgentID:                  agentID,
-		Since:                    since,
-		Until:                    until,
-		TotalConversations:       totalConversations,
-		TotalMessages:            totalMessages,
+		Period:                     period,
+		AgentID:                    agentID,
+		Since:                      since,
+		Until:                      until,
+		TotalConversations:         totalConversations,
+		TotalMessages:              totalMessages,
 		AvgMessagesPerConversation: avgMessages,
-		MessagesPerDay:           messagesPerDay,
-		TopTools:                 topTools,
-		ToolCalls:                toolCalls,
-		ToolResults:              toolResults,
-		ToolErrors:               toolErrors,
-		ToolErrorRatePct:         toolErrorRatePct,
+		MessagesPerDay:             messagesPerDay,
+		TopTools:                   topTools,
+		ToolCalls:                  toolCalls,
+		ToolResults:                toolResults,
+		ToolErrors:                 toolErrors,
+		ToolErrorRatePct:           toolErrorRatePct,
 	}, nil
 }
 
@@ -362,19 +362,19 @@ func analyticsOverviewFromStore(ctx context.Context, store sessions.Store, agent
 	}
 
 	return &AnalyticsOverview{
-		Period:                  period,
-		AgentID:                  agentID,
-		Since:                    since,
-		Until:                    until,
-		TotalConversations:       totalConversations,
-		TotalMessages:            totalMessages,
+		Period:                     period,
+		AgentID:                    agentID,
+		Since:                      since,
+		Until:                      until,
+		TotalConversations:         totalConversations,
+		TotalMessages:              totalMessages,
 		AvgMessagesPerConversation: avgMessages,
-		MessagesPerDay:           flattenTimeSeries(messagesPerDay),
-		TopTools:                 topToolCounts(toolCounts, 10),
-		ToolCalls:                toolCalls,
-		ToolResults:              toolResults,
-		ToolErrors:               toolErrors,
-		ToolErrorRatePct:         toolErrorRatePct,
+		MessagesPerDay:             flattenTimeSeries(messagesPerDay),
+		TopTools:                   topToolCounts(toolCounts, 10),
+		ToolCalls:                  toolCalls,
+		ToolResults:                toolResults,
+		ToolErrors:                 toolErrors,
+		ToolErrorRatePct:           toolErrorRatePct,
 	}, nil
 }
 
@@ -414,4 +414,3 @@ func topToolCounts(raw map[string]int64, limit int) []ToolUsageCount {
 	}
 	return items
 }
-

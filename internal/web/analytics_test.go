@@ -121,4 +121,3 @@ func TestAPIAnalyticsOverview_JSON(t *testing.T) {
 		t.Fatalf("TopTools=%v, want 2 entries", overview.TopTools)
 	}
 }
-

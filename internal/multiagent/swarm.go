@@ -21,8 +21,8 @@ const (
 
 // SwarmConfig configures swarm execution behavior.
 type SwarmConfig struct {
-	Enabled           bool               `json:"enabled" yaml:"enabled"`
-	MaxParallelAgents int                `json:"max_parallel_agents,omitempty" yaml:"max_parallel_agents"`
+	Enabled           bool                     `json:"enabled" yaml:"enabled"`
+	MaxParallelAgents int                      `json:"max_parallel_agents,omitempty" yaml:"max_parallel_agents"`
 	SharedContext     SwarmSharedContextConfig `json:"shared_context,omitempty" yaml:"shared_context"`
 }
 
@@ -265,8 +265,8 @@ func (s *Swarm) Execute(ctx context.Context, exec SwarmExecutor) (*SwarmResult, 
 
 	sem := make(chan struct{}, s.cfg.MaxParallelAgents)
 	var (
-		mu      sync.Mutex
-		results []SwarmAgentResult
+		mu       sync.Mutex
+		results  []SwarmAgentResult
 		firstErr error
 	)
 

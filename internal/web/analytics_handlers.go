@@ -48,4 +48,3 @@ func (h *Handler) handleAnalytics(w http.ResponseWriter, r *http.Request) {
 
 	h.render(w, "layout.html", data)
 }
-

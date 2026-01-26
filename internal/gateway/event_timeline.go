@@ -100,6 +100,16 @@ func (p *EventTimelinePlugin) OnEvent(ctx context.Context, e models.AgentEvent) 
 
 	case models.AgentEventModelCompleted:
 		data := map[string]interface{}{}
+		if e.Stream != nil {
+			if e.Stream.Provider != "" {
+				data["provider"] = e.Stream.Provider
+			}
+			if e.Stream.Model != "" {
+				data["model"] = e.Stream.Model
+			}
+			data["input_tokens"] = e.Stream.InputTokens
+			data["output_tokens"] = e.Stream.OutputTokens
+		}
 		if e.Stats != nil && e.Stats.Run != nil {
 			data["model_wall_time_ms"] = e.Stats.Run.ModelWallTime.Milliseconds()
 		}

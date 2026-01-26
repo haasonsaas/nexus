@@ -11,6 +11,7 @@ import (
 	"os"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,7 +25,9 @@ import (
 	"github.com/haasonsaas/nexus/internal/cron"
 	"github.com/haasonsaas/nexus/internal/doctor"
 	"github.com/haasonsaas/nexus/internal/edge"
+	"github.com/haasonsaas/nexus/internal/observability"
 	"github.com/haasonsaas/nexus/internal/sessions"
+	"github.com/haasonsaas/nexus/internal/status"
 	"github.com/haasonsaas/nexus/internal/tools/naming"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
@@ -95,6 +98,16 @@ type ProviderStatus struct {
 	HealthDegraded bool   `json:"health_degraded,omitempty"`
 	QRAvailable    bool   `json:"qr_available,omitempty"`
 	QRUpdatedAt    string `json:"qr_updated_at,omitempty"`
+}
+
+type costUsageEntry struct {
+	Date     time.Time `json:"date"`
+	Cost     float64   `json:"cost"`
+	Provider string    `json:"provider,omitempty"`
+}
+
+type costUsageResponse struct {
+	Entries []costUsageEntry `json:"entries"`
 }
 
 type providerTestRequest struct {
@@ -673,6 +686,69 @@ func (h *Handler) apiTools(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.jsonResponse(w, map[string]any{"tools": tools})
+}
+
+// apiUsageCosts handles GET /api/usage/costs.
+func (h *Handler) apiUsageCosts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h.config == nil || h.config.EventStore == nil {
+		h.jsonError(w, "Usage data unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	days := 7
+	if raw := strings.TrimSpace(r.URL.Query().Get("days")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			days = parsed
+		}
+	}
+	if days > 90 {
+		days = 90
+	}
+
+	now := time.Now()
+	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, -days+1)
+	events, err := h.config.EventStore.GetByType(observability.EventTypeLLMResponse, 0)
+	if err != nil {
+		h.jsonError(w, "Failed to load usage events", http.StatusInternalServerError)
+		return
+	}
+
+	dayTotals := make(map[string]float64)
+	dayDates := make(map[string]time.Time)
+	for _, event := range events {
+		if event.Timestamp.Before(start) {
+			continue
+		}
+		provider := eventDataString(event.Data, "provider")
+		model := eventDataString(event.Data, "model")
+		if provider == "" || model == "" {
+			continue
+		}
+		inputTokens := eventDataInt(event.Data, "input_tokens")
+		outputTokens := eventDataInt(event.Data, "output_tokens")
+		cost := status.EstimateUsageCost(inputTokens, outputTokens, status.ResolveModelCostConfig(provider, model, h.config.GatewayConfig))
+		day := time.Date(event.Timestamp.Year(), event.Timestamp.Month(), event.Timestamp.Day(), 0, 0, 0, 0, event.Timestamp.Location())
+		key := day.Format("2006-01-02")
+		dayTotals[key] += cost
+		dayDates[key] = day
+	}
+
+	entries := make([]costUsageEntry, 0, len(dayTotals))
+	for key, cost := range dayTotals {
+		entries = append(entries, costUsageEntry{
+			Date: dayDates[key],
+			Cost: cost,
+		})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Date.Before(entries[j].Date)
+	})
+
+	h.jsonResponse(w, costUsageResponse{Entries: entries})
 }
 
 // apiSkillsRefresh triggers skill discovery.
@@ -1664,6 +1740,47 @@ func sanitizeAttachmentFilename(name string) string {
 	name = strings.ReplaceAll(name, "\"", "")
 	name = strings.ReplaceAll(name, "\\", "")
 	return strings.TrimSpace(name)
+}
+
+func eventDataString(data map[string]interface{}, key string) string {
+	if data == nil {
+		return ""
+	}
+	value, ok := data[key]
+	if !ok {
+		return ""
+	}
+	if str, ok := value.(string); ok {
+		return str
+	}
+	return ""
+}
+
+func eventDataInt(data map[string]interface{}, key string) int {
+	if data == nil {
+		return 0
+	}
+	value, ok := data[key]
+	if !ok || value == nil {
+		return 0
+	}
+	switch typed := value.(type) {
+	case int:
+		return typed
+	case int64:
+		return int(typed)
+	case int32:
+		return int(typed)
+	case float64:
+		return int(typed)
+	case float32:
+		return int(typed)
+	case json.Number:
+		if parsed, err := typed.Int64(); err == nil {
+			return int(parsed)
+		}
+	}
+	return 0
 }
 
 // jsonResponse writes a JSON response.

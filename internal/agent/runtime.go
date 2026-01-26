@@ -1240,6 +1240,8 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 		assistantMsgID := uuid.NewString()
 		var textBuilder strings.Builder
 		var toolCalls []models.ToolCall
+		var inputTokens int
+		var outputTokens int
 
 		for chunk := range completion {
 			if chunk == nil {
@@ -1250,7 +1252,8 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 				return chunk.Error
 			}
 			if chunk.Done {
-				break
+				inputTokens = chunk.InputTokens
+				outputTokens = chunk.OutputTokens
 			}
 			if chunk.Text != "" {
 				// Check size limit to prevent memory exhaustion
@@ -1285,12 +1288,17 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 					}
 				}
 			}
+			if chunk.Done {
+				break
+			}
 		}
 
 		// Check if context was cancelled during stream processing
 		if ctx.Err() != nil {
 			return r.handleContextDone(ctx, emitter, wallTimeLimit)
 		}
+
+		emitter.ModelCompleted(ctx, r.provider.Name(), model, inputTokens, outputTokens)
 
 		// Persist assistant message
 		assistantMsg := &models.Message{

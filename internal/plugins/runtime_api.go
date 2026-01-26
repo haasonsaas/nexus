@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/haasonsaas/nexus/internal/channels"
@@ -183,6 +184,7 @@ func toChannelHealth(status pluginsdk.HealthStatus) channels.HealthStatus {
 type runtimeCLIRegistry struct {
 	rootCmd  *cobra.Command
 	pluginID string
+	allowed  map[string]struct{}
 }
 
 func (r *runtimeCLIRegistry) RegisterCommand(cmd *pluginsdk.CLICommand) error {
@@ -194,6 +196,18 @@ func (r *runtimeCLIRegistry) RegisterCommand(cmd *pluginsdk.CLICommand) error {
 	}
 
 	cobraCmd := convertCLICommand(cmd)
+	name := cobraCmd.Name()
+	if name == "" {
+		return fmt.Errorf("command name is required")
+	}
+	if len(r.allowed) > 0 {
+		if _, ok := r.allowed[name]; !ok {
+			return fmt.Errorf("plugin %q attempted to register undeclared CLI command %q", r.pluginID, name)
+		}
+	}
+	if existing := findCommand(r.rootCmd, name); existing != nil {
+		return fmt.Errorf("CLI command %q already exists", name)
+	}
 	r.rootCmd.AddCommand(cobraCmd)
 	return nil
 }
@@ -213,6 +227,35 @@ func (r *runtimeCLIRegistry) RegisterSubcommand(parent string, cmd *pluginsdk.CL
 	}
 
 	cobraCmd := convertCLICommand(cmd)
+	name := cobraCmd.Name()
+	if name == "" {
+		return fmt.Errorf("command name is required")
+	}
+
+	key := name
+	if parent != "" {
+		parts := splitCommandPath(parent)
+		if len(parts) > 0 {
+			key = strings.Join(append(parts, name), ".")
+		}
+	}
+
+	if parent == "" {
+		if len(r.allowed) > 0 {
+			if _, ok := r.allowed[key]; !ok {
+				return fmt.Errorf("plugin %q attempted to register undeclared CLI command %q", r.pluginID, key)
+			}
+		}
+	} else if len(r.allowed) > 0 {
+		if _, ok := r.allowed[key]; !ok {
+			return fmt.Errorf("plugin %q attempted to register undeclared CLI command %q", r.pluginID, key)
+		}
+	}
+
+	if existing := findCommand(r.rootCmd, key); existing != nil {
+		return fmt.Errorf("CLI command %q already exists", key)
+	}
+
 	parentCmd.AddCommand(cobraCmd)
 	return nil
 }
@@ -378,6 +421,7 @@ func (m *ServiceManager) Services() []*pluginsdk.Service {
 type runtimeServiceRegistry struct {
 	manager  *ServiceManager
 	pluginID string
+	allowed  map[string]struct{}
 }
 
 func (r *runtimeServiceRegistry) RegisterService(svc *pluginsdk.Service) error {
@@ -389,6 +433,11 @@ func (r *runtimeServiceRegistry) RegisterService(svc *pluginsdk.Service) error {
 	}
 	if svc.ID == "" {
 		return fmt.Errorf("service ID is required")
+	}
+	if len(r.allowed) > 0 {
+		if _, ok := r.allowed[svc.ID]; !ok {
+			return fmt.Errorf("plugin %q attempted to register undeclared service %q", r.pluginID, svc.ID)
+		}
 	}
 	if svc.Start == nil {
 		return fmt.Errorf("service Start function is required")
@@ -412,6 +461,7 @@ func (r *runtimeServiceRegistry) RegisterService(svc *pluginsdk.Service) error {
 type runtimeHookRegistry struct {
 	registry *hooks.Registry
 	pluginID string
+	allowed  map[string]struct{}
 }
 
 func (r *runtimeHookRegistry) RegisterHook(reg *pluginsdk.HookRegistration) error {
@@ -423,6 +473,11 @@ func (r *runtimeHookRegistry) RegisterHook(reg *pluginsdk.HookRegistration) erro
 	}
 	if reg.EventType == "" {
 		return fmt.Errorf("event type is required")
+	}
+	if len(r.allowed) > 0 {
+		if _, ok := r.allowed[reg.EventType]; !ok {
+			return fmt.Errorf("plugin %q attempted to register undeclared hook %q", r.pluginID, reg.EventType)
+		}
 	}
 	if reg.Handler == nil {
 		return fmt.Errorf("handler is required")

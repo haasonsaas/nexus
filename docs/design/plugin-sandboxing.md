@@ -22,8 +22,13 @@ This document addresses issue #97: isolating third-party plugin execution.
 ### Phase 0: Capability Declaration + Enforcement (Implemented)
 Runtime plugin registration is now gated by its manifest:
 
-- `nexus.plugin.json` supports an optional `tools` allowlist.
-- Channel/tool registration rejects undeclared capabilities when an allowlist is present.
+- `nexus.plugin.json` supports optional allowlists for:
+  - `tools`
+  - `channels`
+  - `commands` (CLI command paths like `plugins.install`)
+  - `services` (service IDs)
+  - `hooks` (hook event types)
+- Runtime registration rejects undeclared capabilities when an allowlist is present.
   - Empty allowlists continue to allow all (backwards compatible).
 
 This does **not** provide strong isolation (plugins are still in-process), but it reduces surprise and

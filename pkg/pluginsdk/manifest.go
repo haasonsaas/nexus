@@ -22,6 +22,9 @@ type Manifest struct {
 	Tools        []string        `json:"tools,omitempty"`
 	Channels     []string        `json:"channels,omitempty"`
 	Providers    []string        `json:"providers,omitempty"`
+	Commands     []string        `json:"commands,omitempty"`
+	Services     []string        `json:"services,omitempty"`
+	Hooks        []string        `json:"hooks,omitempty"`
 	ConfigSchema json.RawMessage `json:"configSchema"`
 	Metadata     map[string]any  `json:"metadata,omitempty"`
 	UIHints      *UIHints        `json:"uiHints,omitempty"`

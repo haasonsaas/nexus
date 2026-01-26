@@ -423,8 +423,8 @@ func TestAdapter_Initialization(t *testing.T) {
 	if adapter.rateLimiter == nil {
 		t.Error("rateLimiter should not be nil")
 	}
-	if adapter.metrics == nil {
-		t.Error("metrics should not be nil")
+	if adapter.health == nil {
+		t.Error("health should not be nil")
 	}
 	if adapter.logger == nil {
 		t.Error("logger should not be nil")

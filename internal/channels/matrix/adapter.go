@@ -17,10 +17,10 @@ import (
 
 // Adapter implements the channels.Adapter interface for Matrix.
 type Adapter struct {
-	config  *Config
-	client  *mautrix.Client
-	logger  *slog.Logger
-	metrics *channels.Metrics
+	config *Config
+	client *mautrix.Client
+	logger *slog.Logger
+	health *channels.BaseHealthAdapter
 
 	messages chan *models.Message
 	errors   chan error
@@ -34,9 +34,6 @@ type Adapter struct {
 
 	roomTypesMu sync.RWMutex
 	roomTypes   map[id.RoomID]string
-
-	statusMu sync.RWMutex
-	status   channels.Status
 }
 
 // NewAdapter creates a new Matrix adapter.
@@ -60,12 +57,12 @@ func NewAdapter(cfg Config) (*Adapter, error) {
 		config:    &cfg,
 		client:    client,
 		logger:    cfg.Logger.With("adapter", "matrix"),
-		metrics:   channels.NewMetrics("matrix"),
 		messages:  make(chan *models.Message, 100),
 		errors:    make(chan error, 10),
 		stopCh:    make(chan struct{}),
 		roomTypes: make(map[id.RoomID]string),
 	}
+	a.health = channels.NewBaseHealthAdapter(models.ChannelType("matrix"), a.logger)
 
 	// Build allowed rooms/users maps
 	if len(cfg.AllowedRooms) > 0 {
@@ -121,12 +118,9 @@ func (a *Adapter) Start(ctx context.Context) error {
 	go a.syncLoop(ctx)
 
 	// Set initial status as connected
-	a.statusMu.Lock()
-	a.status = channels.Status{
-		Connected: true,
-		LastPing:  time.Now().Unix(),
+	if a.health != nil {
+		a.health.SetStatus(true, "")
 	}
-	a.statusMu.Unlock()
 
 	a.logger.Info("matrix adapter started",
 		"homeserver", a.config.Homeserver,
@@ -202,12 +196,12 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	// Send message
 	resp, err := a.client.SendMessageEvent(ctx, roomID, event.EventMessage, content)
 	if err != nil {
-		a.metrics.RecordError(channels.ErrCodeInternal)
+		a.health.RecordError(channels.ErrCodeInternal)
 		return channels.ErrInternal(fmt.Sprintf("send message to %s", roomID), err)
 	}
 
-	a.metrics.RecordMessageSent()
-	a.metrics.RecordSendLatency(time.Since(start))
+	a.health.RecordMessageSent()
+	a.health.RecordSendLatency(time.Since(start))
 
 	a.logger.Debug("sent message",
 		"room_id", roomID,
@@ -265,14 +259,18 @@ func (a *Adapter) HealthCheck(ctx context.Context) channels.HealthStatus {
 
 // Status returns the current connection status.
 func (a *Adapter) Status() channels.Status {
-	a.statusMu.RLock()
-	defer a.statusMu.RUnlock()
-	return a.status
+	if a.health == nil {
+		return channels.Status{}
+	}
+	return a.health.Status()
 }
 
 // Metrics returns the current metrics snapshot.
 func (a *Adapter) Metrics() channels.MetricsSnapshot {
-	return a.metrics.Snapshot()
+	if a.health == nil {
+		return channels.MetricsSnapshot{ChannelType: models.ChannelType("matrix")}
+	}
+	return a.health.Metrics()
 }
 
 func (a *Adapter) syncLoop(ctx context.Context) {
@@ -288,13 +286,9 @@ func (a *Adapter) syncLoop(ctx context.Context) {
 				a.logger.Error("sync error", "error", err)
 
 				// Update status to reflect error
-				a.statusMu.Lock()
-				a.status = channels.Status{
-					Connected: false,
-					Error:     err.Error(),
-					LastPing:  time.Now().Unix(),
+				if a.health != nil {
+					a.health.SetStatus(false, err.Error())
 				}
-				a.statusMu.Unlock()
 
 				select {
 				case a.errors <- err:
@@ -311,12 +305,9 @@ func (a *Adapter) syncLoop(ctx context.Context) {
 				}
 			} else {
 				// Sync successful, update status
-				a.statusMu.Lock()
-				a.status = channels.Status{
-					Connected: true,
-					LastPing:  time.Now().Unix(),
+				if a.health != nil {
+					a.health.SetStatus(true, "")
 				}
-				a.statusMu.Unlock()
 			}
 		}
 	}
@@ -381,7 +372,7 @@ func (a *Adapter) handleMessage(ctx context.Context, evt *event.Event) {
 		Metadata:  metadata,
 	}
 
-	a.metrics.RecordMessageReceived()
+	a.health.RecordMessageReceived()
 
 	select {
 	case a.messages <- msg:

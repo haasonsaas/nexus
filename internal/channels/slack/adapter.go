@@ -112,18 +112,14 @@ type Adapter struct {
 	client       *slack.Client
 	socketClient *socketmode.Client
 	messages     chan *models.Message
-	status       channels.Status
-	statusMu     sync.RWMutex
 	ctx          context.Context
 	cancel       context.CancelFunc
 	wg           sync.WaitGroup
 	botUserID    string
 	botUserIDMu  sync.RWMutex
 	rateLimiter  *channels.RateLimiter
-	metrics      *channels.Metrics
 	logger       *slog.Logger
-	degraded     bool
-	degradedMu   sync.RWMutex
+	health       *channels.BaseHealthAdapter
 	canvasMu     sync.RWMutex
 	canvasLinker CanvasLinkProvider
 }
@@ -145,18 +141,16 @@ func NewAdapter(cfg Config) (*Adapter, error) {
 		socketmode.OptionDebug(false),
 	)
 
-	return &Adapter{
+	adapter := &Adapter{
 		cfg:          cfg,
 		client:       client,
 		socketClient: socketClient,
 		messages:     make(chan *models.Message, 100),
-		status: channels.Status{
-			Connected: false,
-		},
-		rateLimiter: channels.NewRateLimiter(cfg.RateLimit, cfg.RateBurst),
-		metrics:     channels.NewMetrics(models.ChannelSlack),
-		logger:      cfg.Logger.With("adapter", "slack"),
-	}, nil
+		rateLimiter:  channels.NewRateLimiter(cfg.RateLimit, cfg.RateBurst),
+		logger:       cfg.Logger.With("adapter", "slack"),
+	}
+	adapter.health = channels.NewBaseHealthAdapter(models.ChannelSlack, adapter.logger)
+	return adapter, nil
 }
 
 // SetCanvasLinkProvider configures a callback for generating canvas links.
@@ -179,7 +173,7 @@ func (a *Adapter) Start(ctx context.Context) error {
 	// Get bot user ID for mention detection
 	authResp, err := a.client.AuthTest()
 	if err != nil {
-		a.metrics.RecordError(channels.ErrCodeAuthentication)
+		a.health.RecordError(channels.ErrCodeAuthentication)
 		return channels.ErrAuthentication("failed to authenticate with Slack", err)
 	}
 
@@ -202,12 +196,12 @@ func (a *Adapter) Start(ctx context.Context) error {
 		if err := a.socketClient.Run(); err != nil {
 			a.updateStatus(false, fmt.Sprintf("Socket mode error: %v", err))
 			a.logger.Error("socket mode error", "error", err)
-			a.metrics.RecordError(channels.ErrCodeConnection)
+			a.health.RecordError(channels.ErrCodeConnection)
 		}
 	}()
 
 	a.updateStatus(true, "")
-	a.metrics.RecordConnectionOpened()
+	a.health.RecordConnectionOpened()
 
 	a.logger.Info("slack adapter started successfully")
 
@@ -236,7 +230,7 @@ func (a *Adapter) Stop(ctx context.Context) error {
 		// Goroutines finished - safe to close messages channel now
 		close(a.messages)
 		a.updateStatus(false, "")
-		a.metrics.RecordConnectionClosed()
+		a.health.RecordConnectionClosed()
 		a.logger.Info("slack adapter stopped gracefully")
 		return nil
 	case <-ctx.Done():
@@ -244,7 +238,7 @@ func (a *Adapter) Stop(ctx context.Context) error {
 		close(a.messages)
 		a.updateStatus(false, "shutdown timeout")
 		a.logger.Warn("slack adapter stop timeout")
-		a.metrics.RecordError(channels.ErrCodeTimeout)
+		a.health.RecordError(channels.ErrCodeTimeout)
 		return channels.ErrTimeout("shutdown timeout", ctx.Err())
 	}
 }
@@ -256,15 +250,15 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	// Apply rate limiting
 	if err := a.rateLimiter.Wait(ctx); err != nil {
 		a.logger.Warn("rate limit wait cancelled", "error", err)
-		a.metrics.RecordError(channels.ErrCodeTimeout)
+		a.health.RecordError(channels.ErrCodeTimeout)
 		return channels.ErrTimeout("rate limit wait cancelled", err)
 	}
 
 	// Extract channel and thread timestamp from message metadata
 	channelID, ok := msg.Metadata["slack_channel"].(string)
 	if !ok {
-		a.metrics.RecordMessageFailed()
-		a.metrics.RecordError(channels.ErrCodeInvalidInput)
+		a.health.RecordMessageFailed()
+		a.health.RecordError(channels.ErrCodeInvalidInput)
 		return channels.ErrInvalidInput("missing slack_channel in message metadata", nil)
 	}
 
@@ -282,24 +276,24 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	// Send the message
 	channel, timestamp, err := a.client.PostMessageContext(ctx, channelID, options...)
 	if err != nil {
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 		a.logger.Error("failed to send message",
 			"error", err,
 			"channel_id", channelID)
 
 		// Classify the error
 		if isRateLimitError(err) {
-			a.metrics.RecordError(channels.ErrCodeRateLimit)
+			a.health.RecordError(channels.ErrCodeRateLimit)
 			return channels.ErrRateLimit("slack rate limit exceeded", err)
 		}
 
-		a.metrics.RecordError(channels.ErrCodeInternal)
+		a.health.RecordError(channels.ErrCodeInternal)
 		return channels.ErrInternal("failed to send Slack message", err)
 	}
 
 	// Record success metrics
-	a.metrics.RecordMessageSent()
-	a.metrics.RecordSendLatency(time.Since(startTime))
+	a.health.RecordMessageSent()
+	a.health.RecordSendLatency(time.Since(startTime))
 
 	a.logger.Debug("message sent successfully",
 		"channel", channel,
@@ -345,9 +339,10 @@ func (a *Adapter) Type() models.ChannelType {
 
 // Status returns the current connection status.
 func (a *Adapter) Status() channels.Status {
-	a.statusMu.RLock()
-	defer a.statusMu.RUnlock()
-	return a.status
+	if a.health == nil {
+		return channels.Status{}
+	}
+	return a.health.Status()
 }
 
 // HealthCheck performs a connectivity check with Slack's API.
@@ -390,7 +385,10 @@ func (a *Adapter) HealthCheck(ctx context.Context) channels.HealthStatus {
 
 // Metrics returns the current metrics snapshot.
 func (a *Adapter) Metrics() channels.MetricsSnapshot {
-	return a.metrics.Snapshot()
+	if a.health == nil {
+		return channels.MetricsSnapshot{ChannelType: models.ChannelSlack}
+	}
+	return a.health.Metrics()
 }
 
 // handleEvents processes incoming Socket Mode events.
@@ -408,10 +406,7 @@ func (a *Adapter) handleEvents() {
 				return
 			}
 
-			// Update last ping timestamp
-			a.statusMu.Lock()
-			a.status.LastPing = time.Now().Unix()
-			a.statusMu.Unlock()
+			a.updateLastPing()
 
 			switch event.Type {
 			case socketmode.EventTypeConnecting:
@@ -420,7 +415,7 @@ func (a *Adapter) handleEvents() {
 			case socketmode.EventTypeConnectionError:
 				a.logger.Error("socket mode connection error", "data", event.Data)
 				a.updateStatus(false, "connection error")
-				a.metrics.RecordError(channels.ErrCodeConnection)
+				a.health.RecordError(channels.ErrCodeConnection)
 				a.setDegraded(true)
 
 			case socketmode.EventTypeConnected:
@@ -622,8 +617,8 @@ func (a *Adapter) handleMessage(event *slackevents.MessageEvent) {
 	msg := convertSlackMessage(event, a.cfg.BotToken)
 
 	// Record metrics
-	a.metrics.RecordMessageReceived()
-	a.metrics.RecordReceiveLatency(time.Since(startTime))
+	a.health.RecordMessageReceived()
+	a.health.RecordReceiveLatency(time.Since(startTime))
 
 	// Send to messages channel
 	select {
@@ -632,33 +627,39 @@ func (a *Adapter) handleMessage(event *slackevents.MessageEvent) {
 	default:
 		a.logger.Warn("messages channel full, dropping message",
 			"channel", event.Channel)
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 	}
 }
 
 // updateStatus updates the connection status thread-safely.
 func (a *Adapter) updateStatus(connected bool, errMsg string) {
-	a.statusMu.Lock()
-	defer a.statusMu.Unlock()
-	a.status.Connected = connected
-	a.status.Error = errMsg
-	if connected {
-		a.status.LastPing = time.Now().Unix()
+	if a.health == nil {
+		return
 	}
+	a.health.SetStatus(connected, errMsg)
+}
+
+func (a *Adapter) updateLastPing() {
+	if a.health == nil {
+		return
+	}
+	a.health.UpdateLastPing()
 }
 
 // setDegraded sets the degraded mode flag.
 func (a *Adapter) setDegraded(degraded bool) {
-	a.degradedMu.Lock()
-	defer a.degradedMu.Unlock()
-	a.degraded = degraded
+	if a.health == nil {
+		return
+	}
+	a.health.SetDegraded(degraded)
 }
 
 // isDegraded returns the current degraded mode status.
 func (a *Adapter) isDegraded() bool {
-	a.degradedMu.RLock()
-	defer a.degradedMu.RUnlock()
-	return a.degraded
+	if a.health == nil {
+		return false
+	}
+	return a.health.IsDegraded()
 }
 
 // isRateLimitError checks if an error is a rate limit error.
@@ -951,11 +952,11 @@ func (a *Adapter) StartStreamingResponse(ctx context.Context, msg *models.Messag
 	_, timestamp, err := a.client.PostMessageContext(ctx, channelID, options...)
 	if err != nil {
 		a.logger.Error("failed to start streaming response", "error", err, "channel_id", channelID)
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 		return "", channels.ErrInternal("failed to send initial message", err)
 	}
 
-	a.metrics.RecordMessageSent()
+	a.health.RecordMessageSent()
 	return timestamp, nil
 }
 

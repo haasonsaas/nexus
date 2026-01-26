@@ -64,6 +64,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/haasonsaas/nexus/internal/agent"
+	"github.com/haasonsaas/nexus/internal/agent/toolconv"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
@@ -1210,28 +1211,7 @@ func parseDataURL(raw string) (string, string, bool) {
 //
 //	Converts to Anthropic tool definition with same name, description, and schema.
 func (p *AnthropicProvider) convertTools(tools []agent.Tool) ([]anthropic.ToolUnionParam, error) {
-	var result []anthropic.ToolUnionParam
-
-	for _, tool := range tools {
-		// Parse JSON schema into Anthropic's schema format
-		var schema anthropic.ToolInputSchemaParam
-		if err := json.Unmarshal(tool.Schema(), &schema); err != nil {
-			return nil, fmt.Errorf("invalid tool schema for %s: %w", tool.Name(), err)
-		}
-
-		// Create tool parameter with schema and name
-		toolParam := anthropic.ToolUnionParamOfTool(schema, tool.Name())
-
-		// Set description if we can access the underlying ToolParam
-		if toolParam.OfTool == nil {
-			return nil, fmt.Errorf("invalid tool schema for %s: missing tool definition", tool.Name())
-		}
-		toolParam.OfTool.Description = anthropic.String(tool.Description())
-
-		result = append(result, toolParam)
-	}
-
-	return result, nil
+	return toolconv.ToAnthropicTools(tools)
 }
 
 // convertToolsBeta converts internal tool definitions to Anthropic beta tool format.
@@ -1252,16 +1232,10 @@ func (p *AnthropicProvider) convertToolsBeta(tools []agent.Tool) ([]anthropic.Be
 			}
 		}
 
-		var schema anthropic.BetaToolInputSchemaParam
-		if err := json.Unmarshal(tool.Schema(), &schema); err != nil {
-			return nil, fmt.Errorf("invalid tool schema for %s: %w", tool.Name(), err)
+		toolParam, err := toolconv.ToAnthropicBetaTool(tool)
+		if err != nil {
+			return nil, err
 		}
-
-		toolParam := anthropic.BetaToolUnionParamOfTool(schema, tool.Name())
-		if toolParam.OfTool == nil {
-			return nil, fmt.Errorf("invalid tool schema for %s: missing tool definition", tool.Name())
-		}
-		toolParam.OfTool.Description = anthropic.String(tool.Description())
 		result = append(result, toolParam)
 	}
 

@@ -20,6 +20,10 @@
 - Prefer smaller, testable increments with explicit config defaults.
 - Update `nexus.example.yaml` when adding new config fields.
 
+## Open Issues Plan
+- The open-issues execution tracker lives in `docs/plan-2026-01-25-open-issues.md`.
+- Design docs referenced there should be kept in sync with implementation progress.
+
 ## CI Notes
 - `go test ./...` is the baseline expectation.
 - Keep platform assumptions explicit (tests should not depend on host OS unless intended).

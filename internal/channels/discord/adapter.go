@@ -89,7 +89,6 @@ type Adapter struct {
 	config         Config
 	token          string
 	session        discordSession
-	status         channels.Status
 	messages       chan *models.Message
 	mu             sync.RWMutex
 	ctx            context.Context
@@ -97,10 +96,8 @@ type Adapter struct {
 	wg             sync.WaitGroup
 	reconnectCount int
 	rateLimiter    *channels.RateLimiter
-	metrics        *channels.Metrics
 	logger         *slog.Logger
-	degraded       bool
-	degradedMu     sync.RWMutex
+	health         *channels.BaseHealthAdapter
 }
 
 // NewAdapter creates a new Discord adapter with the given configuration.
@@ -110,15 +107,15 @@ func NewAdapter(config Config) (*Adapter, error) {
 		return nil, err
 	}
 
-	return &Adapter{
+	adapter := &Adapter{
 		config:      config,
 		token:       config.Token,
-		status:      channels.Status{Connected: false},
 		messages:    make(chan *models.Message, 100),
 		rateLimiter: channels.NewRateLimiter(config.RateLimit, config.RateBurst),
-		metrics:     channels.NewMetrics(models.ChannelDiscord),
 		logger:      config.Logger.With("adapter", "discord"),
-	}, nil
+	}
+	adapter.health = channels.NewBaseHealthAdapter(models.ChannelDiscord, adapter.logger)
+	return adapter, nil
 }
 
 // NewAdapterSimple creates a new Discord adapter with just a token (for backward compatibility).
@@ -149,7 +146,7 @@ func (a *Adapter) Start(ctx context.Context) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if a.status.Connected {
+	if a.isConnected() {
 		return channels.ErrInternal("adapter already started", nil)
 	}
 
@@ -159,7 +156,7 @@ func (a *Adapter) Start(ctx context.Context) error {
 	if a.session == nil {
 		dg, err := discordgo.New("Bot " + a.token)
 		if err != nil {
-			a.metrics.RecordError(channels.ErrCodeAuthentication)
+			a.health.RecordError(channels.ErrCodeAuthentication)
 			return channels.ErrAuthentication("failed to create Discord session", err)
 		}
 		a.session = dg
@@ -174,15 +171,13 @@ func (a *Adapter) Start(ctx context.Context) error {
 	// Open the connection with retry logic
 	err := a.connectWithRetry(ctx)
 	if err != nil {
-		a.metrics.RecordError(channels.ErrCodeConnection)
+		a.health.RecordError(channels.ErrCodeConnection)
 		return channels.ErrConnection("failed to connect to Discord", err)
 	}
 
 	a.ctx, a.cancel = context.WithCancel(ctx)
-	a.status.Connected = true
-	a.status.Error = ""
-	a.status.LastPing = time.Now().Unix()
-	a.metrics.RecordConnectionOpened()
+	a.updateStatus(true, "")
+	a.health.RecordConnectionOpened()
 
 	a.logger.Info("discord adapter started successfully")
 
@@ -195,7 +190,7 @@ func (a *Adapter) Stop(ctx context.Context) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if !a.status.Connected {
+	if !a.isConnected() {
 		return nil
 	}
 
@@ -220,15 +215,15 @@ func (a *Adapter) Stop(ctx context.Context) error {
 
 	err := a.session.Close()
 	if err != nil {
-		a.status.Error = err.Error()
-		a.metrics.RecordError(channels.ErrCodeConnection)
+		a.updateStatus(true, err.Error())
+		a.health.RecordError(channels.ErrCodeConnection)
 		a.logger.Error("failed to close Discord session", "error", err)
 		return channels.ErrConnection("failed to close Discord session", err)
 	}
 
-	a.status.Connected = false
+	a.updateStatus(false, "")
 	close(a.messages)
-	a.metrics.RecordConnectionClosed()
+	a.health.RecordConnectionClosed()
 
 	a.logger.Info("discord adapter stopped gracefully")
 
@@ -242,25 +237,21 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	// Apply rate limiting
 	if err := a.rateLimiter.Wait(ctx); err != nil {
 		a.logger.Warn("rate limit wait cancelled", "error", err)
-		a.metrics.RecordError(channels.ErrCodeTimeout)
+		a.health.RecordError(channels.ErrCodeTimeout)
 		return channels.ErrTimeout("rate limit wait cancelled", err)
 	}
 
-	a.mu.RLock()
-	connected := a.status.Connected
-	a.mu.RUnlock()
-
-	if !connected {
-		a.metrics.RecordMessageFailed()
-		a.metrics.RecordError(channels.ErrCodeUnavailable)
+	if !a.isConnected() {
+		a.health.RecordMessageFailed()
+		a.health.RecordError(channels.ErrCodeUnavailable)
 		return channels.ErrUnavailable("adapter not connected", nil)
 	}
 
 	// Extract Discord-specific metadata
 	channelID, ok := msg.Metadata["discord_channel_id"].(string)
 	if !ok || channelID == "" {
-		a.metrics.RecordMessageFailed()
-		a.metrics.RecordError(channels.ErrCodeInvalidInput)
+		a.health.RecordMessageFailed()
+		a.health.RecordError(channels.ErrCodeInvalidInput)
 		return channels.ErrInvalidInput("missing discord_channel_id in metadata", nil)
 	}
 
@@ -273,13 +264,13 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 		if reactionMsgID, ok := msg.Metadata["discord_reaction_msg_id"].(string); ok {
 			err := a.session.MessageReactionAdd(channelID, reactionMsgID, reactionEmoji)
 			if err != nil {
-				a.metrics.RecordMessageFailed()
-				a.metrics.RecordError(channels.ErrCodeInternal)
+				a.health.RecordMessageFailed()
+				a.health.RecordError(channels.ErrCodeInternal)
 				a.logger.Error("failed to add reaction", "error", err)
 				return channels.ErrInternal("failed to add reaction", err)
 			}
-			a.metrics.RecordMessageSent()
-			a.metrics.RecordSendLatency(time.Since(startTime))
+			a.health.RecordMessageSent()
+			a.health.RecordSendLatency(time.Since(startTime))
 			return nil
 		}
 	}
@@ -292,7 +283,7 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 		}
 		thread, err := a.session.ThreadStart(channelID, threadName, discordgo.ChannelTypeGuildPublicThread, 1440)
 		if err != nil {
-			a.metrics.RecordError(channels.ErrCodeInternal)
+			a.health.RecordError(channels.ErrCodeInternal)
 			a.logger.Error("failed to create thread", "error", err)
 			return channels.ErrInternal("failed to create thread", err)
 		}
@@ -328,24 +319,24 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	}
 
 	if err != nil {
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 		a.logger.Error("failed to send message",
 			"error", err,
 			"channel_id", channelID)
 
 		// Classify the error
 		if isRateLimitError(err) {
-			a.metrics.RecordError(channels.ErrCodeRateLimit)
+			a.health.RecordError(channels.ErrCodeRateLimit)
 			return channels.ErrRateLimit("discord rate limit exceeded", err)
 		}
 
-		a.metrics.RecordError(channels.ErrCodeInternal)
+		a.health.RecordError(channels.ErrCodeInternal)
 		return channels.ErrInternal("failed to send message", err)
 	}
 
 	// Record success metrics
-	a.metrics.RecordMessageSent()
-	a.metrics.RecordSendLatency(time.Since(startTime))
+	a.health.RecordMessageSent()
+	a.health.RecordSendLatency(time.Since(startTime))
 
 	a.logger.Debug("message sent successfully",
 		"channel_id", channelID,
@@ -366,9 +357,10 @@ func (a *Adapter) Type() models.ChannelType {
 
 // Status returns the current connection status.
 func (a *Adapter) Status() channels.Status {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	return a.status
+	if a.health == nil {
+		return channels.Status{}
+	}
+	return a.health.Status()
 }
 
 // HealthCheck performs a connectivity check with Discord's API.
@@ -382,7 +374,7 @@ func (a *Adapter) HealthCheck(ctx context.Context) channels.HealthStatus {
 	}
 
 	a.mu.RLock()
-	connected := a.status.Connected
+	connected := a.isConnected()
 	session := a.session
 	a.mu.RUnlock()
 
@@ -414,7 +406,10 @@ func (a *Adapter) HealthCheck(ctx context.Context) channels.HealthStatus {
 
 // Metrics returns the current metrics snapshot.
 func (a *Adapter) Metrics() channels.MetricsSnapshot {
-	return a.metrics.Snapshot()
+	if a.health == nil {
+		return channels.MetricsSnapshot{ChannelType: models.ChannelDiscord}
+	}
+	return a.health.Metrics()
 }
 
 // RegisterSlashCommands registers slash commands with Discord.
@@ -441,7 +436,7 @@ func (a *Adapter) RegisterSlashCommands(commands []*discordgo.ApplicationCommand
 
 	_, err := a.session.ApplicationCommandBulkOverwrite(appID, guildID, commands)
 	if err != nil {
-		a.metrics.RecordError(channels.ErrCodeInternal)
+		a.health.RecordError(channels.ErrCodeInternal)
 		a.logger.Error("failed to register slash commands", "error", err)
 		return channels.ErrInternal("failed to register slash commands", err)
 	}
@@ -471,8 +466,8 @@ func (a *Adapter) handleMessageCreate(s *discordgo.Session, m *discordgo.Message
 	}
 
 	// Record metrics
-	a.metrics.RecordMessageReceived()
-	a.metrics.RecordReceiveLatency(time.Since(startTime))
+	a.health.RecordMessageReceived()
+	a.health.RecordReceiveLatency(time.Since(startTime))
 
 	select {
 	case a.messages <- msg:
@@ -481,7 +476,7 @@ func (a *Adapter) handleMessageCreate(s *discordgo.Session, m *discordgo.Message
 	default:
 		a.logger.Warn("messages channel full, dropping message",
 			"channel_id", m.ChannelID)
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 	}
 }
 
@@ -536,7 +531,7 @@ func (a *Adapter) handleInteractionCreate(s *discordgo.Session, i *discordgo.Int
 		msg.Content += fmt.Sprintf(" %s:%v", opt.Name, opt.Value)
 	}
 
-	a.metrics.RecordMessageReceived()
+	a.health.RecordMessageReceived()
 
 	select {
 	case a.messages <- msg:
@@ -544,7 +539,7 @@ func (a *Adapter) handleInteractionCreate(s *discordgo.Session, i *discordgo.Int
 		return
 	default:
 		a.logger.Warn("messages channel full, dropping interaction")
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 	}
 }
 
@@ -552,9 +547,7 @@ func (a *Adapter) handleReady(s *discordgo.Session, r *discordgo.Ready) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	a.status.Connected = true
-	a.status.Error = ""
-	a.status.LastPing = time.Now().Unix()
+	a.updateStatus(true, "")
 	a.reconnectCount = 0
 	a.setDegraded(false)
 
@@ -567,11 +560,10 @@ func (a *Adapter) handleDisconnect(s *discordgo.Session, d *discordgo.Disconnect
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	a.status.Connected = false
-	a.status.Error = "disconnected from Discord"
+	a.updateStatus(false, "disconnected from Discord")
 
 	a.logger.Warn("disconnected from discord")
-	a.metrics.RecordError(channels.ErrCodeConnection)
+	a.health.RecordError(channels.ErrCodeConnection)
 
 	// Attempt reconnection in background
 	a.wg.Add(1)
@@ -594,7 +586,7 @@ func (a *Adapter) connectWithRetry(ctx context.Context) error {
 			return nil
 		}
 
-		a.metrics.RecordReconnectAttempt()
+		a.health.RecordReconnectAttempt()
 
 		backoff := calculateBackoff(attempt, a.config.ReconnectBackoff)
 		a.logger.Warn("connection failed, retrying",
@@ -630,7 +622,7 @@ func (a *Adapter) reconnect() {
 	if maxAttempts > 0 && attempt > maxAttempts {
 		a.logger.Error("max reconnection attempts reached", "attempts", attempt-1, "max", maxAttempts)
 		a.mu.Lock()
-		a.status.Error = fmt.Sprintf("max reconnection attempts (%d) reached", maxAttempts)
+		a.updateStatus(false, fmt.Sprintf("max reconnection attempts (%d) reached", maxAttempts))
 		a.mu.Unlock()
 		return
 	}
@@ -647,13 +639,11 @@ func (a *Adapter) reconnect() {
 	defer a.mu.Unlock()
 
 	if err != nil {
-		a.status.Error = fmt.Sprintf("reconnection attempt %d failed: %v", attempt, err)
-		a.metrics.RecordError(channels.ErrCodeConnection)
+		a.updateStatus(false, fmt.Sprintf("reconnection attempt %d failed: %v", attempt, err))
+		a.health.RecordError(channels.ErrCodeConnection)
 		a.logger.Error("reconnection failed", "error", err, "attempt", attempt)
 	} else {
-		a.status.Connected = true
-		a.status.Error = ""
-		a.status.LastPing = time.Now().Unix()
+		a.updateStatus(true, "")
 		a.reconnectCount = 0
 		a.setDegraded(false)
 		a.logger.Info("reconnection successful")
@@ -669,18 +659,34 @@ func calculateBackoff(attempt int, maxWait time.Duration) time.Duration {
 	return backoff
 }
 
+func (a *Adapter) updateStatus(connected bool, errMsg string) {
+	if a.health == nil {
+		return
+	}
+	a.health.SetStatus(connected, errMsg)
+}
+
+func (a *Adapter) isConnected() bool {
+	if a.health == nil {
+		return false
+	}
+	return a.health.Status().Connected
+}
+
 // setDegraded sets the degraded mode flag.
 func (a *Adapter) setDegraded(degraded bool) {
-	a.degradedMu.Lock()
-	defer a.degradedMu.Unlock()
-	a.degraded = degraded
+	if a.health == nil {
+		return
+	}
+	a.health.SetDegraded(degraded)
 }
 
 // isDegraded returns the current degraded mode status.
 func (a *Adapter) isDegraded() bool {
-	a.degradedMu.RLock()
-	defer a.degradedMu.RUnlock()
-	return a.degraded
+	if a.health == nil {
+		return false
+	}
+	return a.health.IsDegraded()
 }
 
 // isRateLimitError checks if an error is a rate limit error.
@@ -814,11 +820,11 @@ func (a *Adapter) StartStreamingResponse(ctx context.Context, msg *models.Messag
 	sentMsg, err := a.session.ChannelMessageSend(channelID, "...")
 	if err != nil {
 		a.logger.Error("failed to start streaming response", "error", err, "channel_id", channelID)
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 		return "", channels.ErrInternal("failed to send initial message", err)
 	}
 
-	a.metrics.RecordMessageSent()
+	a.health.RecordMessageSent()
 	return sentMsg.ID, nil
 }
 

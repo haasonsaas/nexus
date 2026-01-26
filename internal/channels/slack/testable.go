@@ -18,18 +18,14 @@ type TestableAdapter struct {
 	cfg         Config
 	apiClient   SlackAPIClient
 	messages    chan *models.Message
-	status      channels.Status
-	statusMu    sync.RWMutex
 	ctx         context.Context
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
 	botUserID   string
 	botUserIDMu sync.RWMutex
 	rateLimiter *channels.RateLimiter
-	metrics     *channels.Metrics
 	logger      *slog.Logger
-	degraded    bool
-	degradedMu  sync.RWMutex
+	health      *channels.BaseHealthAdapter
 }
 
 // NewTestableAdapter creates a new testable Slack adapter with injected clients.
@@ -38,17 +34,15 @@ func NewTestableAdapter(cfg Config, apiClient SlackAPIClient) (*TestableAdapter,
 		return nil, err
 	}
 
-	return &TestableAdapter{
-		cfg:       cfg,
-		apiClient: apiClient,
-		messages:  make(chan *models.Message, 100),
-		status: channels.Status{
-			Connected: false,
-		},
+	adapter := &TestableAdapter{
+		cfg:         cfg,
+		apiClient:   apiClient,
+		messages:    make(chan *models.Message, 100),
 		rateLimiter: channels.NewRateLimiter(cfg.RateLimit, cfg.RateBurst),
-		metrics:     channels.NewMetrics(models.ChannelSlack),
 		logger:      cfg.Logger.With("adapter", "slack-testable"),
-	}, nil
+	}
+	adapter.health = channels.NewBaseHealthAdapter(models.ChannelSlack, adapter.logger)
+	return adapter, nil
 }
 
 // Type returns the channel type.
@@ -63,14 +57,18 @@ func (a *TestableAdapter) Messages() <-chan *models.Message {
 
 // Status returns the current connection status.
 func (a *TestableAdapter) Status() channels.Status {
-	a.statusMu.RLock()
-	defer a.statusMu.RUnlock()
-	return a.status
+	if a.health == nil {
+		return channels.Status{}
+	}
+	return a.health.Status()
 }
 
 // Metrics returns the current metrics snapshot.
 func (a *TestableAdapter) Metrics() channels.MetricsSnapshot {
-	return a.metrics.Snapshot()
+	if a.health == nil {
+		return channels.MetricsSnapshot{ChannelType: models.ChannelSlack}
+	}
+	return a.health.Metrics()
 }
 
 // Start begins the adapter with mock authentication.
@@ -79,7 +77,7 @@ func (a *TestableAdapter) Start(ctx context.Context) error {
 
 	authResp, err := a.apiClient.AuthTest()
 	if err != nil {
-		a.metrics.RecordError(channels.ErrCodeAuthentication)
+		a.health.RecordError(channels.ErrCodeAuthentication)
 		return channels.ErrAuthentication("failed to authenticate with Slack", err)
 	}
 
@@ -88,7 +86,7 @@ func (a *TestableAdapter) Start(ctx context.Context) error {
 	a.botUserIDMu.Unlock()
 
 	a.updateStatus(true, "")
-	a.metrics.RecordConnectionOpened()
+	a.health.RecordConnectionOpened()
 
 	return nil
 }
@@ -110,11 +108,11 @@ func (a *TestableAdapter) Stop(ctx context.Context) error {
 	select {
 	case <-done:
 		a.updateStatus(false, "")
-		a.metrics.RecordConnectionClosed()
+		a.health.RecordConnectionClosed()
 		return nil
 	case <-ctx.Done():
 		a.updateStatus(false, "shutdown timeout")
-		a.metrics.RecordError(channels.ErrCodeTimeout)
+		a.health.RecordError(channels.ErrCodeTimeout)
 		return channels.ErrTimeout("shutdown timeout", ctx.Err())
 	}
 }
@@ -124,14 +122,14 @@ func (a *TestableAdapter) Send(ctx context.Context, msg *models.Message) error {
 	startTime := time.Now()
 
 	if err := a.rateLimiter.Wait(ctx); err != nil {
-		a.metrics.RecordError(channels.ErrCodeTimeout)
+		a.health.RecordError(channels.ErrCodeTimeout)
 		return channels.ErrTimeout("rate limit wait cancelled", err)
 	}
 
 	channelID, ok := msg.Metadata["slack_channel"].(string)
 	if !ok {
-		a.metrics.RecordMessageFailed()
-		a.metrics.RecordError(channels.ErrCodeInvalidInput)
+		a.health.RecordMessageFailed()
+		a.health.RecordError(channels.ErrCodeInvalidInput)
 		return channels.ErrInvalidInput("missing slack_channel in message metadata", nil)
 	}
 
@@ -143,19 +141,19 @@ func (a *TestableAdapter) Send(ctx context.Context, msg *models.Message) error {
 
 	channel, timestamp, err := a.apiClient.PostMessageContext(ctx, channelID, options...)
 	if err != nil {
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 
 		if isRateLimitError(err) {
-			a.metrics.RecordError(channels.ErrCodeRateLimit)
+			a.health.RecordError(channels.ErrCodeRateLimit)
 			return channels.ErrRateLimit("slack rate limit exceeded", err)
 		}
 
-		a.metrics.RecordError(channels.ErrCodeInternal)
+		a.health.RecordError(channels.ErrCodeInternal)
 		return channels.ErrInternal("failed to send Slack message", err)
 	}
 
-	a.metrics.RecordMessageSent()
-	a.metrics.RecordSendLatency(time.Since(startTime))
+	a.health.RecordMessageSent()
+	a.health.RecordSendLatency(time.Since(startTime))
 
 	// Handle reactions if specified
 	if reaction, ok := msg.Metadata["slack_reaction"].(string); ok && reaction != "" {
@@ -164,7 +162,7 @@ func (a *TestableAdapter) Send(ctx context.Context, msg *models.Message) error {
 			Timestamp: timestamp,
 		}
 		if err := a.apiClient.AddReactionContext(ctx, reaction, msgRef); err != nil {
-			a.metrics.RecordError(channels.ErrCodeInternal)
+			a.health.RecordError(channels.ErrCodeInternal)
 			a.logger.Warn("failed to add slack reaction", "error", err)
 		}
 	}
@@ -218,14 +216,14 @@ func (a *TestableAdapter) ProcessMessage(event *slackevents.MessageEvent) {
 
 	msg := convertSlackMessage(event, a.cfg.BotToken)
 
-	a.metrics.RecordMessageReceived()
-	a.metrics.RecordReceiveLatency(time.Since(startTime))
+	a.health.RecordMessageReceived()
+	a.health.RecordReceiveLatency(time.Since(startTime))
 
 	select {
 	case a.messages <- msg:
 	case <-a.ctx.Done():
 	default:
-		a.metrics.RecordMessageFailed()
+		a.health.RecordMessageFailed()
 	}
 }
 
@@ -258,25 +256,24 @@ func (a *TestableAdapter) GetBotUserID() string {
 
 // SetDegraded sets the degraded mode flag for testing.
 func (a *TestableAdapter) SetDegraded(degraded bool) {
-	a.degradedMu.Lock()
-	defer a.degradedMu.Unlock()
-	a.degraded = degraded
+	if a.health == nil {
+		return
+	}
+	a.health.SetDegraded(degraded)
 }
 
 func (a *TestableAdapter) isDegraded() bool {
-	a.degradedMu.RLock()
-	defer a.degradedMu.RUnlock()
-	return a.degraded
+	if a.health == nil {
+		return false
+	}
+	return a.health.IsDegraded()
 }
 
 func (a *TestableAdapter) updateStatus(connected bool, errMsg string) {
-	a.statusMu.Lock()
-	defer a.statusMu.Unlock()
-	a.status.Connected = connected
-	a.status.Error = errMsg
-	if connected {
-		a.status.LastPing = time.Now().Unix()
+	if a.health == nil {
+		return
 	}
+	a.health.SetStatus(connected, errMsg)
 }
 
 // containsMention checks if text contains a mention of the given user ID.

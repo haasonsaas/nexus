@@ -263,8 +263,8 @@ func TestNewAdapter(t *testing.T) {
 		t.Error("adapter.rateLimiter is nil")
 	}
 
-	if adapter.metrics == nil {
-		t.Error("adapter.metrics is nil")
+	if adapter.health == nil {
+		t.Error("adapter.health is nil")
 	}
 
 	if adapter.logger == nil {
@@ -756,7 +756,7 @@ func TestAdapter_HealthCheckConnected(t *testing.T) {
 	adapter := NewAdapterSimple("test-token")
 	mock := &mockDiscordSession{}
 	adapter.session = mock
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	ctx := context.Background()
 	health := adapter.HealthCheck(ctx)
@@ -773,7 +773,7 @@ func TestAdapter_HealthCheckDegraded(t *testing.T) {
 	adapter := NewAdapterSimple("test-token")
 	mock := &mockDiscordSession{}
 	adapter.session = mock
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 	adapter.setDegraded(true)
 
 	ctx := context.Background()
@@ -991,7 +991,7 @@ func TestAdapter_Send(t *testing.T) {
 			adapter := NewAdapterSimple("test-token")
 			mock := &mockDiscordSession{}
 			adapter.session = mock
-			adapter.status.Connected = true
+			adapter.updateStatus(true, "")
 
 			ctx := context.Background()
 			err := adapter.Send(ctx, tt.message)
@@ -1035,7 +1035,7 @@ func TestAdapter_SendMissingChannelID(t *testing.T) {
 	adapter := NewAdapterSimple("test-token")
 	mock := &mockDiscordSession{}
 	adapter.session = mock
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	msg := &models.Message{
 		Content:  "Test",
@@ -1065,7 +1065,7 @@ func TestAdapter_SendError(t *testing.T) {
 		},
 	}
 	adapter.session = mock
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	msg := &models.Message{
 		Content: "Test",
@@ -1090,7 +1090,7 @@ func TestAdapter_SendRateLimitError(t *testing.T) {
 		},
 	}
 	adapter.session = mock
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	msg := &models.Message{
 		Content: "Test",
@@ -1122,7 +1122,7 @@ func TestAdapter_SendReactionError(t *testing.T) {
 		},
 	}
 	adapter.session = mock
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	msg := &models.Message{
 		Content: "",
@@ -1420,7 +1420,7 @@ func TestAdapter_HandleMessageCreate_BotMessage(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	adapter.ctx = ctx
 	adapter.cancel = cancel
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	// Create a bot message (should be ignored)
 	botMsg := &discordgo.MessageCreate{
@@ -1456,7 +1456,7 @@ func TestAdapter_HandleMessageCreate_UserMessage(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	adapter.ctx = ctx
 	adapter.cancel = cancel
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	// Create a user message
 	userMsg := &discordgo.MessageCreate{
@@ -1498,7 +1498,7 @@ func TestAdapter_HandleMessageCreate_ChannelFull(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	adapter.ctx = ctx
 	adapter.cancel = cancel
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	// Fill the messages channel
 	for i := 0; i < 100; i++ {
@@ -1543,7 +1543,7 @@ func TestAdapter_HandleMessageCreate_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	adapter.ctx = ctx
 	adapter.cancel = cancel
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	// Cancel context before sending message
 	cancel()
@@ -1590,7 +1590,7 @@ func TestAdapter_HandleInteractionCreate_SlashCommand(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	adapter.ctx = ctx
 	adapter.cancel = cancel
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	// Create a slash command interaction
 	interaction := &discordgo.InteractionCreate{
@@ -1639,7 +1639,7 @@ func TestAdapter_HandleInteractionCreate_NonCommand(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	adapter.ctx = ctx
 	adapter.cancel = cancel
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	// Create a non-command interaction (should be ignored)
 	interaction := &discordgo.InteractionCreate{
@@ -1664,7 +1664,7 @@ func TestAdapter_HandleReady(t *testing.T) {
 	adapter := NewAdapterSimple("test-token")
 	mock := &mockDiscordSession{}
 	adapter.session = mock
-	adapter.status.Connected = false
+	adapter.updateStatus(false, "")
 	adapter.reconnectCount = 5
 	adapter.setDegraded(true)
 
@@ -1681,11 +1681,12 @@ func TestAdapter_HandleReady(t *testing.T) {
 
 	adapter.handleReady(nil, readyEvent)
 
-	if !adapter.status.Connected {
+	status := adapter.Status()
+	if !status.Connected {
 		t.Error("Expected status.Connected to be true after handleReady")
 	}
-	if adapter.status.Error != "" {
-		t.Errorf("Expected status.Error to be empty, got %q", adapter.status.Error)
+	if status.Error != "" {
+		t.Errorf("Expected status.Error to be empty, got %q", status.Error)
 	}
 	if adapter.reconnectCount != 0 {
 		t.Errorf("Expected reconnectCount to be 0, got %d", adapter.reconnectCount)
@@ -1699,7 +1700,7 @@ func TestAdapter_HandleDisconnect(t *testing.T) {
 	adapter := NewAdapterSimple("test-token")
 	mock := &mockDiscordSession{}
 	adapter.session = mock
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	adapter.ctx = ctx
@@ -1712,11 +1713,12 @@ func TestAdapter_HandleDisconnect(t *testing.T) {
 
 	adapter.handleDisconnect(nil, disconnectEvent)
 
-	if adapter.status.Connected {
+	status := adapter.Status()
+	if status.Connected {
 		t.Error("Expected status.Connected to be false after handleDisconnect")
 	}
-	if adapter.status.Error != "disconnected from Discord" {
-		t.Errorf("Expected status.Error 'disconnected from Discord', got %q", adapter.status.Error)
+	if status.Error != "disconnected from Discord" {
+		t.Errorf("Expected status.Error 'disconnected from Discord', got %q", status.Error)
 	}
 }
 
@@ -1728,7 +1730,7 @@ func TestAdapter_ConcurrentSends(t *testing.T) {
 	adapter := NewAdapterSimple("test-token")
 	mock := &extendedMockDiscordSession{}
 	adapter.session = mock
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	ctx := context.Background()
 	var wg sync.WaitGroup
@@ -1764,7 +1766,7 @@ func TestAdapter_ConcurrentStatusReads(t *testing.T) {
 	adapter := NewAdapterSimple("test-token")
 	mock := &mockDiscordSession{}
 	adapter.session = mock
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	var wg sync.WaitGroup
 	numReaders := 100
@@ -1814,7 +1816,7 @@ func TestAdapter_ConcurrentHealthChecks(t *testing.T) {
 	adapter := NewAdapterSimple("test-token")
 	mock := &mockDiscordSession{}
 	adapter.session = mock
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	ctx := context.Background()
 	var wg sync.WaitGroup
@@ -1840,7 +1842,7 @@ func TestAdapter_SendEmbed_TitleOnly(t *testing.T) {
 	adapter := NewAdapterSimple("test-token")
 	mock := &extendedMockDiscordSession{}
 	adapter.session = mock
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	msg := &models.Message{
 		Content: "Fallback content",
@@ -1881,7 +1883,7 @@ func TestAdapter_SendEmbed_ColorOnly(t *testing.T) {
 	adapter := NewAdapterSimple("test-token")
 	mock := &extendedMockDiscordSession{}
 	adapter.session = mock
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	msg := &models.Message{
 		Content: "Colored message",
@@ -1915,7 +1917,7 @@ func TestAdapter_SendEmbed_DescriptionOverridesContent(t *testing.T) {
 	adapter := NewAdapterSimple("test-token")
 	mock := &extendedMockDiscordSession{}
 	adapter.session = mock
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	msg := &models.Message{
 		Content: "This should be ignored",
@@ -1950,7 +1952,7 @@ func TestAdapter_SendEmbed_ComplexError(t *testing.T) {
 		},
 	}
 	adapter.session = mock
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	msg := &models.Message{
 		Content: "Test",
@@ -1972,7 +1974,7 @@ func TestAdapter_SendNoContent(t *testing.T) {
 	adapter := NewAdapterSimple("test-token")
 	mock := &extendedMockDiscordSession{}
 	adapter.session = mock
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	// Message with empty content and no embed
 	msg := &models.Message{
@@ -2011,7 +2013,7 @@ func TestAdapter_SendThreadCreate_Error(t *testing.T) {
 		return nil, errors.New("thread creation failed")
 	}
 	adapter.session = mock
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	msg := &models.Message{
 		Content: "Thread message",
@@ -2041,7 +2043,7 @@ func TestAdapter_SendThreadCreate_DefaultName(t *testing.T) {
 	adapter := NewAdapterSimple("test-token")
 	mock := &extendedMockDiscordSession{}
 	adapter.session = mock
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	msg := &models.Message{
 		Content: "Thread message",
@@ -2075,7 +2077,7 @@ func TestAdapter_SendThreadCreate_EmptyName(t *testing.T) {
 	adapter := NewAdapterSimple("test-token")
 	mock := &extendedMockDiscordSession{}
 	adapter.session = mock
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	msg := &models.Message{
 		Content: "Thread message",
@@ -2109,7 +2111,7 @@ func TestAdapter_SendReaction_Success(t *testing.T) {
 	adapter := NewAdapterSimple("test-token")
 	mock := &extendedMockDiscordSession{}
 	adapter.session = mock
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	msg := &models.Message{
 		Content: "",
@@ -2149,7 +2151,7 @@ func TestAdapter_SendReaction_MissingMessageID(t *testing.T) {
 	adapter := NewAdapterSimple("test-token")
 	mock := &extendedMockDiscordSession{}
 	adapter.session = mock
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	// Has emoji but no message ID
 	msg := &models.Message{
@@ -2325,14 +2327,15 @@ func TestAdapter_Reconnect_Success(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	adapter.ctx = ctx
 	adapter.cancel = cancel
-	adapter.status.Connected = false
+	adapter.updateStatus(false, "")
 	adapter.setDegraded(true)
 
 	adapter.wg.Add(1)
 	go adapter.reconnect()
 	adapter.wg.Wait()
 
-	if !adapter.status.Connected {
+	status := adapter.Status()
+	if !status.Connected {
 		t.Error("Expected status.Connected to be true after successful reconnect")
 	}
 	if adapter.isDegraded() {
@@ -2354,16 +2357,17 @@ func TestAdapter_Reconnect_Failure(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	adapter.ctx = ctx
 	adapter.cancel = cancel
-	adapter.status.Connected = false
+	adapter.updateStatus(false, "")
 
 	adapter.wg.Add(1)
 	go adapter.reconnect()
 	adapter.wg.Wait()
 
-	if adapter.status.Connected {
+	status := adapter.Status()
+	if status.Connected {
 		t.Error("Expected status.Connected to be false after failed reconnect")
 	}
-	if adapter.status.Error == "" {
+	if status.Error == "" {
 		t.Error("Expected status.Error to be set after failed reconnect")
 	}
 }
@@ -2376,7 +2380,7 @@ func TestAdapter_Send_RateLimiterContextCancelled(t *testing.T) {
 	adapter := NewAdapterSimple("test-token")
 	mock := &mockDiscordSession{}
 	adapter.session = mock
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	// Create a very restrictive rate limiter
 	adapter.rateLimiter = channels.NewRateLimiter(0.001, 1) // Very slow
@@ -2527,7 +2531,7 @@ func TestAdapter_SendWithNilMetadata(t *testing.T) {
 	adapter := NewAdapterSimple("test-token")
 	mock := &mockDiscordSession{}
 	adapter.session = mock
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	msg := &models.Message{
 		Content:  "Test",
@@ -2547,7 +2551,7 @@ func TestAdapter_SendWithWrongChannelIDType(t *testing.T) {
 	adapter := NewAdapterSimple("test-token")
 	mock := &mockDiscordSession{}
 	adapter.session = mock
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	msg := &models.Message{
 		Content: "Test",
@@ -2579,7 +2583,7 @@ func TestAdapter_HandleInteractionCreate_ChannelFull(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	adapter.ctx = ctx
 	adapter.cancel = cancel
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	// Fill the messages channel
 	for i := 0; i < 100; i++ {
@@ -2626,7 +2630,7 @@ func TestAdapter_HandleInteractionCreate_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	adapter.ctx = ctx
 	adapter.cancel = cancel
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	// Cancel context
 	cancel()
@@ -2680,7 +2684,7 @@ func TestAdapter_HandleInteractionCreate_MultipleOptions(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	adapter.ctx = ctx
 	adapter.cancel = cancel
-	adapter.status.Connected = true
+	adapter.updateStatus(true, "")
 
 	interaction := &discordgo.InteractionCreate{
 		Interaction: &discordgo.Interaction{

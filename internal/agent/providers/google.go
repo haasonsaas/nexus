@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/agent"
+	"github.com/haasonsaas/nexus/internal/agent/toolconv"
 	"github.com/haasonsaas/nexus/pkg/models"
 	"google.golang.org/genai"
 )
@@ -658,94 +659,14 @@ func (p *GoogleProvider) convertAttachment(att models.Attachment) (*genai.Part, 
 // Returns:
 //   - []*genai.Tool: Gemini-formatted tool definitions
 func (p *GoogleProvider) convertTools(tools []agent.Tool) []*genai.Tool {
-	if len(tools) == 0 {
-		return nil
-	}
-
-	var declarations []*genai.FunctionDeclaration
-
-	for _, tool := range tools {
-		// Parse the JSON schema
-		var schemaMap map[string]any
-		if err := json.Unmarshal(tool.Schema(), &schemaMap); err != nil {
-			continue // Skip invalid schemas
-		}
-
-		// Convert to Gemini Schema
-		schema := p.convertSchemaToGemini(schemaMap)
-
-		declarations = append(declarations, &genai.FunctionDeclaration{
-			Name:        tool.Name(),
-			Description: tool.Description(),
-			Parameters:  schema,
-		})
-	}
-
-	if len(declarations) == 0 {
-		return nil
-	}
-
-	return []*genai.Tool{
-		{
-			FunctionDeclarations: declarations,
-		},
-	}
+	return toolconv.ToGeminiTools(tools)
 }
 
 // convertSchemaToGemini converts a JSON Schema map to Gemini's Schema type.
 //
 // This handles the recursive conversion of JSON Schema properties to Gemini's format.
 func (p *GoogleProvider) convertSchemaToGemini(schemaMap map[string]any) *genai.Schema {
-	if schemaMap == nil {
-		return nil
-	}
-
-	schema := &genai.Schema{}
-
-	// Handle type
-	if t, ok := schemaMap["type"].(string); ok {
-		schema.Type = genai.Type(strings.ToUpper(t))
-	}
-
-	// Handle description
-	if desc, ok := schemaMap["description"].(string); ok {
-		schema.Description = desc
-	}
-
-	// Handle enum
-	if enum, ok := schemaMap["enum"].([]any); ok {
-		for _, e := range enum {
-			if s, ok := e.(string); ok {
-				schema.Enum = append(schema.Enum, s)
-			}
-		}
-	}
-
-	// Handle properties (for object type)
-	if props, ok := schemaMap["properties"].(map[string]any); ok {
-		schema.Properties = make(map[string]*genai.Schema)
-		for name, prop := range props {
-			if propMap, ok := prop.(map[string]any); ok {
-				schema.Properties[name] = p.convertSchemaToGemini(propMap)
-			}
-		}
-	}
-
-	// Handle required fields
-	if required, ok := schemaMap["required"].([]any); ok {
-		for _, r := range required {
-			if s, ok := r.(string); ok {
-				schema.Required = append(schema.Required, s)
-			}
-		}
-	}
-
-	// Handle items (for array type)
-	if items, ok := schemaMap["items"].(map[string]any); ok {
-		schema.Items = p.convertSchemaToGemini(items)
-	}
-
-	return schema
+	return toolconv.ToGeminiSchema(schemaMap)
 }
 
 // buildConfig builds the GenerateContentConfig from a CompletionRequest.

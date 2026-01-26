@@ -493,8 +493,8 @@ func TestAdapterInternalChannelsInitialized(t *testing.T) {
 	if adapter.stopCh == nil {
 		t.Error("stopCh should be initialized")
 	}
-	if adapter.metrics == nil {
-		t.Error("metrics should be initialized")
+	if adapter.health == nil {
+		t.Error("health should be initialized")
 	}
 	if adapter.logger == nil {
 		t.Error("logger should be initialized")

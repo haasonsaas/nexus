@@ -484,8 +484,9 @@ func (r *runtimeServiceRegistry) RegisterService(svc *pluginsdk.Service) error {
 		return fmt.Errorf("service Stop function is required")
 	}
 
+	svcCopy := *svc
 	r.manager.services = append(r.manager.services, &pluginService{
-		def:      svc,
+		def:      &svcCopy,
 		pluginID: r.pluginID,
 	})
 	return nil
@@ -521,6 +522,11 @@ func (r *runtimeHookRegistry) RegisterHook(reg *pluginsdk.HookRegistration) erro
 		return fmt.Errorf("handler is required")
 	}
 
+	eventType := reg.EventType
+	handler := reg.Handler
+	name := reg.Name
+	priority := reg.Priority
+
 	// Convert plugin handler to internal handler
 	internalHandler := func(ctx context.Context, event *hooks.Event) error {
 		pluginEvent := &pluginsdk.HookEvent{
@@ -529,21 +535,21 @@ func (r *runtimeHookRegistry) RegisterHook(reg *pluginsdk.HookRegistration) erro
 			ChannelID: event.ChannelID,
 			Data:      event.Context,
 		}
-		return reg.Handler(ctx, pluginEvent)
+		return handler(ctx, pluginEvent)
 	}
 
 	// Build options
 	opts := []hooks.RegisterOption{
 		hooks.WithSource(r.pluginID),
 	}
-	if reg.Name != "" {
-		opts = append(opts, hooks.WithName(reg.Name))
+	if name != "" {
+		opts = append(opts, hooks.WithName(name))
 	}
-	if reg.Priority != 0 {
-		opts = append(opts, hooks.WithPriority(hooks.Priority(reg.Priority)))
+	if priority != 0 {
+		opts = append(opts, hooks.WithPriority(hooks.Priority(priority)))
 	}
 
-	r.registry.Register(reg.EventType, internalHandler, opts...)
+	r.registry.Register(eventType, internalHandler, opts...)
 	return nil
 }
 

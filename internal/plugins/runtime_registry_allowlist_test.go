@@ -40,9 +40,19 @@ func TestPluginAPIBuilderBuild_EnforcesManifestAllowlists(t *testing.T) {
 		ConfigSchema: json.RawMessage(`{"type":"object"}`),
 		Tools:        []string{"allowed-tool"},
 		Channels:     []string{string(models.ChannelTelegram)},
-		Commands:     []string{"allowedcmd", "parent.child"},
-		Services:     []string{"allowed-service"},
-		Hooks:        []string{"session.created"},
+		Commands: []string{
+			"allowedcmd",
+			"parent.child",
+			"parent.childnested",
+			"parent.childnested.deep",
+			"parent.badchild",
+			"nested",
+			"nested.good",
+			"nested.good.deep",
+			"nestedbad",
+		},
+		Services: []string{"allowed-service"},
+		Hooks:    []string{"session.created"},
 	}
 
 	api := builder.Build("test-plugin", map[string]any{}, manifest)
@@ -53,6 +63,29 @@ func TestPluginAPIBuilderBuild_EnforcesManifestAllowlists(t *testing.T) {
 
 	if err := api.CLI.RegisterSubcommand("parent", &pluginsdk.CLICommand{Use: "child"}); err != nil {
 		t.Fatalf("RegisterSubcommand(parent.child) error = %v", err)
+	}
+
+	if err := api.CLI.RegisterSubcommand("parent", &pluginsdk.CLICommand{
+		Use: "childnested",
+		Subcommands: []*pluginsdk.CLICommand{
+			{Use: "deep"},
+		},
+	}); err != nil {
+		t.Fatalf("RegisterSubcommand(parent.childnested.deep) error = %v", err)
+	}
+
+	if err := api.CLI.RegisterCommand(&pluginsdk.CLICommand{
+		Use: "nested",
+		Subcommands: []*pluginsdk.CLICommand{
+			{
+				Use: "good",
+				Subcommands: []*pluginsdk.CLICommand{
+					{Use: "deep"},
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("RegisterCommand(nested.good.deep) error = %v", err)
 	}
 
 	err := api.CLI.RegisterCommand(&pluginsdk.CLICommand{Use: "forbidden"})
@@ -69,6 +102,32 @@ func TestPluginAPIBuilderBuild_EnforcesManifestAllowlists(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), `plugin "test-plugin"`) {
 		t.Fatalf("RegisterSubcommand(parent.evil) error = %q; expected plugin id", err.Error())
+	}
+
+	err = api.CLI.RegisterCommand(&pluginsdk.CLICommand{
+		Use: "nestedbad",
+		Subcommands: []*pluginsdk.CLICommand{
+			{Use: "evil"},
+		},
+	})
+	if err == nil {
+		t.Fatalf("RegisterCommand(nestedbad.evil) expected error")
+	}
+	if !strings.Contains(err.Error(), `plugin "test-plugin"`) {
+		t.Fatalf("RegisterCommand(nestedbad.evil) error = %q; expected plugin id", err.Error())
+	}
+
+	err = api.CLI.RegisterSubcommand("parent", &pluginsdk.CLICommand{
+		Use: "badchild",
+		Subcommands: []*pluginsdk.CLICommand{
+			{Use: "deep"},
+		},
+	})
+	if err == nil {
+		t.Fatalf("RegisterSubcommand(parent.badchild.deep) expected error")
+	}
+	if !strings.Contains(err.Error(), `plugin "test-plugin"`) {
+		t.Fatalf("RegisterSubcommand(parent.badchild.deep) error = %q; expected plugin id", err.Error())
 	}
 
 	err = api.Tools.RegisterTool(pluginsdk.ToolDefinition{Name: "allowed-tool"}, func(ctx context.Context, params json.RawMessage) (*pluginsdk.ToolResult, error) {

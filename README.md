@@ -474,6 +474,7 @@ Prometheus metrics at `/metrics`:
 - [x] RAG pipelines - Document parsing, chunking, and semantic retrieval
 - [x] Agent templates - YAML+Markdown format with variable substitution
 - [x] Conversation branching - Fork, merge, and compare conversation paths
+- [x] Analytics dashboard - Usage metrics and conversation insights
 
 ### Planned
 
@@ -481,7 +482,6 @@ Prometheus metrics at `/metrics`:
 - [ ] Streaming responses - Real-time token streaming to messaging channels
 - [ ] Custom tools SDK - Plugin development kit for external tools
 - [ ] Workflow builder - Visual agent workflow designer
-- [ ] Analytics dashboard - Usage metrics and conversation insights
 
 ## Contributing
 

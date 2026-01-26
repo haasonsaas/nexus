@@ -195,19 +195,24 @@ func (r *runtimeCLIRegistry) RegisterCommand(cmd *pluginsdk.CLICommand) error {
 		return fmt.Errorf("CLI command is nil")
 	}
 
-	cobraCmd := convertCLICommand(cmd)
-	name := cobraCmd.Name()
-	if name == "" {
-		return fmt.Errorf("command name is required")
+	paths, err := cliCommandPaths("", cmd)
+	if err != nil {
+		return err
 	}
 	if len(r.allowed) > 0 {
-		if _, ok := r.allowed[name]; !ok {
-			return fmt.Errorf("plugin %q attempted to register undeclared CLI command %q", r.pluginID, name)
+		for _, path := range paths {
+			if _, ok := r.allowed[path]; !ok {
+				return fmt.Errorf("plugin %q attempted to register undeclared CLI command %q", r.pluginID, path)
+			}
 		}
 	}
-	if existing := findCommand(r.rootCmd, name); existing != nil {
-		return fmt.Errorf("CLI command %q already exists", name)
+
+	rootPath := paths[0]
+	if existing := findCommand(r.rootCmd, rootPath); existing != nil {
+		return fmt.Errorf("CLI command %q already exists", rootPath)
 	}
+
+	cobraCmd := convertCLICommand(cmd)
 	r.rootCmd.AddCommand(cobraCmd)
 	return nil
 }
@@ -226,36 +231,25 @@ func (r *runtimeCLIRegistry) RegisterSubcommand(parent string, cmd *pluginsdk.CL
 		return fmt.Errorf("parent command %q not found", parent)
 	}
 
-	cobraCmd := convertCLICommand(cmd)
-	name := cobraCmd.Name()
-	if name == "" {
-		return fmt.Errorf("command name is required")
+	canonicalParent := strings.Join(splitCommandPath(parent), ".")
+	paths, err := cliCommandPaths(canonicalParent, cmd)
+	if err != nil {
+		return err
 	}
-
-	key := name
-	if parent != "" {
-		parts := splitCommandPath(parent)
-		if len(parts) > 0 {
-			key = strings.Join(append(parts, name), ".")
-		}
-	}
-
-	if parent == "" {
-		if len(r.allowed) > 0 {
-			if _, ok := r.allowed[key]; !ok {
-				return fmt.Errorf("plugin %q attempted to register undeclared CLI command %q", r.pluginID, key)
+	if len(r.allowed) > 0 {
+		for _, path := range paths {
+			if _, ok := r.allowed[path]; !ok {
+				return fmt.Errorf("plugin %q attempted to register undeclared CLI command %q", r.pluginID, path)
 			}
 		}
-	} else if len(r.allowed) > 0 {
-		if _, ok := r.allowed[key]; !ok {
-			return fmt.Errorf("plugin %q attempted to register undeclared CLI command %q", r.pluginID, key)
-		}
 	}
 
-	if existing := findCommand(r.rootCmd, key); existing != nil {
-		return fmt.Errorf("CLI command %q already exists", key)
+	rootPath := paths[0]
+	if existing := findCommand(r.rootCmd, rootPath); existing != nil {
+		return fmt.Errorf("CLI command %q already exists", rootPath)
 	}
 
+	cobraCmd := convertCLICommand(cmd)
 	parentCmd.AddCommand(cobraCmd)
 	return nil
 }
@@ -329,6 +323,50 @@ func splitCommandPath(path string) []string {
 		parts = append(parts, current)
 	}
 	return parts
+}
+
+func commandNameFromUse(use string) string {
+	fields := strings.Fields(use)
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[0]
+}
+
+func cliCommandPaths(prefix string, cmd *pluginsdk.CLICommand) ([]string, error) {
+	var paths []string
+	seen := make(map[string]struct{})
+
+	var walk func(prefix string, cmd *pluginsdk.CLICommand) error
+	walk = func(prefix string, cmd *pluginsdk.CLICommand) error {
+		if cmd == nil {
+			return nil
+		}
+		name := commandNameFromUse(cmd.Use)
+		if name == "" {
+			return fmt.Errorf("command name is required")
+		}
+		path := name
+		if prefix != "" {
+			path = prefix + "." + name
+		}
+		if _, ok := seen[path]; ok {
+			return fmt.Errorf("duplicate CLI command %q", path)
+		}
+		seen[path] = struct{}{}
+		paths = append(paths, path)
+
+		for _, sub := range cmd.Subcommands {
+			if err := walk(path, sub); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := walk(prefix, cmd); err != nil {
+		return nil, err
+	}
+	return paths, nil
 }
 
 // =============================================================================

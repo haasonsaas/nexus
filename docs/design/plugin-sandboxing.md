@@ -30,6 +30,7 @@ Runtime plugin registration is now gated by its manifest:
   - `hooks` (hook event types)
 - Runtime registration rejects undeclared capabilities when an allowlist is present.
   - Empty allowlists continue to allow all (backwards compatible).
+  - `commands` is validated for nested subcommands too (declare each dotted path you register).
 
 This does **not** provide strong isolation (plugins are still in-process), but it reduces surprise and
 makes “what this plugin can do” explicit and enforceable.
@@ -56,7 +57,7 @@ Add a dedicated plugin isolation config (avoid colliding with legacy `plugins.sa
 
 ## Rollout
 
-1. Enforce manifest-declared capabilities (tools/channels) for runtime plugin registration. ✅
+1. Enforce manifest-declared capabilities (tools/channels/commands/services/hooks) for runtime plugin registration. ✅
 2. Add config + runner abstraction.
 3. Implement Docker backend (out-of-process plugin host).
 4. Extend with Firecracker backend + snapshots (reuse existing sandbox pool patterns).

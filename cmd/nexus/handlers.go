@@ -1295,6 +1295,10 @@ func runRagEval(cmd *cobra.Command, configPath, testSetPath, output string, limi
 		fmt.Fprintf(out, "Answer Faithfulness: %.3f\n", report.Summary.AvgFaithfulness)
 		fmt.Fprintf(out, "Context Recall: %.3f\n", report.Summary.AvgContextRecall)
 	}
+	if report.Summary.AnswerCases > 0 {
+		fmt.Fprintf(out, "Answer Cases: %d\n", report.Summary.AnswerCases)
+		fmt.Fprintf(out, "Answer Coverage: %.3f\n", report.Summary.AvgAnswerCoverage)
+	}
 	if output != "" {
 		fmt.Fprintf(out, "Report written to %s\n", output)
 	}

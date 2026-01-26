@@ -1,6 +1,9 @@
 package eval
 
-import "math"
+import (
+	"math"
+	"strings"
+)
 
 // PrecisionRecall computes precision and recall for retrieved results.
 func PrecisionRecall(retrieved []ResultKey, expected []ExpectedChunk) (precision, recall float64) {
@@ -56,6 +59,27 @@ func NDCG(retrieved []ResultKey, expected []ExpectedChunk) float64 {
 		return 0
 	}
 	return dcg / idcg
+}
+
+// MatchExpectedAnswer checks how many expected phrases appear in an answer.
+func MatchExpectedAnswer(answer string, expected []string) (expectedCount, matchedCount int, missing []string) {
+	if len(expected) == 0 {
+		return 0, 0, nil
+	}
+	answerLower := strings.ToLower(answer)
+	for _, exp := range expected {
+		expTrim := strings.TrimSpace(exp)
+		if expTrim == "" {
+			continue
+		}
+		expectedCount++
+		if strings.Contains(answerLower, strings.ToLower(expTrim)) {
+			matchedCount++
+			continue
+		}
+		missing = append(missing, expTrim)
+	}
+	return expectedCount, matchedCount, missing
 }
 
 func idealDCG(expectedCount, retrievedCount int) float64 {

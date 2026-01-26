@@ -104,6 +104,10 @@ func (e *Evaluator) evaluateCase(ctx context.Context, tc TestCase) (CaseResult, 
 	var answerRelevance float64
 	var faithfulness float64
 	var contextRecall float64
+	var answerExpected int
+	var answerMatched int
+	var answerCoverage float64
+	var answerMissing []string
 	judged := false
 	if e.judge != nil {
 		answerText, err := e.generateAnswer(ctx, tc.Query, resp.Results)
@@ -123,25 +127,35 @@ func (e *Evaluator) evaluateCase(ctx context.Context, tc TestCase) (CaseResult, 
 		if err != nil {
 			return CaseResult{}, err
 		}
+		if len(tc.ExpectedAnswerContains) > 0 {
+			answerExpected, answerMatched, answerMissing = MatchExpectedAnswer(answer, tc.ExpectedAnswerContains)
+			if answerExpected > 0 {
+				answerCoverage = float64(answerMatched) / float64(answerExpected)
+			}
+		}
 		judged = true
 	}
 
 	return CaseResult{
-		CaseID:        tc.ID,
-		Query:         tc.Query,
-		Retrieved:     len(retrievedKeys),
-		Expected:      len(tc.ExpectedChunks),
-		Precision:     precision,
-		Recall:        recall,
-		MRR:           mrr,
-		NDCG:          ndcg,
-		QueryTime:     resp.QueryTime,
-		Answer:        answer,
-		Relevance:     answerRelevance,
-		Faithfulness:  faithfulness,
-		ContextRecall: contextRecall,
-		Judged:        judged,
-		ExpectedHints: tc.ExpectedChunks,
+		CaseID:         tc.ID,
+		Query:          tc.Query,
+		Retrieved:      len(retrievedKeys),
+		Expected:       len(tc.ExpectedChunks),
+		Precision:      precision,
+		Recall:         recall,
+		MRR:            mrr,
+		NDCG:           ndcg,
+		QueryTime:      resp.QueryTime,
+		Answer:         answer,
+		Relevance:      answerRelevance,
+		Faithfulness:   faithfulness,
+		ContextRecall:  contextRecall,
+		Judged:         judged,
+		AnswerExpected: answerExpected,
+		AnswerMatched:  answerMatched,
+		AnswerCoverage: answerCoverage,
+		AnswerMissing:  answerMissing,
+		ExpectedHints:  tc.ExpectedChunks,
 	}, nil
 }
 

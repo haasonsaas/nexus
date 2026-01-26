@@ -41,3 +41,18 @@ func TestDocOnlyMatch(t *testing.T) {
 		t.Errorf("doc-only match failed: precision=%v recall=%v", precision, recall)
 	}
 }
+
+func TestMatchExpectedAnswer(t *testing.T) {
+	answer := "Configure MCP.Servers with transport http and TLS."
+	expected := []string{"mcp.servers", "transport", "missing", ""}
+	expectedCount, matchedCount, missing := MatchExpectedAnswer(answer, expected)
+	if expectedCount != 3 {
+		t.Fatalf("expected count = %d", expectedCount)
+	}
+	if matchedCount != 2 {
+		t.Fatalf("matched count = %d", matchedCount)
+	}
+	if len(missing) != 1 || missing[0] != "missing" {
+		t.Fatalf("missing = %v", missing)
+	}
+}

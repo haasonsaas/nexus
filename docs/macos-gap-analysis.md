@@ -11,6 +11,14 @@ This document provides a comprehensive comparison between the Nexus macOS client
 | **Feature Directories** | 64 | 80+ | -16+ |
 | **Singleton Services** | ~109 | 80+ | +~29 (Nexus higher) |
 
+## Status Update (2026-01-26)
+
+Most items previously listed as gaps are now implemented in the Nexus macOS client. The sections below have been updated to reflect current coverage and highlight any remaining gaps.
+
+**Remaining gaps / partials:**
+- Anthropic OAuth flow is still API-key only in Nexus.
+- Context menu cards exist, but some cards still use stubbed data (e.g., pending approvals/cost summary).
+
 ## Critical Feature Gaps
 
 ### 1. Exec Approvals System (Priority: Critical)
@@ -26,16 +34,17 @@ This document provides a comprehensive comparison between the Nexus macOS client
 - Exec event logging and allowlist entry recording
 
 **Nexus Has:**
-- Basic tool execution via `ToolExecutionService`
-- No user approval prompts for shell commands
-- No allowlist management
+- Exec approvals store/models + allowlist management (`ExecApprovalsStore`, `ExecApprovalModels`)
+- IPC socket server and prompt presenter (`ExecApprovalsService`, `ExecApprovalsSocketServer`, `ExecApprovalsPromptPresenter`)
+- Approval UI + settings (`ExecApprovalAlert`, `ExecApprovalsListView`, `ExecApprovalsSettingsView`)
+- Node command dispatch integrates approval checks (`NodeCommandDispatcher`)
 
 **Files to Reference:**
 - `clawdbot/ExecApprovals.swift` (790 LOC) - Core approval models and store
 - `clawdbot/ExecApprovalsSocket.swift` (832 LOC) - Socket server and prompt UI
 - `clawdbot/ExecApprovalsGatewayPrompter.swift` - Gateway integration
 
-**Implementation Estimate:** High complexity
+**Status:** Implemented in Nexus (see file references above)
 
 ---
 
@@ -49,14 +58,14 @@ This document provides a comprehensive comparison between the Nexus macOS client
 - Real-time cost summaries in menu bar
 
 **Nexus Has:**
-- Basic `UsageMenuView` with progress bars
-- No historical tracking or charts
-- No cost breakdowns in the macOS UI (gateway exposes `/api/usage/costs`)
+- `CostUsageMenuView` (compact + expanded) with embedded charting
+- `CostUsageChartView` and `CostUsageStore` backed by Swift Charts
+- `/api/usage/costs` integration via `NexusAPI.fetchCostUsage`
 
 **Files to Reference:**
 - `clawdbot/CostUsageMenuView.swift` (100 LOC)
 
-**Implementation Estimate:** Medium complexity
+**Status:** Implemented in Nexus (see file references above)
 
 ---
 
@@ -73,10 +82,10 @@ This document provides a comprehensive comparison between the Nexus macOS client
 - Debug status overlay
 
 **Nexus Has:**
-- Basic `ArtifactsView` with grid display
-- File type filtering and search
-- No WebKit rendering or live preview
-- No agent feedback loops
+- Full WebKit-based canvas system (`CanvasWindowController`)
+- Custom scheme handler (`CanvasSchemeHandler`) and session artifact directory support
+- Live reload via `CanvasFileWatcher`
+- A2UI action bridge via `CanvasA2UIHandler` and `CanvasManager`
 
 **Files to Reference:**
 - `clawdbot/CanvasWindowController.swift` (362 LOC)
@@ -84,7 +93,7 @@ This document provides a comprehensive comparison between the Nexus macOS client
 - `clawdbot/CanvasFileWatcher.swift`
 - `clawdbot/CanvasA2UIActionMessageHandler.swift`
 
-**Implementation Estimate:** High complexity
+**Status:** Implemented in Nexus (see file references above)
 
 ---
 
@@ -98,14 +107,13 @@ This document provides a comprehensive comparison between the Nexus macOS client
 - Immediate presence on connect
 
 **Nexus Has:**
-- Gateway connection status
-- No presence reporting
-- No user activity tracking
+- `PresenceReporter` with periodic beacons and instance identity integration
+- App lifecycle wiring in `NexusApp` and `ApplicationCoordinator`
 
 **Files to Reference:**
 - `clawdbot/PresenceReporter.swift` (159 LOC)
 
-**Implementation Estimate:** Low complexity
+**Status:** Implemented in Nexus (see file references above)
 
 ---
 
@@ -118,14 +126,12 @@ This document provides a comprehensive comparison between the Nexus macOS client
 - Reload on config changes
 
 **Nexus Has:**
-- In-memory config store
-- No external file watching
-- Manual refresh required
+- `ConfigFileWatcher` with FSEvents + debounced change notifications
 
 **Files to Reference:**
 - `clawdbot/ConfigFileWatcher.swift` (119 LOC)
 
-**Implementation Estimate:** Low complexity
+**Status:** Implemented in Nexus (see file references above)
 
 ---
 
@@ -138,13 +144,13 @@ This document provides a comprehensive comparison between the Nexus macOS client
 - Service status checking
 
 **Nexus Has:**
-- Basic node listing
-- No remote service control
+- `NodeServiceManager` with start/stop/status operations
+- `NodeServiceView` UI and error handling
 
 **Files to Reference:**
 - `clawdbot/NodeServiceManager.swift` (151 LOC)
 
-**Implementation Estimate:** Medium complexity
+**Status:** Implemented in Nexus (see file references above)
 
 ---
 
@@ -158,13 +164,13 @@ This document provides a comprehensive comparison between the Nexus macOS client
 - Automatic endpoint refresh on changes
 
 **Nexus Has:**
+- `GatewayConnectivityCoordinator` with endpoint state + mode resolution
 - `ConnectionModeCoordinator` for mode switching
-- Less unified endpoint management
 
 **Files to Reference:**
 - `clawdbot/GatewayConnectivityCoordinator.swift` (64 LOC)
 
-**Implementation Estimate:** Low complexity
+**Status:** Implemented in Nexus (see file references above)
 
 ---
 
@@ -177,10 +183,10 @@ This document provides a comprehensive comparison between the Nexus macOS client
 - Used across presence, canvas, approvals
 
 **Nexus Has:**
-- Basic device identification
-- No unified identity system
+- `InstanceIdentity` for stable instance ID + display name + hardware metadata
+- `InstanceIdentityView` UI and usage in `InstancesStore`
 
-**Implementation Estimate:** Low complexity
+**Status:** Implemented in Nexus (see file references above)
 
 ---
 
@@ -193,10 +199,10 @@ This document provides a comprehensive comparison between the Nexus macOS client
 - QR code authentication flow
 
 **Nexus Has:**
-- Basic provider health view
-- QR code display (needs verification)
+- `DevicePairingApprovalPrompter` and `NodePairingApprovalPrompter`
+- Interactive pairing dialogs for device/node workflows
 
-**Implementation Estimate:** Medium complexity
+**Status:** Implemented in Nexus (see file references above)
 
 ---
 
@@ -209,52 +215,53 @@ This document provides a comprehensive comparison between the Nexus macOS client
 - LaunchAgent installation
 
 **Nexus Has:**
-- LaunchAgent paths documented
-- Basic install command
-- No attach-only mode
+- `LaunchdManager` lifecycle management for LaunchAgents
+- `Launchctl` wrapper utilities + settings UI
 
 **Files to Reference:**
 - `clawdbot/LaunchdManager.swift`
 - `clawdbot/Launchctl.swift`
 
-**Implementation Estimate:** Medium complexity
+**Status:** Implemented in Nexus (see file references above)
 
 ---
 
-## Additional Gaps
+## Additional Coverage Updates
 
 ### UI/UX Features
 
 | Feature | Clawdbot | Nexus |
 |---------|----------|-------|
-| Cron Job Editor | Full editor with validation | View only |
-| Channel Config Forms | Schema-driven dynamic forms | Static config |
-| Agent Events Window | Dedicated event viewer | Inline in workspace |
-| Context Menu Cards | Rich context cards | Basic menus |
-| Dock Icon Manager | Dynamic icon states | Static icon |
-| Menu Sessions Injector | Pre-warmed session previews | Basic session list |
+| Cron Job Editor | Full editor with validation | Full CRUD editor with validation (`CronJobEditorView`, `CronSchedulerView`) |
+| Channel Config Forms | Schema-driven dynamic forms | Schema-driven dynamic forms (`ChannelConfigFormView`) |
+| Agent Events Window | Dedicated event viewer | `AgentEventsView` + `AgentEventStore` |
+| Context Menu Cards | Rich context cards | Context card framework; some cards still stub data (`ContextMenuCardView`) |
+| Dock Icon Manager | Dynamic icon states | Dynamic icon states (`DockIconManager`) |
+| Menu Sessions Injector | Pre-warmed session previews | `MenuSessionsInjector` for session previews |
 
 ### Infrastructure
 
 | Feature | Clawdbot | Nexus |
 |---------|----------|-------|
-| AnthropicOAuth | Full OAuth flow | API key only |
-| CLI Installer | Guided CLI install | Manual setup |
-| Debug Actions | Developer tools | Limited debug |
-| Diagnostics File Log | File-based logging | OSLog only |
-| Audio Input Observer | Device change monitoring | Static config |
+| AnthropicOAuth | Full OAuth flow | API key only (OAuth not yet implemented) |
+| CLI Installer | Guided CLI install | `CLIInstaller` + UI (direct/Homebrew/Go) |
+| Debug Actions | Developer tools | `DebugActions` panel + registry |
+| Diagnostics File Log | File-based logging | `DiagnosticsFileLogger` + export view |
+| Audio Input Observer | Device change monitoring | `AudioInputObserver` device monitoring |
 
 ### Agent/Session
 
 | Feature | Clawdbot | Nexus |
 |---------|----------|-------|
-| Agent Event Store | Persistent event history | In-memory |
-| Instances Store | Multi-instance tracking | Single instance |
-| Heartbeat Store | Connection health | Basic status |
+| Agent Event Store | Persistent event history | `AgentEventStore` + `AgentEventsView` |
+| Instances Store | Multi-instance tracking | `InstancesStore` multi-instance tracking |
+| Heartbeat Store | Connection health | `HeartbeatStore` with health + timeout tracking |
 
 ---
 
-## Implementation Roadmap
+## Implementation Roadmap (Historical)
+
+Most items below are now implemented in Nexus. This roadmap is retained for historical context; remaining gaps are listed in the status update above.
 
 ### Phase 1: Security & Approvals (Critical)
 
@@ -344,11 +351,8 @@ Both follow similar patterns. Clawdbot makes heavier use of `AsyncStream` for st
 
 ## Recommendations
 
-1. **Prioritize Exec Approvals** - Security-critical feature for production deployment
-2. **Add Cost Tracking** - Important for user visibility and cost management
-3. **Implement Canvas System** - Enables rich agent-generated content display
-4. **Add Presence Reporting** - Improves observability and debugging
-5. **Unify Identity System** - Foundation for many other features
+1. **Add Anthropic OAuth** - Only remaining infra gap in this comparison.
+2. **Finish context card data wiring** - Some cards still show placeholder values.
 
 ---
 
@@ -359,6 +363,6 @@ see `apps/macos/README.md`.
 
 ---
 
-*Generated: 2026-01-26*
+*Updated: 2026-01-26*
 *Nexus Version: Current HEAD*
 *Clawdbot Version: Latest Main*

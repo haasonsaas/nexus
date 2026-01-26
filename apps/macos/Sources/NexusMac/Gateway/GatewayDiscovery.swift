@@ -111,9 +111,25 @@ final class GatewayDiscovery {
         removeRecentGateway(gateway)
     }
 
+    private func upsertGateway(_ gateway: DiscoveredGateway) {
+        if let existing = discoveredGateways.firstIndex(where: { $0.id == gateway.id }) {
+            discoveredGateways[existing] = gateway
+        } else {
+            discoveredGateways.append(gateway)
+        }
+    }
+
     /// Check if a specific gateway is online
     func checkGateway(_ gateway: DiscoveredGateway) async -> Bool {
-        let url = URL(string: "http://\(gateway.host):\(gateway.port)/health")!
+        let isOnline = await Self.probeGateway(host: gateway.host, port: gateway.port)
+        if !isOnline {
+            logger.debug("gateway check failed for \(gateway.host):\(gateway.port)")
+        }
+        return isOnline
+    }
+
+    private nonisolated static func probeGateway(host: String, port: Int) async -> Bool {
+        guard let url = URL(string: "http://\(host):\(port)/health") else { return false }
 
         do {
             let config = URLSessionConfiguration.default
@@ -125,7 +141,7 @@ final class GatewayDiscovery {
                 return httpResponse.statusCode == 200
             }
         } catch {
-            logger.debug("gateway check failed for \(gateway.host): \(error.localizedDescription)")
+            return false
         }
 
         return false
@@ -243,8 +259,43 @@ final class GatewayDiscovery {
             }
         }
 
-        // TODO: Query Tailscale for other devices running Nexus
-        // This would require the Tailscale API or a custom discovery protocol
+        let peers = await TailscaleService.shared.fetchPeers()
+        guard !peers.isEmpty else { return }
+
+        let localIP = TailscaleService.shared.ipAddress
+        let port = AppStateStore.shared.gatewayPort
+        var peerGateways: [DiscoveredGateway] = []
+
+        await withTaskGroup(of: DiscoveredGateway?.self) { group in
+            for peer in peers where peer.isOnline {
+                guard let host = peer.primaryAddress else { continue }
+                if host == localIP {
+                    continue
+                }
+                group.addTask {
+                    let isOnline = await Self.probeGateway(host: host, port: port)
+                    guard isOnline else { return nil }
+                    return DiscoveredGateway(
+                        id: "tailscale-\(peer.id)",
+                        name: peer.displayName,
+                        host: host,
+                        port: port,
+                        source: .tailscale,
+                        isOnline: true
+                    )
+                }
+            }
+
+            for await gateway in group {
+                if let gateway {
+                    peerGateways.append(gateway)
+                }
+            }
+        }
+
+        for gateway in peerGateways {
+            upsertGateway(gateway)
+        }
     }
 
     // MARK: - Recent Gateways

@@ -24,12 +24,23 @@ struct DailyCostEntry: Identifiable, Hashable {
     }()
 }
 
+struct CostUsageResponse: Decodable {
+    let entries: [CostUsageEntry]
+}
+
+struct CostUsageEntry: Decodable {
+    let date: Date
+    let cost: Double
+    let provider: String?
+}
+
 /// Store for managing cost/usage data.
 @MainActor
 final class CostUsageStore: ObservableObject {
     @Published private(set) var entries: [DailyCostEntry] = []
     @Published private(set) var isLoading = false
     @Published private(set) var error: String?
+    @Published private(set) var isDemoData = false
 
     /// Number of days to display in the chart.
     var periodDays: Int = 7
@@ -77,18 +88,19 @@ final class CostUsageStore: ObservableObject {
         isLoading = true
         defer { isLoading = false }
 
-        // Simulate loading cost data - in production this would call the API
-        // Replace with actual API call when available
         do {
-            // TODO: Replace with actual API endpoint
-            // let result = try await api.fetchCostUsage(days: periodDays)
-            // entries = result.entries
-
-            // For now, generate sample data for demonstration
-            entries = generateSampleData()
+            let result = try await api.fetchCostUsage(days: periodDays)
+            entries = result.entries
+                .sorted { $0.date < $1.date }
+                .map { entry in
+                    DailyCostEntry(date: entry.date, cost: entry.cost, provider: entry.provider)
+                }
             error = nil
+            isDemoData = false
         } catch {
-            self.error = error.localizedDescription
+            entries = generateSampleData()
+            self.error = nil
+            isDemoData = true
         }
     }
 
@@ -151,6 +163,18 @@ struct CostUsageChartView: View {
             HStack {
                 Text("Cost Overview")
                     .font(.title2.weight(.semibold))
+
+                if store.isDemoData {
+                    Text("Sample")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule()
+                                .fill(Color.secondary.opacity(0.15))
+                        )
+                }
 
                 Spacer()
 

@@ -14,6 +14,18 @@ struct CostUsageMenuView: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
 
+                if store.isDemoData {
+                    Text("Sample")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(
+                            Capsule()
+                                .fill(Color.secondary.opacity(0.12))
+                        )
+                }
+
                 Spacer()
 
                 if store.isLoading {
@@ -227,6 +239,18 @@ struct CostUsageExpandedMenuView: View {
             HStack {
                 Text("Cost Overview")
                     .font(.subheadline.weight(.semibold))
+
+                if store.isDemoData {
+                    Text("Sample")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule()
+                                .fill(Color.secondary.opacity(0.12))
+                        )
+                }
 
                 Spacer()
 

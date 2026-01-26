@@ -37,6 +37,28 @@ final class TailscaleService {
 
     private var refreshTask: Task<Void, Never>?
 
+    struct Peer: Identifiable, Hashable, Sendable {
+        let id: String
+        let name: String
+        let dnsName: String?
+        let ipAddresses: [String]
+        let isOnline: Bool
+
+        var displayName: String {
+            name
+        }
+
+        var primaryAddress: String? {
+            if let ipv4 = ipAddresses.first(where: { $0.contains(".") }) {
+                return ipv4
+            }
+            if let first = ipAddresses.first {
+                return first
+            }
+            return dnsName
+        }
+    }
+
     private init() {
         Task { await refresh() }
     }
@@ -117,6 +139,28 @@ final class TailscaleService {
         refreshTask = nil
     }
 
+    func fetchPeers() async -> [Peer] {
+        guard isAvailable else { return [] }
+        guard let data = await fetchStatusData(),
+              let peers = data["Peer"] as? [String: Any] else {
+            return []
+        }
+
+        var results: [Peer] = []
+
+        for (id, value) in peers {
+            guard let peer = value as? [String: Any] else { continue }
+            let hostName = (peer["HostName"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let dnsName = sanitizeDNSName(peer["DNSName"] as? String)
+            let ipAddresses = peer["TailscaleIPs"] as? [String] ?? []
+            let isOnline = peer["Online"] as? Bool ?? false
+            let name = hostName ?? dnsName ?? id
+            results.append(Peer(id: id, name: name, dnsName: dnsName, ipAddresses: ipAddresses, isOnline: isOnline))
+        }
+
+        return results.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
     // MARK: - Actions
 
     /// Open the Tailscale app
@@ -186,6 +230,37 @@ final class TailscaleService {
             logger.debug("tailscale API fetch failed: \(error.localizedDescription)")
             return nil
         }
+    }
+
+    private func fetchStatusData() async -> [String: Any]? {
+        guard let url = URL(string: Self.apiEndpoint) else { return nil }
+
+        do {
+            let config = URLSessionConfiguration.default
+            config.timeoutIntervalForRequest = Self.apiTimeout
+            let session = URLSession(configuration: config)
+
+            let (data, response) = try await session.data(from: url)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else {
+                return nil
+            }
+
+            return try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]
+        } catch {
+            logger.debug("tailscale API fetch failed: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    private func sanitizeDNSName(_ name: String?) -> String? {
+        guard var value = name?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+            return nil
+        }
+        if value.hasSuffix(".") {
+            value.removeLast()
+        }
+        return value
     }
 
     private nonisolated func detectTailnetIP() -> String? {

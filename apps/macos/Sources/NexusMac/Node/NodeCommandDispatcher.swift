@@ -42,6 +42,11 @@ final class NodeCommandDispatcher {
     static let shared = NodeCommandDispatcher()
 
     private let logger = Logger(subsystem: "com.nexus.mac", category: "node-dispatch")
+    private static let iso8601Formatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
 
     // Capabilities
     private(set) var capabilities: Set<NodeCommand> = []
@@ -183,10 +188,35 @@ final class NodeCommandDispatcher {
             return .ok(["image": AnyCodable(result.data.base64EncodedString())])
         }
 
-        // Location (placeholder - requires CoreLocation setup)
-        register(.locationGet) { _ in
-            // TODO: Implement location services integration
-            return .fail("Location services not implemented")
+        // Location
+        register(.locationGet) { [weak self] _ in
+            guard let self else { return .fail("Dispatcher deallocated") }
+            do {
+                let location = try await PermissionGuard.shared.execute(requiring: .location) {
+                    try await LocationService.shared.requestLocation()
+                }
+                var payload: [String: AnyCodable] = [
+                    "latitude": AnyCodable(location.coordinate.latitude),
+                    "longitude": AnyCodable(location.coordinate.longitude),
+                    "accuracy": AnyCodable(location.horizontalAccuracy),
+                    "timestamp": AnyCodable(Self.iso8601Formatter.string(from: location.timestamp)),
+                ]
+                if location.verticalAccuracy >= 0 {
+                    payload["altitude"] = AnyCodable(location.altitude)
+                }
+                if location.speed >= 0 {
+                    payload["speed"] = AnyCodable(location.speed)
+                }
+                if location.course >= 0 {
+                    payload["course"] = AnyCodable(location.course)
+                }
+                return .ok(payload)
+            } catch let error as PermissionError {
+                return .fail(error.localizedDescription)
+            } catch {
+                self.logger.error("location request failed: \(error.localizedDescription)")
+                return .fail("Location request failed: \(error.localizedDescription)")
+            }
         }
 
         // Clipboard

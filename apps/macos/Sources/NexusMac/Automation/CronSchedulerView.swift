@@ -395,6 +395,8 @@ struct CronJobEditorSheet: View {
     @State private var enabled = true
     @State private var selectedPreset: CronPreset = .daily
     @State private var useCustomSchedule = false
+    @State private var isHistoryPresented = false
+    @State private var scheduler = CronScheduler.shared
 
     private let logger = Logger(subsystem: "com.nexus.mac", category: "cron-editor-sheet")
 
@@ -441,6 +443,11 @@ struct CronJobEditorSheet: View {
         .frame(width: 520, height: 650)
         .onAppear {
             loadExistingJob()
+        }
+        .sheet(isPresented: $isHistoryPresented) {
+            if let job = mode.existingJob {
+                CronJobHistorySheet(job: job, scheduler: scheduler)
+            }
         }
     }
 
@@ -575,9 +582,8 @@ struct CronJobEditorSheet: View {
         HStack {
             if mode.isEditing {
                 Button("View History") {
-                    // TODO: Show history sheet
+                    isHistoryPresented = true
                 }
-                .disabled(true) // Not implemented yet
             }
 
             Spacer()
@@ -641,6 +647,150 @@ struct CronJobEditorSheet: View {
         logger.info("Saving cron job: \(job.name)")
         onSave(job)
         dismiss()
+    }
+}
+
+// MARK: - Cron Job History Sheet
+
+struct CronJobHistorySheet: View {
+    let job: CronJob
+    @Bindable var scheduler: CronScheduler
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var isClearConfirmPresented = false
+
+    private var history: [CronJobResult] {
+        scheduler.getHistory(for: job.id)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            headerView
+            Divider()
+            historyView
+            Divider()
+            footerView
+        }
+        .frame(width: 520, height: 520)
+        .confirmationDialog("Clear history for \(job.name)?", isPresented: $isClearConfirmPresented) {
+            Button("Clear History", role: .destructive) {
+                scheduler.clearHistory(for: job.id)
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    private var headerView: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Run History")
+                    .font(.headline)
+                Text(job.name)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+        }
+        .padding()
+    }
+
+    private var historyView: some View {
+        Group {
+            if history.isEmpty {
+                ContentUnavailableView {
+                    Label("No Run History", systemImage: "clock.badge.questionmark")
+                } description: {
+                    Text("This job has not run yet.")
+                }
+            } else {
+                List {
+                    ForEach(Array(history.enumerated()), id: \.offset) { _, result in
+                        historyRow(result)
+                    }
+                }
+                .listStyle(.inset)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func historyRow(_ result: CronJobResult) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(result.success ? Color.green : Color.red)
+                        .frame(width: 8, height: 8)
+                    Text(result.success ? "Success" : "Failed")
+                        .font(.subheadline.weight(.semibold))
+                }
+
+                Spacer()
+
+                Text(result.timestamp, format: .dateTime.year().month().day().hour().minute())
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack {
+                Text("Duration: \(formatDuration(result.duration))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+
+            if let output = result.output, !output.isEmpty {
+                Text(output)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+            }
+
+            if let error = result.error, !error.isEmpty {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .lineLimit(3)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var footerView: some View {
+        HStack {
+            Button("Clear History", role: .destructive) {
+                isClearConfirmPresented = true
+            }
+
+            Spacer()
+
+            Button("Close") {
+                dismiss()
+            }
+            .keyboardShortcut(.cancelAction)
+        }
+        .padding()
+    }
+
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        if duration < 1 {
+            return String(format: "%.0f ms", duration * 1000)
+        }
+        if duration < 60 {
+            return String(format: "%.2f s", duration)
+        }
+        let minutes = Int(duration / 60)
+        let seconds = Int(duration.truncatingRemainder(dividingBy: 60))
+        return "\(minutes)m \(seconds)s"
     }
 }
 

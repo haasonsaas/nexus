@@ -85,6 +85,11 @@ final class NexusAPI {
         try await request(path: "/api/usage")
     }
 
+    func fetchCostUsage(days: Int) async throws -> CostUsageResponse {
+        let items = [URLQueryItem(name: "days", value: String(days))]
+        return try await request(path: "/api/usage/costs", queryItems: items)
+    }
+
     private func request<T: Decodable>(path: String, method: String = "GET", body: Data? = nil, queryItems: [URLQueryItem] = []) async throws -> T {
         let data = try await requestData(path: path, method: method, body: body, queryItems: queryItems)
         let decoder = JSONDecoder()

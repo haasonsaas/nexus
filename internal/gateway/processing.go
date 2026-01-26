@@ -463,11 +463,17 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		}
 	}
 
-	if response.Len() == 0 && len(toolResults) == 0 {
+	content, suppressed, suppressReason := normalizeReplyContent(response.String())
+	if strings.TrimSpace(content) == "" && len(toolResults) == 0 && len(attachments) == 0 {
+		if suppressed {
+			s.confirmMemoryFlush(ctx, session)
+			EmitMessageProcessed(string(msg.Channel), outboundMsg.ID, channelID, key, session.ID,
+				"completed", suppressReason, "", time.Since(startTime).Milliseconds())
+		}
 		return
 	}
 
-	outboundMsg.Content = response.String()
+	outboundMsg.Content = content
 	outboundMsg.ToolResults = toolResults
 	outboundMsg.Attachments = attachments
 	ttsCleanup := s.maybeAttachTTSAudio(ctx, msg, outboundMsg)
@@ -535,15 +541,7 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		}
 	}
 
-	if session.Metadata != nil {
-		if pending, ok := session.Metadata["memory_flush_pending"].(bool); ok && pending {
-			session.Metadata["memory_flush_pending"] = false
-			session.Metadata["memory_flush_confirmed_at"] = time.Now().Format(time.RFC3339)
-			if err := s.sessions.Update(ctx, session); err != nil {
-				s.logger.Error("failed to update memory flush confirmation", "error", err)
-			}
-		}
-	}
+	s.confirmMemoryFlush(ctx, session)
 }
 
 func (s *Server) sendImmediateReply(ctx context.Context, session *models.Session, inbound *models.Message, content string) {
@@ -715,7 +713,8 @@ func (s *Server) handleBroadcastMessage(ctx context.Context, peerID string, msg 
 			continue
 		}
 
-		if result.Response == "" {
+		content, _, _ := normalizeReplyContent(result.Response)
+		if strings.TrimSpace(content) == "" {
 			continue
 		}
 
@@ -724,7 +723,7 @@ func (s *Server) handleBroadcastMessage(ctx context.Context, peerID string, msg 
 			Channel:   msg.Channel,
 			Direction: models.DirectionOutbound,
 			Role:      models.RoleAssistant,
-			Content:   result.Response,
+			Content:   content,
 			Metadata:  s.buildReplyMetadata(msg),
 			CreatedAt: time.Now(),
 		}

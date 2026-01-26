@@ -185,6 +185,7 @@ func (g *grpcService) handleSendMessage(ctx context.Context, stream proto.NexusG
 		}
 	}
 
+	content, _, _ := normalizeReplyContent(response.String())
 	outbound := &models.Message{
 		ID:          messageID,
 		SessionID:   session.ID,
@@ -192,7 +193,7 @@ func (g *grpcService) handleSendMessage(ctx context.Context, stream proto.NexusG
 		ChannelID:   session.ChannelID,
 		Direction:   models.DirectionOutbound,
 		Role:        models.RoleAssistant,
-		Content:     response.String(),
+		Content:     content,
 		ToolResults: toolResults,
 		CreatedAt:   time.Now(),
 	}
@@ -210,15 +211,7 @@ func (g *grpcService) handleSendMessage(ctx context.Context, stream proto.NexusG
 			g.server.logger.Warn("failed to append memory log", "error", err)
 		}
 	}
-	if session.Metadata != nil {
-		if pending, ok := session.Metadata["memory_flush_pending"].(bool); ok && pending {
-			session.Metadata["memory_flush_pending"] = false
-			session.Metadata["memory_flush_confirmed_at"] = time.Now().Format(time.RFC3339)
-			if err := g.server.sessions.Update(ctx, session); err != nil && g.server.logger != nil {
-				g.server.logger.Warn("failed to update session metadata", "error", err)
-			}
-		}
-	}
+	g.server.confirmMemoryFlush(ctx, session)
 
 	return stream.Send(&proto.ServerMessage{Message: &proto.ServerMessage_MessageComplete{
 		MessageComplete: &proto.MessageComplete{

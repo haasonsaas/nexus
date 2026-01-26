@@ -231,6 +231,7 @@ func (s *Server) handleHomeAssistantConversation(w http.ResponseWriter, r *http.
 		}
 	}
 
+	content, _, _ = normalizeReplyContent(response.String())
 	outbound := &models.Message{
 		ID:          messageID,
 		SessionID:   session.ID,
@@ -238,7 +239,7 @@ func (s *Server) handleHomeAssistantConversation(w http.ResponseWriter, r *http.
 		ChannelID:   session.ChannelID,
 		Direction:   models.DirectionOutbound,
 		Role:        models.RoleAssistant,
-		Content:     response.String(),
+		Content:     content,
 		ToolResults: toolResults,
 		CreatedAt:   time.Now(),
 	}
@@ -252,15 +253,7 @@ func (s *Server) handleHomeAssistantConversation(w http.ResponseWriter, r *http.
 		}
 	}
 
-	if session.Metadata != nil {
-		if pending, ok := session.Metadata["memory_flush_pending"].(bool); ok && pending {
-			session.Metadata["memory_flush_pending"] = false
-			session.Metadata["memory_flush_confirmed_at"] = time.Now().Format(time.RFC3339)
-			if err := s.sessions.Update(ctx, session); err != nil && s.logger != nil {
-				s.logger.Warn("failed to update session metadata", "error", err)
-			}
-		}
-	}
+	s.confirmMemoryFlush(ctx, session)
 
 	writeJSON(w, http.StatusOK, haConversationResponse{
 		Response:        outbound.Content,

@@ -641,6 +641,7 @@ type ToolsConfig struct {
 	WebSearch    WebSearchConfig     `yaml:"websearch"`
 	WebFetch     WebFetchConfig      `yaml:"web_fetch"`
 	MemorySearch MemorySearchConfig  `yaml:"memory_search"`
+	FactExtract  FactExtractConfig   `yaml:"fact_extraction"`
 	Links        LinksConfig         `yaml:"links"`
 	Notes        string              `yaml:"notes"`
 	NotesFile    string              `yaml:"notes_file"`
@@ -655,6 +656,12 @@ type ServiceNowConfig struct {
 	InstanceURL string `yaml:"instance_url"`
 	Username    string `yaml:"username"`
 	Password    string `yaml:"password"`
+}
+
+// FactExtractConfig controls the structured fact extraction tool.
+type FactExtractConfig struct {
+	Enabled  bool `yaml:"enabled"`
+	MaxFacts int  `yaml:"max_facts"`
 }
 
 // ComputerUseConfig controls the Claude computer use tool routing.
@@ -1636,6 +1643,9 @@ func applyToolsDefaults(cfg *Config) {
 	}
 	if cfg.Tools.MemorySearch.MemoryFile == "" {
 		cfg.Tools.MemorySearch.MemoryFile = cfg.Workspace.MemoryFile
+	}
+	if cfg.Tools.FactExtract.MaxFacts == 0 {
+		cfg.Tools.FactExtract.MaxFacts = 10
 	}
 	applyMemorySearchEmbeddingsDefaults(&cfg.Tools.MemorySearch.Embeddings)
 	applyLinksDefaults(&cfg.Tools.Links)

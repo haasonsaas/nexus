@@ -19,6 +19,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/skills"
 	"github.com/haasonsaas/nexus/internal/tools/browser"
 	exectools "github.com/haasonsaas/nexus/internal/tools/exec"
+	"github.com/haasonsaas/nexus/internal/tools/facts"
 	"github.com/haasonsaas/nexus/internal/tools/files"
 	jobtools "github.com/haasonsaas/nexus/internal/tools/jobs"
 	"github.com/haasonsaas/nexus/internal/tools/memorysearch"
@@ -278,6 +279,11 @@ func (m *ToolManager) RegisterTools(ctx context.Context, runtime *agent.Runtime)
 				Timeout:  cfg.Tools.MemorySearch.Embeddings.Timeout,
 			},
 		}))
+	}
+
+	// Register structured fact extraction tool
+	if cfg.Tools.FactExtract.Enabled {
+		m.registerCoreTool(runtime, facts.NewExtractTool(cfg.Tools.FactExtract.MaxFacts))
 	}
 
 	// Register skill-provided tools

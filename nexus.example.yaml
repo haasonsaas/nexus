@@ -370,6 +370,9 @@ tools:
       cache_dir: ~/.nexus/cache/embeddings
       cache_ttl: 24h
       timeout: 15s
+  fact_extraction:
+    enabled: false
+    max_facts: 10
   sandbox:
     enabled: true
     backend: docker # docker | firecracker

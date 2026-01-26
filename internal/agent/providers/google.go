@@ -662,13 +662,6 @@ func (p *GoogleProvider) convertTools(tools []agent.Tool) []*genai.Tool {
 	return toolconv.ToGeminiTools(tools)
 }
 
-// convertSchemaToGemini converts a JSON Schema map to Gemini's Schema type.
-//
-// This handles the recursive conversion of JSON Schema properties to Gemini's format.
-func (p *GoogleProvider) convertSchemaToGemini(schemaMap map[string]any) *genai.Schema {
-	return toolconv.ToGeminiSchema(schemaMap)
-}
-
 // buildConfig builds the GenerateContentConfig from a CompletionRequest.
 //
 // This method configures:

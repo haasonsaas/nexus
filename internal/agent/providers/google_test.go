@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/agent"
+	"github.com/haasonsaas/nexus/internal/agent/toolconv"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
@@ -565,13 +566,6 @@ func TestGoogleProviderConvertTools(t *testing.T) {
 
 // TestGoogleProviderConvertSchemaToGemini tests JSON Schema conversion.
 func TestGoogleProviderConvertSchemaToGemini(t *testing.T) {
-	provider, err := NewGoogleProvider(GoogleConfig{
-		APIKey: "test-key",
-	})
-	if err != nil {
-		t.Fatalf("failed to create provider: %v", err)
-	}
-
 	tests := []struct {
 		name        string
 		schemaMap   map[string]any
@@ -642,7 +636,7 @@ func TestGoogleProviderConvertSchemaToGemini(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := provider.convertSchemaToGemini(tt.schemaMap)
+			result := toolconv.ToGeminiSchema(tt.schemaMap)
 
 			if tt.expectNil {
 				if result != nil {
@@ -1434,13 +1428,6 @@ func TestGoogleProviderConvertToolsWithEnumAndRequired(t *testing.T) {
 
 // TestGoogleProviderConvertSchemaWithArrayItems tests array schema conversion.
 func TestGoogleProviderConvertSchemaWithArrayItems(t *testing.T) {
-	provider, err := NewGoogleProvider(GoogleConfig{
-		APIKey: "test-key",
-	})
-	if err != nil {
-		t.Fatalf("failed to create provider: %v", err)
-	}
-
 	schemaMap := map[string]any{
 		"type": "array",
 		"items": map[string]any{
@@ -1452,7 +1439,7 @@ func TestGoogleProviderConvertSchemaWithArrayItems(t *testing.T) {
 		},
 	}
 
-	result := provider.convertSchemaToGemini(schemaMap)
+	result := toolconv.ToGeminiSchema(schemaMap)
 	if result == nil {
 		t.Fatal("expected non-nil result")
 	}

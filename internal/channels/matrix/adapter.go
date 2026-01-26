@@ -120,6 +120,7 @@ func (a *Adapter) Start(ctx context.Context) error {
 	// Set initial status as connected
 	if a.health != nil {
 		a.health.SetStatus(true, "")
+		a.health.RecordConnectionOpened()
 	}
 
 	a.logger.Info("matrix adapter started",
@@ -142,6 +143,11 @@ func (a *Adapter) Stop(ctx context.Context) error {
 
 	// Stop sync
 	a.client.StopSync()
+
+	if a.health != nil {
+		a.health.SetStatus(false, "")
+		a.health.RecordConnectionClosed()
+	}
 
 	a.logger.Info("matrix adapter stopped")
 	return nil
@@ -274,42 +280,62 @@ func (a *Adapter) Metrics() channels.MetricsSnapshot {
 }
 
 func (a *Adapter) syncLoop(ctx context.Context) {
-	for {
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	go func() {
 		select {
 		case <-a.stopCh:
-			return
+			cancel()
 		case <-ctx.Done():
-			return
-		default:
-			err := a.client.SyncWithContext(ctx)
-			if err != nil {
-				a.logger.Error("sync error", "error", err)
-
-				// Update status to reflect error
-				if a.health != nil {
-					a.health.SetStatus(false, err.Error())
-				}
-
-				select {
-				case a.errors <- err:
-				default:
-				}
-
-				// Backoff before retry
-				select {
-				case <-time.After(5 * time.Second):
-				case <-a.stopCh:
-					return
-				case <-ctx.Done():
-					return
-				}
-			} else {
-				// Sync successful, update status
-				if a.health != nil {
-					a.health.SetStatus(true, "")
-				}
-			}
+			cancel()
 		}
+	}()
+
+	reconnector := &channels.Reconnector{
+		Config: channels.ReconnectConfig{
+			MaxAttempts:  a.config.MaxReconnectAttempts,
+			InitialDelay: time.Second,
+			MaxDelay:     a.config.ReconnectBackoff,
+			Factor:       2,
+			Jitter:       true,
+		},
+		Logger: a.logger,
+		Health: a.health,
+	}
+
+	attempt := 0
+	err := reconnector.Run(runCtx, func(loopCtx context.Context) error {
+		attempt++
+		a.logger.Info("matrix sync attempt", "attempt", attempt, "max_attempts", a.config.MaxReconnectAttempts)
+
+		err := a.client.SyncWithContext(loopCtx)
+		if err == nil {
+			if a.health != nil {
+				a.health.SetStatus(true, "")
+				a.health.SetDegraded(false)
+			}
+			return nil
+		}
+
+		if loopCtx.Err() != nil {
+			return loopCtx.Err()
+		}
+
+		a.logger.Error("sync error", "error", err)
+		if a.health != nil {
+			a.health.SetStatus(false, err.Error())
+			a.health.SetDegraded(true)
+		}
+		select {
+		case a.errors <- err:
+		default:
+		}
+		return err
+	})
+
+	if err != nil && runCtx.Err() == nil {
+		a.logger.Error("sync loop stopped", "error", err)
 	}
 }
 

@@ -573,36 +573,29 @@ func (a *Adapter) handleDisconnect(s *discordgo.Session, d *discordgo.Disconnect
 // Reconnection logic
 
 func (a *Adapter) connectWithRetry(ctx context.Context) error {
-	var err error
-	maxAttempts := a.config.MaxReconnectAttempts
-
-	for attempt := 0; attempt < maxAttempts; attempt++ {
-		a.logger.Info("connecting to discord",
-			"attempt", attempt+1,
-			"max_attempts", maxAttempts)
-
-		err = a.session.Open()
-		if err == nil {
-			return nil
-		}
-
-		a.health.RecordReconnectAttempt()
-
-		backoff := calculateBackoff(attempt, a.config.ReconnectBackoff)
-		a.logger.Warn("connection failed, retrying",
-			"error", err,
-			"attempt", attempt+1,
-			"backoff_ms", backoff.Milliseconds())
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(backoff):
-			continue
-		}
+	reconnector := &channels.Reconnector{
+		Config: channels.ReconnectConfig{
+			MaxAttempts:  a.config.MaxReconnectAttempts,
+			InitialDelay: time.Second,
+			MaxDelay:     a.config.ReconnectBackoff,
+			Factor:       2,
+			Jitter:       true,
+		},
+		Logger: a.logger,
+		Health: a.health,
 	}
 
-	return channels.ErrConnection("failed to connect after retries", err)
+	attempt := 0
+	return reconnector.Run(ctx, func(runCtx context.Context) error {
+		attempt++
+		a.logger.Info("connecting to discord",
+			"attempt", attempt,
+			"max_attempts", a.config.MaxReconnectAttempts)
+		if err := a.session.Open(); err != nil {
+			return channels.ErrConnection("failed to open discord session", err)
+		}
+		return nil
+	})
 }
 
 func (a *Adapter) reconnect() {
@@ -612,51 +605,49 @@ func (a *Adapter) reconnect() {
 		return // Context cancelled, don't reconnect
 	}
 
-	a.mu.Lock()
-	a.reconnectCount++
-	attempt := a.reconnectCount
-	maxAttempts := a.config.MaxReconnectAttempts
-	a.mu.Unlock()
-
-	// Stop trying if we've exceeded max attempts
-	if maxAttempts > 0 && attempt > maxAttempts {
-		a.logger.Error("max reconnection attempts reached", "attempts", attempt-1, "max", maxAttempts)
-		a.mu.Lock()
-		a.updateStatus(false, fmt.Sprintf("max reconnection attempts (%d) reached", maxAttempts))
-		a.mu.Unlock()
-		return
+	reconnector := &channels.Reconnector{
+		Config: channels.ReconnectConfig{
+			MaxAttempts:  a.config.MaxReconnectAttempts,
+			InitialDelay: time.Second,
+			MaxDelay:     a.config.ReconnectBackoff,
+			Factor:       2,
+			Jitter:       true,
+		},
+		Logger: a.logger,
+		Health: a.health,
 	}
 
+	attempt := 0
 	a.setDegraded(true)
-	a.logger.Info("attempting reconnection", "attempt", attempt, "max", maxAttempts)
+	err := reconnector.Run(a.ctx, func(runCtx context.Context) error {
+		attempt++
+		a.mu.Lock()
+		a.reconnectCount = attempt
+		a.mu.Unlock()
+		a.logger.Info("attempting reconnection", "attempt", attempt, "max", a.config.MaxReconnectAttempts)
+		if err := a.session.Open(); err != nil {
+			return channels.ErrConnection("reconnect discord session", err)
+		}
+		return nil
+	})
 
-	backoff := calculateBackoff(attempt, a.config.ReconnectBackoff)
-	time.Sleep(backoff)
-
-	err := a.session.Open()
+	if a.ctx.Err() != nil {
+		return
+	}
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
 	if err != nil {
-		a.updateStatus(false, fmt.Sprintf("reconnection attempt %d failed: %v", attempt, err))
-		a.health.RecordError(channels.ErrCodeConnection)
-		a.logger.Error("reconnection failed", "error", err, "attempt", attempt)
-	} else {
-		a.updateStatus(true, "")
-		a.reconnectCount = 0
-		a.setDegraded(false)
-		a.logger.Info("reconnection successful")
+		a.updateStatus(false, fmt.Sprintf("reconnection failed: %v", err))
+		a.logger.Error("reconnection failed", "error", err)
+		return
 	}
-}
 
-func calculateBackoff(attempt int, maxWait time.Duration) time.Duration {
-	// Exponential backoff: 1s, 2s, 4s, 8s, 16s, ...
-	backoff := time.Second << attempt
-	if backoff > maxWait {
-		backoff = maxWait
-	}
-	return backoff
+	a.updateStatus(true, "")
+	a.reconnectCount = 0
+	a.setDegraded(false)
+	a.logger.Info("reconnection successful")
 }
 
 func (a *Adapter) updateStatus(connected bool, errMsg string) {

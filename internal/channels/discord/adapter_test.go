@@ -620,42 +620,6 @@ func TestDetectAttachmentType(t *testing.T) {
 }
 
 // =============================================================================
-// Reconnection Backoff Tests
-// =============================================================================
-
-func TestCalculateBackoff(t *testing.T) {
-	tests := []struct {
-		attempt  int
-		maxWait  time.Duration
-		expected time.Duration
-	}{
-		{attempt: 0, expected: 1 * time.Second, maxWait: 60 * time.Second},
-		{attempt: 1, expected: 2 * time.Second, maxWait: 60 * time.Second},
-		{attempt: 2, expected: 4 * time.Second, maxWait: 60 * time.Second},
-		{attempt: 3, expected: 8 * time.Second, maxWait: 60 * time.Second},
-		{attempt: 4, expected: 16 * time.Second, maxWait: 60 * time.Second},
-		{attempt: 5, expected: 32 * time.Second, maxWait: 60 * time.Second},
-		{attempt: 6, expected: 60 * time.Second, maxWait: 60 * time.Second}, // Capped at max
-		{attempt: 10, expected: 60 * time.Second, maxWait: 60 * time.Second},
-		// Note: Very high attempts cause integer overflow in 1<<uint(attempt), resulting in 0
-		// This is a known edge case - in practice, max reconnect attempts prevents this
-		// Different max wait
-		{attempt: 3, expected: 8 * time.Second, maxWait: 30 * time.Second},
-		{attempt: 6, expected: 30 * time.Second, maxWait: 30 * time.Second}, // Capped at 30s
-	}
-
-	for _, tt := range tests {
-		name := fmt.Sprintf("attempt=%d,max=%v", tt.attempt, tt.maxWait)
-		t.Run(name, func(t *testing.T) {
-			got := calculateBackoff(tt.attempt, tt.maxWait)
-			if got != tt.expected {
-				t.Errorf("calculateBackoff(%d, %v) = %v, want %v", tt.attempt, tt.maxWait, got, tt.expected)
-			}
-		})
-	}
-}
-
-// =============================================================================
 // Rate Limit Error Detection Tests
 // =============================================================================
 

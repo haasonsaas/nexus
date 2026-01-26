@@ -111,7 +111,7 @@ func (p *OllamaProvider) Complete(ctx context.Context, req *agent.CompletionRequ
 	}
 	if resp.StatusCode >= http.StatusBadRequest {
 		defer resp.Body.Close()
-		errBody, err := io.ReadAll(resp.Body)
+		errBody, err := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
 		if err != nil {
 			return nil, NewProviderError("ollama", model, fmt.Errorf("ollama status %d (read body failed: %w)", resp.StatusCode, err)).WithStatus(resp.StatusCode)
 		}

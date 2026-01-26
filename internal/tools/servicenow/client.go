@@ -164,7 +164,7 @@ func (c *Client) ListIncidents(ctx context.Context, opts ListIncidentsOptions) (
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, err := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
 		if err != nil {
 			body = []byte("(failed to read response body)")
 		}
@@ -214,7 +214,7 @@ func (c *Client) GetIncident(ctx context.Context, idOrNumber string) (*Incident,
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, err := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
 		if err != nil {
 			body = []byte("(failed to read response body)")
 		}
@@ -261,7 +261,7 @@ func (c *Client) UpdateIncident(ctx context.Context, sysID string, updates map[s
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		respBody, err := io.ReadAll(resp.Body)
+		respBody, err := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
 		if err != nil {
 			respBody = []byte("(failed to read response body)")
 		}

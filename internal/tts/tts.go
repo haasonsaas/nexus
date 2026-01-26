@@ -445,7 +445,7 @@ func openaiTTS(ctx context.Context, cfg *Config, text, channel string) (*Result,
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, err := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
 		if err != nil {
 			return &Result{
 				Success: false,
@@ -535,7 +535,7 @@ func elevenlabsTTS(ctx context.Context, cfg *Config, text string) (*Result, erro
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, err := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
 		if err != nil {
 			return &Result{
 				Success: false,

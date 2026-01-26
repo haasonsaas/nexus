@@ -96,7 +96,7 @@ func (p *Provider) Embed(ctx context.Context, text string) ([]float32, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, readErr := io.ReadAll(resp.Body)
+		bodyBytes, readErr := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
 		if readErr != nil {
 			return nil, fmt.Errorf("ollama returned status %d and failed to read body: %w", resp.StatusCode, readErr)
 		}

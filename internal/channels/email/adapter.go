@@ -229,7 +229,7 @@ func (a *Adapter) sendNewEmail(ctx context.Context, recipient string, msg *model
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		body, err := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
 		if err != nil {
 			body = []byte("(failed to read response body)")
 		}
@@ -283,7 +283,7 @@ func (a *Adapter) sendReply(ctx context.Context, messageID, content string) erro
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		body, err := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
 		if err != nil {
 			body = []byte("(failed to read response body)")
 		}
@@ -384,7 +384,7 @@ func (a *Adapter) authenticate(ctx context.Context) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, err := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
 		if err != nil {
 			body = []byte("(failed to read response body)")
 		}
@@ -539,7 +539,7 @@ func (a *Adapter) fetchNewMessages(ctx context.Context) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, err := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
 		if err != nil {
 			body = []byte("(failed to read response body)")
 		}

@@ -463,9 +463,12 @@ func (p *TwilioProvider) apiRequest(ctx context.Context, endpoint string, params
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, (1<<20)+1))
 	if err != nil {
 		return nil, err
+	}
+	if len(body) > 1<<20 {
+		return nil, fmt.Errorf("API response too large (%d bytes)", len(body))
 	}
 
 	if resp.StatusCode >= 400 {

@@ -125,7 +125,7 @@ func (f *OpenAIUsageFetcher) Fetch(ctx context.Context) (*ProviderUsage, error) 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, err := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
 		if err != nil {
 			usage.Error = fmt.Sprintf("API error %d (read body failed: %v)", resp.StatusCode, err)
 			return usage, nil

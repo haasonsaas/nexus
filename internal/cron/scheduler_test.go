@@ -2,6 +2,7 @@ package cron
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -249,5 +250,52 @@ func TestSchedulerRunOnce_NoReadyJobs(t *testing.T) {
 	count := scheduler.RunOnce(context.Background())
 	if count != 0 {
 		t.Errorf("expected 0 jobs run (not yet ready), got %d", count)
+	}
+}
+
+func TestScheduler_RunJob_DefaultWebhookTimeout(t *testing.T) {
+	originalTimeout := defaultWebhookTimeout
+	defaultWebhookTimeout = 50 * time.Millisecond
+	defer func() { defaultWebhookTimeout = originalTimeout }()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	now := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	cfg := config.CronConfig{
+		Enabled: true,
+		Jobs: []config.CronJobConfig{
+			{
+				ID:      "job-1",
+				Name:    "webhook",
+				Type:    "webhook",
+				Enabled: true,
+				Schedule: config.CronScheduleConfig{
+					At: now.Format(time.RFC3339),
+				},
+				Webhook: &config.CronWebhookConfig{
+					URL: server.URL,
+				},
+			},
+		},
+	}
+
+	scheduler, err := NewScheduler(cfg, WithNow(func() time.Time { return now }), WithHTTPClient(server.Client()))
+	if err != nil {
+		t.Fatalf("NewScheduler() error = %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	err = scheduler.RunJob(ctx, "job-1")
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected context deadline exceeded, got %v", err)
 	}
 }

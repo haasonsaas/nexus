@@ -13,6 +13,8 @@ import (
 	"github.com/haasonsaas/nexus/internal/config"
 )
 
+var defaultWebhookTimeout = 30 * time.Second
+
 // Scheduler runs cron jobs from configuration.
 type Scheduler struct {
 	jobs         []*Job
@@ -360,9 +362,14 @@ func (s *Scheduler) executeWebhook(ctx context.Context, job *Job) error {
 	if client == nil {
 		client = http.DefaultClient
 	}
-	if cfg.Timeout > 0 {
+
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = defaultWebhookTimeout
+	}
+	if timeout > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, cfg.Timeout)
+		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
 		req = req.WithContext(ctx)
 	}

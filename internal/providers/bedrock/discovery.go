@@ -25,7 +25,7 @@ type ModelDefinition struct {
 	ContextWindow      int      // Maximum context window size
 	MaxTokens          int      // Maximum output tokens
 	StreamingSupported bool     // Whether streaming is supported
-	LifecycleStatus    string   // Model lifecycle status (e.g., "ACTIVE", "LEGACY")
+	LifecycleStatus    string   // Model lifecycle status (e.g., "ACTIVE" or an older-generation state)
 }
 
 // DiscoveryConfig holds configuration for model discovery.

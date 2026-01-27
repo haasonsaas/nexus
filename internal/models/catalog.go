@@ -78,7 +78,7 @@ type Model struct {
 	// Aliases are alternative names for this model
 	Aliases []string `json:"aliases,omitempty"`
 
-	// Deprecated indicates if this model is superseded
+	// Superseded indicates if this model should no longer be used
 	Deprecated bool `json:"deprecated,omitempty"`
 
 	// ReplacedBy is the recommended replacement for superseded models

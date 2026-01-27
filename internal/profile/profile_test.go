@@ -111,7 +111,7 @@ func TestDefaultConfigPath(t *testing.T) {
 }
 
 func TestReadActiveProfile_NotExist(t *testing.T) {
-	// Create a temp directory structure
+	// Create a test directory structure
 	tmpDir := t.TempDir()
 
 	// Override the home directory temporarily

@@ -231,7 +231,7 @@ func TestIdentity_HasValues(t *testing.T) {
 }
 
 func TestLoadIdentityFromFile(t *testing.T) {
-	// Create a temp file
+	// Create a test file
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "IDENTITY.md")
 
@@ -269,7 +269,7 @@ func TestLoadIdentityFromFile_NotFound(t *testing.T) {
 }
 
 func TestLoadIdentityFromWorkspace(t *testing.T) {
-	// Create a temp workspace
+	// Create a test workspace
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, DefaultIdentityFilename)
 

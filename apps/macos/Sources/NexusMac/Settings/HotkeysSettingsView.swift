@@ -196,7 +196,7 @@ struct HotkeysSettingsBindingRow: View {
 
             Spacer()
 
-            // Shortcut display
+            // Key binding display
             HStack(spacing: 4) {
                 ForEach(modifierSymbols, id: \.self) { symbol in
                     Text(symbol)

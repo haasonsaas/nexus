@@ -14,7 +14,7 @@ import (
 )
 
 func TestLocalStore(t *testing.T) {
-	// Create temp directory
+	// Create a test directory
 	dir := t.TempDir()
 	store, err := NewLocalStore(dir)
 	if err != nil {

@@ -165,7 +165,7 @@ func handleBrowserAttach(ctx context.Context, input string) (*ToolResult, error)
 		return nil, fmt.Errorf("invalid params: %w", err)
 	}
 
-	// Create a temporary context to list targets
+	// Create a short-lived context to list targets
 	allocCtx, allocCancel := chromedp.NewRemoteAllocator(ctx, params.DebugURL)
 	taskCtx, taskCancel := chromedp.NewContext(allocCtx)
 

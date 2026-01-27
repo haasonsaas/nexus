@@ -232,7 +232,7 @@ func InstallLaunchAgent(opts InstallOptions) (*InstallResult, error) {
 	label := resolveLaunchdLabel(env)
 	plistPath := resolveLaunchdPlistPath(env)
 
-	// Clean up legacy services
+	// Clean up prior services
 	for _, legacyLabel := range []string{LegacyLaunchdLabel} {
 		legacyPath := filepath.Join(filepath.Dir(plistPath), legacyLabel+".plist")
 		execLaunchctl([]string{"bootout", domain, legacyPath})
@@ -477,7 +477,7 @@ func isLaunchctlNotLoaded(output string) bool {
 		strings.Contains(lower, "not found")
 }
 
-// LegacyLaunchAgent represents a legacy LaunchAgent that may need cleanup.
+// LegacyLaunchAgent represents a prior LaunchAgent that may need cleanup.
 type LegacyLaunchAgent struct {
 	Label     string
 	PlistPath string
@@ -485,7 +485,7 @@ type LegacyLaunchAgent struct {
 	Exists    bool
 }
 
-// FindLegacyLaunchAgents finds legacy LaunchAgents that may need cleanup.
+// FindLegacyLaunchAgents finds prior LaunchAgents that may need cleanup.
 func FindLegacyLaunchAgents(env map[string]string) ([]LegacyLaunchAgent, error) {
 	if env == nil {
 		env = make(map[string]string)
@@ -527,7 +527,7 @@ func FindLegacyLaunchAgents(env map[string]string) ([]LegacyLaunchAgent, error) 
 	return results, nil
 }
 
-// UninstallLegacyLaunchAgents removes legacy LaunchAgents.
+// UninstallLegacyLaunchAgents removes prior LaunchAgents.
 func UninstallLegacyLaunchAgents(env map[string]string) ([]LegacyLaunchAgent, error) {
 	agents, err := FindLegacyLaunchAgents(env)
 	if err != nil {

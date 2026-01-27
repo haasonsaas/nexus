@@ -104,7 +104,7 @@ final class DiagnosticsFileLogger {
     }
 
     /// Export all log files as a zip archive.
-    /// Returns the URL to the created zip file in the temporary directory.
+    /// Returns the URL to the created zip file in the scratch directory.
     func exportLogs() -> URL? {
         let tempDir = fileManager.temporaryDirectory
         let exportName = "nexus-diagnostics-\(formattedExportDate()).zip"

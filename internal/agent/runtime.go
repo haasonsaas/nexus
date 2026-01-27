@@ -1386,7 +1386,7 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 				continue
 			}
 
-			// Check approvals (policy-based or legacy require_approval)
+			// Check approvals (policy-based or compatibility require_approval)
 			if approvalChecker != nil {
 				decision, reason := approvalChecker.Check(ctx, session.AgentID, tc)
 				if decision == ApprovalPending && elevatedMode == ElevatedFull && matchesToolPatterns(runOpts.ElevatedTools, tc.Name, resolver) {
@@ -1442,7 +1442,7 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 				}
 			} else if r.requiresApproval(runOpts, tc.Name, resolver) {
 				if elevatedMode == ElevatedFull && matchesToolPatterns(runOpts.ElevatedTools, tc.Name, resolver) {
-					// bypass legacy approvals in elevated full
+					// bypass compatibility approvals in elevated full
 				} else {
 					res := models.ToolResult{
 						ToolCallID: tc.ID,
@@ -1695,7 +1695,7 @@ func (r *Runtime) executeToolsWithEvents(ctx context.Context, toolExec *ToolExec
 		startTimes[tc.ID] = time.Now()
 	}
 
-	results := toolExec.ExecuteConcurrently(ctx, calls, nil) // no legacy event callback
+	results := toolExec.ExecuteConcurrently(ctx, calls, nil) // no compatibility event callback
 
 	// Emit tool.finished or tool.timed_out for each result
 	for _, er := range results {

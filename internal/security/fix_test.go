@@ -32,7 +32,7 @@ func TestFix_NonexistentPaths(t *testing.T) {
 }
 
 func TestFix_FilePermissions(t *testing.T) {
-	// Create a temp directory
+	// Create a test directory
 	tmpDir := t.TempDir()
 
 	// Create a file with insecure permissions
@@ -71,7 +71,7 @@ func TestFix_FilePermissions(t *testing.T) {
 }
 
 func TestFix_DirectoryPermissions(t *testing.T) {
-	// Create a temp directory with insecure permissions
+	// Create a test directory with insecure permissions
 	tmpDir := t.TempDir()
 	stateDir := filepath.Join(tmpDir, "state")
 	if err := os.MkdirAll(stateDir, 0755); err != nil {
@@ -108,7 +108,7 @@ func TestFix_DirectoryPermissions(t *testing.T) {
 }
 
 func TestFix_DryRun(t *testing.T) {
-	// Create a temp directory
+	// Create a test directory
 	tmpDir := t.TempDir()
 
 	// Create a file with insecure permissions
@@ -139,7 +139,7 @@ func TestFix_DryRun(t *testing.T) {
 }
 
 func TestFix_AlreadySecure(t *testing.T) {
-	// Create a temp directory
+	// Create a test directory
 	tmpDir := t.TempDir()
 
 	// Create a file with already secure permissions
@@ -168,7 +168,7 @@ func TestFix_AlreadySecure(t *testing.T) {
 }
 
 func TestFix_SensitiveSubdirectories(t *testing.T) {
-	// Create a temp directory structure
+	// Create a test directory structure
 	tmpDir := t.TempDir()
 	stateDir := filepath.Join(tmpDir, "state")
 
@@ -221,7 +221,7 @@ func TestFix_SensitiveSubdirectories(t *testing.T) {
 }
 
 func TestFix_SkipsSymlinks(t *testing.T) {
-	// Create a temp directory
+	// Create a test directory
 	tmpDir := t.TempDir()
 
 	// Create a real file
@@ -256,7 +256,7 @@ func TestFix_SkipsSymlinks(t *testing.T) {
 }
 
 func TestFixResult_Counts(t *testing.T) {
-	// Create temp directory with various scenarios
+	// Create a test directory with various scenarios
 	tmpDir := t.TempDir()
 	stateDir := filepath.Join(tmpDir, "state")
 	if err := os.MkdirAll(stateDir, 0755); err != nil {

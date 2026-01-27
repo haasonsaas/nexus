@@ -541,7 +541,7 @@ func (s *MemoryBranchStore) EnsurePrimaryBranch(ctx context.Context, sessionID s
 }
 
 func (s *MemoryBranchStore) MigrateSessionToBranches(ctx context.Context, sessionID string) error {
-	// In memory store, this is a no-op since we don't have legacy data
+	// In memory store, this is a no-op since we don't have previous data
 	_, err := s.EnsurePrimaryBranch(ctx, sessionID)
 	return err
 }

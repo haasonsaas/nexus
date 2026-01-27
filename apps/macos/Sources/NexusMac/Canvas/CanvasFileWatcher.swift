@@ -137,7 +137,7 @@ final class CanvasFileWatcher {
             return true
         }
 
-        // Ignore temporary files
+        // Ignore scratch files
         if filename.hasSuffix("~") || filename.hasSuffix(".swp") || filename.hasSuffix(".tmp") {
             return true
         }

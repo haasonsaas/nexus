@@ -66,7 +66,7 @@ func TestParse(t *testing.T) {
 		{"core.browser", SourceCore, "", "browser", false},
 		{"mcp:server.tool", SourceMCP, "server", "tool", false},
 		{"edge:id.tool", SourceEdge, "id", "tool", false},
-		{"legacy_tool", SourceCore, "", "legacy_tool", false}, // Legacy format
+		{"legacy_tool", SourceCore, "", "legacy_tool", false}, // Compatibility format
 		{"mcp:", "", "", "", true},                            // Invalid
 		{"mcp:server", "", "", "", true},                      // Missing tool
 		{"edge:.", "", "", "", true},                          // Empty parts

@@ -539,7 +539,7 @@ func TestEligibilityResult_Struct(t *testing.T) {
 }
 
 func TestGatingContext_CheckEnvOrConfig_WithTempEnvVar(t *testing.T) {
-	// Set a temp env var
+	// Set a test env var
 	key := "TEST_GATING_VAR_XYZ"
 	os.Setenv(key, "test-value")
 	defer os.Unsetenv(key)

@@ -23,7 +23,7 @@ const (
 	PhaseServices
 	// PhaseConnections closes external connections (databases, APIs).
 	PhaseConnections
-	// PhaseCleanup performs final cleanup (temp files, logs).
+	// PhaseCleanup performs final cleanup (scratch files, logs).
 	PhaseCleanup
 	phaseCount // sentinel for iteration
 )

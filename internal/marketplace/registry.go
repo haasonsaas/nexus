@@ -308,7 +308,7 @@ type SearchOptions struct {
 	// Limit limits the number of results.
 	Limit int
 
-	// IncludeDeprecated includes deprecated plugins.
+	// IncludeDeprecated includes superseded plugins.
 	IncludeDeprecated bool
 }
 

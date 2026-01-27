@@ -52,7 +52,7 @@ type DiscoveryConfig struct {
 	// SecretAccessKey for explicit AWS credentials (optional)
 	SecretAccessKey string
 
-	// SessionToken for temporary credentials (optional)
+	// SessionToken for short-lived credentials (optional)
 	SessionToken string
 }
 

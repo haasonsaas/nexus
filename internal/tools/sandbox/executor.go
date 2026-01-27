@@ -234,7 +234,7 @@ func (e *Executor) executeCode(ctx context.Context, params *ExecuteParams) (*Exe
 	return result, nil
 }
 
-// prepareWorkspace creates a temporary directory with code and files.
+// prepareWorkspace creates a scratch directory with code and files.
 func prepareWorkspace(params *ExecuteParams) (string, error) {
 	workspace, err := os.MkdirTemp("", "sandbox-*")
 	if err != nil {

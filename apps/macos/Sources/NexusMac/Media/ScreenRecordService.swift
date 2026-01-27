@@ -167,7 +167,7 @@ final class ScreenRecordService: NSObject {
 
         assetWriter?.cancelWriting()
 
-        // Clean up temp file
+        // Clean up scratch file
         if let url = recordingURL {
             try? FileManager.default.removeItem(at: url)
         }

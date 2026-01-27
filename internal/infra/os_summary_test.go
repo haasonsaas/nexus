@@ -178,7 +178,7 @@ func TestGetWindowsVersion(t *testing.T) {
 }
 
 func TestParseOSRelease(t *testing.T) {
-	// Create a temporary os-release file for testing
+	// Create a test os-release file for testing
 	tmpDir := t.TempDir()
 	osReleasePath := filepath.Join(tmpDir, "os-release")
 

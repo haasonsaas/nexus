@@ -670,7 +670,7 @@ func TestProcess_LifecycleEvents(t *testing.T) {
 	}
 
 	// Should have lifecycle events
-	// Note: After refactor to unified event model, some legacy events are no longer emitted:
+	// Note: After refactor to unified event model, some compatibility events are no longer emitted:
 	// - thinking_start/end: removed (artificial markers)
 	// - tool_completed: now emitted as ToolResult instead of RuntimeEvent
 	eventTypes := make(map[models.RuntimeEventType]int)

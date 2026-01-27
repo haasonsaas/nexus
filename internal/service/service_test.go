@@ -266,7 +266,7 @@ func TestInstallUserService_Linux(t *testing.T) {
 		t.Skip("skipping Linux-specific test")
 	}
 
-	// Create temp directory to act as XDG_CONFIG_HOME
+	// Create a test directory to act as XDG_CONFIG_HOME
 	tmpDir := t.TempDir()
 	originalXDG := os.Getenv("XDG_CONFIG_HOME")
 	os.Setenv("XDG_CONFIG_HOME", tmpDir)

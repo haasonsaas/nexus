@@ -436,7 +436,7 @@ func parseSystemdShow(output string) SystemdShowInfo {
 	return info
 }
 
-// LegacySystemdUnit represents a legacy systemd unit that may need cleanup.
+// LegacySystemdUnit represents a prior systemd unit that may need cleanup.
 type LegacySystemdUnit struct {
 	Name     string
 	UnitPath string
@@ -444,7 +444,7 @@ type LegacySystemdUnit struct {
 	Exists   bool
 }
 
-// FindLegacySystemdUnits finds legacy systemd units that may need cleanup.
+// FindLegacySystemdUnits finds prior systemd units that may need cleanup.
 func FindLegacySystemdUnits(env map[string]string) ([]LegacySystemdUnit, error) {
 	if env == nil {
 		env = make(map[string]string)
@@ -452,7 +452,7 @@ func FindLegacySystemdUnits(env map[string]string) ([]LegacySystemdUnit, error) 
 
 	var results []LegacySystemdUnit
 
-	// No legacy names defined yet for nexus
+	// No prior names defined yet for Nexus
 	legacyNames := []string{}
 
 	home := resolveHomeDir(env)
@@ -491,7 +491,7 @@ func FindLegacySystemdUnits(env map[string]string) ([]LegacySystemdUnit, error) 
 	return results, nil
 }
 
-// UninstallLegacySystemdUnits removes legacy systemd units.
+// UninstallLegacySystemdUnits removes prior systemd units.
 func UninstallLegacySystemdUnits(env map[string]string) ([]LegacySystemdUnit, error) {
 	units, err := FindLegacySystemdUnits(env)
 	if err != nil {

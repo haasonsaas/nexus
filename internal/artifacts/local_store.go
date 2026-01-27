@@ -58,11 +58,11 @@ func (s *LocalStore) Put(ctx context.Context, artifactID string, data io.Reader,
 	filename := artifactID + ext
 	filePath := filepath.Join(dir, filename)
 
-	// Write to temp file first, then atomic rename
+	// Write to scratch file first, then atomic rename
 	tmpPath := filePath + ".tmp"
 	f, err := os.Create(tmpPath)
 	if err != nil {
-		return "", fmt.Errorf("create temp file: %w", err)
+		return "", fmt.Errorf("create scratch file: %w", err)
 	}
 
 	if _, err := io.Copy(f, data); err != nil {

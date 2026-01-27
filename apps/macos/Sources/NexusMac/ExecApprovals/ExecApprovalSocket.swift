@@ -507,7 +507,7 @@ final class ExecApprovalSocket {
     }
 }
 
-// MARK: - Legacy Compatibility Extension
+// MARK: - Compatibility Extension
 
 extension ExecApprovalSocket {
     /// Start the socket server if not already running

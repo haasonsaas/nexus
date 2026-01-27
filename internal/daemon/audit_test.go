@@ -479,7 +479,7 @@ WantedBy=default.target
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create temporary unit file
+			// Create a test unit file
 			tmpDir := t.TempDir()
 			unitPath := filepath.Join(tmpDir, "nexus.service")
 			if err := os.WriteFile(unitPath, []byte(tt.content), 0644); err != nil {
@@ -635,7 +635,7 @@ func TestAuditLaunchdPlist(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create temporary plist file
+			// Create a test plist file
 			tmpDir := t.TempDir()
 			plistPath := filepath.Join(tmpDir, "com.haasonsaas.nexus.plist")
 			if err := os.WriteFile(plistPath, []byte(tt.content), 0644); err != nil {

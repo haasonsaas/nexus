@@ -260,7 +260,7 @@ func (p *AnthropicProvider) Name() string {
 //   - Context window size in tokens
 //   - Vision support capability
 //
-// The list includes both current and legacy models. Model IDs include version
+// The list includes both current and prior-generation models. Model IDs include version
 // suffixes (e.g., "20250514") for API compatibility.
 //
 // Returns:
@@ -278,7 +278,7 @@ func (p *AnthropicProvider) Name() string {
 //   - Claude Sonnet 4: Latest balanced model (200K context, vision)
 //   - Claude Opus 4: Most capable model (200K context, vision)
 //   - Claude 3.5 Sonnet: Previous generation (200K context, vision)
-//   - Claude 3 Opus/Sonnet/Haiku: Legacy models (200K context, vision)
+//   - Claude 3 Opus/Sonnet/Haiku: Prior-generation models (200K context, vision)
 func (p *AnthropicProvider) Models() []agent.Model {
 	return []agent.Model{
 		{
@@ -1317,7 +1317,7 @@ func (p *AnthropicProvider) isRetryableError(err error) bool {
 		return true
 	}
 
-	// Server errors (5xx) - temporary Anthropic infrastructure issues
+	// Server errors (5xx) - transient Anthropic infrastructure issues
 	if strings.Contains(errMsg, "500") ||
 		strings.Contains(errMsg, "502") ||
 		strings.Contains(errMsg, "503") ||

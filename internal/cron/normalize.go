@@ -266,7 +266,7 @@ func coercePayload(input map[string]interface{}) *Payload {
 		payload.Kind = PayloadKind(kind)
 	}
 
-	// Handle channel with legacy provider migration
+	// Handle channel with provider migration from earlier configs
 	if channel, ok := input["channel"].(string); ok && strings.TrimSpace(channel) != "" {
 		payload.Channel = normalizeChannel(channel)
 	} else if provider, ok := input["provider"].(string); ok && strings.TrimSpace(provider) != "" {

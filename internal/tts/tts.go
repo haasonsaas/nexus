@@ -61,7 +61,7 @@ type Config struct {
 	TimeoutSeconds int `yaml:"timeout_seconds"`
 
 	// OutputDir is the directory for generated audio files.
-	// Default: system temp directory
+	// Default: system scratch directory
 	OutputDir string `yaml:"output_dir"`
 
 	// Edge configures the Edge TTS provider.
@@ -780,7 +780,7 @@ func ValidateConfig(cfg *Config) error {
 	return nil
 }
 
-// Cleanup removes a temporary audio file created by TTS.
+// Cleanup removes the generated audio file created by TTS.
 func Cleanup(result *Result) error {
 	if result == nil || result.AudioPath == "" {
 		return nil

@@ -60,7 +60,7 @@ func TestLocalSource_Discover_NonexistentDirectory(t *testing.T) {
 }
 
 func TestLocalSource_Discover_NotADirectory(t *testing.T) {
-	// Create a temporary file (not directory)
+	// Create a test file (not directory)
 	f, err := os.CreateTemp("", "test-template-*")
 	if err != nil {
 		t.Fatalf("create temp file: %v", err)
@@ -78,7 +78,7 @@ func TestLocalSource_Discover_NotADirectory(t *testing.T) {
 }
 
 func TestLocalSource_Discover_EmptyDirectory(t *testing.T) {
-	// Create a temporary directory
+	// Create a test directory
 	dir, err := os.MkdirTemp("", "test-templates-*")
 	if err != nil {
 		t.Fatalf("create temp dir: %v", err)
@@ -98,7 +98,7 @@ func TestLocalSource_Discover_EmptyDirectory(t *testing.T) {
 }
 
 func TestLocalSource_Discover_WithTemplate(t *testing.T) {
-	// Create a temporary directory structure
+	// Create a test directory structure
 	dir, err := os.MkdirTemp("", "test-templates-*")
 	if err != nil {
 		t.Fatalf("create temp dir: %v", err)
@@ -272,7 +272,7 @@ func TestDiscoverAll(t *testing.T) {
 	})
 
 	t.Run("priority ordering", func(t *testing.T) {
-		// Create two temp directories with same-named template
+		// Create two test directories with same-named template
 		dir1, err := os.MkdirTemp("", "test-low-*")
 		if err != nil {
 			t.Fatalf("create temp dir: %v", err)

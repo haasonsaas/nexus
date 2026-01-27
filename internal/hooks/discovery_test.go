@@ -209,7 +209,7 @@ func TestValidateHook(t *testing.T) {
 }
 
 func TestLocalSourceDiscover(t *testing.T) {
-	// Create temp directory structure
+	// Create a test directory structure
 	tmpDir := t.TempDir()
 	hooksDir := filepath.Join(tmpDir, "hooks")
 	if err := os.MkdirAll(hooksDir, 0o755); err != nil {

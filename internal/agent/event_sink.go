@@ -356,7 +356,7 @@ func eventToChunk(e models.AgentEvent) *ResponseChunk {
 
 	case models.AgentEventIterStarted, models.AgentEventIterFinished,
 		models.AgentEventToolStarted, models.AgentEventToolStdout, models.AgentEventToolStderr:
-		// Convert to legacy RuntimeEvent for backwards compatibility
+		// Convert to compatibility RuntimeEvent for older clients
 		return &ResponseChunk{
 			Event: legacyEventFromAgentEvent(e),
 		}

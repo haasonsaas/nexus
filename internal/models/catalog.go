@@ -78,10 +78,10 @@ type Model struct {
 	// Aliases are alternative names for this model
 	Aliases []string `json:"aliases,omitempty"`
 
-	// Deprecated indicates if this model is deprecated
+	// Deprecated indicates if this model is superseded
 	Deprecated bool `json:"deprecated,omitempty"`
 
-	// ReplacedBy is the recommended replacement for deprecated models
+	// ReplacedBy is the recommended replacement for superseded models
 	ReplacedBy string `json:"replaced_by,omitempty"`
 
 	// ReleaseDate is when the model was released (YYYY-MM-DD)
@@ -223,7 +223,7 @@ type Filter struct {
 	// Minimum context window
 	MinContextWindow int
 
-	// Include deprecated models
+	// Include superseded models
 	IncludeDeprecated bool
 }
 
@@ -273,7 +273,7 @@ func (f *Filter) Matches(m *Model) bool {
 		return false
 	}
 
-	// Check deprecated
+	// Check superseded state
 	if !f.IncludeDeprecated && m.Deprecated {
 		return false
 	}

@@ -161,7 +161,7 @@ func TestNewLogger_OutputDestinations(t *testing.T) {
 }
 
 func TestNewLogger_FileOutput(t *testing.T) {
-	// Create temp directory for test file
+	// Create a test directory for the log file
 	tmpDir := t.TempDir()
 	logPath := filepath.Join(tmpDir, "audit.log")
 

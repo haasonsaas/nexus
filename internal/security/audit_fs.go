@@ -247,7 +247,7 @@ func checkConfigFile(path string, opts AuditOptions) ([]AuditFinding, error) {
 
 // Backward compatibility check IDs mapping
 const (
-	// Legacy check IDs - keep for backward compatibility
+	// Compatibility check IDs - keep for backward compatibility
 	FS001 = "FS-001" // symlink state dir
 	FS002 = "FS-002" // world-writable dir
 	FS003 = "FS-003" // group-writable dir

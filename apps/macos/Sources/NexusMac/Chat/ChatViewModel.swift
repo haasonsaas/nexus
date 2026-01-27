@@ -406,17 +406,17 @@ final class ChatViewModel {
     }
 }
 
-// MARK: - Keyboard Shortcuts
+// MARK: - Key Bindings
 
 extension ChatViewModel {
-    /// Handle keyboard shortcut for sending
+    /// Handle key binding for sending
     func handleSendShortcut() {
         Task {
             await send()
         }
     }
 
-    /// Handle keyboard shortcut for aborting
+    /// Handle key binding for aborting
     func handleAbortShortcut() {
         if isStreaming || isSending {
             Task {
@@ -425,7 +425,7 @@ extension ChatViewModel {
         }
     }
 
-    /// Handle keyboard shortcut for new session
+    /// Handle key binding for new session
     func handleNewSessionShortcut() {
         Task {
             await newSession()

@@ -67,7 +67,7 @@ final class KeyboardController {
         logger.debug("keyboard pressed key=\(key.rawValue) modifiers=\(modifiers.rawValue)")
     }
 
-    /// Execute a keyboard shortcut (e.g., Cmd+C)
+    /// Execute a key binding (e.g., Cmd+C)
     func shortcut(_ key: KeyCode, command: Bool = false, shift: Bool = false, option: Bool = false, control: Bool = false) async {
         var modifiers: CGEventFlags = []
         if command { modifiers.insert(.maskCommand) }

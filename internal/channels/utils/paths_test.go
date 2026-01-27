@@ -108,7 +108,7 @@ func TestExpandPathWithDefault(t *testing.T) {
 }
 
 func TestEnsureDir(t *testing.T) {
-	// Create a temp directory for testing
+	// Create a test directory for testing
 	tmpDir := t.TempDir()
 
 	tests := []struct {

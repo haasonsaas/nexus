@@ -44,7 +44,7 @@ func WriteRawConfig(path string, raw map[string]any) error {
 	return os.WriteFile(path, data, mode)
 }
 
-// ApplyConfigMigrations updates legacy config keys in-place.
+// ApplyConfigMigrations updates prior config keys in-place.
 func ApplyConfigMigrations(raw map[string]any) (MigrationReport, error) {
 	report := MigrationReport{ToVersion: config.CurrentVersion}
 	if raw == nil {

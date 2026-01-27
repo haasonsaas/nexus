@@ -145,7 +145,7 @@ func TestTracePlugin_Redaction(t *testing.T) {
 }
 
 func TestTracePlugin_FileIO(t *testing.T) {
-	// Create temp file
+	// Create a test file
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "trace.jsonl")
 

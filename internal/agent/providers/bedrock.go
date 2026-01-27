@@ -60,7 +60,7 @@ type BedrockConfig struct {
 	// SecretAccessKey for explicit credentials (optional)
 	SecretAccessKey string
 
-	// SessionToken for temporary credentials (optional)
+	// SessionToken for short-lived credentials (optional)
 	SessionToken string
 
 	// DefaultModel is the model to use when not specified (default: anthropic.claude-3-sonnet-20240229-v1:0)

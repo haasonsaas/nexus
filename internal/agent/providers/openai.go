@@ -727,7 +727,7 @@ func (p *OpenAIProvider) isRetryableError(err error) bool {
 		return true
 	}
 
-	// Server errors (5xx) - temporary OpenAI infrastructure issues
+	// Server errors (5xx) - transient OpenAI infrastructure issues
 	if contains(errMsg, "500") || contains(errMsg, "502") || contains(errMsg, "503") || contains(errMsg, "504") {
 		return true
 	}

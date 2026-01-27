@@ -49,7 +49,7 @@ const (
 	EventGmailReceived EventType = "gmail.received"
 	EventGmailError    EventType = "gmail.error"
 
-	// Lifecycle events (legacy, prefer gateway.* events)
+	// Lifecycle events (compatibility; prefer gateway.* events)
 	EventStartup  EventType = "lifecycle.startup"
 	EventShutdown EventType = "lifecycle.shutdown"
 )

@@ -69,7 +69,7 @@ func handleCameraSnap(ctx context.Context, input string) (*ToolResult, error) {
 		return nil, fmt.Errorf("invalid params: %w", err)
 	}
 
-	// Create temp file for output
+	// Create a scratch file for output
 	tmpFile := filepath.Join(os.TempDir(), fmt.Sprintf("nexus_camera_%s.jpg", uuid.NewString()[:8]))
 	defer os.Remove(tmpFile)
 

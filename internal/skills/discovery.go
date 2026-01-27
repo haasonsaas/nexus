@@ -535,11 +535,11 @@ func (s *RegistrySource) downloadFile(ctx context.Context, url, destPath string)
 		return fmt.Errorf("download returned %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Write to temp file first
+	// Write to scratch file first
 	tmpFile := destPath + ".tmp"
 	f, err := os.Create(tmpFile)
 	if err != nil {
-		return fmt.Errorf("create temp file: %w", err)
+		return fmt.Errorf("create scratch file: %w", err)
 	}
 
 	_, err = io.Copy(f, resp.Body)

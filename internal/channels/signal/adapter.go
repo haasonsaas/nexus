@@ -166,7 +166,7 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	var attachmentPaths []string
 	for _, att := range msg.Attachments {
 		if att.URL != "" {
-			// Download to temp file
+			// Download to scratch file
 			path, err := downloadToTempFile(att.URL)
 			if err != nil {
 				a.Logger().Error("failed to download attachment",
@@ -178,11 +178,11 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 		}
 	}
 
-	// Clean up temp files after send completes (or on error)
+	// Clean up scratch files after send completes (or on error)
 	defer func() {
 		for _, path := range attachmentPaths {
 			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-				a.Logger().Debug("failed to remove temp file", "path", path, "error", err)
+				a.Logger().Debug("failed to remove scratch file", "path", path, "error", err)
 			}
 		}
 	}()
@@ -486,9 +486,9 @@ func expandPath(path string) string {
 	return path
 }
 
-// downloadToTempFile downloads a URL to a temporary file.
+// downloadToTempFile downloads a URL to a scratch file.
 func downloadToTempFile(url string) (string, error) {
-	// Create temp file
+	// Create scratch file
 	f, err := os.CreateTemp("", "signal-attachment-*")
 	if err != nil {
 		return "", err

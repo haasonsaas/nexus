@@ -269,7 +269,7 @@ struct UsageSkeletonView: View {
     }
 }
 
-// MARK: - Legacy Support
+// MARK: - Compatibility Support
 
 struct UsageRowView: View {
     let row: UsageRow

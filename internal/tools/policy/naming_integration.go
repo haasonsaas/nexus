@@ -64,7 +64,7 @@ func (r *ToolRegistry) RegisterMCPTool(serverID, toolName string) error {
 		return err
 	}
 
-	// Also register with the legacy resolver for backwards compatibility
+	// Also register with the compatibility resolver for backwards compatibility
 	if r.resolver != nil {
 		r.resolver.RegisterMCPServer(serverID, []string{toolName})
 	}
@@ -84,7 +84,7 @@ func (r *ToolRegistry) RegisterMCPServer(serverID string, tools []string) error 
 		}
 	}
 
-	// Register with legacy resolver
+	// Register with compatibility resolver
 	if r.resolver != nil {
 		r.resolver.RegisterMCPServer(serverID, tools)
 	}

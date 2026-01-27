@@ -122,7 +122,7 @@ func Parse(canonical string) (ToolIdentity, error) {
 		return EdgeTool(parts[0], parts[1]), nil
 	}
 
-	// Legacy format - treat as core tool
+	// Compatibility format - treat as core tool
 	return CoreTool(canonical), nil
 }
 
@@ -399,7 +399,7 @@ func hashString(s string) string {
 }
 
 // DefaultCoreAliases returns standard aliases for core tools.
-// These provide backwards compatibility with legacy tool names.
+// These provide backwards compatibility with prior tool names.
 func DefaultCoreAliases() map[string]string {
 	return map[string]string{
 		// Backwards compatibility

@@ -146,7 +146,7 @@ agents:
 }
 
 func TestLoadConfig(t *testing.T) {
-	// Create temp directory
+	// Create a test directory
 	tmpDir := t.TempDir()
 
 	t.Run("load valid config", func(t *testing.T) {

@@ -4546,7 +4546,7 @@ func runEventsShow(cmd *cobra.Command, configPath string, runID string, format s
 		return nil
 	}
 
-	// Fallback to in-memory event store (legacy behavior)
+	// Fallback to in-memory event store (previous default)
 	store := observability.NewMemoryEventStore(10000)
 
 	events, err := store.GetByRunID(runID)

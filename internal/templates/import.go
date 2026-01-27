@@ -324,10 +324,10 @@ func (i *Importer) ImportFromGit(repoURL, branch, subPath string, opts ImportOpt
 		return nil, fmt.Errorf("repository URL is required")
 	}
 
-	// Create temporary directory for clone
+	// Create a staging directory for clone
 	tempDir, err := os.MkdirTemp("", "nexus-template-*")
 	if err != nil {
-		return nil, fmt.Errorf("create temp directory: %w", err)
+		return nil, fmt.Errorf("create staging directory: %w", err)
 	}
 	defer os.RemoveAll(tempDir)
 

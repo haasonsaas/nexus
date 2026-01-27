@@ -184,13 +184,13 @@ func TestFilter_Deprecated(t *testing.T) {
 		Deprecated: true,
 	}
 
-	// Default excludes deprecated
+	// Default excludes retired models
 	filter := &Filter{}
 	if filter.Matches(deprecated) {
 		t.Error("should not match deprecated by default")
 	}
 
-	// Explicitly include deprecated
+	// Explicitly include retired models
 	filter = &Filter{IncludeDeprecated: true}
 	if !filter.Matches(deprecated) {
 		t.Error("should match when IncludeDeprecated is true")

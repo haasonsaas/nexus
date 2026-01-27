@@ -53,7 +53,7 @@ func (k HierarchicalKey) MainKey() string {
 }
 
 // ParseHierarchicalKey parses a hierarchical key string.
-// Supports both legacy format (agentId:channel:channelId) and new format (agent:agentId:channel:channelId).
+// Supports both prior format (agentId:channel:channelId) and new format (agent:agentId:channel:channelId).
 func ParseHierarchicalKey(key string) (HierarchicalKey, error) {
 	parts := strings.Split(key, ":")
 	if len(parts) < 3 {
@@ -73,7 +73,7 @@ func ParseHierarchicalKey(key string) (HierarchicalKey, error) {
 		return result, nil
 	}
 
-	// Legacy format: agentId:channel:channelId
+	// Prior format: agentId:channel:channelId
 	result := HierarchicalKey{
 		AgentID:   parts[0],
 		Channel:   models.ChannelType(parts[1]),

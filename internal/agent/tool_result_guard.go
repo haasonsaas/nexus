@@ -15,13 +15,13 @@ const DefaultMaxToolResultSize = 64 * 1024
 // builtinSecretPatterns contains pre-compiled patterns for detecting common secrets.
 // These are always applied when SanitizeSecrets is enabled.
 var builtinSecretPatterns = []*regexp.Regexp{
-	// API keys: api_key=xxx, apiKey: xxx, etc.
+	// API keys: api_key=<key>, apiKey: <key>, etc.
 	regexp.MustCompile(`(?i)(api[_-]?key|apikey)\s*[:=]\s*['"]?[\w-]{20,}['"]?`),
 	// Bearer tokens: Bearer eyJhbGc...
 	regexp.MustCompile(`(?i)bearer\s+[\w-\.]+`),
 	// AWS keys and secrets
 	regexp.MustCompile(`(?i)(aws|amazon).*?(key|secret|token)\s*[:=]\s*['"]?[\w/+=]{20,}['"]?`),
-	// Generic secrets: password=xxx, secret: xxx, token=xxx
+	// Generic secrets: password=<value>, secret=<value>, token=<value>
 	regexp.MustCompile(`(?i)(password|passwd|secret|token)\s*[:=]\s*['"]?[^\s'"]{8,}['"]?`),
 	// Private keys (PEM format)
 	regexp.MustCompile(`-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----`),

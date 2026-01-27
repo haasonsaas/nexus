@@ -1,6 +1,7 @@
 package infra
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -51,11 +52,7 @@ func TestSystemEventsQueue_MaxEventsLimit(t *testing.T) {
 	q.MaxEvents = 5
 
 	for i := 1; i <= 10; i++ {
-		q.Enqueue("session1", "Event", "") // Use different text each time
-		// Workaround for consecutive duplicate suppression
-		if i < 10 {
-			q.Enqueue("session1", "spacer", "")
-		}
+		q.Enqueue("session1", fmt.Sprintf("Event %d", i), "")
 	}
 
 	// Should only have the last 5 events

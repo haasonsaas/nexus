@@ -259,7 +259,7 @@ func TestResolveToolDisplay(t *testing.T) {
 
 	t.Run("grep tool with multiple detail keys", func(t *testing.T) {
 		args := map[string]interface{}{
-			"pattern": "TODO",
+			"pattern": "FLAG",
 			"path":    "/project",
 		}
 		display := ResolveToolDisplay("grep", args, "")
@@ -268,8 +268,8 @@ func TestResolveToolDisplay(t *testing.T) {
 			t.Errorf("expected emoji '🔍', got %q", display.Emoji)
 		}
 		// Detail should contain both pattern and path
-		if display.Detail != "TODO · /project" {
-			t.Errorf("expected detail 'TODO · /project', got %q", display.Detail)
+		if display.Detail != "FLAG · /project" {
+			t.Errorf("expected detail 'FLAG · /project', got %q", display.Detail)
 		}
 	})
 

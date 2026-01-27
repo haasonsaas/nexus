@@ -147,7 +147,7 @@ func (a *ToolAdapter) Execute(ctx context.Context, params json.RawMessage) (*age
 
 // waitForApproval waits for an approval decision when required.
 func (a *ToolAdapter) waitForApproval(ctx context.Context, approvalErr error) error {
-	// Extract the request ID from the error (format: "approval required: request_id=xxx")
+	// Extract the request ID from the error (format: "approval required: request_id=<id>")
 	errStr := approvalErr.Error()
 	var requestID string
 	if _, err := fmt.Sscanf(errStr, "approval required: request_id=%s", &requestID); err != nil {

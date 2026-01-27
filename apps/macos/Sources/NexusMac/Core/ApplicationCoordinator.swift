@@ -201,9 +201,9 @@ final class ApplicationCoordinator {
     func handleURL(_ url: URL) -> Bool {
         logger.info("handling URL: \(url.absoluteString)")
 
-        // nexus://chat?id=xxx
-        // nexus://prompt?id=xxx
-        // nexus://action?name=xxx
+        // nexus://chat?id=<session_id>
+        // nexus://prompt?id=<prompt_id>
+        // nexus://action?name=<action_name>
 
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
               let host = components.host else {

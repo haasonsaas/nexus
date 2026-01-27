@@ -372,7 +372,7 @@ func (t *ResolveTicketTool) Schema() json.RawMessage {
 			},
 			"close_code": {
 				"type": "string",
-				"description": "Close code (e.g., Solved (Permanently), Solved (Workaround))",
+				"description": "Close code (ServiceNow-defined values)",
 				"enum": ["Solved (Permanently)", "Solved (Workaround)", "Not Solved (Not Reproducible)", "Not Solved (Too Costly)", "Closed/Resolved by Caller"]
 			}
 		},

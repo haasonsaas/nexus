@@ -4,7 +4,7 @@ import Foundation
 
 /// Defines all actions that can be sent from an agent to the UI (A2UI) for canvas control.
 /// These actions allow agents to control canvas windows programmatically.
-enum A2UIAction: Sendable, Equatable {
+enum A2UIAction: Equatable, @unchecked Sendable {
     /// Navigate the canvas to a specific URL
     case navigate(url: URL)
 

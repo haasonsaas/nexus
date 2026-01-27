@@ -289,7 +289,7 @@ final class PermissionManager {
         refreshTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(5))
-                await self?.refreshAllStatuses()
+                self?.refreshAllStatuses()
             }
         }
     }

@@ -32,7 +32,7 @@ enum VoiceWakeForwarder {
     @discardableResult
     static func forward(transcript: String, sessionId: String? = nil) async -> Result<Void, ForwardError> {
         let payload = prefixedTranscript(transcript)
-        logger.info("Forwarding voice transcript (\(transcript.count) chars)")
+        logger.info("Forwarding voice transcript (\(payload.count) chars)")
         // Integration point: webSocketService.sendChat(sessionId: sessionId, content: payload)
         return .success(())
     }

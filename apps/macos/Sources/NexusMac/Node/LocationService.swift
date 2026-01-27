@@ -33,7 +33,7 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
             timeoutTask?.cancel()
             timeoutTask = Task { [weak self] in
                 try? await Task.sleep(for: timeout)
-                await self?.finish(.failure(LocationError.timeout))
+                self?.finish(.failure(LocationError.timeout))
             }
         }
     }

@@ -362,8 +362,11 @@ final class MenuBarBadgeObserver {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.pendingApprovals += 1
-            self?.updateBadge()
+            Task { @MainActor in
+                guard let self else { return }
+                self.pendingApprovals += 1
+                self.updateBadge()
+            }
         }
 
         NotificationCenter.default.addObserver(
@@ -371,8 +374,11 @@ final class MenuBarBadgeObserver {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.pendingApprovals = max(0, (self?.pendingApprovals ?? 0) - 1)
-            self?.updateBadge()
+            Task { @MainActor in
+                guard let self else { return }
+                self.pendingApprovals = max(0, self.pendingApprovals - 1)
+                self.updateBadge()
+            }
         }
     }
 

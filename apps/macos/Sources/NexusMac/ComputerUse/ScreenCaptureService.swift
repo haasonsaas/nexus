@@ -80,31 +80,28 @@ final class ScreenCaptureService {
 
     /// Capture a specific window
     func captureWindow(windowID: CGWindowID, options: CaptureOptions = CaptureOptions()) async throws -> CaptureResult {
-        let windowList = CGWindowListCopyWindowInfo([.optionIncludingWindow], windowID) as? [[String: Any]]
-        guard let windowInfo = windowList?.first,
-              let bounds = windowInfo[kCGWindowBounds as String] as? [String: CGFloat],
-              let x = bounds["X"],
-              let y = bounds["Y"],
-              let width = bounds["Width"],
-              let height = bounds["Height"] else {
+        let shareableContent = try await SCShareableContent.current
+        guard let window = shareableContent.windows.first(where: { $0.windowID == windowID }) else {
             throw CaptureError.windowNotFound
         }
 
-        let rect = CGRect(x: x, y: y, width: width, height: height)
+        let rect = window.frame
+        let filter = SCContentFilter(desktopIndependentWindow: window)
+        let scale = CGFloat(filter.pointPixelScale)
 
-        guard let cgImage = CGWindowListCreateImage(
-            rect,
-            .optionIncludingWindow,
-            windowID,
-            options.includesCursor ? [.boundsIgnoreFraming] : [.boundsIgnoreFraming, .nominalResolution]
-        ) else {
-            throw CaptureError.captureFailed
-        }
+        let config = SCStreamConfiguration()
+        config.width = max(1, Int(rect.width * scale))
+        config.height = max(1, Int(rect.height * scale))
+        config.showsCursor = options.includesCursor
+        config.scalesToFit = false
+        config.capturesAudio = false
+        config.ignoreShadowsSingleWindow = true
 
-        let image = NSImage(cgImage: cgImage, size: NSSize(width: width, height: height))
+        let cgImage = try await captureWindowImage(filter: filter, config: config)
+        let image = NSImage(cgImage: cgImage, size: NSSize(width: rect.width, height: rect.height))
         let data = try encodeImage(image, format: options.format)
 
-        logger.debug("window captured id=\(windowID) size=\(Int(width))x\(Int(height))")
+        logger.debug("window captured id=\(windowID) size=\(Int(rect.width))x\(Int(rect.height))")
 
         return CaptureResult(
             image: image,
@@ -182,6 +179,22 @@ final class ScreenCaptureService {
         }
 
         return NSImage(cgImage: cgImage, size: size)
+    }
+
+    private func captureWindowImage(filter: SCContentFilter, config: SCStreamConfiguration) async throws -> CGImage {
+        try await withCheckedThrowingContinuation { continuation in
+            SCScreenshotManager.captureImage(contentFilter: filter, configuration: config) { image, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                guard let image else {
+                    continuation.resume(throwing: CaptureError.captureFailed)
+                    return
+                }
+                continuation.resume(returning: image)
+            }
+        }
     }
 
     private func encodeImage(_ image: NSImage, format: CaptureOptions.ImageFormat) throws -> Data {

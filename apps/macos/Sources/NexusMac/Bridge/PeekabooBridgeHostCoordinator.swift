@@ -604,7 +604,7 @@ public final class PeekabooBridgeHostCoordinator {
 
     private func handleAuthResponse(_ frame: AuthFrame, from connectionId: String) async {
         guard let peerPublicKey = frame.publicKey,
-              let signature = frame.signature else {
+              let _ = frame.signature else {
             logger.error("Invalid auth response from \(connectionId, privacy: .public)")
             await sendAuthRejected(to: connectionId, reason: "Missing credentials")
             return
@@ -735,7 +735,7 @@ public final class PeekabooBridgeHostCoordinator {
 
             guard !Task.isCancelled else { return }
 
-            if let service = await self?.discoveredServices[peerId] {
+            if let service = self?.discoveredServices[peerId] {
                 await self?.connectToService(service)
             }
         }

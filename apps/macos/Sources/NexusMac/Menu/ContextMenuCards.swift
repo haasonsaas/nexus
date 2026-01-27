@@ -705,7 +705,7 @@ final class ContextCardManager {
         updateTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(5))
-                await self?.refresh()
+                self?.refresh()
             }
         }
 
@@ -715,7 +715,9 @@ final class ContextCardManager {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.refresh()
+            Task { @MainActor in
+                self?.refresh()
+            }
         }
 
         NotificationCenter.default.addObserver(
@@ -723,7 +725,9 @@ final class ContextCardManager {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.refresh()
+            Task { @MainActor in
+                self?.refresh()
+            }
         }
 
         logger.debug("context card manager started observing")

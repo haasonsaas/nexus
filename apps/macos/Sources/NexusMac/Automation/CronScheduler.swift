@@ -549,7 +549,6 @@ final class CronScheduler {
         if let lastRun = job.lastRunAt {
             let lastMinute = calendar.component(.minute, from: lastRun)
             let lastHour = calendar.component(.hour, from: lastRun)
-            let lastDay = calendar.component(.day, from: lastRun)
 
             if calendar.isDate(date, inSameDayAs: lastRun) &&
                lastHour == hour &&

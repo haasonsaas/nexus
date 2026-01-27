@@ -70,6 +70,14 @@ final class AppStateStore {
         }
     }
 
+    var gatewayUseTLS: Bool = false {
+        didSet {
+            if oldValue != gatewayUseTLS {
+                save(Keys.gatewayUseTLS, gatewayUseTLS)
+            }
+        }
+    }
+
     // MARK: - Remote Settings
 
     var remoteHost: String? {
@@ -221,6 +229,7 @@ final class AppStateStore {
         didSet {
             if oldValue != launchAtLogin {
                 save(Keys.launchAtLogin, launchAtLogin)
+                applyLaunchAtLoginSetting()
             }
         }
     }
@@ -256,6 +265,7 @@ final class AppStateStore {
         static let isPaused = "isPaused"
         static let gatewayPort = "gatewayPort"
         static let gatewayAutostart = "gatewayAutostart"
+        static let gatewayUseTLS = "gatewayUseTLS"
         static let remoteHost = "remoteHost"
         static let remoteUser = "remoteUser"
         static let remoteIdentityFile = "remoteIdentityFile"
@@ -296,6 +306,7 @@ final class AppStateStore {
         // Gateway
         gatewayPort = defaults.integer(forKey: Keys.gatewayPort).nonZero ?? 8080
         gatewayAutostart = defaults.object(forKey: Keys.gatewayAutostart) == nil ? true : defaults.bool(forKey: Keys.gatewayAutostart)
+        gatewayUseTLS = defaults.bool(forKey: Keys.gatewayUseTLS)
 
         // Remote
         remoteHost = defaults.string(forKey: Keys.remoteHost).nonEmpty
@@ -331,6 +342,8 @@ final class AppStateStore {
 
         // Onboarding
         hasCompletedOnboarding = defaults.bool(forKey: Keys.hasCompletedOnboarding)
+
+        applyLaunchAtLoginSetting()
     }
 
     // MARK: - Persistence
@@ -349,12 +362,17 @@ final class AppStateStore {
         }
     }
 
+    private func applyLaunchAtLoginSetting() {
+        LaunchAtLoginManager.shared.applyPreference(launchAtLogin)
+    }
+
     /// Reset all settings to defaults
     func resetToDefaults() {
         connectionMode = .unconfigured
         isPaused = false
         gatewayPort = 8080
         gatewayAutostart = true
+        gatewayUseTLS = false
         remoteHost = nil
         remoteUser = "root"
         remoteIdentityFile = nil

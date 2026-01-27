@@ -96,7 +96,7 @@ final class AppIntegration {
         guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId).first else {
             return false
         }
-        return app.activate(options: [.activateIgnoringOtherApps])
+        return app.activate(options: [.activateAllWindows])
     }
 
     /// Get running applications

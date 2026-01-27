@@ -141,7 +141,7 @@ final class GatewayConnectivityCoordinator {
                 return nil
             }
             var components = URLComponents()
-            components.scheme = "http"
+            components.scheme = state.gatewayUseTLS ? "https" : "http"
             components.host = host
             components.port = port
             return components.url
@@ -153,7 +153,11 @@ final class GatewayConnectivityCoordinator {
         guard let baseURL = effectiveURL else { return nil }
 
         var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
-        components?.scheme = "ws"
+        if baseURL.scheme == "https" {
+            components?.scheme = "wss"
+        } else {
+            components?.scheme = "ws"
+        }
         components?.path = "/\(path)"
 
         return components?.url
@@ -195,22 +199,16 @@ final class GatewayConnectivityCoordinator {
         lastRefreshAt = Date()
         refreshError = nil
 
-        do {
-            // Update current URL
-            currentEndpointURL = resolveEffectiveURL()
+        // Update current URL
+        currentEndpointURL = resolveEffectiveURL()
 
-            // Notify the control channel to refresh
-            await ControlChannel.shared.refreshEndpoint(reason: "connectivity coordinator refresh")
+        // Notify the control channel to refresh
+        await ControlChannel.shared.refreshEndpoint(reason: "connectivity coordinator refresh")
 
-            // Broadcast state to all subscribers
-            broadcastState()
+        // Broadcast state to all subscribers
+        broadcastState()
 
-            logger.info("endpoint refreshed url=\(self.currentEndpointURL?.absoluteString ?? "nil")")
-        } catch {
-            refreshError = error
-            logger.error("refresh failed: \(error.localizedDescription)")
-            broadcastState()
-        }
+        logger.info("endpoint refreshed url=\(self.currentEndpointURL?.absoluteString ?? "nil")")
     }
 
     /// Force reconnection with the current settings.

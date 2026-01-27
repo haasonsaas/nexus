@@ -18,7 +18,6 @@ final class ServiceContainer {
 
     var gateway: GatewayProcessManager { GatewayProcessManager.shared }
     var controlChannel: ControlChannel { ControlChannel.shared }
-    var endpointStore: GatewayEndpointStore { GatewayEndpointStore.shared }
     var tunnel: RemoteTunnelManager { RemoteTunnelManager.shared }
     var health: HealthStore { HealthStore.shared }
 
@@ -116,7 +115,6 @@ final class ServiceContainer {
         // Accessing them here ensures they're created
 
         _ = config
-        _ = endpointStore
         _ = modelRouter
         _ = prompts
         _ = memory

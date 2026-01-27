@@ -36,39 +36,32 @@ final class ApplicationCoordinator {
         logger.info("application initialization starting")
         let startTime = Date()
 
-        do {
-            // Phase 1: Load configuration
-            phase = .config
-            await loadConfiguration()
+        // Phase 1: Load configuration
+        phase = .config
+        await loadConfiguration()
 
-            // Phase 2: Check permissions
-            phase = .permissions
-            await checkPermissions()
+        // Phase 2: Check permissions
+        phase = .permissions
+        await checkPermissions()
 
-            // Phase 3: Initialize services
-            phase = .services
-            await initializeServices()
+        // Phase 3: Initialize services
+        phase = .services
+        await initializeServices()
 
-            // Phase 4: Connect to gateway
-            phase = .gateway
-            await connectGateway()
+        // Phase 4: Connect to gateway
+        phase = .gateway
+        await connectGateway()
 
-            // Phase 5: Initialize UI components
-            phase = .ui
-            await initializeUI()
+        // Phase 5: Initialize UI components
+        phase = .ui
+        await initializeUI()
 
-            // Complete
-            phase = .complete
-            isInitialized = true
+        // Complete
+        phase = .complete
+        isInitialized = true
 
-            let duration = Date().timeIntervalSince(startTime)
-            logger.info("application initialized in \(String(format: "%.2f", duration))s")
-
-        } catch {
-            phase = .failed
-            initializationError = error
-            logger.error("initialization failed: \(error.localizedDescription)")
-        }
+        let duration = Date().timeIntervalSince(startTime)
+        logger.info("application initialized in \(String(format: "%.2f", duration))s")
     }
 
     /// Shutdown all services
@@ -101,7 +94,7 @@ final class ApplicationCoordinator {
 
     private func loadConfiguration() async {
         // Load stored configuration
-        let config = await ConfigStore.load()
+        _ = await ConfigStore.load()
         logger.debug("configuration loaded")
 
         // Load saved data
@@ -111,7 +104,6 @@ final class ApplicationCoordinator {
         QuickActionManager.shared.loadActions()
         ConversationMemory.shared.loadMemory()
         UsageAnalytics.shared.loadAnalytics()
-        GatewayEndpointStore.shared // Initialize (loads on init)
     }
 
     private func checkPermissions() async {
@@ -230,7 +222,7 @@ final class ApplicationCoordinator {
 
         case "prompt":
             if let id = params["id"],
-               let prompt = PromptLibrary.shared.prompts.first(where: { $0.id == id }) {
+               PromptLibrary.shared.prompts.contains(where: { $0.id == id }) {
                 // Open chat with prompt
                 let session = SessionBridge.shared.createSession(type: .chat)
                 WebChatManager.shared.openChat(for: session.id)

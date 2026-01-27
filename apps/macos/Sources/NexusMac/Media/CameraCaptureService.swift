@@ -37,7 +37,7 @@ final class CameraCaptureService: NSObject {
     override init() {
         super.init()
         Task {
-            await checkPermission()
+            _ = await checkPermission()
             await refreshCameraList()
         }
     }
@@ -66,7 +66,7 @@ final class CameraCaptureService: NSObject {
     /// Refresh list of available cameras
     func refreshCameraList() async {
         let discoverySession = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [.builtInWideAngleCamera, .externalUnknown],
+            deviceTypes: [.builtInWideAngleCamera, .external],
             mediaType: .video,
             position: .unspecified
         )

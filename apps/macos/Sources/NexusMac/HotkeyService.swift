@@ -348,7 +348,7 @@ final class HotkeyService: ObservableObject {
             return
         }
 
-        var hotkeyID = EventHotKeyID(signature: hotkeySignature, id: id)
+        let hotkeyID = EventHotKeyID(signature: hotkeySignature, id: id)
         var hotkeyRef: EventHotKeyRef?
 
         let status = RegisterEventHotKey(

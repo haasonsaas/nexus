@@ -10,7 +10,7 @@ extension CronJobsStore.CronJob.Schedule {
 
         let calendar = Calendar.current
         var dates: [Date] = []
-        var current = Date()
+        let current = Date()
 
         switch type {
         case .interval:

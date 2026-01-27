@@ -109,7 +109,9 @@ final class AppModel: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.syncDefaults()
+            Task { @MainActor in
+                self?.syncDefaults()
+            }
         }
     }
 
@@ -133,7 +135,7 @@ final class AppModel: ObservableObject {
         webSocketObservation = Task { [weak self] in
             guard let self = self else { return }
             while !Task.isCancelled {
-                await self.syncWebSocketState()
+                self.syncWebSocketState()
                 try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
             }
         }

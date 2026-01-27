@@ -259,7 +259,7 @@ final class DiagnosticsFileLogger {
 
         if fileManager.fileExists(atPath: logFilePath.path) {
             if let handle = try? FileHandle(forWritingTo: logFilePath) {
-                try? handle.seekToEnd()
+                _ = try? handle.seekToEnd()
                 try? handle.write(contentsOf: data)
                 try? handle.close()
             }

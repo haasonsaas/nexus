@@ -16,6 +16,7 @@ struct OnboardingStep: Identifiable {
         case requestPermission(PermissionType)
         case configureGateway
         case enableVoiceWake
+        case reviewAdditionalPermissions
         case completeSetup
     }
 }
@@ -81,6 +82,13 @@ struct OnboardingView: View {
         ),
         OnboardingStep(
             id: 7,
+            title: "Additional Permissions",
+            subtitle: "Optional access for richer context",
+            icon: "hand.raised.fill",
+            action: .reviewAdditionalPermissions
+        ),
+        OnboardingStep(
+            id: 8,
             title: "You're All Set!",
             subtitle: "Nexus is ready to help you",
             icon: "checkmark.circle.fill",
@@ -244,6 +252,9 @@ struct OnboardingStepView: View {
         case .enableVoiceWake:
             VoiceWakeSetupView(onComplete: onContinue, onSkip: onSkip)
 
+        case .reviewAdditionalPermissions:
+            AdditionalPermissionsView(onComplete: onContinue, onSkip: onSkip)
+
         case .completeSetup:
             CompletionView(onComplete: onContinue)
 
@@ -303,6 +314,14 @@ struct PermissionRequestView: View {
 
     private var isGranted: Bool {
         permissions.status(for: permissionType)
+    }
+
+    private var detailedStatus: PermissionStatus {
+        permissions.detailedStatus(for: permissionType)
+    }
+
+    private var canRequest: Bool {
+        detailedStatus.canRequest
     }
 
     private var permissionTitle: String {
@@ -376,7 +395,7 @@ struct PermissionRequestView: View {
                     .controlSize(.large)
                 } else {
                     VStack(spacing: 12) {
-                        Button("Grant Permission") {
+                        Button(canRequest ? "Grant Permission" : "Open System Settings") {
                             Task {
                                 await requestPermission()
                             }
@@ -432,23 +451,32 @@ struct PermissionRequestView: View {
     }
 
     private func requestPermission() async {
+        let status = permissions.detailedStatus(for: permissionType)
+        if !status.canRequest && !status.isGranted {
+            if permissionType == .accessibility {
+                permissions.promptAccessibilityPermission()
+            } else {
+                permissions.openSystemSettings(for: permissionType)
+            }
+            return
+        }
+
         switch permissionType {
         case .microphone:
-            let granted = await permissions.requestMicrophoneAccess()
-            if granted { onGranted() }
+            _ = await permissions.requestMicrophoneAccess()
         case .speechRecognition:
-            let granted = await permissions.requestSpeechRecognitionAccess()
-            if granted { onGranted() }
+            _ = await permissions.requestSpeechRecognitionAccess()
         case .camera:
-            let granted = await permissions.requestCameraAccess()
-            if granted { onGranted() }
+            _ = await permissions.requestCameraAccess()
         case .accessibility:
             permissions.promptAccessibilityPermission()
-            // User needs to manually grant in System Settings
+            return
         case .screenRecording:
             permissions.openSystemSettings(for: .screenRecording)
-            // User needs to manually grant in System Settings
+            return
         }
+
+        permissions.refreshAllStatuses()
     }
 }
 
@@ -465,6 +493,8 @@ struct GatewaySetupView: View {
     @State private var isConnected = false
     @State private var apiKey = ""
     @State private var hasLoadedApiKey = false
+    @State private var gatewayStatus = GatewayEnvironmentStatus.checking
+    @State private var showingCLIInstaller = false
 
     private let keychain = KeychainStore()
 
@@ -480,6 +510,31 @@ struct GatewaySetupView: View {
                 ) {
                     appState.connectionMode = .local
                     connectionError = nil
+                }
+
+                if appState.connectionMode == .local, case .missingBinary = gatewayStatus.kind {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("CLI not installed")
+                                .font(.subheadline.weight(.medium))
+                            Text(gatewayStatus.message)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Button("Install CLI") {
+                            showingCLIInstaller = true
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    .padding(8)
+                    .background(Color.orange.opacity(0.1))
+                    .cornerRadius(8)
                 }
 
                 Divider()
@@ -518,9 +573,22 @@ struct GatewaySetupView: View {
                             )
                         )
                         .textFieldStyle(.roundedBorder)
+
+                        Toggle("Use TLS (https)", isOn: $appState.gatewayUseTLS)
                     }
                     .padding(.leading, 32)
                     .padding(.top, 4)
+                }
+
+                if appState.connectionMode != .unconfigured {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Gateway Port")
+                            .font(.headline)
+
+                        TextField("8080", value: $appState.gatewayPort, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 140)
+                    }
                 }
 
                 Divider()
@@ -599,6 +667,16 @@ struct GatewaySetupView: View {
                 apiKey = keychain.read() ?? ""
                 hasLoadedApiKey = true
             }
+            refreshGatewayStatus()
+        }
+        .onChange(of: appState.connectionMode) { _, newMode in
+            if newMode == .local {
+                refreshGatewayStatus()
+            }
+        }
+        .sheet(isPresented: $showingCLIInstaller, onDismiss: refreshGatewayStatus) {
+            CLIInstallerView()
+                .frame(width: 520, height: 560)
         }
     }
 
@@ -655,6 +733,17 @@ struct GatewaySetupView: View {
             break
         }
 
+        if appState.connectionMode != .unconfigured {
+            let port = appState.gatewayPort
+            if port <= 0 || port > 65535 {
+                return "Enter a valid gateway port (1-65535)"
+            }
+        }
+
+        if appState.connectionMode == .local, case .missingBinary = gatewayStatus.kind {
+            return "Install the Nexus CLI to run the local gateway"
+        }
+
         if requireAPIKey {
             let trimmed = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty {
@@ -690,6 +779,88 @@ struct GatewaySetupView: View {
             try? await Task.sleep(for: .milliseconds(250))
         }
         return coordinator.isConnected
+    }
+
+    private func refreshGatewayStatus() {
+        gatewayStatus = GatewayEnvironment.check()
+    }
+}
+
+// MARK: - Additional Permissions View
+
+struct AdditionalPermissionsView: View {
+    let onComplete: () -> Void
+    let onSkip: () -> Void
+
+    @State private var guard_ = PermissionGuard.shared
+    @State private var isRefreshing = false
+
+    private let optionalPermissions: [GuardedPermission] = [
+        .camera,
+        .location,
+        .contacts,
+        .calendar,
+        .photos,
+    ]
+
+    var body: some View {
+        OnboardingCard {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Optional permissions for richer context")
+                    .font(.headline)
+
+                Text("Enable these if you want Nexus to access location, contacts, calendars, or photos.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if isRefreshing {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Checking permissions...")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                ForEach(optionalPermissions, id: \.self) { permission in
+                    PermissionRow(
+                        permission: permission,
+                        status: guard_.permissionStates[permission] ?? .notDetermined,
+                        onGrant: { await guard_.request(permission) },
+                        onOpenSettings: { guard_.openSystemPreferences(for: permission) }
+                    )
+                }
+
+                Divider()
+
+                HStack {
+                    Button("Skip") {
+                        onSkip()
+                    }
+                    .buttonStyle(.bordered)
+
+                    Spacer()
+
+                    Button("Continue") {
+                        onComplete()
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+        }
+        .task {
+            await refreshPermissions()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await refreshPermissions() }
+        }
+    }
+
+    private func refreshPermissions() async {
+        isRefreshing = true
+        _ = await guard_.check(optionalPermissions)
+        isRefreshing = false
     }
 }
 

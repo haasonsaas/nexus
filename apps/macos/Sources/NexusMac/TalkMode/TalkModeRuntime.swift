@@ -1,5 +1,6 @@
 import AVFoundation
 import AppKit
+import AVFoundation
 import Foundation
 import OSLog
 import Speech
@@ -61,6 +62,8 @@ actor TalkModeRuntime {
     private var lastSpokenText: String?
     private var audioPlayer: AVAudioPlayer?
     private var isPlaying = false
+    private var systemSpeechSynthesizer: AVSpeechSynthesizer?
+    private var systemSpeechDelegate: SystemSpeechDelegate?
 
     // Tunables
     private let silenceWindow: TimeInterval = 0.7
@@ -514,13 +517,19 @@ actor TalkModeRuntime {
         await MainActor.run { TalkModeController.shared.updatePhase(.speaking) }
         phase = .speaking
 
-        let synthesizer = NSSpeechSynthesizer()
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            let delegate = SpeechDelegate(continuation: continuation)
+            let delegate = SystemSpeechDelegate { [weak self] in
+                Task { [weak self] in
+                    await self?.clearSystemSpeech()
+                    continuation.resume()
+                }
+            }
+            let synthesizer = AVSpeechSynthesizer()
+            let utterance = AVSpeechUtterance(string: text)
+            systemSpeechSynthesizer = synthesizer
+            systemSpeechDelegate = delegate
             synthesizer.delegate = delegate
-            synthesizer.startSpeaking(text)
-            // Keep delegate alive
-            withExtendedLifetime(delegate) {}
+            synthesizer.speak(utterance)
         }
 
         ttsLogger.info("talk system voice done")
@@ -534,6 +543,7 @@ actor TalkModeRuntime {
     func stopSpeaking(reason: TalkStopReason) async {
         let interruptedAt = audioPlayer?.currentTime
         stopAudioPlayer()
+        systemSpeechSynthesizer?.stopSpeaking(at: .immediate)
 
         guard phase == .speaking else { return }
 
@@ -552,6 +562,11 @@ actor TalkModeRuntime {
 
         phase = .thinking
         await MainActor.run { TalkModeController.shared.updatePhase(.thinking) }
+    }
+
+    private func clearSystemSpeech() {
+        systemSpeechSynthesizer = nil
+        systemSpeechDelegate = nil
     }
 
     // MARK: - Audio Level Handling
@@ -626,15 +641,25 @@ actor TalkModeRuntime {
 
 // MARK: - Speech Delegate
 
-private final class SpeechDelegate: NSObject, NSSpeechSynthesizerDelegate, @unchecked Sendable {
-    private var continuation: CheckedContinuation<Void, Never>?
+private final class SystemSpeechDelegate: NSObject, AVSpeechSynthesizerDelegate {
+    private let onFinish: () -> Void
+    private var didFinish = false
 
-    init(continuation: CheckedContinuation<Void, Never>) {
-        self.continuation = continuation
+    init(onFinish: @escaping () -> Void) {
+        self.onFinish = onFinish
     }
 
-    func speechSynthesizer(_ sender: NSSpeechSynthesizer, didFinishSpeaking finishedSpeaking: Bool) {
-        continuation?.resume()
-        continuation = nil
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        finishIfNeeded()
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        finishIfNeeded()
+    }
+
+    private func finishIfNeeded() {
+        guard !didFinish else { return }
+        didFinish = true
+        onFinish()
     }
 }

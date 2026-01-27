@@ -157,8 +157,6 @@ final class WorkflowEngine {
     // MARK: - Step Execution
 
     private func executeStep(_ step: Workflow.WorkflowStep) async throws {
-        let toolService = ToolExecutionService.shared
-
         // Convert step to agent request format
         let request = AgentOrchestrator.AgentRequest(
             agentId: "workflow",

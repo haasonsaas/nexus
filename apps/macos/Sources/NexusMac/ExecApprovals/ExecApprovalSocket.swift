@@ -177,12 +177,12 @@ final class ExecApprovalSocket {
         listener?.cancel()
         listener = nil
 
-        clientsLock.lock()
-        for (_, client) in clients {
-            client.connection.cancel()
+        clientsLock.withLock {
+            for (_, client) in clients {
+                client.connection.cancel()
+            }
+            clients.removeAll()
         }
-        clients.removeAll()
-        clientsLock.unlock()
 
         pendingRequests.removeAll()
 
@@ -225,11 +225,11 @@ final class ExecApprovalSocket {
 
         connection.start(queue: .main)
 
-        clientsLock.lock()
-        clients[client.id] = client
-        clientsLock.unlock()
-
-        connectedClients = clients.count
+        let count = clientsLock.withLock {
+            clients[client.id] = client
+            return clients.count
+        }
+        connectedClients = count
 
         // Start receiving
         receiveMessage(from: client)
@@ -250,11 +250,11 @@ final class ExecApprovalSocket {
     }
 
     private func removeClient(_ clientId: UUID) {
-        clientsLock.lock()
-        clients.removeValue(forKey: clientId)
-        clientsLock.unlock()
-
-        connectedClients = clients.count
+        let count = clientsLock.withLock {
+            clients.removeValue(forKey: clientId)
+            return clients.count
+        }
+        connectedClients = count
 
         // Remove pending requests from this client
         pendingRequests = pendingRequests.filter { $0.value.connectionId != clientId }
@@ -282,9 +282,7 @@ final class ExecApprovalSocket {
                 }
 
                 // Continue receiving
-                self.clientsLock.lock()
-                let client = self.clients[clientId]
-                self.clientsLock.unlock()
+                let client = self.clientsLock.withLock { self.clients[clientId] }
 
                 if let client {
                     self.receiveMessage(from: client)
@@ -294,14 +292,14 @@ final class ExecApprovalSocket {
     }
 
     private func processReceivedData(_ data: Data, clientId: UUID) {
-        clientsLock.lock()
-        guard let client = clients[clientId] else {
-            clientsLock.unlock()
-            return
+        let clientData = clientsLock.withLock { () -> (ConnectedClient, Data)? in
+            guard let client = clients[clientId] else {
+                return nil
+            }
+            client.pendingData.append(data)
+            return (client, client.pendingData)
         }
-        client.pendingData.append(data)
-        let pendingData = client.pendingData
-        clientsLock.unlock()
+        guard let (client, pendingData) = clientData else { return }
 
         // Process complete messages (newline-delimited JSON)
         var remaining = pendingData
@@ -313,9 +311,9 @@ final class ExecApprovalSocket {
         }
 
         // Update remaining data
-        clientsLock.lock()
-        clients[clientId]?.pendingData = remaining
-        clientsLock.unlock()
+        clientsLock.withLock {
+            clients[clientId]?.pendingData = remaining
+        }
     }
 
     private func processMessage(_ data: Data, from client: ConnectedClient) {
@@ -341,9 +339,9 @@ final class ExecApprovalSocket {
         let response: ApprovalSocketMessage
 
         if message.token == authToken {
-            clientsLock.lock()
-            clients[client.id]?.isAuthenticated = true
-            clientsLock.unlock()
+            clientsLock.withLock {
+                clients[client.id]?.isAuthenticated = true
+            }
 
             response = ApprovalSocketMessage(type: .authOk)
             logger.debug("Client \(client.id.uuidString.prefix(8), privacy: .public) authenticated")
@@ -417,7 +415,7 @@ final class ExecApprovalSocket {
             } else {
                 // Need user approval - show prompt
                 Task {
-                    await ExecApprovalPrompter.shared.showPrompt(for: request)
+                    ExecApprovalPrompter.shared.showPrompt(for: request)
                 }
             }
         }
@@ -431,9 +429,7 @@ final class ExecApprovalSocket {
             return
         }
 
-        clientsLock.lock()
-        let client = clients[request.connectionId]
-        clientsLock.unlock()
+        let client = clientsLock.withLock { clients[request.connectionId] }
 
         guard let client else {
             logger.warning("Client disconnected for request: \(requestId, privacy: .public)")

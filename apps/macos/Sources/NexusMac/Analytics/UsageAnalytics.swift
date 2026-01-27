@@ -211,7 +211,6 @@ final class UsageAnalytics {
     // MARK: - Persistence
 
     private func saveDailyStats() {
-        let url = dailyStatsURL()
         let historyURL = statsHistoryURL()
 
         // Append to history

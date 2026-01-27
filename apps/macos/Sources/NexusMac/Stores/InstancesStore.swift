@@ -279,7 +279,7 @@ final class InstancesStore {
         pruneTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 3600 * 1_000_000_000) // 1 hour
-                await self?.pruneStaleInstances()
+                self?.pruneStaleInstances()
             }
         }
     }

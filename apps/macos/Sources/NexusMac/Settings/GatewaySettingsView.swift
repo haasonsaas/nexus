@@ -7,7 +7,7 @@ struct GatewaySettingsView: View {
     @State private var coordinator = ConnectionModeCoordinator.shared
 
     @State private var manualHost = ""
-    @State private var manualPort = "8080"
+    @State private var manualPort = String(GatewayEnvironment.gatewayPort())
     @State private var showingManualEntry = false
 
     var body: some View {
@@ -76,6 +76,11 @@ struct GatewaySettingsView: View {
                     await coordinator.apply(mode: newMode, paused: appState.isPaused)
                 }
             }
+            .onChange(of: appState.gatewayUseTLS) { _, _ in
+                Task {
+                    await coordinator.apply(mode: appState.connectionMode, paused: appState.isPaused)
+                }
+            }
 
             Text(modeDescription)
                 .font(.caption)
@@ -133,6 +138,8 @@ struct GatewaySettingsView: View {
                     }
                 }
             }
+
+            Toggle("Use TLS (https)", isOn: $appState.gatewayUseTLS)
 
             if TailscaleService.shared.isAvailable {
                 HStack {
@@ -265,7 +272,7 @@ struct GatewaySettingsView: View {
                 Button("Cancel") {
                     showingManualEntry = false
                     manualHost = ""
-                    manualPort = "3000"
+                    manualPort = String(appState.gatewayPort)
                 }
                 .keyboardShortcut(.cancelAction)
 
@@ -275,7 +282,7 @@ struct GatewaySettingsView: View {
                     }
                     showingManualEntry = false
                     manualHost = ""
-                    manualPort = "3000"
+                    manualPort = String(appState.gatewayPort)
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(manualHost.isEmpty)

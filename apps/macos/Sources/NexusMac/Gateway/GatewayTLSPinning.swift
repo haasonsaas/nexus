@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import NexusMacObjC
 import OSLog
 import Security
 
@@ -244,7 +245,7 @@ public final class GatewayTLSPinningManager: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
 
-        var backupPin = TLSPin(
+        let backupPin = TLSPin(
             host: pin.host,
             hash: pin.hash,
             expiresAt: pin.expiresAt,
@@ -552,9 +553,10 @@ private func SecKeyGetKeyType(_ key: SecKey) -> String? {
 // MARK: - URLSession Delegate
 
 /// URLSession delegate that implements TLS certificate pinning for gateway connections.
-public final class GatewayTLSPinningSession: NSObject, URLSessionDelegate, @unchecked Sendable {
+public final class GatewayTLSPinningSession: NSObject, @unchecked Sendable {
     private let logger = Logger(subsystem: "com.nexus.mac", category: "tls-pinning")
     private let pinningManager: GatewayTLSPinningManager
+    private let sessionDelegate = GatewayTLSPinningSessionDelegate()
 
     /// Creates a URLSession configured with TLS pinning.
     public private(set) lazy var session: URLSession = {
@@ -562,12 +564,19 @@ public final class GatewayTLSPinningSession: NSObject, URLSessionDelegate, @unch
         config.waitsForConnectivity = true
         config.timeoutIntervalForRequest = 30
         config.timeoutIntervalForResource = 60
-        return URLSession(configuration: config, delegate: self, delegateQueue: nil)
+        return URLSession(configuration: config, delegate: sessionDelegate, delegateQueue: nil)
     }()
 
     public init(pinningManager: GatewayTLSPinningManager = .shared) {
         self.pinningManager = pinningManager
         super.init()
+        sessionDelegate.challengeHandler = { [weak self] session, challenge, completionHandler in
+            guard let self else {
+                completionHandler(.performDefaultHandling, nil)
+                return
+            }
+            self.handleChallenge(session: session, challenge: challenge, completionHandler: completionHandler)
+        }
     }
 
     /// Creates a WebSocket task with TLS pinning.
@@ -589,17 +598,17 @@ public final class GatewayTLSPinningSession: NSObject, URLSessionDelegate, @unch
         return try await session.data(for: request)
     }
 
-    // MARK: - URLSessionDelegate
-
-    public func urlSession(
-        _ session: URLSession,
-        didReceive challenge: URLAuthenticationChallenge,
+    private func handleChallenge(
+        session _: URLSession,
+        challenge: URLAuthenticationChallenge,
         completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     ) {
+        let finish = completionHandler
+
         guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
               let trust = challenge.protectionSpace.serverTrust
         else {
-            completionHandler(.performDefaultHandling, nil)
+            finish(.performDefaultHandling, nil)
             return
         }
 
@@ -609,35 +618,35 @@ public final class GatewayTLSPinningSession: NSObject, URLSessionDelegate, @unch
         switch result {
         case .success(let pin):
             logger.debug("TLS pinning succeeded for \(host, privacy: .public) with pin: \(pin.hash.prefix(16), privacy: .public)...")
-            completionHandler(.useCredential, URLCredential(trust: trust))
+            finish(.useCredential, URLCredential(trust: trust))
 
         case .successBackup(let pin):
             logger.info("TLS pinning succeeded with backup pin for \(host, privacy: .public): \(pin.hash.prefix(16), privacy: .public)...")
-            completionHandler(.useCredential, URLCredential(trust: trust))
+            finish(.useCredential, URLCredential(trust: trust))
 
         case .disabled:
             // Perform standard trust evaluation when pinning is disabled
             let trustValid = SecTrustEvaluateWithError(trust, nil)
             if trustValid {
-                completionHandler(.useCredential, URLCredential(trust: trust))
+                finish(.useCredential, URLCredential(trust: trust))
             } else {
                 logger.warning("Standard trust evaluation failed for \(host, privacy: .public)")
-                completionHandler(.cancelAuthenticationChallenge, nil)
+                finish(.cancelAuthenticationChallenge, nil)
             }
 
         case .failedNoPinMatch(let failedHost, let receivedHash):
             logger.error(
                 "TLS pinning FAILED for \(failedHost, privacy: .public): no matching pin. Hash: \(receivedHash.prefix(32), privacy: .public)..."
             )
-            completionHandler(.cancelAuthenticationChallenge, nil)
+            finish(.cancelAuthenticationChallenge, nil)
 
         case .failedExpiredPin(let pin):
             logger.error("TLS pinning FAILED for \(host, privacy: .public): pin expired at \(pin.expiresAt?.description ?? "unknown", privacy: .public)")
-            completionHandler(.cancelAuthenticationChallenge, nil)
+            finish(.cancelAuthenticationChallenge, nil)
 
         case .failedChainValidation(let error):
             logger.error("TLS pinning FAILED for \(host, privacy: .public): chain validation error - \(error.localizedDescription, privacy: .public)")
-            completionHandler(.cancelAuthenticationChallenge, nil)
+            finish(.cancelAuthenticationChallenge, nil)
         }
     }
 }

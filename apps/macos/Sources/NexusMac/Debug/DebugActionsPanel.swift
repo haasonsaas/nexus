@@ -277,13 +277,19 @@ final class DebugActionsManager {
 
         register(DebugAction(
             id: "gateway.clear_endpoints_cache",
-            name: "Clear Endpoints Cache",
-            description: "Clear cached gateway endpoints",
+            name: "Reset Gateway Settings",
+            description: "Reset gateway connection settings to local defaults",
             category: .gateway
         ) {
-            // Reset to local endpoint
-            GatewayEndpointStore.shared.selectEndpoint(id: "local")
-            return "Endpoints cache cleared, reset to local"
+            let appState = AppStateStore.shared
+            appState.connectionMode = .local
+            appState.remoteHost = nil
+            appState.remoteIdentityFile = nil
+            appState.gatewayUseTLS = false
+            appState.gatewayPort = 8080
+
+            await ConnectionModeCoordinator.shared.apply(mode: .local, paused: appState.isPaused)
+            return "Gateway settings reset to local"
         })
 
         register(DebugAction(
@@ -785,14 +791,17 @@ final class DebugActionsManager {
             let gwState = await GatewayConnection.shared.getStateDescription()
             output += "  State: \(gwState)\n"
 
-            // Endpoint info
-            if let endpoint = GatewayEndpointStore.shared.currentEndpoint {
-                output += "\nEndpoint:\n"
-                output += "  Name: \(endpoint.name)\n"
-                output += "  Host: \(endpoint.host):\(endpoint.port)\n"
-                output += "  TLS: \(endpoint.useTLS)\n"
-                output += "  Mode: \(GatewayEndpointStore.shared.connectionMode.rawValue)\n"
+            // Gateway settings snapshot
+            let appState = AppStateStore.shared
+            output += "\nGateway Settings:\n"
+            output += "  Mode: \(appState.connectionMode.rawValue)\n"
+            if appState.connectionMode == .remote {
+                output += "  Host: \(appState.remoteHost ?? "not set")\n"
+            } else {
+                output += "  Host: 127.0.0.1\n"
             }
+            output += "  Port: \(appState.gatewayPort)\n"
+            output += "  TLS: \(appState.gatewayUseTLS)\n"
 
             return output
         })

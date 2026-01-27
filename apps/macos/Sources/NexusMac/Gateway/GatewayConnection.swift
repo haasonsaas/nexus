@@ -96,19 +96,13 @@ actor GatewayConnection {
             ws.send(.string(text)) { error in
                 if let error {
                     Task {
-                        if await self.pendingRequests[id] != nil {
-                            await self.removePendingRequest(id)
-                            continuation.resume(throwing: error)
-                        }
+                        await self.failPendingRequest(id: id, error: error)
                     }
                 }
             }
             Task {
                 try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000))
-                if await self.pendingRequests[id] != nil {
-                    await self.removePendingRequest(id)
-                    continuation.resume(throwing: ControlChannelError.timeout)
-                }
+                self.failPendingRequest(id: id, error: ControlChannelError.timeout)
             }
         }
     }
@@ -126,6 +120,11 @@ actor GatewayConnection {
     private func nextRequestId() -> String { requestCounter += 1; return "req-\(requestCounter)" }
     private func removePendingRequest(_ id: String) { pendingRequests.removeValue(forKey: id) }
     private func removeSubscriber(_ id: UUID) { subscribers.removeValue(forKey: id) }
+    private func failPendingRequest(id: String, error: Error) {
+        guard let continuation = pendingRequests[id] else { return }
+        pendingRequests.removeValue(forKey: id)
+        continuation.resume(throwing: error)
+    }
 
     private func broadcast(_ push: GatewayPush) {
         if case .snapshot(let h) = push { lastHello = h }

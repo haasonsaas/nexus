@@ -89,7 +89,7 @@ struct TalkAudioPlaybackResult: Sendable {
 /// Main audio player for TTS responses with support for streaming, queueing, and playback controls.
 @MainActor
 @Observable
-final class TalkAudioPlayer: NSObject, @preconcurrency AVAudioPlayerDelegate {
+final class TalkAudioPlayer: NSObject, AVAudioPlayerDelegate {
     static let shared = TalkAudioPlayer()
 
     private let logger = Logger(subsystem: "com.nexus.mac", category: "talk-audio")

@@ -134,7 +134,7 @@ final class QuickActionManager {
                 }
 
             case .copyContext:
-                let context = await ContextManager.shared.gatherContext()
+                _ = await ContextManager.shared.gatherContext()
                 let markdown = ContextManager.shared.exportMarkdown()
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(markdown, forType: .string)
@@ -153,7 +153,7 @@ final class QuickActionManager {
 
             case .computerUse:
                 // Create computer use agent session
-                let session = SessionBridge.shared.createSession(type: .computerUse)
+                _ = SessionBridge.shared.createSession(type: .computerUse)
                 _ = AgentOrchestrator.shared.spawn(type: .computerUse, task: "Computer Use")
 
             case .runWorkflow(let workflowId):

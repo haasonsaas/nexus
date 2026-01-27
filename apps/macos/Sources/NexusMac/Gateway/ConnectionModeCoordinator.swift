@@ -96,7 +96,7 @@ final class ConnectionModeCoordinator {
                 try await waitForGatewayReady()
 
                 let port = AppStateStore.shared.gatewayPort
-                updateBaseURL(host: "127.0.0.1", port: port)
+                updateBaseURL(host: "127.0.0.1", port: port, useTLS: false)
 
                 // Connect control channel
                 await ControlChannel.shared.refreshEndpoint(reason: "connect-local")
@@ -153,7 +153,7 @@ final class ConnectionModeCoordinator {
                 // Configure base URL for remote or tunnel
                 let port = RemoteTunnelManager.shared.localPort ?? AppStateStore.shared.gatewayPort
                 let baseHost = RemoteTunnelManager.shared.isConnected ? "127.0.0.1" : host
-                updateBaseURL(host: baseHost, port: port)
+                updateBaseURL(host: baseHost, port: port, useTLS: AppStateStore.shared.gatewayUseTLS)
 
                 // Connect control channel to remote
                 await ControlChannel.shared.refreshEndpoint(reason: "connect-remote")
@@ -227,8 +227,6 @@ final class ConnectionModeCoordinator {
     // MARK: - Helpers
 
     private func waitForGatewayReady(timeout: TimeInterval = 30) async throws {
-        let deadline = Date().addingTimeInterval(timeout)
-
         let ready = await GatewayProcessManager.shared.waitForGatewayReady(timeout: timeout)
         if !ready {
             throw ConnectionError.gatewayTimeout
@@ -278,9 +276,9 @@ final class ConnectionModeCoordinator {
 // MARK: - Base URL Helpers
 
 private extension ConnectionModeCoordinator {
-    func updateBaseURL(host: String, port: Int) {
+    func updateBaseURL(host: String, port: Int, useTLS: Bool) {
         var components = URLComponents()
-        components.scheme = "http"
+        components.scheme = useTLS ? "https" : "http"
         components.host = host
         components.port = port
         if let url = components.url {

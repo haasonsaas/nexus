@@ -127,7 +127,7 @@ final class ChatViewModel {
 
         // If this is a message event, check if we need to update
         if event.stream == "message" || event.stream == "output" {
-            if let content = event.data?["content"]?.value as? String,
+            if let _ = event.data?["content"]?.value as? String,
                let sessionId = event.data?["session_id"]?.value as? String,
                sessionId == activeSessionId {
                 // This might be a partial update, handled by streaming

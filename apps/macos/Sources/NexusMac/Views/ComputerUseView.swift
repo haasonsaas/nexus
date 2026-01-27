@@ -467,7 +467,7 @@ struct ComputerUseView: View {
                 try? await Task.sleep(nanoseconds: delay)
             }
         }
-        .onChange(of: selectedNode) { newNode in
+        .onChange(of: selectedNode) { _, newNode in
             if newNode == nil {
                 autoRefresh = false
             }
@@ -478,11 +478,11 @@ struct ComputerUseView: View {
             // Configure the HotkeyManager with the app model
             hotkeyManager.configure(with: model)
         }
-        .onChange(of: coordinateX) { _ in
-            selectedPoint = CGPoint(x: coordinateX, y: coordinateY)
+        .onChange(of: coordinateX) { _, newValue in
+            selectedPoint = CGPoint(x: newValue, y: coordinateY)
         }
-        .onChange(of: coordinateY) { _ in
-            selectedPoint = CGPoint(x: coordinateX, y: coordinateY)
+        .onChange(of: coordinateY) { _, newValue in
+            selectedPoint = CGPoint(x: coordinateX, y: newValue)
         }
     }
 

@@ -117,6 +117,7 @@ struct BasicGatewaySettingsView: View {
                     get: { appState.remoteIdentityFile ?? "" },
                     set: { appState.remoteIdentityFile = $0.isEmpty ? nil : $0 }
                 ))
+                Toggle("Use TLS (https)", isOn: $appState.gatewayUseTLS)
             }
         }
         .formStyle(.grouped)
@@ -194,6 +195,7 @@ struct CronSettingsView: View {
 
 struct PermissionsSettingsView: View {
     @State private var permissions = PermissionManager.shared
+    @State private var showingAdvancedPermissions = false
 
     var body: some View {
         Form {
@@ -239,9 +241,19 @@ struct PermissionsSettingsView: View {
                     permissions.refreshAllStatuses()
                 }
             }
+
+            Section {
+                Button("Manage Additional Permissions") {
+                    showingAdvancedPermissions = true
+                }
+            }
         }
         .formStyle(.grouped)
         .padding()
+        .sheet(isPresented: $showingAdvancedPermissions) {
+            PermissionGuardView()
+                .frame(width: 520, height: 600)
+        }
     }
 }
 

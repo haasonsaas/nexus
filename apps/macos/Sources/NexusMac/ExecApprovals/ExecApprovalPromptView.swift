@@ -192,6 +192,7 @@ final class ExecApprovalPrompter {
 
     private let logger = Logger(subsystem: "com.nexus.mac", category: "approval-prompter")
     private var windows: [String: NSWindow] = [:]
+    private var windowDelegates: [String: WindowCloseDelegate] = [:]
 
     private init() {}
 
@@ -234,15 +235,18 @@ final class ExecApprovalPrompter {
         positionWindow(panel)
 
         // Handle window close
-        panel.delegate = WindowCloseDelegate(requestId: request.id) { [weak self] requestId in
+        let delegate = WindowCloseDelegate(requestId: request.id) { [weak self] requestId in
             ExecApprovalSocket.shared.respondToRequest(requestId, decision: .deny)
             self?.windows.removeValue(forKey: requestId)
+            self?.windowDelegates.removeValue(forKey: requestId)
         }
+        panel.delegate = delegate
 
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
         windows[request.id] = panel
+        windowDelegates[request.id] = delegate
 
         // Play notification sound
         NSSound.beep()
@@ -270,6 +274,7 @@ final class ExecApprovalPrompter {
 
     func dismissPrompt(requestId: String) {
         guard let window = windows.removeValue(forKey: requestId) else { return }
+        windowDelegates.removeValue(forKey: requestId)
         window.close()
         logger.debug("Dismissed prompt for: \(requestId.prefix(8), privacy: .public)")
     }
@@ -281,6 +286,7 @@ final class ExecApprovalPrompter {
             ExecApprovalSocket.shared.respondToRequest(requestId, decision: .deny)
         }
         windows.removeAll()
+        windowDelegates.removeAll()
         logger.info("Dismissed all prompts")
     }
 

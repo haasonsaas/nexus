@@ -298,7 +298,7 @@ final class AgentEventStore {
         saveTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: (self?.saveDebounceMs ?? 500) * 1_000_000)
             guard !Task.isCancelled else { return }
-            await self?.saveToDisk()
+            self?.saveToDisk()
         }
     }
 

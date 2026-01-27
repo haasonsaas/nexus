@@ -107,7 +107,9 @@ final class VoiceWakeOverlayController {
             context.timingFunction = CAMediaTimingFunction(name: .easeIn)
             panel.animator().alphaValue = 0
         } completionHandler: { [weak self] in
-            self?.window?.orderOut(nil)
+            Task { @MainActor in
+                self?.window?.orderOut(nil)
+            }
         }
 
         logger.debug("overlay hidden")
@@ -303,7 +305,7 @@ final class VoiceWakeOverlayController {
 
         // Send to the gateway
         do {
-            try await ControlChannel.shared.request(
+            _ = try await ControlChannel.shared.request(
                 method: "voice.command",
                 params: [
                     "sessionId": session.id,

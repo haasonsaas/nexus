@@ -23,7 +23,7 @@ final class GlobalHotkeyManager {
         let id = nextId
         nextId += 1
 
-        var hotKeyID = EventHotKeyID(signature: fourCharCode("NXUS"), id: id)
+        let hotKeyID = EventHotKeyID(signature: fourCharCode("NXUS"), id: id)
         var hotKeyRef: EventHotKeyRef?
 
         let status = RegisterEventHotKey(

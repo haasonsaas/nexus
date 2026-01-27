@@ -15,9 +15,15 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
     ],
     targets: [
+        .target(
+            name: "NexusMacObjC",
+            path: "Sources/NexusMacObjC",
+            publicHeadersPath: "include"
+        ),
         .executableTarget(
             name: "NexusMac",
             dependencies: [
+                "NexusMacObjC",
                 .product(name: "Logging", package: "swift-log"),
             ],
             path: "Sources/NexusMac"

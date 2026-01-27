@@ -5,6 +5,7 @@ import OSLog
 
 /// Protocol for chat transport implementations.
 /// Provides an abstraction layer for different chat backend implementations.
+@MainActor
 protocol ChatTransportProtocol: AnyObject, Sendable {
     /// Connect to the transport
     func connect() async throws
@@ -467,7 +468,7 @@ final class ToolCallTracker {
     private(set) var activeToolCalls: [ToolCall] = []
     private(set) var completedToolCalls: [ToolCall] = []
 
-    struct ToolCall: Identifiable, Sendable {
+    struct ToolCall: Identifiable, @unchecked Sendable {
         let id: String
         let runId: String
         let name: String

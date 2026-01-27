@@ -229,7 +229,7 @@ final class RemotePortTunnel {
 
         // Disconnect existing connections
         if state.isActive {
-            await disconnect()
+            disconnect()
         }
 
         state = .connecting

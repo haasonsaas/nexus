@@ -189,12 +189,8 @@ final class SystemIntegration {
     /// Get CPU usage percentage
     func getCPUUsage() -> Double {
         var cpuInfo: processor_info_array_t!
-        var prevCpuInfo: processor_info_array_t?
         var numCpuInfo: mach_msg_type_number_t = 0
-        var numPrevCpuInfo: mach_msg_type_number_t = 0
         var numCPUs: natural_t = 0
-
-        let mibKeys = [CTL_HW, HW_NCPU]
         var numCPUsU: UInt32 = 0
         var sizeOfNumCPUs: Int = MemoryLayout<UInt32>.size
 

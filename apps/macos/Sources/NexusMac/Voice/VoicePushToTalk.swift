@@ -188,7 +188,7 @@ final class VoicePushToTalk {
 
     private func beginCapture() async {
         // Request coordinator permission
-        let granted = await VoiceSessionCoordinator.shared.requestSession(mode: .pushToTalk)
+        let granted = VoiceSessionCoordinator.shared.requestSession(mode: .pushToTalk)
         guard granted else {
             logger.warning("ptt session denied by coordinator")
             await MainActor.run { state = .idle }

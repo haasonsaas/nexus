@@ -118,8 +118,11 @@ final class HoverHUDController {
             context.timingFunction = CAMediaTimingFunction(name: .easeIn)
             window.animator().alphaValue = 0
         } completionHandler: { [weak self] in
-            window.orderOut(nil)
-            self?.isVisible = false
+            Task { @MainActor in
+                guard let self else { return }
+                self.window?.orderOut(nil)
+                self.isVisible = false
+            }
         }
 
         logger.debug("hover HUD hidden: \(reason)")

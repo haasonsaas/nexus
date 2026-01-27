@@ -25,7 +25,7 @@ final class SpotlightIntegration {
         attributeSet.kind = "AI Conversation"
         attributeSet.creator = "Nexus"
 
-        if let model = conversation.metadata.model {
+        if conversation.metadata.model != nil {
             attributeSet.addedDate = conversation.createdAt
             attributeSet.contentModificationDate = conversation.updatedAt
         }

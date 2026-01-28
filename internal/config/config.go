@@ -2576,6 +2576,18 @@ func validateConfig(cfg *Config) error {
 			}
 		}
 	}
+	if browserURL := strings.TrimSpace(cfg.Tools.Browser.URL); browserURL != "" {
+		parsed, err := url.Parse(browserURL)
+		if err != nil || parsed == nil || strings.TrimSpace(parsed.Scheme) == "" || strings.TrimSpace(parsed.Host) == "" {
+			issues = append(issues, "tools.browser.url must be a valid URL when set")
+		} else {
+			switch strings.ToLower(parsed.Scheme) {
+			case "http", "https", "ws", "wss":
+			default:
+				issues = append(issues, "tools.browser.url scheme must be http, https, ws, or wss")
+			}
+		}
+	}
 	if cfg.Tools.WebFetch.MaxChars < 0 {
 		issues = append(issues, "tools.web_fetch.max_chars must be >= 0")
 	}

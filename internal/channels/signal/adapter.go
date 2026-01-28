@@ -261,7 +261,63 @@ func (a *Adapter) GetConversation(ctx context.Context, peerID string) (*personal
 
 // ListConversations lists conversations.
 func (a *Adapter) ListConversations(ctx context.Context, opts personal.ListOptions) ([]*personal.Conversation, error) {
-	return nil, nil
+	if a == nil || a.stdin == nil || a.pending == nil {
+		return nil, channels.ErrUnavailable("list conversations unavailable", nil)
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	req := map[string]any{
+		"method": "listContacts",
+	}
+	result, err := a.call(ctx, req)
+	if err != nil {
+		return nil, channels.ErrConnection("failed to list contacts", err)
+	}
+	var contacts []signalContact
+	if err := json.Unmarshal(result, &contacts); err != nil {
+		return nil, channels.ErrInternal("failed to parse contacts", err)
+	}
+	limit := opts.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := opts.Offset
+	if offset < 0 {
+		offset = 0
+	}
+	conversations := make([]*personal.Conversation, 0, limit)
+	for _, sc := range contacts {
+		if offset > 0 {
+			offset--
+			continue
+		}
+		id := sc.Number
+		if id == "" {
+			id = sc.UUID
+		}
+		if id == "" {
+			continue
+		}
+		contact := &personal.Contact{
+			ID:    id,
+			Name:  sc.Name,
+			Phone: sc.Number,
+		}
+		if contact.Name == "" {
+			contact.Name = id
+		}
+		a.SetContact(contact)
+		conversations = append(conversations, &personal.Conversation{
+			ID:   id,
+			Type: personal.ConversationDM,
+			Name: contact.Name,
+		})
+		if len(conversations) >= limit {
+			break
+		}
+	}
+	return conversations, nil
 }
 
 // receiveLoop reads and processes messages from signal-cli stdout.
@@ -393,6 +449,9 @@ func (a *Adapter) handleReceive(params json.RawMessage) {
 
 // call sends a JSON-RPC request and waits for a response.
 func (a *Adapter) call(ctx context.Context, req map[string]any) (json.RawMessage, error) {
+	if a == nil || a.stdin == nil || a.pending == nil {
+		return nil, channels.ErrUnavailable("signal client not started", nil)
+	}
 	id := a.requestID.Add(1)
 	req["jsonrpc"] = "2.0"
 	req["id"] = id

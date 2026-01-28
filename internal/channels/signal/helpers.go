@@ -58,7 +58,52 @@ func (c *contactManager) Resolve(ctx context.Context, identifier string) (*perso
 }
 
 func (c *contactManager) Search(ctx context.Context, query string) ([]*personal.Contact, error) {
-	return nil, nil
+	if c == nil || c.adapter == nil || c.adapter.stdin == nil || c.adapter.pending == nil {
+		return nil, channels.ErrUnavailable("contact search unavailable", nil)
+	}
+	q := strings.TrimSpace(query)
+	if q == "" {
+		return []*personal.Contact{}, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	req := map[string]any{
+		"method": "listContacts",
+	}
+	result, err := c.adapter.call(ctx, req)
+	if err != nil {
+		return nil, channels.ErrConnection("failed to list contacts", err)
+	}
+	var contacts []signalContact
+	if err := json.Unmarshal(result, &contacts); err != nil {
+		return nil, channels.ErrInternal("failed to parse contacts", err)
+	}
+	q = strings.ToLower(q)
+	results := make([]*personal.Contact, 0)
+	for _, sc := range contacts {
+		if !matchesQuery(q, sc.Name, sc.Number, sc.UUID) {
+			continue
+		}
+		id := sc.Number
+		if id == "" {
+			id = sc.UUID
+		}
+		contact := &personal.Contact{
+			ID:    id,
+			Name:  sc.Name,
+			Phone: sc.Number,
+		}
+		if contact.Name == "" {
+			contact.Name = id
+		}
+		c.adapter.SetContact(contact)
+		results = append(results, contact)
+		if len(results) >= 50 {
+			break
+		}
+	}
+	return results, nil
 }
 
 func (c *contactManager) Sync(ctx context.Context) error {
@@ -90,6 +135,21 @@ func (c *contactManager) Sync(ctx context.Context) error {
 
 func (c *contactManager) GetByID(ctx context.Context, id string) (*personal.Contact, error) {
 	return c.Resolve(ctx, id)
+}
+
+func matchesQuery(query string, values ...string) bool {
+	if query == "" {
+		return true
+	}
+	for _, value := range values {
+		if value == "" {
+			continue
+		}
+		if strings.Contains(strings.ToLower(value), query) {
+			return true
+		}
+	}
+	return false
 }
 
 // presenceManager implements personal.PresenceManager for Signal.

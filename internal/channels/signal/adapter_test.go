@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/channels/personal"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
@@ -854,8 +855,11 @@ func TestContactManagerSearch(t *testing.T) {
 	}
 
 	results, err := cm.Search(context.Background(), "test")
-	if err != nil {
-		t.Errorf("expected no error for Search, got %v", err)
+	if err == nil {
+		t.Error("expected error for missing signal client")
+	}
+	if channels.GetErrorCode(err) != channels.ErrCodeUnavailable {
+		t.Errorf("expected unavailable error, got %v", err)
 	}
 	if results != nil {
 		t.Errorf("expected nil results, got %v", results)
@@ -1989,7 +1993,7 @@ func TestGetConversation(t *testing.T) {
 // ListConversations Tests
 // =============================================================================
 
-func TestListConversationsReturnsNil(t *testing.T) {
+func TestListConversationsUnavailable(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Account = "+1234567890"
 
@@ -2000,8 +2004,11 @@ func TestListConversationsReturnsNil(t *testing.T) {
 	adapter.BaseAdapter = personal.NewBaseAdapter("signal", &cfg.Personal, nil)
 
 	convs, err := adapter.ListConversations(context.Background(), personal.ListOptions{})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if err == nil {
+		t.Fatal("expected error for missing signal client")
+	}
+	if channels.GetErrorCode(err) != channels.ErrCodeUnavailable {
+		t.Fatalf("expected unavailable error, got %v", err)
 	}
 	if convs != nil {
 		t.Errorf("expected nil conversations, got %v", convs)

@@ -55,9 +55,45 @@ func (c *contactManager) Resolve(ctx context.Context, identifier string) (*perso
 }
 
 func (c *contactManager) Search(ctx context.Context, query string) ([]*personal.Contact, error) {
-	// whatsmeow doesn't have a contact search API
-	// We could search our local cache
-	return nil, nil
+	if c == nil || c.adapter == nil || c.adapter.client == nil {
+		return nil, channels.ErrUnavailable("contact search unavailable", nil)
+	}
+	q := strings.TrimSpace(query)
+	if q == "" {
+		return []*personal.Contact{}, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	contacts, err := c.adapter.client.Store.Contacts.GetAllContacts(ctx)
+	if err != nil {
+		return nil, channels.ErrConnection("failed to get contacts", err)
+	}
+	q = strings.ToLower(q)
+	results := make([]*personal.Contact, 0)
+	for jid, contact := range contacts {
+		name := contact.FullName
+		if name == "" {
+			name = contact.PushName
+		}
+		if !matchesQuery(q, jid.String(), jid.User, name, contact.PushName) {
+			continue
+		}
+		result := &personal.Contact{
+			ID:    jid.String(),
+			Name:  name,
+			Phone: jid.User,
+		}
+		if result.Name == "" {
+			result.Name = jid.User
+		}
+		c.adapter.SetContact(result)
+		results = append(results, result)
+		if len(results) >= 50 {
+			break
+		}
+	}
+	return results, nil
 }
 
 func (c *contactManager) Sync(ctx context.Context) error {
@@ -80,6 +116,21 @@ func (c *contactManager) Sync(ctx context.Context) error {
 
 func (c *contactManager) GetByID(ctx context.Context, id string) (*personal.Contact, error) {
 	return c.Resolve(ctx, id)
+}
+
+func matchesQuery(query string, values ...string) bool {
+	if query == "" {
+		return true
+	}
+	for _, value := range values {
+		if value == "" {
+			continue
+		}
+		if strings.Contains(strings.ToLower(value), query) {
+			return true
+		}
+	}
+	return false
 }
 
 // mediaHandler implements personal.MediaHandler for WhatsApp.

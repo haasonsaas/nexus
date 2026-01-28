@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/channels/personal"
 	"github.com/haasonsaas/nexus/pkg/models"
 	"go.mau.fi/whatsmeow/types/events"
@@ -567,8 +568,11 @@ func TestContactManagerSearchReturnsEmpty(t *testing.T) {
 	cm := &contactManager{}
 
 	results, err := cm.Search(nil, "test")
-	if err != nil {
-		t.Errorf("expected no error, got %v", err)
+	if err == nil {
+		t.Error("expected error for missing adapter")
+	}
+	if channels.GetErrorCode(err) != channels.ErrCodeUnavailable {
+		t.Errorf("expected unavailable error, got %v", err)
 	}
 	if results != nil {
 		t.Errorf("expected nil results, got %v", results)
@@ -580,8 +584,11 @@ func TestContactManagerSearchWithContext(t *testing.T) {
 	ctx := context.Background()
 
 	results, err := cm.Search(ctx, "any query")
-	if err != nil {
-		t.Errorf("expected no error, got %v", err)
+	if err == nil {
+		t.Error("expected error for missing adapter")
+	}
+	if channels.GetErrorCode(err) != channels.ErrCodeUnavailable {
+		t.Errorf("expected unavailable error, got %v", err)
 	}
 	if results != nil {
 		t.Errorf("expected nil results, got %v", results)
@@ -604,8 +611,11 @@ func TestContactManagerSearchDifferentQueries(t *testing.T) {
 	for _, q := range queries {
 		t.Run(q, func(t *testing.T) {
 			results, err := cm.Search(ctx, q)
-			if err != nil {
-				t.Errorf("expected no error for query %q, got %v", q, err)
+			if err == nil {
+				t.Errorf("expected error for query %q with missing adapter", q)
+			}
+			if channels.GetErrorCode(err) != channels.ErrCodeUnavailable {
+				t.Errorf("expected unavailable error for query %q, got %v", q, err)
 			}
 			if results != nil {
 				t.Errorf("expected nil results for query %q", q)

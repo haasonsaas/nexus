@@ -274,6 +274,7 @@ func downloadURL(ctx context.Context, url string) ([]byte, error) {
 	if raw == "" {
 		return nil, channels.ErrInvalidInput("missing attachment url", nil)
 	}
+	isFileURL := strings.HasPrefix(raw, "file://")
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -299,7 +300,16 @@ func downloadURL(ctx context.Context, url string) ([]byte, error) {
 
 	path := strings.TrimPrefix(raw, "file://")
 	if strings.TrimSpace(path) != "" {
-		if info, err := os.Stat(path); err == nil && !info.IsDir() {
+		info, err := os.Stat(path)
+		if err != nil {
+			if isFileURL {
+				return nil, channels.ErrInvalidInput("attachment file not found", err)
+			}
+		} else if info.IsDir() {
+			if isFileURL {
+				return nil, channels.ErrInvalidInput("attachment path is a directory", nil)
+			}
+		} else {
 			if info.Size() > maxBytes {
 				return nil, channels.ErrConnection(fmt.Sprintf("download too large (%d bytes)", info.Size()), nil)
 			}
@@ -318,6 +328,12 @@ func downloadURL(ctx context.Context, url string) ([]byte, error) {
 			}
 			return payload, nil
 		}
+	} else if isFileURL {
+		return nil, channels.ErrInvalidInput("missing attachment path", nil)
+	}
+
+	if isFileURL {
+		return nil, channels.ErrInvalidInput("attachment file not found", nil)
 	}
 
 	client := &http.Client{

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -97,6 +98,7 @@ type WebhookHooks struct {
 	config   *config.WebhookHooksConfig
 	handlers map[string]WebhookHandler
 	stats    *WebhookStats
+	logger   *slog.Logger
 }
 
 // WebhookStats tracks webhook usage statistics.
@@ -132,12 +134,15 @@ func NewWebhookHooks(config *config.WebhookHooksConfig) (*WebhookHooks, error) {
 		config.MaxBodyBytes = defaultMaxBodyBytes
 	}
 
+	logger := slog.Default().With("component", "webhook_hooks")
+
 	return &WebhookHooks{
 		config:   config,
 		handlers: make(map[string]WebhookHandler),
 		stats: &WebhookStats{
 			ByPath: make(map[string]int64),
 		},
+		logger: logger,
 	}, nil
 }
 
@@ -200,6 +205,14 @@ func (h *WebhookHooks) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.mu.RUnlock()
 
 	if !ok {
+		if h.logger != nil {
+			h.logger.Warn(
+				"webhook handler not registered",
+				"handler", mapping.Handler,
+				"path", path,
+				"name", mapping.Name,
+			)
+		}
 		h.respondError(w, http.StatusNotImplemented, "handler not implemented: "+mapping.Handler)
 		return
 	}

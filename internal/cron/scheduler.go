@@ -596,7 +596,7 @@ func (s *Scheduler) executeJob(ctx context.Context, job *Job) error {
 	case JobTypeCustom:
 		return s.executeCustom(ctx, job)
 	default:
-		return fmt.Errorf("job type %s not implemented", job.Type)
+		return fmt.Errorf("job type %s not implemented (job id=%q name=%q)", job.Type, job.ID, job.Name)
 	}
 }
 

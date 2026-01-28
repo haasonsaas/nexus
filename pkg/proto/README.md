@@ -10,6 +10,8 @@ The Nexus proto defines a comprehensive gRPC API for:
 - Agent management (AI configurations)
 - Channel management (messaging platform connections)
 - Health checks
+- Tasks, events, identities, and provisioning workflows
+- Artifacts and edge/node coordination
 
 ## Services
 
@@ -60,6 +62,82 @@ Standard health check service.
 rpc Check(HealthCheckRequest) returns (HealthCheckResponse);
 rpc Watch(HealthCheckRequest) returns (stream HealthCheckResponse);
 ```
+
+### ArtifactService
+Manages stored artifacts and blobs.
+
+```go
+rpc ListArtifacts(ListArtifactsRequest) returns (ListArtifactsResponse);
+rpc GetArtifact(GetArtifactRequest) returns (GetArtifactResponse);
+rpc DeleteArtifact(DeleteArtifactRequest) returns (DeleteArtifactResponse);
+```
+
+### EventService
+Reads system event streams and timelines.
+
+```go
+rpc GetEvents(GetEventsRequest) returns (GetEventsResponse);
+rpc GetTimeline(GetTimelineRequest) returns (GetTimelineResponse);
+```
+
+### TaskService
+Manages background tasks and executions.
+
+```go
+rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);
+rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
+rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse);
+rpc DeleteTask(DeleteTaskRequest) returns (DeleteTaskResponse);
+rpc PauseTask(PauseTaskRequest) returns (PauseTaskResponse);
+rpc ResumeTask(ResumeTaskRequest) returns (ResumeTaskResponse);
+rpc TriggerTask(TriggerTaskRequest) returns (TriggerTaskResponse);
+rpc ListExecutions(ListExecutionsRequest) returns (ListExecutionsResponse);
+```
+
+### MessageService
+Sends or broadcasts messages.
+
+```go
+rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
+rpc BroadcastMessage(BroadcastMessageRequest) returns (BroadcastMessageResponse);
+```
+
+### IdentityService
+Manages identity records and peer links.
+
+```go
+rpc CreateIdentity(CreateIdentityRequest) returns (CreateIdentityResponse);
+rpc GetIdentity(GetIdentityRequest) returns (GetIdentityResponse);
+rpc ListIdentities(ListIdentitiesRequest) returns (ListIdentitiesResponse);
+rpc DeleteIdentity(DeleteIdentityRequest) returns (DeleteIdentityResponse);
+rpc LinkPeer(LinkPeerRequest) returns (LinkPeerResponse);
+rpc UnlinkPeer(UnlinkPeerRequest) returns (UnlinkPeerResponse);
+rpc ResolveIdentity(ResolveIdentityRequest) returns (ResolveIdentityResponse);
+rpc GetLinkedPeers(GetLinkedPeersRequest) returns (GetLinkedPeersResponse);
+```
+
+### ProvisioningService
+Coordinates guided provisioning workflows.
+
+```go
+rpc StartProvisioning(StartProvisioningRequest) returns (StartProvisioningResponse);
+rpc GetProvisioningStatus(GetProvisioningStatusRequest) returns (GetProvisioningStatusResponse);
+rpc SubmitProvisioningStep(SubmitProvisioningStepRequest) returns (SubmitProvisioningStepResponse);
+rpc CancelProvisioning(CancelProvisioningRequest) returns (CancelProvisioningResponse);
+rpc GetProvisioningRequirements(GetProvisioningRequirementsRequest) returns (GetProvisioningRequirementsResponse);
+```
+
+### EdgeService
+Manages edge nodes and streaming connections.
+
+```go
+rpc Connect(stream EdgeMessage) returns (stream EdgeMessage);
+rpc GetEdgeStatus(GetEdgeStatusRequest) returns (GetEdgeStatusResponse);
+rpc ListEdges(ListEdgesRequest) returns (ListEdgesResponse);
+```
+
+> Note: Not every deployment enables every service. Services are registered at runtime based on configuration and features; clients should be prepared for `Unimplemented` responses when a service is disabled.
 
 ## Message Types
 

@@ -3,7 +3,6 @@ package whatsapp
 import (
 	"context"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -299,9 +298,6 @@ func (a *Adapter) GetConversation(ctx context.Context, peerID string) (*personal
 		Type: convType,
 	}, nil
 }
-
-// ErrNotImplemented indicates the operation is not implemented for this adapter.
-var ErrNotImplemented = errors.New("operation not implemented")
 
 // ListConversations lists conversations tracked from message history.
 func (a *Adapter) ListConversations(ctx context.Context, opts personal.ListOptions) ([]*personal.Conversation, error) {

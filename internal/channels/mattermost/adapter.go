@@ -208,9 +208,13 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	// Extract channel ID from message metadata
 	channelID, ok := msg.Metadata["mattermost_channel"].(string)
 	if !ok {
+		msgID := ""
+		if msg != nil {
+			msgID = msg.ID
+		}
 		a.health.RecordMessageFailed()
 		a.health.RecordError(channels.ErrCodeInvalidInput)
-		return channels.ErrInvalidInput("missing mattermost_channel in message metadata", nil)
+		return channels.ErrInvalidInput(channels.MissingMetadata("mattermost_channel", msgID), nil)
 	}
 
 	a.logger.Debug("sending message",
@@ -500,7 +504,11 @@ func (a *Adapter) StartStreamingResponse(ctx context.Context, msg *models.Messag
 
 	channelID, ok := msg.Metadata["mattermost_channel"].(string)
 	if !ok || channelID == "" {
-		return "", channels.ErrInvalidInput("missing mattermost_channel in message metadata", nil)
+		msgID := ""
+		if msg != nil {
+			msgID = msg.ID
+		}
+		return "", channels.ErrInvalidInput(channels.MissingMetadata("mattermost_channel", msgID), nil)
 	}
 
 	if err := a.rateLimiter.Wait(ctx); err != nil {

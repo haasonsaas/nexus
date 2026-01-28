@@ -376,9 +376,13 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	// Extract room token from message metadata
 	roomToken, ok := msg.Metadata["nextcloud_room_token"].(string)
 	if !ok || roomToken == "" {
+		msgID := ""
+		if msg != nil {
+			msgID = msg.ID
+		}
 		a.health.RecordMessageFailed()
 		a.health.RecordError(channels.ErrCodeInvalidInput)
-		return channels.ErrInvalidInput("missing nextcloud_room_token in message metadata", nil)
+		return channels.ErrInvalidInput(channels.MissingMetadata("nextcloud_room_token", msgID), nil)
 	}
 
 	a.logger.Debug("sending message",

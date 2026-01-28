@@ -666,7 +666,15 @@ func (a *Adapter) DownloadAttachment(ctx context.Context, msg *nexusmodels.Messa
 		}
 	}
 	if fileID == "" {
-		return nil, "", "", channels.ErrInvalidInput("missing telegram file id", nil)
+		msgID := ""
+		if msg != nil {
+			msgID = msg.ID
+		}
+		suffix := ""
+		if msgID != "" {
+			suffix = fmt.Sprintf(" (message_id=%s)", msgID)
+		}
+		return nil, "", "", channels.ErrInvalidInput(fmt.Sprintf("missing telegram file id%s", suffix), nil)
 	}
 
 	file, err := a.botClient.GetFile(ctx, &bot.GetFileParams{FileID: fileID})

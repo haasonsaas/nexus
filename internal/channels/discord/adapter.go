@@ -250,9 +250,13 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	// Extract Discord-specific metadata
 	channelID, ok := msg.Metadata["discord_channel_id"].(string)
 	if !ok || channelID == "" {
+		msgID := ""
+		if msg != nil {
+			msgID = msg.ID
+		}
 		a.health.RecordMessageFailed()
 		a.health.RecordError(channels.ErrCodeInvalidInput)
-		return channels.ErrInvalidInput("missing discord_channel_id in metadata", nil)
+		return channels.ErrInvalidInput(channels.MissingMetadata("discord_channel_id", msgID), nil)
 	}
 
 	a.logger.Debug("sending message",

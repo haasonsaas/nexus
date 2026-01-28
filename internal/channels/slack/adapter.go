@@ -257,9 +257,13 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	// Extract channel and thread timestamp from message metadata
 	channelID, ok := msg.Metadata["slack_channel"].(string)
 	if !ok {
+		msgID := ""
+		if msg != nil {
+			msgID = msg.ID
+		}
 		a.health.RecordMessageFailed()
 		a.health.RecordError(channels.ErrCodeInvalidInput)
-		return channels.ErrInvalidInput("missing slack_channel in message metadata", nil)
+		return channels.ErrInvalidInput(channels.MissingMetadata("slack_channel", msgID), nil)
 	}
 
 	a.logger.Debug("sending message",
@@ -932,7 +936,11 @@ func (a *Adapter) StartStreamingResponse(ctx context.Context, msg *models.Messag
 
 	channelID, ok := msg.Metadata["slack_channel"].(string)
 	if !ok || channelID == "" {
-		return "", channels.ErrInvalidInput("missing slack_channel in message metadata", nil)
+		msgID := ""
+		if msg != nil {
+			msgID = msg.ID
+		}
+		return "", channels.ErrInvalidInput(channels.MissingMetadata("slack_channel", msgID), nil)
 	}
 
 	// Apply rate limiting
@@ -969,7 +977,11 @@ func (a *Adapter) UpdateStreamingResponse(ctx context.Context, msg *models.Messa
 
 	channelID, ok := msg.Metadata["slack_channel"].(string)
 	if !ok || channelID == "" {
-		return channels.ErrInvalidInput("missing slack_channel in message metadata", nil)
+		msgID := ""
+		if msg != nil {
+			msgID = msg.ID
+		}
+		return channels.ErrInvalidInput(channels.MissingMetadata("slack_channel", msgID), nil)
 	}
 
 	// Apply rate limiting for edits

@@ -128,9 +128,13 @@ func (a *TestableAdapter) Send(ctx context.Context, msg *models.Message) error {
 
 	channelID, ok := msg.Metadata["slack_channel"].(string)
 	if !ok {
+		msgID := ""
+		if msg != nil {
+			msgID = msg.ID
+		}
 		a.health.RecordMessageFailed()
 		a.health.RecordError(channels.ErrCodeInvalidInput)
-		return channels.ErrInvalidInput("missing slack_channel in message metadata", nil)
+		return channels.ErrInvalidInput(channels.MissingMetadata("slack_channel", msgID), nil)
 	}
 
 	options := buildBlockKitMessage(msg)

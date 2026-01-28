@@ -3,6 +3,7 @@ package channels
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // ErrorCode represents a specific error condition in channel operations.
@@ -117,6 +118,19 @@ func ErrRateLimit(message string, err error) *Error {
 // ErrInvalidInput creates an invalid input error.
 func ErrInvalidInput(message string, err error) *Error {
 	return NewError(ErrCodeInvalidInput, message, err)
+}
+
+// MissingMetadata formats a consistent missing-metadata error message.
+func MissingMetadata(field string, messageID string) string {
+	field = strings.TrimSpace(field)
+	if field == "" {
+		field = "required"
+	}
+	msg := fmt.Sprintf("missing %s in message metadata", field)
+	if strings.TrimSpace(messageID) != "" {
+		msg = fmt.Sprintf("%s (message_id=%s)", msg, messageID)
+	}
+	return msg
 }
 
 // ErrNotFound creates a not found error.

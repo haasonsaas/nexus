@@ -356,9 +356,13 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	// Extract recipient pubkey from message metadata
 	toPubkey, ok := msg.Metadata["nostr_pubkey"].(string)
 	if !ok || toPubkey == "" {
+		msgID := ""
+		if msg != nil {
+			msgID = msg.ID
+		}
 		a.health.RecordMessageFailed()
 		a.health.RecordError(channels.ErrCodeInvalidInput)
-		return channels.ErrInvalidInput("missing nostr_pubkey in message metadata", nil)
+		return channels.ErrInvalidInput(channels.MissingMetadata("nostr_pubkey", msgID), nil)
 	}
 
 	// Normalize pubkey

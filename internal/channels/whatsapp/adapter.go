@@ -198,7 +198,11 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 
 	peerID, ok := msg.Metadata["peer_id"].(string)
 	if !ok || peerID == "" {
-		return channels.ErrInvalidInput("missing peer_id in message metadata", nil)
+		msgID := ""
+		if msg != nil {
+			msgID = msg.ID
+		}
+		return channels.ErrInvalidInput(channels.MissingMetadata("peer_id", msgID), nil)
 	}
 
 	jid, err := types.ParseJID(peerID)

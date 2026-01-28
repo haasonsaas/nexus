@@ -26,7 +26,7 @@ type HierarchyRequest struct {
 // SearchHierarchical searches across scopes and merges results by weighted score.
 func (m *Manager) SearchHierarchical(ctx context.Context, req *HierarchyRequest) (*models.SearchResponse, error) {
 	if m == nil || m.backend == nil {
-		return nil, fmt.Errorf("memory manager not initialized")
+		return nil, fmt.Errorf("memory manager not initialized (set vector_memory.enabled)")
 	}
 	if req == nil || strings.TrimSpace(req.Query) == "" {
 		return nil, fmt.Errorf("query is required")

@@ -114,7 +114,7 @@ func (w *fileWriter) Write(line string) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.file == nil {
-		return fmt.Errorf("file not initialized")
+		return fmt.Errorf("file not initialized (path=%s)", w.filePath)
 	}
 	_, err := w.file.WriteString(line)
 	return err

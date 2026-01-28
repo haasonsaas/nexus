@@ -230,7 +230,7 @@ type firecrackerExecutorWrapper struct {
 // Run executes code in a Firecracker microVM.
 func (f *firecrackerExecutorWrapper) Run(ctx context.Context, params *ExecuteParams, workspace string) (*ExecuteResult, error) {
 	if f.backend == nil || f.backend.backend == nil {
-		return nil, fmt.Errorf("firecracker backend not initialized")
+		return nil, fmt.Errorf("firecracker backend not initialized - call InitFirecrackerBackend first")
 	}
 	return f.backend.backend.Run(ctx, params, workspace)
 }

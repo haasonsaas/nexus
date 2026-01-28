@@ -112,7 +112,7 @@ func (c *Client) CallService(ctx context.Context, domain, service string, data m
 
 func (c *Client) doJSON(ctx context.Context, method, endpoint string, body io.Reader) (json.RawMessage, error) {
 	if c == nil || c.client == nil {
-		return nil, fmt.Errorf("homeassistant: client not configured")
+		return nil, fmt.Errorf("homeassistant: client not configured (enable channels.homeassistant)")
 	}
 	req, err := http.NewRequestWithContext(ctx, method, endpoint, body)
 	if err != nil {

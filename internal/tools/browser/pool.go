@@ -186,7 +186,7 @@ func (p *Pool) Close() error {
 // createInstance creates a new browser instance
 func (p *Pool) createInstance() (*BrowserInstance, error) {
 	if p.pw == nil {
-		return nil, fmt.Errorf("playwright not initialized")
+		return nil, fmt.Errorf("playwright not initialized (install failed or missing driver)")
 	}
 
 	// Launch or connect to browser

@@ -778,7 +778,7 @@ func applyWebhookAuth(req *http.Request, auth *config.CronWebhookAuth) error {
 
 func (s *Scheduler) renderMessageContent(message *config.CronMessageConfig) (string, error) {
 	if message == nil {
-		return "", errors.New("missing message payload")
+		return "", errors.New("cron message payload missing")
 	}
 	templateText := strings.TrimSpace(message.Template)
 	if templateText == "" {

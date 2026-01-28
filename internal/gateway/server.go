@@ -659,7 +659,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		messageSvc := newMessageService(server)
 		server.cronScheduler.SetMessageSender(cron.MessageSenderFunc(func(ctx context.Context, message *config.CronMessageConfig) error {
 			if message == nil {
-				return fmt.Errorf("missing message payload")
+				return fmt.Errorf("cron message payload missing")
 			}
 			req := &proto.ProactiveSendRequest{
 				Channel: strings.TrimSpace(message.Channel),
@@ -681,11 +681,11 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		}))
 		server.cronScheduler.SetAgentRunner(cron.AgentRunnerFunc(func(ctx context.Context, job *cron.Job) error {
 			if job == nil || job.Message == nil {
-				return fmt.Errorf("missing agent payload")
+				return fmt.Errorf("cron agent payload missing")
 			}
 			content := strings.TrimSpace(job.Message.Content)
 			if content == "" {
-				return fmt.Errorf("missing agent content")
+				return fmt.Errorf("cron agent content missing")
 			}
 			channel := strings.TrimSpace(job.Message.Channel)
 			channelID := strings.TrimSpace(job.Message.ChannelID)
@@ -693,7 +693,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 				channel = string(models.ChannelAPI)
 				channelID = fmt.Sprintf("cron:%s", job.ID)
 			} else if channel == "" || channelID == "" {
-				return fmt.Errorf("agent payload missing channel")
+				return fmt.Errorf("cron agent payload missing channel")
 			}
 			channelType := models.ChannelType(channel)
 			metadata := map[string]any{

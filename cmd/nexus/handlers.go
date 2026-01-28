@@ -1536,11 +1536,11 @@ func resolveProviderProfile(cfg config.LLMProviderConfig, profileID string) (con
 		return cfg, nil
 	}
 	if cfg.Profiles == nil {
-		return cfg, fmt.Errorf("provider profile %q not configured", profileID)
+		return cfg, fmt.Errorf("provider profile %q not configured (define under llm.providers.<provider>.profiles)", profileID)
 	}
 	profile, ok := cfg.Profiles[profileID]
 	if !ok {
-		return cfg, fmt.Errorf("provider profile %q not configured", profileID)
+		return cfg, fmt.Errorf("provider profile %q not configured (define under llm.providers.<provider>.profiles)", profileID)
 	}
 	effective := cfg
 	if profile.APIKey != "" {

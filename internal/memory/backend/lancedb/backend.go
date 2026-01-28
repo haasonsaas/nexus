@@ -328,9 +328,11 @@ func (b *Backend) Count(ctx context.Context, scope models.MemoryScope, scopeID s
 	return count, nil
 }
 
-// Compact is a no-op for this backend.
+// Compact rewrites the on-disk representation to drop deleted entries.
 func (b *Backend) Compact(ctx context.Context) error {
-	return nil
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.save()
 }
 
 // Close saves data and releases resources.

@@ -269,6 +269,9 @@ func (m *ToolManager) RegisterTools(ctx context.Context, runtime *agent.Runtime)
 	}
 
 	cfg := m.config
+	m.registeredTools = nil
+	m.toolSummaries = nil
+	m.mcpTools = nil
 
 	fileCfg := files.Config{Workspace: cfg.Workspace.Path}
 	m.registerCoreTool(runtime, files.NewReadTool(fileCfg))

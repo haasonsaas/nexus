@@ -167,13 +167,19 @@ func (m *ManagedServer) MediaManager() *MediaManager {
 // RegisterToolsWithRuntime registers all managed tools with the runtime.
 // This should be called after the runtime is initialized.
 func (m *ManagedServer) RegisterToolsWithRuntime(ctx context.Context) error {
+	alreadyInitialized := m.Server.runtime != nil
 	runtime, err := m.Server.ensureRuntime(ctx)
 	if err != nil {
 		return err
 	}
 
-	if m.toolManager != nil {
-		m.toolManager.SetSessionStore(m.Server.sessions)
+	if m.toolManager == nil {
+		return nil
+	}
+
+	m.toolManager.SetSessionStore(m.Server.sessions)
+	if !alreadyInitialized {
+		return nil
 	}
 	return m.toolManager.RegisterTools(ctx, runtime)
 }

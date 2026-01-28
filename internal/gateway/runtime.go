@@ -13,15 +13,19 @@ import (
 
 	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/haasonsaas/nexus/internal/agent/providers"
+	"github.com/haasonsaas/nexus/internal/agent/routing"
+	"github.com/haasonsaas/nexus/internal/attention"
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/edge"
 	"github.com/haasonsaas/nexus/internal/mcp"
 	"github.com/haasonsaas/nexus/internal/sessions"
+	"github.com/haasonsaas/nexus/internal/skills"
 	"github.com/haasonsaas/nexus/internal/tools/browser"
 	canvastools "github.com/haasonsaas/nexus/internal/tools/canvas"
 	"github.com/haasonsaas/nexus/internal/tools/computeruse"
 	crontools "github.com/haasonsaas/nexus/internal/tools/cron"
 	exectools "github.com/haasonsaas/nexus/internal/tools/exec"
+	"github.com/haasonsaas/nexus/internal/tools/facts"
 	"github.com/haasonsaas/nexus/internal/tools/files"
 	gatewaytools "github.com/haasonsaas/nexus/internal/tools/gateway"
 	"github.com/haasonsaas/nexus/internal/tools/homeassistant"
@@ -30,6 +34,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/tools/message"
 	modelstools "github.com/haasonsaas/nexus/internal/tools/models"
 	nodestools "github.com/haasonsaas/nexus/internal/tools/nodes"
+	ragtools "github.com/haasonsaas/nexus/internal/tools/rag"
 	"github.com/haasonsaas/nexus/internal/tools/reminders"
 	"github.com/haasonsaas/nexus/internal/tools/sandbox"
 	"github.com/haasonsaas/nexus/internal/tools/sandbox/firecracker"
@@ -90,7 +95,12 @@ func (s *Server) ensureRuntime(ctx context.Context) (*agent.Runtime, error) {
 	if system := buildSystemPrompt(s.config, SystemPromptOptions{}); system != "" {
 		runtime.SetSystemPrompt(system)
 	}
-	if err := s.registerTools(ctx, runtime); err != nil {
+	if s.toolManager != nil {
+		s.toolManager.SetSessionStore(s.sessions)
+		if err := s.toolManager.RegisterTools(ctx, runtime); err != nil {
+			return nil, fmt.Errorf("register tools: %w", err)
+		}
+	} else if err := s.registerTools(ctx, runtime); err != nil {
 		return nil, fmt.Errorf("register tools: %w", err)
 	}
 	if s.runtimePlugins != nil {
@@ -239,6 +249,11 @@ func (s *Server) newProvider() (agent.LLMProvider, string, error) {
 		return nil, "", err
 	}
 
+	providerMap := map[string]agent.LLMProvider{
+		providerID: primary,
+	}
+	selected := primary
+
 	// Wrap with failover orchestrator if fallback chain is configured
 	if len(s.config.LLM.FallbackChain) > 0 {
 		orchestrator := agent.NewFailoverOrchestrator(primary, agent.DefaultFailoverConfig())
@@ -258,12 +273,98 @@ func (s *Server) newProvider() (agent.LLMProvider, string, error) {
 				continue
 			}
 			orchestrator.AddProvider(fallback)
+			if _, ok := providerMap[fallbackID]; !ok {
+				providerMap[fallbackID] = fallback
+			}
 		}
 
-		return orchestrator, model, nil
+		providerMap[providerID] = orchestrator
+		selected = orchestrator
 	}
 
-	return primary, model, nil
+	// Add routing target providers.
+	if s.config.LLM.Routing.Enabled {
+		for _, rule := range s.config.LLM.Routing.Rules {
+			targetID := normalizeProviderID(rule.Target.Provider)
+			if targetID == "" {
+				continue
+			}
+			if _, ok := providerMap[targetID]; ok {
+				continue
+			}
+			target, _, err := s.buildProvider(targetID)
+			if err != nil {
+				if s.logger != nil {
+					s.logger.Warn("failed to create routed provider", "provider", targetID, "error", err)
+				}
+				continue
+			}
+			providerMap[targetID] = target
+		}
+		fallbackID := normalizeProviderID(s.config.LLM.Routing.Fallback.Provider)
+		if fallbackID != "" {
+			if _, ok := providerMap[fallbackID]; !ok {
+				target, _, err := s.buildProvider(fallbackID)
+				if err != nil {
+					if s.logger != nil {
+						s.logger.Warn("failed to create routing fallback provider", "provider", fallbackID, "error", err)
+					}
+				} else {
+					providerMap[fallbackID] = target
+				}
+			}
+		}
+	}
+
+	localProviders := []string{}
+	if s.config.LLM.AutoDiscover.Ollama.Enabled {
+		discovered, err := discoverOllama(s.config.LLM.AutoDiscover.Ollama.ProbeLocations, s.logger)
+		if err != nil {
+			if s.logger != nil {
+				s.logger.Warn("ollama discovery failed", "error", err)
+			}
+		} else if discovered != nil {
+			provider := providers.NewOllamaProvider(providers.OllamaConfig{
+				BaseURL:      discovered.BaseURL,
+				DefaultModel: discovered.DefaultModel,
+			})
+			providerMap["ollama"] = provider
+			localProviders = append(localProviders, "ollama")
+		}
+	}
+
+	if s.config.LLM.Routing.Enabled {
+		rules := make([]routing.Rule, 0, len(s.config.LLM.Routing.Rules))
+		for _, rule := range s.config.LLM.Routing.Rules {
+			rules = append(rules, routing.Rule{
+				Name: rule.Name,
+				Match: routing.Match{
+					Patterns: rule.Match.Patterns,
+					Tags:     rule.Match.Tags,
+				},
+				Target: routing.Target{
+					Provider: rule.Target.Provider,
+					Model:    rule.Target.Model,
+				},
+			})
+		}
+
+		preferLocal := s.config.LLM.Routing.PreferLocal || s.config.LLM.AutoDiscover.Ollama.PreferLocal
+		router := routing.NewRouter(routing.Config{
+			DefaultProvider: providerID,
+			PreferLocal:     preferLocal,
+			LocalProviders:  localProviders,
+			Rules:           rules,
+			Fallback: routing.Target{
+				Provider: s.config.LLM.Routing.Fallback.Provider,
+				Model:    s.config.LLM.Routing.Fallback.Model,
+			},
+			FailureCooldown: s.config.LLM.Routing.UnhealthyCooldown,
+		}, providerMap)
+		selected = router
+	}
+
+	return selected, model, nil
 }
 
 // buildProvider creates a single LLM provider by ID.
@@ -312,6 +413,73 @@ func (s *Server) buildProvider(providerID string) (agent.LLMProvider, string, er
 		provider, err := providers.NewGoogleProvider(providers.GoogleConfig{
 			APIKey:       effectiveCfg.APIKey,
 			DefaultModel: effectiveCfg.DefaultModel,
+		})
+		if err != nil {
+			return nil, "", err
+		}
+		return provider, effectiveCfg.DefaultModel, nil
+	case "openrouter":
+		if effectiveCfg.APIKey == "" {
+			return nil, "", errors.New("openrouter api key is required")
+		}
+		provider, err := providers.NewOpenRouterProvider(providers.OpenRouterConfig{
+			APIKey:       effectiveCfg.APIKey,
+			DefaultModel: effectiveCfg.DefaultModel,
+		})
+		if err != nil {
+			return nil, "", err
+		}
+		return provider, effectiveCfg.DefaultModel, nil
+	case "azure":
+		if effectiveCfg.APIKey == "" {
+			return nil, "", errors.New("azure api key is required")
+		}
+		endpoint := strings.TrimSpace(effectiveCfg.BaseURL)
+		if endpoint == "" {
+			return nil, "", errors.New("azure endpoint (base_url) is required")
+		}
+		apiVersion := strings.TrimSpace(effectiveCfg.APIVersion)
+		if apiVersion == "" {
+			apiVersion = strings.TrimSpace(os.Getenv("AZURE_OPENAI_API_VERSION"))
+		}
+		provider, err := providers.NewAzureOpenAIProvider(providers.AzureOpenAIConfig{
+			Endpoint:     endpoint,
+			APIKey:       effectiveCfg.APIKey,
+			APIVersion:   apiVersion,
+			DefaultModel: effectiveCfg.DefaultModel,
+		})
+		if err != nil {
+			return nil, "", err
+		}
+		return provider, effectiveCfg.DefaultModel, nil
+	case "bedrock":
+		region := strings.TrimSpace(s.config.LLM.Bedrock.Region)
+		provider, err := providers.NewBedrockProvider(providers.BedrockConfig{
+			Region:       region,
+			DefaultModel: effectiveCfg.DefaultModel,
+		})
+		if err != nil {
+			return nil, "", err
+		}
+		return provider, effectiveCfg.DefaultModel, nil
+	case "ollama":
+		defaultModel := strings.TrimSpace(effectiveCfg.DefaultModel)
+		if defaultModel == "" {
+			defaultModel = "llama3"
+		}
+		provider := providers.NewOllamaProvider(providers.OllamaConfig{
+			BaseURL:      effectiveCfg.BaseURL,
+			DefaultModel: defaultModel,
+		})
+		return provider, defaultModel, nil
+	case "copilot-proxy":
+		models := []string{}
+		if strings.TrimSpace(effectiveCfg.DefaultModel) != "" {
+			models = []string{strings.TrimSpace(effectiveCfg.DefaultModel)}
+		}
+		provider, err := providers.NewCopilotProxyProvider(providers.CopilotProxyConfig{
+			BaseURL: effectiveCfg.BaseURL,
+			Models:  models,
 		})
 		if err != nil {
 			return nil, "", err
@@ -506,8 +674,43 @@ func (s *Server) registerTools(ctx context.Context, runtime *agent.Runtime) erro
 		runtime.RegisterTool(memorysearch.NewMemoryGetTool(searchConfig))
 	}
 
+	if s.config.RAG.Enabled && s.ragIndex != nil {
+		searchCfg := ragtools.DefaultSearchToolConfig()
+		if s.config.RAG.Search.DefaultLimit > 0 {
+			searchCfg.DefaultLimit = s.config.RAG.Search.DefaultLimit
+		}
+		if s.config.RAG.Search.MaxResults > 0 {
+			searchCfg.MaxLimit = s.config.RAG.Search.MaxResults
+		}
+		if s.config.RAG.Search.DefaultThreshold > 0 {
+			searchCfg.DefaultThreshold = s.config.RAG.Search.DefaultThreshold
+		}
+		runtime.RegisterTool(ragtools.NewSearchTool(s.ragIndex, &searchCfg))
+		runtime.RegisterTool(ragtools.NewUploadTool(s.ragIndex, nil))
+	}
+
+	if s.config.Tools.FactExtract.Enabled {
+		runtime.RegisterTool(facts.NewExtractTool(s.config.Tools.FactExtract.MaxFacts))
+	}
+
+	if s.skillsManager != nil {
+		for _, skill := range s.skillsManager.ListEligible() {
+			for _, tool := range skills.BuildSkillTools(skill, execManager) {
+				runtime.RegisterTool(tool)
+			}
+		}
+	}
+
 	if s.jobStore != nil {
 		runtime.RegisterTool(jobtools.NewStatusTool(s.jobStore))
+	}
+
+	if s.attentionFeed != nil {
+		runtime.RegisterTool(attention.NewListAttentionTool(s.attentionFeed))
+		runtime.RegisterTool(attention.NewGetAttentionTool(s.attentionFeed))
+		runtime.RegisterTool(attention.NewHandleAttentionTool(s.attentionFeed))
+		runtime.RegisterTool(attention.NewSnoozeAttentionTool(s.attentionFeed))
+		runtime.RegisterTool(attention.NewStatsAttentionTool(s.attentionFeed))
 	}
 
 	// Register reminder tools if task store is available

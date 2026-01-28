@@ -40,12 +40,18 @@
 - **OpenAI** - GPT-4o, GPT-4 Turbo, with function calling
 - **Google** - Gemini Pro, Gemini Ultra
 - **OpenRouter** - Access to 100+ models through unified API
+- **Azure OpenAI** - Azure-hosted OpenAI deployments
+- **Amazon Bedrock** - Anthropic/Meta/Mistral models via Bedrock
+- **Ollama (local)** - Run local models without API keys
+- **Copilot Proxy** - Route requests through a GitHub Copilot proxy
 
 ### Tool Capabilities
 
 - **Web Search** - SearXNG-powered web search with content extraction
 - **Browser Automation** - Playwright-based web browsing and scraping
 - **Memory Search** - Semantic search across conversation history
+- **Document RAG** - Upload and search documents with `document_upload`/`document_search`
+- **Link Understanding** - Extract, summarize, and inject link context
 - **Code Sandbox** - Docker-based execution (default) with optional Firecracker microVM backend (Linux-only)
 - **Voice Transcription** - OpenAI Whisper for audio message processing
 
@@ -68,6 +74,7 @@ Full Model Context Protocol support:
 - **Vector Memory** - SQLite-vec, LanceDB, or pgvector backends
 - **Embedding Providers** - OpenAI, Ollama (local)
 - **Conversation Summarization** - Automatic context compaction
+- **Context Augmentation** - Optional RAG + link summaries injected into system prompts
 - **Tool Policies** - Fine-grained allow/deny rules per tool
 - **Multi-Agent** - Supervisor, router, and handoff orchestration patterns
 
@@ -197,6 +204,43 @@ channels:
 
 ## Configuration Reference
 
+### LLM Providers
+
+```yaml
+llm:
+  default_provider: anthropic
+  providers:
+    anthropic:
+      api_key: ${ANTHROPIC_API_KEY}
+      default_model: claude-sonnet-4-20250514
+
+    openai:
+      api_key: ${OPENAI_API_KEY}
+      default_model: gpt-4o
+
+    azure:
+      api_key: ${AZURE_OPENAI_API_KEY}
+      base_url: https://your-resource.openai.azure.com
+      api_version: ${AZURE_OPENAI_API_VERSION}
+      default_model: gpt-4o-deployment
+
+    bedrock:
+      default_model: anthropic.claude-3-sonnet-20240229-v1:0
+
+    openrouter:
+      api_key: ${OPENROUTER_API_KEY}
+      default_model: anthropic/claude-3.5-sonnet
+
+    copilot-proxy:
+      base_url: http://localhost:3000/v1
+      default_model: gpt-5.2
+
+    # Optional local Ollama provider
+    # ollama:
+    #   base_url: http://localhost:11434
+    #   default_model: llama3
+```
+
 ### Memory (Vector Search)
 
 ```yaml
@@ -263,6 +307,39 @@ tools:
         channels: [telegram]  # Deny browser in Telegram
       - tool: websearch
         action: allow
+```
+
+### RAG (Document Indexing)
+
+```yaml
+rag:
+  enabled: true
+  store:
+    backend: pgvector
+    use_database_url: true
+    dimension: 1536
+  embeddings:
+    provider: openai
+    api_key: ${OPENAI_API_KEY}
+    model: text-embedding-3-small
+  context_injection:
+    enabled: true
+    max_chunks: 5
+    max_tokens: 2000
+```
+
+### Link Understanding
+
+```yaml
+tools:
+  links:
+    enabled: true
+    max_links: 5
+    timeout_seconds: 30
+    models:
+      - type: cli
+        command: link-understand
+        args: ["--url", "{{LinkUrl}}"]
 ```
 
 ### Session Behavior

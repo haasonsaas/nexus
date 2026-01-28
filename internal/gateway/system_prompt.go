@@ -13,6 +13,8 @@ type SystemPromptOptions struct {
 	ToolNotes           string
 	MemoryLines         []string
 	VectorMemoryResults []VectorMemoryResult // Results from semantic memory search
+	RAGContext          string
+	LinkContext         string
 	Heartbeat           string
 	AttentionSummary    string
 	SteeringDirectives  string
@@ -133,6 +135,14 @@ func buildSystemPrompt(cfg *config.Config, opts SystemPromptOptions) string {
 			resultLines = append(resultLines, fmt.Sprintf("- [%.2f] %s", r.Score, truncateContent(r.Content, 200)))
 		}
 		lines = append(lines, fmt.Sprintf("Relevant context (from memory search):\n%s", strings.Join(resultLines, "\n")))
+	}
+
+	if ragContext := strings.TrimSpace(opts.RAGContext); ragContext != "" {
+		lines = append(lines, fmt.Sprintf("Relevant context (from RAG):\n%s", ragContext))
+	}
+
+	if linkContext := strings.TrimSpace(opts.LinkContext); linkContext != "" {
+		lines = append(lines, fmt.Sprintf("Link context:\n%s", linkContext))
 	}
 
 	if notes := strings.TrimSpace(opts.ToolNotes); notes != "" {

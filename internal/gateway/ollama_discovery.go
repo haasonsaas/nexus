@@ -1,4 +1,4 @@
-package managers
+package gateway
 
 import (
 	"context"

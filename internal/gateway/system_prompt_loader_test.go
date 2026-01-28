@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/haasonsaas/nexus/internal/config"
+	ragcontext "github.com/haasonsaas/nexus/internal/rag/context"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
@@ -197,6 +198,70 @@ func TestReadPromptFileLimited(t *testing.T) {
 	}
 	if !strings.Contains(content, "truncated") {
 		t.Fatalf("expected truncation marker, got %q", content)
+	}
+}
+
+type stubRAGSearcher struct {
+	results []*models.DocumentSearchResult
+}
+
+func (s stubRAGSearcher) Search(ctx context.Context, req *models.DocumentSearchRequest) (*models.DocumentSearchResponse, error) {
+	return &models.DocumentSearchResponse{Results: s.results}, nil
+}
+
+func TestSystemPromptIncludesRAGContext(t *testing.T) {
+	chunk := &models.DocumentChunk{
+		Content: "RAG context content",
+		Metadata: models.ChunkMetadata{
+			DocumentName: "TestDoc",
+		},
+	}
+	searcher := stubRAGSearcher{
+		results: []*models.DocumentSearchResult{
+			{Chunk: chunk, Score: 0.9},
+		},
+	}
+	injectorCfg := ragcontext.DefaultInjectorConfig()
+	injectorCfg.Enabled = true
+	injectorCfg.MaxChunks = 1
+	injectorCfg.MinScore = 0.0
+	injector := ragcontext.NewInjectorWithSearcher(searcher, injectorCfg)
+
+	cfg := &config.Config{
+		RAG: config.RAGConfig{
+			ContextInjection: config.RAGContextInjectionConfig{
+				Enabled: true,
+			},
+		},
+	}
+	server := &Server{config: cfg, logger: slog.Default(), ragInjector: injector}
+
+	session := &models.Session{ID: "session-1", AgentID: "main"}
+	msg := &models.Message{Content: "Find context"}
+
+	prompt, _ := server.systemPromptForMessage(context.Background(), session, msg)
+	if !strings.Contains(prompt, "RAG context content") {
+		t.Fatalf("expected RAG context in prompt, got %q", prompt)
+	}
+}
+
+func TestSystemPromptIncludesLinkContext(t *testing.T) {
+	cfg := &config.Config{
+		Tools: config.ToolsConfig{
+			Links: config.LinksConfig{
+				Enabled:  true,
+				MaxLinks: 5,
+			},
+		},
+	}
+	server := &Server{config: cfg, logger: slog.Default()}
+
+	session := &models.Session{ID: "session-1", AgentID: "main"}
+	msg := &models.Message{Content: "Check https://example.com"}
+
+	prompt, _ := server.systemPromptForMessage(context.Background(), session, msg)
+	if !strings.Contains(prompt, "https://example.com") {
+		t.Fatalf("expected link context in prompt, got %q", prompt)
 	}
 }
 

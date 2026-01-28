@@ -55,6 +55,17 @@ func NewManagedServer(cfg ManagedServerConfig) (*ManagedServer, error) {
 		JobStore:       server.jobStore,
 		SkillsManager:  server.skillsManager,
 		AttentionFeed:  server.attentionFeed,
+		Channels:       server.channels,
+		CronScheduler:  server.cronScheduler,
+		CanvasHost:     server.canvasHost,
+		CanvasManager:  server.canvasManager,
+		Gateway:        server,
+		ModelCatalog:   server.modelCatalog,
+		BedrockDisc:    server.bedrockDiscovery,
+		EdgeManager:    server.edgeManager,
+		EdgeTOFU:       server.edgeTOFU,
+		TaskStore:      server.taskStore,
+		RAGManager:     server.ragIndex,
 		Logger:         logger.With("component", "tool-manager"),
 	})
 	server.toolManager = toolManager

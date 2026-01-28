@@ -1446,6 +1446,38 @@ func buildLLMProvider(cfg *config.Config, providerID string) (agent.LLMProvider,
 			return nil, "", err
 		}
 		return provider, resolveDefaultModel(effectiveCfg.DefaultModel, provider), nil
+	case "azure":
+		if effectiveCfg.APIKey == "" {
+			return nil, "", errors.New("azure api key is required")
+		}
+		endpoint := strings.TrimSpace(effectiveCfg.BaseURL)
+		if endpoint == "" {
+			return nil, "", errors.New("azure endpoint (base_url) is required")
+		}
+		apiVersion := strings.TrimSpace(effectiveCfg.APIVersion)
+		if apiVersion == "" {
+			apiVersion = strings.TrimSpace(os.Getenv("AZURE_OPENAI_API_VERSION"))
+		}
+		provider, err := providers.NewAzureOpenAIProvider(providers.AzureOpenAIConfig{
+			Endpoint:     endpoint,
+			APIKey:       effectiveCfg.APIKey,
+			APIVersion:   apiVersion,
+			DefaultModel: effectiveCfg.DefaultModel,
+		})
+		if err != nil {
+			return nil, "", err
+		}
+		return provider, resolveDefaultModel(effectiveCfg.DefaultModel, provider), nil
+	case "bedrock":
+		region := strings.TrimSpace(cfg.LLM.Bedrock.Region)
+		provider, err := providers.NewBedrockProvider(providers.BedrockConfig{
+			Region:       region,
+			DefaultModel: effectiveCfg.DefaultModel,
+		})
+		if err != nil {
+			return nil, "", err
+		}
+		return provider, resolveDefaultModel(effectiveCfg.DefaultModel, provider), nil
 	case "ollama":
 		defaultModel := strings.TrimSpace(effectiveCfg.DefaultModel)
 		if defaultModel == "" {
@@ -1456,6 +1488,19 @@ func buildLLMProvider(cfg *config.Config, providerID string) (agent.LLMProvider,
 			DefaultModel: defaultModel,
 		})
 		return provider, resolveDefaultModel(defaultModel, provider), nil
+	case "copilot-proxy":
+		models := []string{}
+		if strings.TrimSpace(effectiveCfg.DefaultModel) != "" {
+			models = []string{strings.TrimSpace(effectiveCfg.DefaultModel)}
+		}
+		provider, err := providers.NewCopilotProxyProvider(providers.CopilotProxyConfig{
+			BaseURL: effectiveCfg.BaseURL,
+			Models:  models,
+		})
+		if err != nil {
+			return nil, "", err
+		}
+		return provider, resolveDefaultModel(effectiveCfg.DefaultModel, provider), nil
 	default:
 		return nil, "", fmt.Errorf("unsupported provider %q", providerKey)
 	}

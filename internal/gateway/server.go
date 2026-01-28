@@ -12,6 +12,7 @@ package gateway
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -49,6 +50,8 @@ import (
 	modelcatalog "github.com/haasonsaas/nexus/internal/models"
 	"github.com/haasonsaas/nexus/internal/observability"
 	"github.com/haasonsaas/nexus/internal/plugins"
+	ragcontext "github.com/haasonsaas/nexus/internal/rag/context"
+	ragindex "github.com/haasonsaas/nexus/internal/rag/index"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/skills"
 	"github.com/haasonsaas/nexus/internal/storage"
@@ -88,6 +91,9 @@ type Server struct {
 	memoryLogger    *sessions.MemoryLogger
 	skillsManager   *skills.Manager
 	vectorMemory    *memory.Manager
+	ragIndex        *ragindex.Manager
+	ragStoreCloser  io.Closer
+	ragInjector     *ragcontext.Injector
 	attentionFeed   *attention.Feed
 	mediaProcessor  media.Processor
 	mediaAggregator *media.Aggregator
@@ -321,6 +327,19 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	var attentionFeed *attention.Feed
 	if cfg.Attention.Enabled {
 		attentionFeed = attention.NewFeed()
+	}
+	var ragIndex *ragindex.Manager
+	var ragStoreCloser io.Closer
+	var ragInjector *ragcontext.Injector
+	if cfg.RAG.Enabled {
+		idx, closer, injector, err := initRAG(cfg, logger)
+		if err != nil {
+			logger.Warn("rag not initialized", "error", err)
+		} else {
+			ragIndex = idx
+			ragStoreCloser = closer
+			ragInjector = injector
+		}
 	}
 	var mediaProcessor media.Processor
 	var mediaAggregator *media.Aggregator
@@ -590,6 +609,9 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		runtimePlugins:     plugins.DefaultRuntimeRegistry(),
 		skillsManager:      skillsMgr,
 		vectorMemory:       vectorMem,
+		ragIndex:           ragIndex,
+		ragStoreCloser:     ragStoreCloser,
+		ragInjector:        ragInjector,
 		attentionFeed:      attentionFeed,
 		mediaProcessor:     mediaProcessor,
 		mediaAggregator:    mediaAggregator,

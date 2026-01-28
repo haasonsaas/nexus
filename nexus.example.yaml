@@ -166,6 +166,28 @@ workspace:
   tools_file: TOOLS.md
   memory_file: MEMORY.md
 
+skills:
+  sources: []
+  load:
+    watch: false
+    watchDebounceMs: 500
+  entries: {}
+
+templates:
+  sources: []
+  load:
+    watch: false
+    watchDebounceMs: 500
+  entries: {}
+
+marketplace:
+  enabled: false
+  registries: []
+  trusted_keys: {}
+  auto_update: false
+  check_interval: 24h
+  skip_verify: false
+
 identity:
   # Optional agent identity
   name: ""
@@ -232,6 +254,35 @@ vector_memory:
     summary_max_chars: 2000
     summary_max_tokens: 512
     model: ""
+
+rag:
+  enabled: false
+  store:
+    backend: pgvector
+    dsn: ${RAG_DSN:-}
+    use_database_url: true
+    dimension: 1536
+    run_migrations: true
+  chunking:
+    chunk_size: 1000
+    chunk_overlap: 200
+    min_chunk_size: 100
+  embeddings:
+    provider: openai
+    api_key: ${OPENAI_API_KEY}
+    base_url: https://api.openai.com/v1
+    model: text-embedding-3-small
+    batch_size: 100
+  search:
+    default_limit: 5
+    default_threshold: 0.7
+    max_results: 20
+  context_injection:
+    enabled: false
+    max_chunks: 5
+    max_tokens: 2000
+    min_score: 0.7
+    scope: global
 
 attention:
   enabled: false
@@ -463,6 +514,19 @@ llm:
       api_key: ${OPENROUTER_API_KEY}
       default_model: anthropic/claude-3.5-sonnet
 
+    azure:
+      api_key: ${AZURE_OPENAI_API_KEY}
+      base_url: https://your-resource.openai.azure.com
+      api_version: ${AZURE_OPENAI_API_VERSION}
+      default_model: gpt-4o-deployment
+
+    bedrock:
+      default_model: anthropic.claude-3-sonnet-20240229-v1:0
+
+    copilot-proxy:
+      base_url: http://localhost:3000/v1
+      default_model: gpt-5.2
+
     # Optional local Ollama provider
     # ollama:
     #   base_url: http://localhost:11434
@@ -498,6 +562,12 @@ llm:
         - http://ollama:11434
         - http://ollama.ollama.svc.cluster.local:11434
 
+  bedrock:
+    enabled: false
+    region: us-east-1
+    refresh_interval: 1h
+    provider_filter: []
+
 experiments:
   # Optional prompt/model experiments (A/B testing)
   experiments: []
@@ -516,6 +586,18 @@ experiments:
   #         weight: 50
   #         config:
   #           system_prompt: "You are concise and direct."
+
+mcp:
+  enabled: false
+  servers: []
+  # Example:
+  # servers:
+  #   - id: filesystem
+  #     name: Local filesystem
+  #     transport: stdio
+  #     command: mcp-server-filesystem
+  #     args: ["--root", "."]
+  #     auto_start: false
 
 tools:
   # Optional notes to include in the system prompt for tool conventions
@@ -541,6 +623,15 @@ tools:
   fact_extraction:
     enabled: false
     max_facts: 10
+  links:
+    enabled: false
+    max_links: 5
+    timeout_seconds: 30
+    models: []
+    scope:
+      mode: all # all | allowlist | denylist
+      allowlist: []
+      denylist: []
   sandbox:
     enabled: true
     backend: docker # docker | firecracker
@@ -605,12 +696,32 @@ tools:
       redact_patterns: []
       redaction_text: "[redacted]"
       truncate_suffix: "...[truncated]"
+      sanitize_secrets: true
     async: []
+  jobs:
+    retention: 24h
+    prune_interval: 1h
   elevated:
     enabled: false
     allow_from:
       telegram: ["123456789"]
     tools: ["execute_code"]
+
+  servicenow:
+    enabled: false
+    instance_url: ${SERVICENOW_INSTANCE_URL}
+    username: ${SERVICENOW_USERNAME}
+    password: ${SERVICENOW_PASSWORD}
+
+edge:
+  enabled: false
+  auth_mode: token # token | tofu | dev
+  tokens: {}
+  heartbeat_interval: 30s
+  heartbeat_timeout: 2m
+  default_tool_timeout: 60s
+  max_concurrent_tools: 10
+  event_buffer_size: 1000
 
 artifacts:
   # Storage backend: local | s3 | minio | none

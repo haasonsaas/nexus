@@ -11,22 +11,39 @@ import (
 
 	"github.com/haasonsaas/nexus/internal/agent"
 	"github.com/haasonsaas/nexus/internal/attention"
+	"github.com/haasonsaas/nexus/internal/canvas"
+	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/config"
+	"github.com/haasonsaas/nexus/internal/cron"
+	"github.com/haasonsaas/nexus/internal/edge"
 	"github.com/haasonsaas/nexus/internal/infra"
 	"github.com/haasonsaas/nexus/internal/jobs"
 	"github.com/haasonsaas/nexus/internal/mcp"
+	modelcatalog "github.com/haasonsaas/nexus/internal/models"
+	ragindex "github.com/haasonsaas/nexus/internal/rag/index"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/skills"
+	"github.com/haasonsaas/nexus/internal/tasks"
 	"github.com/haasonsaas/nexus/internal/tools/browser"
+	canvastools "github.com/haasonsaas/nexus/internal/tools/canvas"
+	"github.com/haasonsaas/nexus/internal/tools/computeruse"
+	crontools "github.com/haasonsaas/nexus/internal/tools/cron"
 	exectools "github.com/haasonsaas/nexus/internal/tools/exec"
 	"github.com/haasonsaas/nexus/internal/tools/facts"
 	"github.com/haasonsaas/nexus/internal/tools/files"
+	gatewaytools "github.com/haasonsaas/nexus/internal/tools/gateway"
 	"github.com/haasonsaas/nexus/internal/tools/homeassistant"
 	jobtools "github.com/haasonsaas/nexus/internal/tools/jobs"
 	"github.com/haasonsaas/nexus/internal/tools/memorysearch"
+	"github.com/haasonsaas/nexus/internal/tools/message"
+	modelstools "github.com/haasonsaas/nexus/internal/tools/models"
+	nodestools "github.com/haasonsaas/nexus/internal/tools/nodes"
 	"github.com/haasonsaas/nexus/internal/tools/policy"
+	ragtools "github.com/haasonsaas/nexus/internal/tools/rag"
+	"github.com/haasonsaas/nexus/internal/tools/reminders"
 	"github.com/haasonsaas/nexus/internal/tools/sandbox"
 	"github.com/haasonsaas/nexus/internal/tools/sandbox/firecracker"
+	"github.com/haasonsaas/nexus/internal/tools/servicenow"
 	sessiontools "github.com/haasonsaas/nexus/internal/tools/sessions"
 	"github.com/haasonsaas/nexus/internal/tools/websearch"
 	"github.com/haasonsaas/nexus/pkg/models"
@@ -46,6 +63,17 @@ type ToolManager struct {
 	sessionStore   sessions.Store
 	skillsManager  *skills.Manager
 	attentionFeed  *attention.Feed
+	channels       *channels.Registry
+	cronScheduler  *cron.Scheduler
+	canvasHost     *canvas.Host
+	canvasManager  *canvas.Manager
+	gateway        *Server
+	modelCatalog   *modelcatalog.Catalog
+	bedrockDisc    *modelcatalog.BedrockDiscovery
+	edgeManager    *edge.Manager
+	edgeTOFU       *edge.TOFUAuthenticator
+	taskStore      tasks.Store
+	ragManager     *ragindex.Manager
 
 	// Managed resources
 	browserPool        *browser.Pool
@@ -66,6 +94,17 @@ type ToolManagerConfig struct {
 	Sessions       sessions.Store
 	SkillsManager  *skills.Manager
 	AttentionFeed  *attention.Feed
+	Channels       *channels.Registry
+	CronScheduler  *cron.Scheduler
+	CanvasHost     *canvas.Host
+	CanvasManager  *canvas.Manager
+	Gateway        *Server
+	ModelCatalog   *modelcatalog.Catalog
+	BedrockDisc    *modelcatalog.BedrockDiscovery
+	EdgeManager    *edge.Manager
+	EdgeTOFU       *edge.TOFUAuthenticator
+	TaskStore      tasks.Store
+	RAGManager     *ragindex.Manager
 	Logger         *slog.Logger
 }
 
@@ -85,6 +124,17 @@ func NewToolManager(cfg ToolManagerConfig) *ToolManager {
 		sessionStore:    cfg.Sessions,
 		skillsManager:   cfg.SkillsManager,
 		attentionFeed:   cfg.AttentionFeed,
+		channels:        cfg.Channels,
+		cronScheduler:   cfg.CronScheduler,
+		canvasHost:      cfg.CanvasHost,
+		canvasManager:   cfg.CanvasManager,
+		gateway:         cfg.Gateway,
+		modelCatalog:    cfg.ModelCatalog,
+		bedrockDisc:     cfg.BedrockDisc,
+		edgeManager:     cfg.EdgeManager,
+		edgeTOFU:        cfg.EdgeTOFU,
+		taskStore:       cfg.TaskStore,
+		ragManager:      cfg.RAGManager,
 		registeredTools: make([]string, 0),
 		mcpTools:        make([]string, 0),
 		toolSummaries:   make([]models.ToolSummary, 0),
@@ -238,6 +288,11 @@ func (m *ToolManager) RegisterTools(ctx context.Context, runtime *agent.Runtime)
 		m.registerCoreTool(runtime, sessiontools.NewSendTool(m.sessionStore, runtime))
 	}
 
+	if m.channels != nil {
+		m.registerCoreTool(runtime, message.NewTool("message", m.channels, m.sessionStore, cfg.Session.DefaultAgentID))
+		m.registerCoreTool(runtime, message.NewTool("send_message", m.channels, m.sessionStore, cfg.Session.DefaultAgentID))
+	}
+
 	// Register sandbox tool
 	if cfg.Tools.Sandbox.Enabled {
 		if err := m.registerSandboxTool(ctx, runtime); err != nil {
@@ -282,6 +337,22 @@ func (m *ToolManager) RegisterTools(ctx context.Context, runtime *agent.Runtime)
 		}))
 	}
 
+	// Register RAG tools if enabled
+	if cfg.RAG.Enabled && m.ragManager != nil {
+		searchCfg := ragtools.DefaultSearchToolConfig()
+		if cfg.RAG.Search.DefaultLimit > 0 {
+			searchCfg.DefaultLimit = cfg.RAG.Search.DefaultLimit
+		}
+		if cfg.RAG.Search.MaxResults > 0 {
+			searchCfg.MaxLimit = cfg.RAG.Search.MaxResults
+		}
+		if cfg.RAG.Search.DefaultThreshold > 0 {
+			searchCfg.DefaultThreshold = cfg.RAG.Search.DefaultThreshold
+		}
+		m.registerCoreTool(runtime, ragtools.NewSearchTool(m.ragManager, &searchCfg))
+		m.registerCoreTool(runtime, ragtools.NewUploadTool(m.ragManager, nil))
+	}
+
 	// Register structured fact extraction tool
 	if cfg.Tools.FactExtract.Enabled {
 		m.registerCoreTool(runtime, facts.NewExtractTool(cfg.Tools.FactExtract.MaxFacts))
@@ -299,6 +370,13 @@ func (m *ToolManager) RegisterTools(ctx context.Context, runtime *agent.Runtime)
 	// Register job status tool
 	if m.jobStore != nil {
 		m.registerCoreTool(runtime, jobtools.NewStatusTool(m.jobStore))
+	}
+
+	// Register reminder tools if task store is available
+	if m.taskStore != nil && cfg.Tasks.Enabled {
+		m.registerCoreTool(runtime, reminders.NewSetTool(m.taskStore))
+		m.registerCoreTool(runtime, reminders.NewCancelTool(m.taskStore))
+		m.registerCoreTool(runtime, reminders.NewListTool(m.taskStore))
 	}
 
 	// Register attention feed tools
@@ -325,11 +403,44 @@ func (m *ToolManager) RegisterTools(ctx context.Context, runtime *agent.Runtime)
 		m.registerCoreTool(runtime, homeassistant.NewListEntitiesTool(haClient))
 	}
 
+	// Register ServiceNow tools if enabled
+	if cfg.Tools.ServiceNow.Enabled {
+		snowClient := servicenow.NewClient(servicenow.Config{
+			InstanceURL: cfg.Tools.ServiceNow.InstanceURL,
+			Username:    cfg.Tools.ServiceNow.Username,
+			Password:    cfg.Tools.ServiceNow.Password,
+		})
+		m.registerCoreTool(runtime, servicenow.NewListTicketsTool(snowClient))
+		m.registerCoreTool(runtime, servicenow.NewGetTicketTool(snowClient))
+		m.registerCoreTool(runtime, servicenow.NewAddCommentTool(snowClient))
+		m.registerCoreTool(runtime, servicenow.NewResolveTicketTool(snowClient))
+		m.registerCoreTool(runtime, servicenow.NewUpdateTicketTool(snowClient))
+	}
+
 	// Register MCP tools
 	if cfg.MCP.Enabled && m.mcpManager != nil {
 		mcpTools := mcp.RegisterToolsWithRegistrar(runtime, m.mcpManager, m.policyResolver)
 		m.mcpTools = mcpTools
 		m.Logger().Info("registered MCP tools", "count", len(mcpTools))
+	}
+
+	if m.cronScheduler != nil {
+		m.registerCoreTool(runtime, crontools.NewTool(m.cronScheduler))
+	}
+	if m.canvasHost != nil || m.canvasManager != nil {
+		m.registerCoreTool(runtime, canvastools.NewTool(m.canvasHost, m.canvasManager))
+	}
+	if m.gateway != nil {
+		m.registerCoreTool(runtime, gatewaytools.NewTool(m.gateway))
+	}
+	if m.modelCatalog != nil {
+		m.registerCoreTool(runtime, modelstools.NewTool(m.modelCatalog, m.bedrockDisc))
+	}
+	if cfg.Edge.Enabled && m.edgeManager != nil {
+		m.registerCoreTool(runtime, nodestools.NewTool(m.edgeManager, m.edgeTOFU))
+	}
+	if cfg.Edge.Enabled && m.edgeManager != nil {
+		m.registerEdgeTools(runtime)
 	}
 
 	m.Logger().Info("tools registered",
@@ -338,6 +449,24 @@ func (m *ToolManager) RegisterTools(ctx context.Context, runtime *agent.Runtime)
 	)
 
 	return nil
+}
+
+func (m *ToolManager) registerEdgeTools(runtime *agent.Runtime) {
+	provider := edge.NewToolProvider(m.edgeManager)
+	for _, tool := range provider.GetTools() {
+		m.registerCoreTool(runtime, tool)
+	}
+	m.Logger().Info("registered edge tools", "count", len(provider.GetTools()))
+
+	if m.config != nil && m.config.Tools.ComputerUse.Enabled {
+		m.registerCoreTool(runtime, computeruse.NewTool(m.edgeManager, computeruse.Config{
+			EdgeID:          m.config.Tools.ComputerUse.EdgeID,
+			DisplayWidthPx:  m.config.Tools.ComputerUse.DisplayWidthPx,
+			DisplayHeightPx: m.config.Tools.ComputerUse.DisplayHeightPx,
+			DisplayNumber:   m.config.Tools.ComputerUse.DisplayNumber,
+		}))
+		m.Logger().Info("registered computer use tool", "edge_id", m.config.Tools.ComputerUse.EdgeID)
+	}
 }
 
 // ReloadMCPTools refreshes MCP tool registrations and policy aliases.

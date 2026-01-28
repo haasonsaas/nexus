@@ -174,6 +174,11 @@ func (s *Server) Stop(ctx context.Context) error {
 			s.logger.Error("error closing vector memory", "error", err)
 		}
 	}
+	if s.ragStoreCloser != nil {
+		if err := s.ragStoreCloser.Close(); err != nil {
+			s.logger.Error("error closing rag store", "error", err)
+		}
+	}
 	if s.skillsManager != nil {
 		if err := s.skillsManager.Close(); err != nil {
 			s.logger.Error("error closing skills manager", "error", err)

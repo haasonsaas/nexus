@@ -51,5 +51,8 @@ func resolveProviderProfile(cfg config.LLMProviderConfig, profileID string) (con
 	if profile.BaseURL != "" {
 		effective.BaseURL = profile.BaseURL
 	}
+	if profile.APIVersion != "" {
+		effective.APIVersion = profile.APIVersion
+	}
 	return effective, nil
 }

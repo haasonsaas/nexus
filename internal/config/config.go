@@ -840,12 +840,14 @@ type LLMProviderProfileConfig struct {
 	APIKey       string `yaml:"api_key"`
 	DefaultModel string `yaml:"default_model"`
 	BaseURL      string `yaml:"base_url"`
+	APIVersion   string `yaml:"api_version"`
 }
 
 type LLMProviderConfig struct {
 	APIKey       string                              `yaml:"api_key"`
 	DefaultModel string                              `yaml:"default_model"`
 	BaseURL      string                              `yaml:"base_url"`
+	APIVersion   string                              `yaml:"api_version"`
 	Profiles     map[string]LLMProviderProfileConfig `yaml:"profiles"`
 }
 

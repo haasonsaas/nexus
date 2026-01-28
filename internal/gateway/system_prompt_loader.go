@@ -10,6 +10,7 @@ import (
 
 	"github.com/haasonsaas/nexus/internal/attention"
 	"github.com/haasonsaas/nexus/internal/config"
+	"github.com/haasonsaas/nexus/internal/links"
 	"github.com/haasonsaas/nexus/internal/memory"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/skills"
@@ -65,7 +66,93 @@ func (s *Server) systemPromptForMessage(ctx context.Context, session *models.Ses
 		opts.VectorMemoryResults = s.loadVectorMemoryContext(ctx, session, msg)
 	}
 
+	// Load RAG context if enabled and injector is configured
+	if s.ragInjector != nil && s.config.RAG.ContextInjection.Enabled && msg != nil && session != nil && msg.Content != "" {
+		result, err := s.ragInjector.InjectForMessage(ctx, msg, session.ID)
+		if err != nil {
+			s.logger.Error("rag context injection failed", "error", err)
+		} else if result != nil && strings.TrimSpace(result.Context) != "" {
+			opts.RAGContext = result.Context
+		}
+	}
+
+	// Load link understanding context if enabled
+	if linkContext := s.linkUnderstandingContext(ctx, session, msg); linkContext != "" {
+		opts.LinkContext = linkContext
+	}
+
 	return buildSystemPrompt(s.config, opts), steeringTrace
+}
+
+func (s *Server) linkUnderstandingContext(ctx context.Context, session *models.Session, msg *models.Message) string {
+	if s == nil || s.config == nil || msg == nil || session == nil {
+		return ""
+	}
+	if !s.config.Tools.Links.Enabled || strings.TrimSpace(msg.Content) == "" {
+		return ""
+	}
+
+	msgCtx := &links.MsgContext{
+		Channel:   string(msg.Channel),
+		SessionID: session.ID,
+		PeerID:    s.extractPeerID(msg),
+		AgentID:   session.AgentID,
+	}
+
+	result, err := links.RunLinkUnderstanding(ctx, links.RunnerParams{
+		Config:  toLinkToolsConfig(s.config.Tools.Links),
+		Context: msgCtx,
+		Message: msg.Content,
+	})
+	if err != nil || result == nil {
+		if err != nil {
+			s.logger.Error("link understanding failed", "error", err)
+		}
+		return ""
+	}
+
+	outputs := make([]string, 0, len(result.Outputs))
+	for _, out := range result.Outputs {
+		out = strings.TrimSpace(out)
+		if out == "" {
+			continue
+		}
+		outputs = append(outputs, out)
+	}
+	if len(outputs) > 0 {
+		return strings.Join(outputs, "\n")
+	}
+	if len(result.URLs) > 0 {
+		return fmt.Sprintf("Links detected: %s", strings.Join(result.URLs, ", "))
+	}
+	return ""
+}
+
+func toLinkToolsConfig(cfg config.LinksConfig) *links.LinkToolsConfig {
+	models := make([]links.LinkModelConfig, 0, len(cfg.Models))
+	for _, entry := range cfg.Models {
+		models = append(models, links.LinkModelConfig{
+			Type:           entry.Type,
+			Command:        entry.Command,
+			Args:           entry.Args,
+			TimeoutSeconds: entry.TimeoutSeconds,
+		})
+	}
+	var scope *links.ScopeConfig
+	if cfg.Scope != nil {
+		scope = &links.ScopeConfig{
+			Mode:      cfg.Scope.Mode,
+			Allowlist: cfg.Scope.Allowlist,
+			Denylist:  cfg.Scope.Denylist,
+		}
+	}
+	return &links.LinkToolsConfig{
+		Enabled:        cfg.Enabled,
+		Models:         models,
+		MaxLinks:       cfg.MaxLinks,
+		TimeoutSeconds: cfg.TimeoutSeconds,
+		Scope:          scope,
+	}
 }
 
 func (s *Server) attentionSummary() string {

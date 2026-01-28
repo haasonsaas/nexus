@@ -460,7 +460,7 @@ func macosTTS(ctx context.Context, cfg *Config, text string) (*Result, error) {
 // openaiTTS uses OpenAI's TTS API.
 func openaiTTS(ctx context.Context, cfg *Config, text, channel string) (*Result, error) {
 	if cfg.OpenAI.APIKey == "" {
-		return nil, errors.New("tts: OpenAI API key not configured")
+		return nil, errors.New("tts: OpenAI API key not configured (set tts.openai.api_key)")
 	}
 
 	// Determine output format based on channel
@@ -560,7 +560,7 @@ func openaiTTS(ctx context.Context, cfg *Config, text, channel string) (*Result,
 // elevenlabsTTS uses ElevenLabs' TTS API.
 func elevenlabsTTS(ctx context.Context, cfg *Config, text string) (*Result, error) {
 	if cfg.ElevenLabs.APIKey == "" {
-		return nil, errors.New("tts: ElevenLabs API key not configured")
+		return nil, errors.New("tts: ElevenLabs API key not configured (set tts.elevenlabs.api_key)")
 	}
 
 	// Build request body

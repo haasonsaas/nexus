@@ -16,7 +16,7 @@ import (
 
 var (
 	ErrUnknownProvider  = errors.New("unknown oauth provider")
-	ErrUserStoreMissing = errors.New("user store not configured")
+	ErrUserStoreMissing = errors.New("user store not configured (set database.url)")
 )
 
 // UserInfo represents user identity data returned by OAuth providers.
@@ -184,7 +184,7 @@ func (p *GenericOAuthProvider) Exchange(ctx context.Context, code string) (*oaut
 // UserInfo fetches user info for the access token.
 func (p *GenericOAuthProvider) UserInfo(ctx context.Context, token *oauth2.Token) (*UserInfo, error) {
 	if p.userInfoURL == "" {
-		return nil, errors.New("user info url not configured")
+		return nil, errors.New("user info url not configured (set provider user info URL)")
 	}
 	client := p.config.Client(ctx, token)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.userInfoURL, nil)
@@ -209,7 +209,7 @@ func (p *GenericOAuthProvider) UserInfo(ctx context.Context, token *oauth2.Token
 		return nil, err
 	}
 	if p.parser == nil {
-		return nil, errors.New("user info parser not configured")
+		return nil, errors.New("user info parser not configured (provide parser)")
 	}
 	return p.parser(data)
 }

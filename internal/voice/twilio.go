@@ -90,7 +90,7 @@ func (p *TwilioProvider) SetPublicURL(url string) {
 func (p *TwilioProvider) InitiateCall(ctx context.Context, input *InitiateCallInput) (*InitiateCallResult, error) {
 	webhookURL := input.WebhookURL
 	if webhookURL == "" {
-		return nil, errors.New("twilio: webhook URL is required")
+		return nil, errors.New("twilio: webhook URL is required (set WebhookURL)")
 	}
 
 	// Add callId to webhook URL
@@ -172,7 +172,7 @@ func (p *TwilioProvider) PlayTTS(ctx context.Context, input *PlayTTSInput) error
 	p.mu.RUnlock()
 
 	if webhookURL == "" {
-		return errors.New("twilio: missing webhook URL for call")
+		return errors.New("twilio: missing webhook URL for call (initiate call with WebhookURL)")
 	}
 
 	voice := input.Voice
@@ -212,7 +212,7 @@ func (p *TwilioProvider) StartListening(ctx context.Context, input *StartListeni
 	p.mu.RUnlock()
 
 	if webhookURL == "" {
-		return errors.New("twilio: missing webhook URL for call")
+		return errors.New("twilio: missing webhook URL for call (initiate call with WebhookURL)")
 	}
 
 	language := input.Language

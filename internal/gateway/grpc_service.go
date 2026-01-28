@@ -90,7 +90,7 @@ func (g *grpcService) handleSendMessage(ctx context.Context, stream proto.NexusG
 		return nil
 	}
 	if g.server == nil {
-		return status.Error(codes.Internal, "server not configured")
+		return status.Error(codes.Internal, "server not configured (gateway unavailable)")
 	}
 
 	runtime, err := g.server.ensureRuntime(ctx)

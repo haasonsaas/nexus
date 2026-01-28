@@ -156,7 +156,7 @@ type CompletionResponse struct {
 // Complete sends a completion request to Venice and returns a streaming response.
 func (c *Client) Complete(ctx context.Context, req *CompletionRequest) (<-chan *agent.CompletionChunk, error) {
 	if c.openaiClient == nil {
-		return nil, errors.New("venice: API key not configured")
+		return nil, errors.New("venice: API key not configured (provide VeniceConfig.APIKey)")
 	}
 
 	model := req.Model
@@ -505,7 +505,7 @@ type VeniceProvider struct {
 //   - error: Returns error if API key is empty
 func NewVeniceProvider(cfg VeniceConfig) (*VeniceProvider, error) {
 	if cfg.APIKey == "" {
-		return nil, errors.New("venice: API key is required")
+		return nil, errors.New("venice: API key is required (set VeniceConfig.APIKey)")
 	}
 
 	client := NewClientWithConfig(cfg)

@@ -2,9 +2,22 @@ package infra
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
+)
+
+var (
+	// ErrWorkerPoolStopped is returned when the pool is stopped.
+	ErrWorkerPoolStopped = errors.New("worker pool stopped")
+	// ErrWorkerPoolQueueFull is returned when the queue is full.
+	ErrWorkerPoolQueueFull = errors.New("worker pool queue full")
+	// ErrWorkerPoolDuplicateJobID is returned when a job ID is already pending.
+	ErrWorkerPoolDuplicateJobID = errors.New("worker pool duplicate job id")
+	// ErrWorkerPoolProcessorRequired is returned when no processor is configured.
+	ErrWorkerPoolProcessorRequired = errors.New("workers: Processor is required")
 )
 
 // Job represents a unit of work to be processed.
@@ -32,6 +45,9 @@ type WorkerPool[T, R any] struct {
 	cancel    context.CancelFunc
 	started   atomic.Bool
 	stopped   atomic.Bool
+	waitMu    sync.Mutex
+	waiters   map[string]chan JobResult[T, R]
+	idCounter atomic.Uint64
 
 	// Statistics
 	processed atomic.Uint64
@@ -58,7 +74,10 @@ func NewWorkerPool[T, R any](config WorkerPoolConfig[T, R]) *WorkerPool[T, R] {
 		config.QueueSize = 100
 	}
 	if config.Processor == nil {
-		panic("workers: Processor is required")
+		config.Processor = func(context.Context, T) (R, error) {
+			var zero R
+			return zero, ErrWorkerPoolProcessorRequired
+		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -70,6 +89,7 @@ func NewWorkerPool[T, R any](config WorkerPoolConfig[T, R]) *WorkerPool[T, R] {
 		results:   make(chan JobResult[T, R], config.QueueSize),
 		ctx:       ctx,
 		cancel:    cancel,
+		waiters:   make(map[string]chan JobResult[T, R]),
 	}
 }
 
@@ -92,8 +112,8 @@ func (p *WorkerPool[T, R]) Stop() {
 	}
 
 	p.cancel()
-	close(p.jobs)
 	p.wg.Wait()
+	p.closeWaiters()
 	close(p.results)
 }
 
@@ -115,37 +135,58 @@ func (p *WorkerPool[T, R]) Submit(job Job[T]) bool {
 
 // SubmitWait submits a job and waits for the result.
 func (p *WorkerPool[T, R]) SubmitWait(ctx context.Context, job Job[T]) (R, error) {
-	wrappedJob := Job[T]{
-		ID:      job.ID,
-		Data:    job.Data,
-		Context: job.Context,
+	if ctx == nil {
+		ctx = context.Background()
 	}
-
-	if !p.Submit(wrappedJob) {
+	if p.stopped.Load() {
 		var zero R
-		return zero, context.DeadlineExceeded
+		return zero, ErrWorkerPoolStopped
 	}
 
-	// Watch for our result
+	if job.Context == nil {
+		job.Context = ctx
+	}
+
+	jobID := job.ID
+	autoID := jobID == ""
 	for {
-		select {
-		case <-ctx.Done():
-			var zero R
-			return zero, ctx.Err()
-		case result, ok := <-p.results:
-			if !ok {
-				var zero R
-				return zero, context.Canceled
-			}
-			if result.Job.ID == job.ID {
-				return result.Result, result.Error
-			}
-			// Put back results that aren't ours
-			select {
-			case p.results <- result:
-			default:
-			}
+		if jobID == "" {
+			jobID = p.nextJobID()
 		}
+		waiter, ok := p.addWaiter(jobID)
+		if ok {
+			job.ID = jobID
+			return p.waitForResult(ctx, job, waiter)
+		}
+		if !autoID {
+			var zero R
+			return zero, ErrWorkerPoolDuplicateJobID
+		}
+		jobID = ""
+	}
+}
+
+func (p *WorkerPool[T, R]) waitForResult(ctx context.Context, job Job[T], waiter chan JobResult[T, R]) (R, error) {
+	if !p.Submit(job) {
+		p.removeWaiter(job.ID)
+		var zero R
+		if p.stopped.Load() {
+			return zero, ErrWorkerPoolStopped
+		}
+		return zero, ErrWorkerPoolQueueFull
+	}
+
+	select {
+	case <-ctx.Done():
+		p.removeWaiter(job.ID)
+		var zero R
+		return zero, ctx.Err()
+	case result, ok := <-waiter:
+		if !ok {
+			var zero R
+			return zero, ErrWorkerPoolStopped
+		}
+		return result.Result, result.Error
 	}
 }
 
@@ -204,15 +245,15 @@ func (p *WorkerPool[T, R]) processJob(job Job[T]) {
 	}
 	p.processed.Add(1)
 
-	select {
-	case p.results <- JobResult[T, R]{Job: job, Result: result, Error: err}:
-	case <-p.ctx.Done():
-	}
+	p.deliverResult(job, result, err)
 }
 
 // ParallelProcess processes items in parallel with bounded concurrency.
 // This is a simpler interface for one-off parallel processing.
 func ParallelProcess[T, R any](ctx context.Context, items []T, workers int, processor func(context.Context, T) (R, error)) ([]R, []error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if workers <= 0 {
 		workers = 1
 	}
@@ -264,6 +305,66 @@ func ParallelForEach[T any](ctx context.Context, items []T, workers int, fn func
 		fn(item)
 		return struct{}{}, nil
 	})
+}
+
+func (p *WorkerPool[T, R]) nextJobID() string {
+	id := p.idCounter.Add(1)
+	return fmt.Sprintf("job-%d", id)
+}
+
+func (p *WorkerPool[T, R]) addWaiter(id string) (chan JobResult[T, R], bool) {
+	p.waitMu.Lock()
+	defer p.waitMu.Unlock()
+	if _, exists := p.waiters[id]; exists {
+		return nil, false
+	}
+	ch := make(chan JobResult[T, R], 1)
+	p.waiters[id] = ch
+	return ch, true
+}
+
+func (p *WorkerPool[T, R]) popWaiter(id string) chan JobResult[T, R] {
+	p.waitMu.Lock()
+	defer p.waitMu.Unlock()
+	ch := p.waiters[id]
+	if ch != nil {
+		delete(p.waiters, id)
+	}
+	return ch
+}
+
+func (p *WorkerPool[T, R]) removeWaiter(id string) {
+	p.waitMu.Lock()
+	ch := p.waiters[id]
+	if ch != nil {
+		delete(p.waiters, id)
+		close(ch)
+	}
+	p.waitMu.Unlock()
+}
+
+func (p *WorkerPool[T, R]) closeWaiters() {
+	p.waitMu.Lock()
+	for id, ch := range p.waiters {
+		delete(p.waiters, id)
+		close(ch)
+	}
+	p.waitMu.Unlock()
+}
+
+func (p *WorkerPool[T, R]) deliverResult(job Job[T], result R, err error) {
+	if job.ID != "" {
+		if ch := p.popWaiter(job.ID); ch != nil {
+			ch <- JobResult[T, R]{Job: job, Result: result, Error: err}
+			close(ch)
+			return
+		}
+	}
+
+	select {
+	case p.results <- JobResult[T, R]{Job: job, Result: result, Error: err}:
+	case <-p.ctx.Done():
+	}
 }
 
 // Batch groups items into batches for processing.

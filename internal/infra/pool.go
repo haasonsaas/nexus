@@ -13,6 +13,8 @@ var (
 	ErrPoolClosed = errors.New("pool is closed")
 	// ErrPoolExhausted is returned when the pool has no available resources.
 	ErrPoolExhausted = errors.New("pool exhausted")
+	// ErrPoolFactoryRequired is returned when the pool has no factory configured.
+	ErrPoolFactoryRequired = errors.New("pool factory is required")
 )
 
 // Resource represents a poolable resource.
@@ -63,7 +65,10 @@ func NewPool[T any](config PoolConfig[T]) *Pool[T] {
 		config.MaxSize = 10
 	}
 	if config.Factory == nil {
-		panic("pool: Factory is required")
+		config.Factory = func(context.Context) (T, error) {
+			var zero T
+			return zero, ErrPoolFactoryRequired
+		}
 	}
 
 	p := &Pool[T]{
@@ -77,6 +82,9 @@ func NewPool[T any](config PoolConfig[T]) *Pool[T] {
 
 // Get retrieves a resource from the pool, creating one if necessary.
 func (p *Pool[T]) Get(ctx context.Context) (*Resource[T], error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if p.closed.Load() {
 		var zero T
 		return &Resource[T]{Value: zero}, ErrPoolClosed

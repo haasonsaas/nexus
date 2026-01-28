@@ -626,7 +626,8 @@ func (s *Server) registerTools(ctx context.Context, runtime *agent.Runtime) erro
 
 	if s.config.Tools.WebSearch.Enabled {
 		searchConfig := &websearch.Config{
-			SearXNGURL: s.config.Tools.WebSearch.URL,
+			SearXNGURL:  s.config.Tools.WebSearch.URL,
+			BraveAPIKey: s.config.Tools.WebSearch.BraveAPIKey,
 		}
 		switch strings.ToLower(strings.TrimSpace(s.config.Tools.WebSearch.Provider)) {
 		case string(websearch.BackendSearXNG):

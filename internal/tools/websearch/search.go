@@ -393,7 +393,7 @@ func (t *WebSearchTool) extractContentForResults(ctx context.Context, response *
 // searchSearXNG performs a search using SearXNG.
 func (t *WebSearchTool) searchSearXNG(ctx context.Context, params *SearchParams) (*SearchResponse, error) {
 	if t.config.SearXNGURL == "" {
-		return nil, fmt.Errorf("SearXNG URL not configured")
+		return nil, fmt.Errorf("SearXNG URL not configured (set tools.websearch.url)")
 	}
 
 	// Build request URL
@@ -558,7 +558,7 @@ func (t *WebSearchTool) searchDuckDuckGo(ctx context.Context, params *SearchPara
 // searchBrave performs a search using the Brave Search API.
 func (t *WebSearchTool) searchBrave(ctx context.Context, params *SearchParams) (*SearchResponse, error) {
 	if t.config.BraveAPIKey == "" {
-		return nil, fmt.Errorf("Brave API key not configured")
+		return nil, fmt.Errorf("Brave API key not configured (set tools.websearch.brave_api_key)")
 	}
 
 	// Build request URL

@@ -678,6 +678,8 @@ tools:
     provider: searxng
     # SearXNG instance URL
     url: ${SEARXNG_URL:-http://localhost:8888}
+    # Brave Search API key (required when provider: brave)
+    brave_api_key: ${BRAVE_API_KEY:-}
   web_fetch:
     enabled: true
     max_chars: 10000

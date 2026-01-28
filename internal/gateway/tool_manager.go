@@ -696,7 +696,8 @@ func (m *ToolManager) registerWebSearchTool(runtime *agent.Runtime) {
 	cfg := m.config.Tools.WebSearch
 
 	searchConfig := &websearch.Config{
-		SearXNGURL: cfg.URL,
+		SearXNGURL:  cfg.URL,
+		BraveAPIKey: cfg.BraveAPIKey,
 	}
 
 	switch cfg.Provider {

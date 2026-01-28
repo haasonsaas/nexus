@@ -1149,9 +1149,10 @@ type BrowserConfig struct {
 }
 
 type WebSearchConfig struct {
-	Enabled  bool   `yaml:"enabled"`
-	Provider string `yaml:"provider"`
-	URL      string `yaml:"url"`
+	Enabled     bool   `yaml:"enabled"`
+	Provider    string `yaml:"provider"`
+	URL         string `yaml:"url"`
+	BraveAPIKey string `yaml:"brave_api_key"`
 }
 
 type WebFetchConfig struct {

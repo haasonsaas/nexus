@@ -119,7 +119,7 @@ func (t *Tool) Execute(ctx context.Context, params json.RawMessage) (*agent.Tool
 		return jsonResult(map[string]any{"providers": out}), nil
 	case "refresh":
 		if t.bedrock == nil {
-			return toolError("bedrock discovery not configured"), nil
+			return toolError("bedrock discovery not configured (set llm.bedrock.enabled)"), nil
 		}
 		if err := t.bedrock.RegisterWithCatalog(ctx, t.catalog); err != nil {
 			return toolError(fmt.Sprintf("refresh: %v", err)), nil

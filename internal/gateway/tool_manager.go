@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 
 	"github.com/haasonsaas/nexus/internal/agent"
@@ -700,7 +701,7 @@ func (m *ToolManager) registerWebSearchTool(runtime *agent.Runtime) {
 		BraveAPIKey: cfg.BraveAPIKey,
 	}
 
-	switch cfg.Provider {
+	switch strings.ToLower(strings.TrimSpace(cfg.Provider)) {
 	case string(websearch.BackendSearXNG):
 		searchConfig.DefaultBackend = websearch.BackendSearXNG
 	case string(websearch.BackendBraveSearch):

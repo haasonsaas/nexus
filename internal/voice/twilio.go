@@ -88,8 +88,14 @@ func (p *TwilioProvider) SetPublicURL(url string) {
 
 // InitiateCall starts an outbound call via Twilio API.
 func (p *TwilioProvider) InitiateCall(ctx context.Context, input *InitiateCallInput) (*InitiateCallResult, error) {
+	if input == nil {
+		return nil, errors.New("twilio: call input is required")
+	}
 	webhookURL := input.WebhookURL
 	if webhookURL == "" {
+		if input.CallID != "" {
+			return nil, fmt.Errorf("twilio: webhook URL is required for call %q (set WebhookURL)", input.CallID)
+		}
 		return nil, errors.New("twilio: webhook URL is required (set WebhookURL)")
 	}
 
@@ -167,6 +173,9 @@ func (p *TwilioProvider) HangupCall(ctx context.Context, input *HangupCallInput)
 
 // PlayTTS plays text-to-speech audio.
 func (p *TwilioProvider) PlayTTS(ctx context.Context, input *PlayTTSInput) error {
+	if input == nil {
+		return errors.New("twilio: tts input is required")
+	}
 	p.mu.RLock()
 	webhookURL := p.webhookURLs[input.ProviderCallID]
 	p.mu.RUnlock()
@@ -214,6 +223,9 @@ func (p *TwilioProvider) PlayTTS(ctx context.Context, input *PlayTTSInput) error
 
 // StartListening begins speech recognition.
 func (p *TwilioProvider) StartListening(ctx context.Context, input *StartListeningInput) error {
+	if input == nil {
+		return errors.New("twilio: listen input is required")
+	}
 	p.mu.RLock()
 	webhookURL := p.webhookURLs[input.ProviderCallID]
 	p.mu.RUnlock()

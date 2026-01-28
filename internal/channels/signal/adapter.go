@@ -167,7 +167,7 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 	for _, att := range msg.Attachments {
 		if att.URL != "" {
 			// Download to scratch file
-			path, err := downloadToTempFile(att.URL)
+			path, err := downloadToTempFile(ctx, att.URL)
 			if err != nil {
 				a.Logger().Error("failed to download attachment",
 					"error", err,
@@ -487,7 +487,10 @@ func expandPath(path string) string {
 }
 
 // downloadToTempFile downloads a URL to a scratch file.
-func downloadToTempFile(url string) (string, error) {
+func downloadToTempFile(ctx context.Context, url string) (string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	// Create scratch file
 	f, err := os.CreateTemp("", "signal-attachment-*")
 	if err != nil {
@@ -496,7 +499,7 @@ func downloadToTempFile(url string) (string, error) {
 	defer f.Close()
 
 	// Download content
-	data, err := downloadURL(url)
+	data, err := downloadURL(ctx, url)
 	if err != nil {
 		os.Remove(f.Name())
 		return "", err

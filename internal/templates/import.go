@@ -1,6 +1,7 @@
 package templates
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -32,6 +33,12 @@ type ImportOptions struct {
 
 	// BasePath is used for relative path resolution.
 	BasePath string
+
+	// Context controls cancellation for network imports.
+	Context context.Context
+
+	// Timeout overrides the default network timeout when importing from URLs.
+	Timeout time.Duration
 }
 
 // DefaultImportOptions returns the default import options.
@@ -40,6 +47,7 @@ func DefaultImportOptions() ImportOptions {
 		Overwrite: false,
 		Validate:  true,
 		Source:    SourceLocal,
+		Timeout:   30 * time.Second,
 	}
 }
 
@@ -103,18 +111,34 @@ func (i *Importer) ImportFromDirectory(dir string, opts ImportOptions) (*AgentTe
 
 // ImportFromURL imports a template from a URL.
 func (i *Importer) ImportFromURL(url string, opts ImportOptions) (*AgentTemplate, error) {
+	timeout := opts.Timeout
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	ctx := opts.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
 	client := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout: timeout,
 	}
 
-	resp, err := client.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("fetch URL: %w", err)
+		return nil, fmt.Errorf("fetch URL %q: %w", url, err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch URL %q: %w", url, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP error: %s", resp.Status)
+		return nil, fmt.Errorf("HTTP error from %q: %s", url, resp.Status)
 	}
 
 	if maxTemplateImportBytes > 0 && resp.ContentLength > maxTemplateImportBytes {

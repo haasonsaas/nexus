@@ -544,7 +544,7 @@ func (a *Adapter) isConnected() bool {
 // sendAttachment uploads and sends an attachment.
 func (a *Adapter) sendAttachment(ctx context.Context, jid types.JID, att models.Attachment) error {
 	// Download attachment data
-	data, err := downloadURL(att.URL)
+	data, err := downloadURL(ctx, att.URL)
 	if err != nil {
 		return channels.ErrConnection("failed to download attachment", err)
 	}

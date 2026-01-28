@@ -225,7 +225,7 @@ func TestDownloadURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			data, err := downloadURL(server.URL + tt.path)
+			data, err := downloadURL(context.Background(), server.URL+tt.path)
 			if tt.wantError {
 				if err == nil {
 					t.Error("expected error but got nil")
@@ -243,7 +243,7 @@ func TestDownloadURL(t *testing.T) {
 }
 
 func TestDownloadURLInvalidURL(t *testing.T) {
-	_, err := downloadURL("http://invalid-url-that-does-not-exist.example.com/test")
+	_, err := downloadURL(context.Background(), "http://invalid-url-that-does-not-exist.example.com/test")
 	if err == nil {
 		t.Error("expected error for invalid URL")
 	}
@@ -1269,7 +1269,7 @@ func TestDownloadURLWithHeaders(t *testing.T) {
 	}))
 	defer server.Close()
 
-	data, err := downloadURL(server.URL)
+	data, err := downloadURL(context.Background(), server.URL)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1285,7 +1285,7 @@ func TestDownloadURLEmptyResponse(t *testing.T) {
 	}))
 	defer server.Close()
 
-	data, err := downloadURL(server.URL)
+	data, err := downloadURL(context.Background(), server.URL)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1565,7 +1565,7 @@ func TestDownloadURLVariousStatusCodes(t *testing.T) {
 			}))
 			defer server.Close()
 
-			_, err := downloadURL(server.URL)
+			_, err := downloadURL(context.Background(), server.URL)
 			if err == nil {
 				t.Errorf("expected error for status %d", code)
 			}

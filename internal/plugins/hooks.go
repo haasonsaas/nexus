@@ -245,7 +245,6 @@ func (r *HookRunner) RunModifying(ctx context.Context, hookName HookName, event 
 		}()
 
 		if err != nil {
-			msg := fmt.Sprintf("hook %s from %s failed: %v", hookName, reg.PluginID, err)
 			if r.catchErrors {
 				if r.logger != nil {
 					r.logger.Error(

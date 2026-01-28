@@ -2,6 +2,7 @@ package media
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"fmt"
 	"image"
@@ -51,9 +52,29 @@ func (p *DefaultProcessor) Process(attachment *Attachment, opts ProcessingOption
 		Contents:    make([]Content, 0),
 	}
 
+	timeout := opts.Timeout
+	if timeout <= 0 {
+		timeout = p.httpClient.Timeout
+		if timeout <= 0 {
+			timeout = 30 * time.Second
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	if err := ctx.Err(); err != nil {
+		result.Error = err.Error()
+		return result, err
+	}
+
 	// Get the data
-	data, err := p.getData(attachment, opts)
+	data, err := p.getData(ctx, attachment, opts)
 	if err != nil {
+		result.Error = err.Error()
+		return result, err
+	}
+
+	if err := ctx.Err(); err != nil {
 		result.Error = err.Error()
 		return result, err
 	}
@@ -115,7 +136,13 @@ func (p *DefaultProcessor) SupportedTypes() []MediaType {
 	}
 }
 
-func (p *DefaultProcessor) getData(attachment *Attachment, opts ProcessingOptions) ([]byte, error) {
+func (p *DefaultProcessor) getData(ctx context.Context, attachment *Attachment, opts ProcessingOptions) ([]byte, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	// Already have data
 	if len(attachment.Data) > 0 {
 		if opts.MaxFileSize > 0 && int64(len(attachment.Data)) > opts.MaxFileSize {
@@ -154,21 +181,37 @@ func (p *DefaultProcessor) getData(attachment *Attachment, opts ProcessingOption
 
 	// Download from URL
 	if attachment.URL != "" {
-		return p.download(attachment.URL, opts)
+		return p.download(ctx, attachment.URL, opts)
 	}
 
 	return nil, fmt.Errorf("no data source available")
 }
 
-func (p *DefaultProcessor) download(url string, opts ProcessingOptions) ([]byte, error) {
-	resp, err := p.httpClient.Get(url)
+func (p *DefaultProcessor) download(ctx context.Context, url string, opts ProcessingOptions) ([]byte, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	client := p.httpClient
+	if opts.Timeout > 0 && opts.Timeout != client.Timeout {
+		client = &http.Client{
+			Timeout:   opts.Timeout,
+			Transport: client.Transport,
+		}
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("download: %w", err)
+		return nil, fmt.Errorf("download %q: %w", url, err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("download %q: %w", url, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("download failed: HTTP %d", resp.StatusCode)
+		return nil, fmt.Errorf("download %q failed: HTTP %d", url, resp.StatusCode)
 	}
 
 	// Limit read size
@@ -179,7 +222,7 @@ func (p *DefaultProcessor) download(url string, opts ProcessingOptions) ([]byte,
 
 	data, err := io.ReadAll(reader)
 	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
+		return nil, fmt.Errorf("read response from %q: %w", url, err)
 	}
 
 	if opts.MaxFileSize > 0 && int64(len(data)) > opts.MaxFileSize {

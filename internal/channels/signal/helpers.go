@@ -156,10 +156,16 @@ type signalContact struct {
 }
 
 // downloadURL downloads content from a URL.
-func downloadURL(url string) ([]byte, error) {
+func downloadURL(ctx context.Context, url string) ([]byte, error) {
 	raw := strings.TrimSpace(url)
 	if raw == "" {
 		return nil, channels.ErrInvalidInput("missing attachment url", nil)
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	maxBytes := channelcontext.GetChannelInfo("signal").MaxAttachmentBytes
@@ -205,9 +211,14 @@ func downloadURL(url string) ([]byte, error) {
 		Timeout: 30 * time.Second,
 	}
 
-	resp, err := client.Get(raw)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, raw, nil)
 	if err != nil {
-		return nil, err
+		return nil, channels.ErrConnection("failed to create download request", err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, channels.ErrConnection("failed to download attachment", err)
 	}
 	defer resp.Body.Close()
 
@@ -217,7 +228,7 @@ func downloadURL(url string) ([]byte, error) {
 
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes+1))
 	if err != nil {
-		return nil, err
+		return nil, channels.ErrConnection("failed to read attachment", err)
 	}
 	if int64(len(data)) > maxBytes {
 		return nil, channels.ErrConnection(fmt.Sprintf("download too large (%d bytes)", len(data)), nil)

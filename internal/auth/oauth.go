@@ -187,9 +187,13 @@ func (p *GenericOAuthProvider) UserInfo(ctx context.Context, token *oauth2.Token
 		return nil, errors.New("user info url not configured")
 	}
 	client := p.config.Client(ctx, token)
-	resp, err := client.Get(p.userInfoURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.userInfoURL, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("user info request: %w", err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("user info request: %w", err)
 	}
 	defer resp.Body.Close()
 

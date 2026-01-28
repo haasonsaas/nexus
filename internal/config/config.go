@@ -2565,6 +2565,16 @@ func validateConfig(cfg *Config) error {
 		default:
 			issues = append(issues, "tools.websearch.provider must be \"searxng\", \"brave\", or \"duckduckgo\"")
 		}
+		switch provider {
+		case "searxng":
+			if strings.TrimSpace(cfg.Tools.WebSearch.URL) == "" {
+				issues = append(issues, "tools.websearch.url is required when provider is \"searxng\"")
+			}
+		case "brave":
+			if strings.TrimSpace(cfg.Tools.WebSearch.BraveAPIKey) == "" {
+				issues = append(issues, "tools.websearch.brave_api_key is required when provider is \"brave\"")
+			}
+		}
 	}
 	if cfg.Tools.WebFetch.MaxChars < 0 {
 		issues = append(issues, "tools.web_fetch.max_chars must be >= 0")

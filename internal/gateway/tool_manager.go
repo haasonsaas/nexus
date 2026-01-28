@@ -681,7 +681,8 @@ func (m *ToolManager) registerBrowserTool(runtime *agent.Runtime) error {
 	cfg := m.config.Tools.Browser
 
 	pool, err := browser.NewPool(browser.PoolConfig{
-		Headless: cfg.Headless,
+		Headless:  cfg.Headless,
+		RemoteURL: cfg.URL,
 	})
 	if err != nil {
 		return err

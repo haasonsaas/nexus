@@ -3,6 +3,7 @@ package browser
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -38,6 +39,7 @@ type PoolConfig struct {
 	Headless       bool          // Run browsers in headless mode
 	ViewportWidth  int           // Viewport width (default: 1920)
 	ViewportHeight int           // Viewport height (default: 1080)
+	RemoteURL      string        // Optional Playwright server URL (ws:// or http(s)://)
 }
 
 // NewPool creates a new browser instance pool with the given configuration.
@@ -58,15 +60,17 @@ func NewPool(config PoolConfig) (*Pool, error) {
 	}
 
 	// Install and run Playwright
-	err := playwright.Install(&playwright.RunOptions{
-		Verbose: false,
-	})
-	if err != nil {
-		return &Pool{
-			config:    config,
-			instances: make(chan *BrowserInstance, config.MaxInstances),
-			closed:    false,
-		}, nil // Return pool anyway, will fail on first Acquire
+	if strings.TrimSpace(config.RemoteURL) == "" {
+		err := playwright.Install(&playwright.RunOptions{
+			Verbose: false,
+		})
+		if err != nil {
+			return &Pool{
+				config:    config,
+				instances: make(chan *BrowserInstance, config.MaxInstances),
+				closed:    false,
+			}, nil // Return pool anyway, will fail on first Acquire
+		}
 	}
 
 	pw, err := playwright.Run()
@@ -185,13 +189,24 @@ func (p *Pool) createInstance() (*BrowserInstance, error) {
 		return nil, fmt.Errorf("playwright not initialized")
 	}
 
-	// Launch browser
-	browser, err := p.pw.Chromium.Launch(playwright.BrowserTypeLaunchOptions{
-		Headless: playwright.Bool(p.config.Headless),
-		Timeout:  playwright.Float(float64(p.config.Timeout.Milliseconds())),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to launch browser: %w", err)
+	// Launch or connect to browser
+	var browser playwright.Browser
+	remoteURL := normalizeRemoteURL(p.config.RemoteURL)
+	if remoteURL != "" {
+		var err error
+		browser, err = p.pw.Chromium.Connect(remoteURL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to browser: %w", err)
+		}
+	} else {
+		var err error
+		browser, err = p.pw.Chromium.Launch(playwright.BrowserTypeLaunchOptions{
+			Headless: playwright.Bool(p.config.Headless),
+			Timeout:  playwright.Float(float64(p.config.Timeout.Milliseconds())),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to launch browser: %w", err)
+		}
 	}
 
 	// Create browser context with configuration
@@ -231,6 +246,20 @@ func (p *Pool) createInstance() (*BrowserInstance, error) {
 	}
 
 	return instance, nil
+}
+
+func normalizeRemoteURL(raw string) string {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return ""
+	}
+	if strings.HasPrefix(value, "http://") {
+		return "ws://" + strings.TrimPrefix(value, "http://")
+	}
+	if strings.HasPrefix(value, "https://") {
+		return "wss://" + strings.TrimPrefix(value, "https://")
+	}
+	return value
 }
 
 // getNextUserAgent returns the next user agent in rotation

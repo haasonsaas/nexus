@@ -615,7 +615,8 @@ func (s *Server) registerTools(ctx context.Context, runtime *agent.Runtime) erro
 
 	if s.config.Tools.Browser.Enabled {
 		pool, err := browser.NewPool(browser.PoolConfig{
-			Headless: s.config.Tools.Browser.Headless,
+			Headless:  s.config.Tools.Browser.Headless,
+			RemoteURL: s.config.Tools.Browser.URL,
 		})
 		if err != nil {
 			return fmt.Errorf("browser pool: %w", err)

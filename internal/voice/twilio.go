@@ -172,6 +172,13 @@ func (p *TwilioProvider) PlayTTS(ctx context.Context, input *PlayTTSInput) error
 	p.mu.RUnlock()
 
 	if webhookURL == "" {
+		label := input.ProviderCallID
+		if label == "" {
+			label = input.CallID
+		}
+		if label != "" {
+			return fmt.Errorf("twilio: missing webhook URL for call %q (initiate call with WebhookURL)", label)
+		}
 		return errors.New("twilio: missing webhook URL for call (initiate call with WebhookURL)")
 	}
 
@@ -212,6 +219,13 @@ func (p *TwilioProvider) StartListening(ctx context.Context, input *StartListeni
 	p.mu.RUnlock()
 
 	if webhookURL == "" {
+		label := input.ProviderCallID
+		if label == "" {
+			label = input.CallID
+		}
+		if label != "" {
+			return fmt.Errorf("twilio: missing webhook URL for call %q (initiate call with WebhookURL)", label)
+		}
 		return errors.New("twilio: missing webhook URL for call (initiate call with WebhookURL)")
 	}
 

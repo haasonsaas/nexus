@@ -272,7 +272,7 @@ func (p *presenceManager) MarkRead(ctx context.Context, peerID string, messageID
 func downloadURL(ctx context.Context, url string) ([]byte, error) {
 	raw := strings.TrimSpace(url)
 	if raw == "" {
-		return nil, channels.ErrInvalidInput("missing attachment url", nil)
+		return nil, channels.ErrInvalidInput("missing attachment url (set attachment.url)", nil)
 	}
 	isFileURL := strings.HasPrefix(raw, "file://")
 	if ctx == nil {

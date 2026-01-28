@@ -402,7 +402,7 @@ func (s *wsSession) handleChatSend(frame *wsFrame) error {
 
 func (s *wsSession) handleChatHistory(frame *wsFrame) error {
 	if s.control.server == nil || s.control.server.sessions == nil {
-		return errors.New("session store unavailable")
+		return errors.New("session store unavailable (set database.url)")
 	}
 	var params wsChatHistoryParams
 	if err := json.Unmarshal(frame.Params, &params); err != nil {
@@ -438,7 +438,7 @@ func (s *wsSession) handleChatAbort(frame *wsFrame) error {
 
 func (s *wsSession) handleSessionsList(frame *wsFrame) error {
 	if s.control.server == nil || s.control.server.sessions == nil {
-		return errors.New("session store unavailable")
+		return errors.New("session store unavailable (set database.url)")
 	}
 	var params wsSessionsListParams
 	if err := json.Unmarshal(frame.Params, &params); err != nil {
@@ -477,7 +477,7 @@ func (s *wsSession) handleSessionsList(frame *wsFrame) error {
 
 func (s *wsSession) handleSessionsPatch(frame *wsFrame) error {
 	if s.control.server == nil || s.control.server.sessions == nil {
-		return errors.New("session store unavailable")
+		return errors.New("session store unavailable (set database.url)")
 	}
 	var params wsSessionsPatchParams
 	if err := json.Unmarshal(frame.Params, &params); err != nil {

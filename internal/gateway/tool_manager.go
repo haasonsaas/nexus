@@ -226,6 +226,13 @@ func (m *ToolManager) Health(_ context.Context) infra.ComponentHealth {
 	details := make(map[string]string)
 	details["registered_tools"] = fmt.Sprintf("%d", len(m.registeredTools))
 	details["mcp_tools"] = fmt.Sprintf("%d", len(m.mcpTools))
+	if m.config != nil && m.config.RAG.Enabled {
+		if m.ragManager == nil {
+			details["rag"] = "unavailable"
+		} else {
+			details["rag"] = "active"
+		}
+	}
 
 	if m.browserPool != nil {
 		details["browser_pool"] = "active"
@@ -236,6 +243,13 @@ func (m *ToolManager) Health(_ context.Context) infra.ComponentHealth {
 
 	switch m.State() {
 	case infra.ComponentStateRunning:
+		if m.config != nil && m.config.RAG.Enabled && m.ragManager == nil {
+			return infra.ComponentHealth{
+				State:   infra.ServiceHealthUnhealthy,
+				Message: "rag unavailable",
+				Details: details,
+			}
+		}
 		return infra.ComponentHealth{
 			State:   infra.ServiceHealthHealthy,
 			Message: "running",
@@ -261,17 +275,47 @@ func (m *ToolManager) Health(_ context.Context) infra.ComponentHealth {
 
 // RegisterTools registers all configured tools with the runtime.
 func (m *ToolManager) RegisterTools(ctx context.Context, runtime *agent.Runtime) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if m.config == nil || runtime == nil {
+	if runtime == nil {
 		return nil
 	}
 
+	m.mu.Lock()
+	if m.config == nil {
+		m.mu.Unlock()
+		return nil
+	}
 	cfg := m.config
+	prevTools := append([]string(nil), m.registeredTools...)
+	prevMCP := append([]string(nil), m.mcpTools...)
+	browserPool := m.browserPool
+	resolver := m.policyResolver
 	m.registeredTools = nil
 	m.toolSummaries = nil
 	m.mcpTools = nil
+	m.browserPool = nil
+	m.mu.Unlock()
+
+	for _, name := range prevTools {
+		runtime.UnregisterTool(name)
+	}
+	for _, name := range prevMCP {
+		runtime.UnregisterTool(name)
+	}
+	if resolver != nil {
+		resolver.ResetMCP()
+	}
+	if browserPool != nil {
+		if err := browserPool.Close(); err != nil {
+			m.Logger().Warn("failed to close browser pool", "error", err)
+		}
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.config == nil {
+		return nil
+	}
+	cfg = m.config
 
 	fileCfg := files.Config{Workspace: cfg.Workspace.Path}
 	m.registerCoreTool(runtime, files.NewReadTool(fileCfg))
@@ -560,6 +604,9 @@ func (m *ToolManager) registerSandboxTool(ctx context.Context, runtime *agent.Ru
 
 // setupFirecrackerBackend initializes the firecracker backend.
 func (m *ToolManager) setupFirecrackerBackend(ctx context.Context, cfg *config.SandboxConfig) error {
+	if m.firecrackerBackend != nil {
+		return nil
+	}
 	fcConfig := firecracker.DefaultBackendConfig()
 	fcConfig.NetworkEnabled = cfg.NetworkEnabled
 

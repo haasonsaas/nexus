@@ -125,7 +125,7 @@ func (g *grpcService) handleSendMessage(ctx context.Context, stream proto.NexusG
 	}
 
 	promptCtx := ctx
-	systemPrompt, steeringTrace := g.server.systemPromptForMessage(ctx, session, msg)
+	systemPrompt, steeringTrace := g.server.systemPromptForMessage(ctx, session, msg, toolPolicyFromMessage(msg))
 	if systemPrompt != "" {
 		promptCtx = agent.WithSystemPrompt(promptCtx, systemPrompt)
 	}

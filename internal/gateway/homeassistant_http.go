@@ -182,7 +182,7 @@ func (s *Server) handleHomeAssistantConversation(w http.ResponseWriter, r *http.
 	}
 
 	promptCtx := ctx
-	systemPrompt, _ := s.systemPromptForMessage(ctx, session, msg)
+	systemPrompt, _ := s.systemPromptForMessage(ctx, session, msg, toolPolicyFromMessage(msg))
 	if systemPrompt != "" {
 		promptCtx = agent.WithSystemPrompt(promptCtx, systemPrompt)
 	}

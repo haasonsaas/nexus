@@ -253,6 +253,10 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		}
 	}
 	overrides := parseAgentToolOverrides(agentModel)
+	toolPolicy := toolPolicyFromAgent(agentModel)
+	if msgPolicy := toolPolicyFromMessage(msg); msgPolicy != nil {
+		toolPolicy = msgPolicy
+	}
 
 	var agentElevatedCfg *config.ElevatedConfig
 	if overrides.HasElevated {
@@ -298,7 +302,7 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 	}
 
 	promptCtx := ctx
-	systemPrompt, steeringTrace := s.systemPromptForMessage(ctx, session, msg)
+	systemPrompt, steeringTrace := s.systemPromptForMessage(ctx, session, msg, toolPolicy)
 	if systemPrompt != "" {
 		promptCtx = agent.WithSystemPrompt(promptCtx, systemPrompt)
 	}
@@ -318,14 +322,8 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		}
 		promptCtx = agent.WithRuntimeOptions(promptCtx, override)
 	}
-	if s.toolPolicyResolver != nil {
-		toolPolicy := toolPolicyFromAgent(agentModel)
-		if msgPolicy := toolPolicyFromMessage(msg); msgPolicy != nil {
-			toolPolicy = msgPolicy
-		}
-		if toolPolicy != nil {
-			promptCtx = agent.WithToolPolicy(promptCtx, s.toolPolicyResolver, toolPolicy)
-		}
+	if s.toolPolicyResolver != nil && toolPolicy != nil {
+		promptCtx = agent.WithToolPolicy(promptCtx, s.toolPolicyResolver, toolPolicy)
 	}
 	if s.approvalChecker != nil {
 		basePolicy := s.approvalChecker.PolicyFor("")
@@ -694,7 +692,20 @@ func (s *Server) handleBroadcastMessage(ctx context.Context, peerID string, msg 
 		peerID,
 		msg,
 		s.resolveConversationID,
-		s.systemPromptForMessage,
+		func(ctx context.Context, session *models.Session, msg *models.Message) (string, []SteeringRuleTrace) {
+			var agentModel *models.Agent
+			if s.stores.Agents != nil && session != nil {
+				model, err := s.stores.Agents.Get(ctx, session.AgentID)
+				if err == nil {
+					agentModel = model
+				}
+			}
+			toolPolicy := toolPolicyFromAgent(agentModel)
+			if msgPolicy := toolPolicyFromMessage(msg); msgPolicy != nil {
+				toolPolicy = msgPolicy
+			}
+			return s.systemPromptForMessage(ctx, session, msg, toolPolicy)
+		},
 	)
 	if err != nil {
 		s.logger.Error("broadcast processing failed", "error", err)

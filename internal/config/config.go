@@ -1152,6 +1152,10 @@ type LinksConfig struct {
 	// Default: 5.
 	MaxLinks int `yaml:"max_links"`
 
+	// MaxOutputChars caps the number of characters injected into the prompt.
+	// Default: 2000.
+	MaxOutputChars int `yaml:"max_output_chars"`
+
 	// TimeoutSeconds is the default timeout for link processing.
 	// Default: 30.
 	TimeoutSeconds int `yaml:"timeout_seconds"`
@@ -1967,6 +1971,9 @@ func applyLinksDefaults(cfg *LinksConfig) {
 	}
 	if cfg.MaxLinks == 0 {
 		cfg.MaxLinks = 5
+	}
+	if cfg.MaxOutputChars == 0 {
+		cfg.MaxOutputChars = 2000
 	}
 	if cfg.TimeoutSeconds == 0 {
 		cfg.TimeoutSeconds = 30

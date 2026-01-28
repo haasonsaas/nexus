@@ -255,16 +255,15 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create skills manager: %w", err)
 	}
-	// Discover skills (non-blocking, errors logged)
-	go func() {
-		if err := skillsMgr.Discover(startupCtx); err != nil {
-			logger.Error("skill discovery failed", "error", err)
-			return
-		}
-		if err := skillsMgr.StartWatching(startupCtx); err != nil {
-			logger.Error("skill watcher failed", "error", err)
-		}
-	}()
+	// Discover skills before tool registration to avoid missing tools at startup.
+	discoverCtx, cancelDiscover := context.WithTimeout(startupCtx, 5*time.Second)
+	defer cancelDiscover()
+	if err := skillsMgr.Discover(discoverCtx); err != nil {
+		logger.Error("skill discovery failed", "error", err)
+	}
+	if err := skillsMgr.StartWatching(startupCtx); err != nil {
+		logger.Error("skill watcher failed", "error", err)
+	}
 
 	// Initialize dedicated canvas host when enabled
 	var canvasHost *canvas.Host

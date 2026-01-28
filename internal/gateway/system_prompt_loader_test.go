@@ -11,6 +11,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/config"
 	ragcontext "github.com/haasonsaas/nexus/internal/rag/context"
 	"github.com/haasonsaas/nexus/internal/sessions"
+	"github.com/haasonsaas/nexus/internal/tools/policy"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
@@ -239,7 +240,7 @@ func TestSystemPromptIncludesRAGContext(t *testing.T) {
 	session := &models.Session{ID: "session-1", AgentID: "main"}
 	msg := &models.Message{Content: "Find context"}
 
-	prompt, _ := server.systemPromptForMessage(context.Background(), session, msg)
+	prompt, _ := server.systemPromptForMessage(context.Background(), session, msg, nil)
 	if !strings.Contains(prompt, "RAG context content") {
 		t.Fatalf("expected RAG context in prompt, got %q", prompt)
 	}
@@ -254,14 +255,56 @@ func TestSystemPromptIncludesLinkContext(t *testing.T) {
 			},
 		},
 	}
-	server := &Server{config: cfg, logger: slog.Default()}
+	server := &Server{config: cfg, logger: slog.Default(), toolPolicyResolver: policy.NewResolver()}
 
 	session := &models.Session{ID: "session-1", AgentID: "main"}
 	msg := &models.Message{Content: "Check https://example.com"}
 
-	prompt, _ := server.systemPromptForMessage(context.Background(), session, msg)
+	prompt, _ := server.systemPromptForMessage(context.Background(), session, msg, nil)
 	if !strings.Contains(prompt, "https://example.com") {
 		t.Fatalf("expected link context in prompt, got %q", prompt)
+	}
+}
+
+func TestSystemPromptLinkContextHonorsPolicy(t *testing.T) {
+	cfg := &config.Config{
+		Tools: config.ToolsConfig{
+			Links: config.LinksConfig{
+				Enabled:  true,
+				MaxLinks: 5,
+			},
+		},
+	}
+	server := &Server{config: cfg, logger: slog.Default(), toolPolicyResolver: policy.NewResolver()}
+
+	session := &models.Session{ID: "session-1", AgentID: "main"}
+	msg := &models.Message{Content: "Check https://example.com"}
+	toolPolicy := &policy.Policy{Deny: []string{"link_understanding"}}
+
+	prompt, _ := server.systemPromptForMessage(context.Background(), session, msg, toolPolicy)
+	if strings.Contains(prompt, "https://example.com") {
+		t.Fatalf("expected link context to be denied, got %q", prompt)
+	}
+}
+
+func TestSystemPromptLinkContextTruncates(t *testing.T) {
+	cfg := &config.Config{
+		Tools: config.ToolsConfig{
+			Links: config.LinksConfig{
+				Enabled:        true,
+				MaxLinks:       5,
+				MaxOutputChars: 12,
+			},
+		},
+	}
+	server := &Server{config: cfg, logger: slog.Default(), toolPolicyResolver: policy.NewResolver()}
+
+	session := &models.Session{ID: "session-1", AgentID: "main"}
+	msg := &models.Message{Content: "Check https://example.com"}
+
+	prompt, _ := server.systemPromptForMessage(context.Background(), session, msg, nil)
+	if !strings.Contains(prompt, "...[truncated]") {
+		t.Fatalf("expected truncated link context, got %q", prompt)
 	}
 }
 

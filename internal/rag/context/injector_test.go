@@ -636,7 +636,7 @@ func TestInjector_InjectForMessage(t *testing.T) {
 		name      string
 		cfg       *InjectorConfig
 		msg       *models.Message
-		sessionID string
+		session   *models.Session
 		wantEmpty bool
 		wantErr   bool
 	}{
@@ -644,7 +644,7 @@ func TestInjector_InjectForMessage(t *testing.T) {
 			name:      "nil message returns empty result",
 			cfg:       &InjectorConfig{Enabled: true},
 			msg:       nil,
-			sessionID: "session-1",
+			session:   &models.Session{ID: "session-1"},
 			wantEmpty: true,
 			wantErr:   false,
 		},
@@ -652,7 +652,7 @@ func TestInjector_InjectForMessage(t *testing.T) {
 			name:      "empty content returns empty result",
 			cfg:       &InjectorConfig{Enabled: true},
 			msg:       &models.Message{Content: ""},
-			sessionID: "session-1",
+			session:   &models.Session{ID: "session-1"},
 			wantEmpty: true,
 			wantErr:   false,
 		},
@@ -660,7 +660,7 @@ func TestInjector_InjectForMessage(t *testing.T) {
 			name:      "disabled injector returns empty result",
 			cfg:       &InjectorConfig{Enabled: false},
 			msg:       &models.Message{Content: "test query"},
-			sessionID: "session-1",
+			session:   &models.Session{ID: "session-1"},
 			wantEmpty: true,
 			wantErr:   false,
 		},
@@ -668,7 +668,7 @@ func TestInjector_InjectForMessage(t *testing.T) {
 			name:      "session scope uses sessionID",
 			cfg:       &InjectorConfig{Enabled: true, Scope: "session"},
 			msg:       &models.Message{Content: "test query"},
-			sessionID: "session-123",
+			session:   &models.Session{ID: "session-123"},
 			wantEmpty: true, // nil manager so returns empty
 			wantErr:   false,
 		},
@@ -676,7 +676,7 @@ func TestInjector_InjectForMessage(t *testing.T) {
 			name:      "channel scope uses channelID",
 			cfg:       &InjectorConfig{Enabled: true, Scope: "channel"},
 			msg:       &models.Message{Content: "test query", ChannelID: "channel-456"},
-			sessionID: "session-1",
+			session:   &models.Session{ID: "session-1", ChannelID: "channel-456"},
 			wantEmpty: true, // nil manager so returns empty
 			wantErr:   false,
 		},
@@ -684,7 +684,7 @@ func TestInjector_InjectForMessage(t *testing.T) {
 			name:      "agent scope with message",
 			cfg:       &InjectorConfig{Enabled: true, Scope: "agent"},
 			msg:       &models.Message{Content: "test query"},
-			sessionID: "session-1",
+			session:   &models.Session{ID: "session-1", AgentID: "agent-1"},
 			wantEmpty: true, // nil manager so returns empty
 			wantErr:   false,
 		},
@@ -692,7 +692,7 @@ func TestInjector_InjectForMessage(t *testing.T) {
 			name:      "global scope is default",
 			cfg:       &InjectorConfig{Enabled: true, Scope: "global"},
 			msg:       &models.Message{Content: "test query"},
-			sessionID: "session-1",
+			session:   &models.Session{ID: "session-1"},
 			wantEmpty: true, // nil manager so returns empty
 			wantErr:   false,
 		},
@@ -701,7 +701,7 @@ func TestInjector_InjectForMessage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			i := NewInjector(nil, tt.cfg)
-			result, err := i.InjectForMessage(context.Background(), tt.msg, tt.sessionID)
+			result, err := i.InjectForMessage(context.Background(), tt.msg, tt.session)
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("InjectForMessage() error = %v, wantErr %v", err, tt.wantErr)
@@ -1081,34 +1081,34 @@ func TestNewInjector_ConfigPreservation(t *testing.T) {
 func TestInjector_InjectForMessage_AllScopes(t *testing.T) {
 	// Test each scope type to ensure proper scopeID extraction
 	testCases := []struct {
-		name      string
-		scope     string
-		sessionID string
-		msg       *models.Message
+		name    string
+		scope   string
+		session *models.Session
+		msg     *models.Message
 	}{
 		{
-			name:      "session scope",
-			scope:     "session",
-			sessionID: "sess-123",
-			msg:       &models.Message{Content: "query", ChannelID: "chan-456"},
+			name:    "session scope",
+			scope:   "session",
+			session: &models.Session{ID: "sess-123", ChannelID: "chan-456", AgentID: "agent-1"},
+			msg:     &models.Message{Content: "query", ChannelID: "chan-456"},
 		},
 		{
-			name:      "channel scope",
-			scope:     "channel",
-			sessionID: "sess-123",
-			msg:       &models.Message{Content: "query", ChannelID: "chan-456"},
+			name:    "channel scope",
+			scope:   "channel",
+			session: &models.Session{ID: "sess-123", ChannelID: "chan-456", AgentID: "agent-1"},
+			msg:     &models.Message{Content: "query", ChannelID: "chan-456"},
 		},
 		{
-			name:      "agent scope",
-			scope:     "agent",
-			sessionID: "sess-123",
-			msg:       &models.Message{Content: "query", ChannelID: "chan-456"},
+			name:    "agent scope",
+			scope:   "agent",
+			session: &models.Session{ID: "sess-123", ChannelID: "chan-456", AgentID: "agent-1"},
+			msg:     &models.Message{Content: "query", ChannelID: "chan-456"},
 		},
 		{
-			name:      "global scope",
-			scope:     "global",
-			sessionID: "sess-123",
-			msg:       &models.Message{Content: "query", ChannelID: "chan-456"},
+			name:    "global scope",
+			scope:   "global",
+			session: &models.Session{ID: "sess-123", ChannelID: "chan-456", AgentID: "agent-1"},
+			msg:     &models.Message{Content: "query", ChannelID: "chan-456"},
 		},
 	}
 
@@ -1121,7 +1121,7 @@ func TestInjector_InjectForMessage_AllScopes(t *testing.T) {
 			i := NewInjector(nil, cfg)
 
 			// Should not error even without manager (returns empty result)
-			result, err := i.InjectForMessage(context.Background(), tc.msg, tc.sessionID)
+			result, err := i.InjectForMessage(context.Background(), tc.msg, tc.session)
 			if err != nil {
 				t.Errorf("InjectForMessage() error = %v", err)
 			}

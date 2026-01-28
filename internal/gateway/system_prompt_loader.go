@@ -14,10 +14,11 @@ import (
 	"github.com/haasonsaas/nexus/internal/memory"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/skills"
+	"github.com/haasonsaas/nexus/internal/tools/policy"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
-func (s *Server) systemPromptForMessage(ctx context.Context, session *models.Session, msg *models.Message) (string, []SteeringRuleTrace) {
+func (s *Server) systemPromptForMessage(ctx context.Context, session *models.Session, msg *models.Message, toolPolicy *policy.Policy) (string, []SteeringRuleTrace) {
 	if s.config == nil {
 		return "", nil
 	}
@@ -68,7 +69,7 @@ func (s *Server) systemPromptForMessage(ctx context.Context, session *models.Ses
 
 	// Load RAG context if enabled and injector is configured
 	if s.ragInjector != nil && s.config.RAG.ContextInjection.Enabled && msg != nil && session != nil && msg.Content != "" {
-		result, err := s.ragInjector.InjectForMessage(ctx, msg, session.ID)
+		result, err := s.ragInjector.InjectForMessage(ctx, msg, session)
 		if err != nil {
 			s.logger.Error("rag context injection failed", "error", err)
 		} else if result != nil && strings.TrimSpace(result.Context) != "" {
@@ -77,19 +78,25 @@ func (s *Server) systemPromptForMessage(ctx context.Context, session *models.Ses
 	}
 
 	// Load link understanding context if enabled
-	if linkContext := s.linkUnderstandingContext(ctx, session, msg); linkContext != "" {
+	if linkContext := s.linkUnderstandingContext(ctx, session, msg, toolPolicy); linkContext != "" {
 		opts.LinkContext = linkContext
 	}
 
 	return buildSystemPrompt(s.config, opts), steeringTrace
 }
 
-func (s *Server) linkUnderstandingContext(ctx context.Context, session *models.Session, msg *models.Message) string {
+func (s *Server) linkUnderstandingContext(ctx context.Context, session *models.Session, msg *models.Message, toolPolicy *policy.Policy) string {
 	if s == nil || s.config == nil || msg == nil || session == nil {
 		return ""
 	}
 	if !s.config.Tools.Links.Enabled || strings.TrimSpace(msg.Content) == "" {
 		return ""
+	}
+	if toolPolicy != nil && s.toolPolicyResolver != nil {
+		decision := s.toolPolicyResolver.Decide(toolPolicy, "link_understanding")
+		if !decision.Allowed {
+			return ""
+		}
 	}
 
 	msgCtx := &links.MsgContext{
@@ -119,13 +126,20 @@ func (s *Server) linkUnderstandingContext(ctx context.Context, session *models.S
 		}
 		outputs = append(outputs, out)
 	}
+	var context string
 	if len(outputs) > 0 {
-		return strings.Join(outputs, "\n")
+		context = strings.Join(outputs, "\n")
+	} else if len(result.URLs) > 0 {
+		context = fmt.Sprintf("Links detected: %s", strings.Join(result.URLs, ", "))
 	}
-	if len(result.URLs) > 0 {
-		return fmt.Sprintf("Links detected: %s", strings.Join(result.URLs, ", "))
+	if context == "" {
+		return ""
 	}
-	return ""
+	maxChars := s.config.Tools.Links.MaxOutputChars
+	if maxChars > 0 && len(context) > maxChars {
+		context = context[:maxChars] + "...[truncated]"
+	}
+	return context
 }
 
 func toLinkToolsConfig(cfg config.LinksConfig) *links.LinkToolsConfig {

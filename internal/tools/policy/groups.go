@@ -32,7 +32,7 @@ var ToolGroups = map[string][]string{
 	"group:messaging": {"message", "send_message"},
 
 	// Web tools - search and fetch from the web
-	"group:web": {"websearch", "webfetch", "web_search", "web_fetch"},
+	"group:web": {"websearch", "webfetch", "web_search", "web_fetch", "link_understanding"},
 
 	// All built-in Nexus tools
 	"group:nexus": {
@@ -41,7 +41,7 @@ var ToolGroups = map[string][]string{
 		// Filesystem
 		"read", "write", "edit", "apply_patch",
 		// Web
-		"websearch", "webfetch", "web_search", "web_fetch",
+		"websearch", "webfetch", "web_search", "web_fetch", "link_understanding",
 		// Memory
 		"memory_search", "memory_get",
 		// Browser
@@ -57,7 +57,7 @@ var ToolGroups = map[string][]string{
 	// Read-only tools - safe tools that don't modify state
 	"group:readonly": {
 		"read",
-		"websearch", "webfetch", "web_search", "web_fetch",
+		"websearch", "webfetch", "web_search", "web_fetch", "link_understanding",
 		"memory_search", "memory_get",
 		"sessions_list", "sessions_history", "session_status",
 		"job_status",

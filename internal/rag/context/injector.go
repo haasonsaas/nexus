@@ -186,7 +186,7 @@ func (i *Injector) Inject(ctx context.Context, query string, scopeID string) (*I
 
 // InjectForMessage injects context for a user message.
 // This is a convenience method that extracts the query from the message.
-func (i *Injector) InjectForMessage(ctx context.Context, msg *models.Message, sessionID string) (*InjectionResult, error) {
+func (i *Injector) InjectForMessage(ctx context.Context, msg *models.Message, session *models.Session) (*InjectionResult, error) {
 	if msg == nil || msg.Content == "" {
 		return &InjectionResult{}, nil
 	}
@@ -198,11 +198,19 @@ func (i *Injector) InjectForMessage(ctx context.Context, msg *models.Message, se
 	scopeID := ""
 	switch i.config.Scope {
 	case "session":
-		scopeID = sessionID
+		if session != nil {
+			scopeID = session.ID
+		}
 	case "channel":
-		scopeID = msg.ChannelID
+		if session != nil && session.ChannelID != "" {
+			scopeID = session.ChannelID
+		} else {
+			scopeID = msg.ChannelID
+		}
 	case "agent":
-		// Agent ID would need to be passed separately
+		if session != nil {
+			scopeID = session.AgentID
+		}
 	}
 
 	return i.Inject(ctx, query, scopeID)

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
+	"strings"
 	"sync"
 
 	"github.com/haasonsaas/nexus/internal/channels"
@@ -211,7 +213,37 @@ func (m *BaseContactManager) Resolve(ctx context.Context, identifier string) (*C
 }
 
 func (m *BaseContactManager) Search(ctx context.Context, query string) ([]*Contact, error) {
-	return nil, fmt.Errorf("contact search: %w", channels.ErrNotSupported)
+	if m == nil || m.adapter == nil {
+		return nil, channels.ErrUnavailable("contact search unavailable", nil)
+	}
+	q := strings.TrimSpace(query)
+	m.adapter.contactsMu.RLock()
+	defer m.adapter.contactsMu.RUnlock()
+
+	results := make([]*Contact, 0, len(m.adapter.contacts))
+	if q == "" {
+		for _, contact := range m.adapter.contacts {
+			results = append(results, contact)
+		}
+		sort.Slice(results, func(i, j int) bool {
+			return strings.ToLower(results[i].ID) < strings.ToLower(results[j].ID)
+		})
+		return results, nil
+	}
+
+	q = strings.ToLower(q)
+	for _, contact := range m.adapter.contacts {
+		if contact == nil {
+			continue
+		}
+		if matchesContactQuery(contact, q) {
+			results = append(results, contact)
+		}
+	}
+	sort.Slice(results, func(i, j int) bool {
+		return strings.ToLower(results[i].ID) < strings.ToLower(results[j].ID)
+	})
+	return results, nil
 }
 
 func (m *BaseContactManager) Sync(ctx context.Context) error {
@@ -223,6 +255,29 @@ func (m *BaseContactManager) GetByID(ctx context.Context, id string) (*Contact, 
 		return c, nil
 	}
 	return nil, nil
+}
+
+func matchesContactQuery(contact *Contact, query string) bool {
+	if contact == nil {
+		return false
+	}
+	if containsFold(contact.ID, query) ||
+		containsFold(contact.Name, query) ||
+		containsFold(contact.Phone, query) ||
+		containsFold(contact.Email, query) {
+		return true
+	}
+	return false
+}
+
+func containsFold(value string, query string) bool {
+	if query == "" {
+		return true
+	}
+	if strings.TrimSpace(value) == "" {
+		return false
+	}
+	return strings.Contains(strings.ToLower(value), query)
 }
 
 // BaseMediaHandler provides a stub implementation of MediaHandler.

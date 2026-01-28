@@ -504,13 +504,24 @@ func TestBaseContactManager(t *testing.T) {
 		}
 	})
 
-	t.Run("Search returns not supported", func(t *testing.T) {
-		results, err := manager.Search(ctx, "query")
-		if !errors.Is(err, channels.ErrNotSupported) {
-			t.Errorf("expected not supported error, got: %v", err)
+	t.Run("Search returns cached matches", func(t *testing.T) {
+		adapter.SetContact(&Contact{ID: "alice-1", Name: "Alice"})
+		results, err := manager.Search(ctx, "ali")
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
 		}
-		if results != nil {
-			t.Error("expected nil results from stub")
+		if len(results) != 1 || results[0].ID != "alice-1" {
+			t.Errorf("expected alice result, got: %v", results)
+		}
+	})
+
+	t.Run("Search with empty query returns all cached", func(t *testing.T) {
+		results, err := manager.Search(ctx, " ")
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		if len(results) < 2 {
+			t.Errorf("expected cached contacts, got: %v", results)
 		}
 	})
 

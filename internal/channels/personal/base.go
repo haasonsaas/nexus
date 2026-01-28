@@ -195,7 +195,7 @@ func (b *BaseAdapter) Close() {
 	close(b.messages)
 }
 
-// BaseContactManager provides a stub implementation of ContactManager.
+// BaseContactManager provides a cache-backed ContactManager implementation.
 type BaseContactManager struct {
 	adapter *BaseAdapter
 }
@@ -280,7 +280,7 @@ func containsFold(value string, query string) bool {
 	return strings.Contains(strings.ToLower(value), query)
 }
 
-// BaseMediaHandler provides a stub implementation of MediaHandler.
+// BaseMediaHandler provides a default MediaHandler that reports unsupported operations.
 type BaseMediaHandler struct{}
 
 func (h *BaseMediaHandler) Download(ctx context.Context, mediaID string) ([]byte, string, error) {
@@ -295,7 +295,7 @@ func (h *BaseMediaHandler) GetURL(ctx context.Context, mediaID string) (string, 
 	return "", fmt.Errorf("media url: %w", channels.ErrNotSupported)
 }
 
-// BasePresenceManager provides a stub implementation of PresenceManager.
+// BasePresenceManager provides a default PresenceManager that reports unsupported operations.
 type BasePresenceManager struct{}
 
 func (p *BasePresenceManager) SetTyping(ctx context.Context, peerID string, typing bool) error {

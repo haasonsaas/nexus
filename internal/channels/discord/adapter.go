@@ -777,7 +777,7 @@ func detectAttachmentType(contentType string) string {
 // This is part of the StreamingAdapter interface.
 func (a *Adapter) SendTypingIndicator(ctx context.Context, msg *models.Message) error {
 	if a.session == nil {
-		return channels.ErrInternal("session not initialized", nil)
+		return channels.ErrInternal("session not initialized (start adapter)", nil)
 	}
 
 	channelID, err := a.extractChannelID(msg)
@@ -798,7 +798,7 @@ func (a *Adapter) SendTypingIndicator(ctx context.Context, msg *models.Message) 
 // This is part of the StreamingAdapter interface.
 func (a *Adapter) StartStreamingResponse(ctx context.Context, msg *models.Message) (string, error) {
 	if a.session == nil {
-		return "", channels.ErrInternal("session not initialized", nil)
+		return "", channels.ErrInternal("session not initialized (start adapter)", nil)
 	}
 
 	channelID, err := a.extractChannelID(msg)
@@ -827,7 +827,7 @@ func (a *Adapter) StartStreamingResponse(ctx context.Context, msg *models.Messag
 // This is part of the StreamingAdapter interface.
 func (a *Adapter) UpdateStreamingResponse(ctx context.Context, msg *models.Message, messageID string, content string) error {
 	if a.session == nil {
-		return channels.ErrInternal("session not initialized", nil)
+		return channels.ErrInternal("session not initialized (start adapter)", nil)
 	}
 
 	channelID, err := a.extractChannelID(msg)
@@ -891,7 +891,7 @@ func (a *Adapter) Capabilities() channels.Capabilities {
 // Implements the channels.MessageActionsAdapter interface.
 func (a *Adapter) ExecuteAction(ctx context.Context, req *channels.MessageActionRequest) (*channels.MessageActionResult, error) {
 	if a.session == nil {
-		return nil, channels.ErrInternal("session not initialized", nil)
+		return nil, channels.ErrInternal("session not initialized (start adapter)", nil)
 	}
 
 	// Apply rate limiting

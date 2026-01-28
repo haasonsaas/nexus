@@ -869,8 +869,8 @@ func TestAdapter_HealthCheckWithoutBot(t *testing.T) {
 	if health.Healthy {
 		t.Error("Expected Healthy = false when bot is not initialized")
 	}
-	if health.Message != "bot not initialized" {
-		t.Errorf("Expected message 'bot not initialized', got %q", health.Message)
+	if health.Message != "bot not initialized (start adapter)" {
+		t.Errorf("Expected message 'bot not initialized (start adapter)', got %q", health.Message)
 	}
 	if health.Latency < 0 {
 		t.Error("Expected Latency >= 0")

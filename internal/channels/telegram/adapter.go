@@ -371,7 +371,7 @@ func (a *Adapter) Send(ctx context.Context, msg *nexusmodels.Message) error {
 	if a.botClient == nil {
 		a.health.RecordMessageFailed()
 		a.health.RecordError(channels.ErrCodeInternal)
-		return channels.ErrInternal("bot not initialized", nil)
+		return channels.ErrInternal("bot not initialized (start adapter)", nil)
 	}
 
 	// Extract chat ID
@@ -545,7 +545,7 @@ func decodeDataURL(raw string) ([]byte, string, error) {
 // This is part of the StreamingAdapter interface.
 func (a *Adapter) SendTypingIndicator(ctx context.Context, msg *nexusmodels.Message) error {
 	if a.botClient == nil {
-		return channels.ErrInternal("bot not initialized", nil)
+		return channels.ErrInternal("bot not initialized (start adapter)", nil)
 	}
 
 	chatID, err := a.extractChatID(msg)
@@ -575,7 +575,7 @@ func (a *Adapter) SendTypingIndicator(ctx context.Context, msg *nexusmodels.Mess
 // This is part of the StreamingAdapter interface.
 func (a *Adapter) StartStreamingResponse(ctx context.Context, msg *nexusmodels.Message) (string, error) {
 	if a.botClient == nil {
-		return "", channels.ErrInternal("bot not initialized", nil)
+		return "", channels.ErrInternal("bot not initialized (start adapter)", nil)
 	}
 
 	chatID, err := a.extractChatID(msg)
@@ -614,7 +614,7 @@ func (a *Adapter) StartStreamingResponse(ctx context.Context, msg *nexusmodels.M
 // This is part of the StreamingAdapter interface.
 func (a *Adapter) UpdateStreamingResponse(ctx context.Context, msg *nexusmodels.Message, messageID string, content string) error {
 	if a.botClient == nil {
-		return channels.ErrInternal("bot not initialized", nil)
+		return channels.ErrInternal("bot not initialized (start adapter)", nil)
 	}
 
 	chatID, err := a.extractChatID(msg)
@@ -653,7 +653,7 @@ func (a *Adapter) UpdateStreamingResponse(ctx context.Context, msg *nexusmodels.
 // DownloadAttachment fetches attachment bytes from Telegram without exposing the bot token.
 func (a *Adapter) DownloadAttachment(ctx context.Context, msg *nexusmodels.Message, attachment *nexusmodels.Attachment) ([]byte, string, string, error) {
 	if a.botClient == nil {
-		return nil, "", "", channels.ErrInternal("telegram bot not initialized", nil)
+		return nil, "", "", channels.ErrInternal("telegram bot not initialized (start adapter)", nil)
 	}
 	if attachment == nil {
 		return nil, "", "", channels.ErrInvalidInput("attachment is required", nil)
@@ -935,7 +935,7 @@ func (a *Adapter) HealthCheck(ctx context.Context) channels.HealthStatus {
 
 	// Check if bot is initialized
 	if a.botClient == nil {
-		health.Message = "bot not initialized"
+		health.Message = "bot not initialized (start adapter)"
 		health.Latency = time.Since(startTime)
 		return health
 	}

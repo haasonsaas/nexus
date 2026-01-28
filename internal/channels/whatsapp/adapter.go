@@ -242,7 +242,7 @@ func (a *Adapter) HealthCheck(ctx context.Context) channels.HealthStatus {
 	if a.client == nil {
 		return channels.HealthStatus{
 			Healthy:   false,
-			Message:   "client not initialized",
+			Message:   "client not initialized (start adapter)",
 			Latency:   time.Since(start),
 			LastCheck: time.Now(),
 		}

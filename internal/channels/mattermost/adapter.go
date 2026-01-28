@@ -499,7 +499,7 @@ func (a *Adapter) SendTypingIndicator(ctx context.Context, msg *models.Message) 
 // StartStreamingResponse sends an initial placeholder message and returns its ID.
 func (a *Adapter) StartStreamingResponse(ctx context.Context, msg *models.Message) (string, error) {
 	if a.client == nil {
-		return "", channels.ErrInternal("client not initialized", nil)
+		return "", channels.ErrInternal("client not initialized (check adapter setup)", nil)
 	}
 
 	channelID, ok := msg.Metadata["mattermost_channel"].(string)
@@ -538,7 +538,7 @@ func (a *Adapter) StartStreamingResponse(ctx context.Context, msg *models.Messag
 // UpdateStreamingResponse updates a previously sent message with new content.
 func (a *Adapter) UpdateStreamingResponse(ctx context.Context, msg *models.Message, messageID string, content string) error {
 	if a.client == nil {
-		return channels.ErrInternal("client not initialized", nil)
+		return channels.ErrInternal("client not initialized (check adapter setup)", nil)
 	}
 
 	if err := a.rateLimiter.Wait(ctx); err != nil {

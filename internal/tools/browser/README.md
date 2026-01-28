@@ -271,7 +271,7 @@ Example error response:
 
 ### Common Issues
 
-**Issue**: "playwright not initialized"
+**Issue**: "playwright not initialized (install failed or missing driver)"
 - **Solution**: Ensure Playwright is installed: `go run github.com/playwright-community/playwright-go/cmd/playwright install`
 
 **Issue**: "failed to acquire browser instance"

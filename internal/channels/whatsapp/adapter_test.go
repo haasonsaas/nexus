@@ -729,8 +729,8 @@ func TestHealthCheckWithoutClient(t *testing.T) {
 	if health.Healthy {
 		t.Error("expected unhealthy status when client is nil")
 	}
-	if health.Message != "client not initialized" {
-		t.Errorf("expected message 'client not initialized', got %s", health.Message)
+	if health.Message != "client not initialized (start adapter)" {
+		t.Errorf("expected message 'client not initialized (start adapter)', got %s", health.Message)
 	}
 }
 
@@ -1703,7 +1703,7 @@ func TestHealthCheckMessages(t *testing.T) {
 			name:        "no client",
 			client:      false,
 			wantHealthy: false,
-			wantMessage: "client not initialized",
+			wantMessage: "client not initialized (start adapter)",
 		},
 	}
 

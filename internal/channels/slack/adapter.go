@@ -931,7 +931,7 @@ func (a *Adapter) SendTypingIndicator(ctx context.Context, msg *models.Message) 
 // This is part of the StreamingAdapter interface.
 func (a *Adapter) StartStreamingResponse(ctx context.Context, msg *models.Message) (string, error) {
 	if a.client == nil {
-		return "", channels.ErrInternal("client not initialized", nil)
+		return "", channels.ErrInternal("client not initialized (check adapter setup)", nil)
 	}
 
 	channelID, ok := msg.Metadata["slack_channel"].(string)
@@ -972,7 +972,7 @@ func (a *Adapter) StartStreamingResponse(ctx context.Context, msg *models.Messag
 // This is part of the StreamingAdapter interface.
 func (a *Adapter) UpdateStreamingResponse(ctx context.Context, msg *models.Message, messageID string, content string) error {
 	if a.client == nil {
-		return channels.ErrInternal("client not initialized", nil)
+		return channels.ErrInternal("client not initialized (check adapter setup)", nil)
 	}
 
 	channelID, ok := msg.Metadata["slack_channel"].(string)

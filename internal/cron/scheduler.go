@@ -637,7 +637,10 @@ func (s *Scheduler) executeMessage(ctx context.Context, job *Job) error {
 	}
 	messageCopy := *job.Message
 	messageCopy.Content = content
-	return s.messageSender.Send(ctx, &messageCopy)
+	if err := s.messageSender.Send(ctx, &messageCopy); err != nil {
+		return fmt.Errorf("%s send message: %w", jobLabel, err)
+	}
+	return nil
 }
 
 func (s *Scheduler) executeAgent(ctx context.Context, job *Job) error {
@@ -664,7 +667,10 @@ func (s *Scheduler) executeAgent(ctx context.Context, job *Job) error {
 	msgCopy := *job.Message
 	msgCopy.Content = content
 	jobCopy.Message = &msgCopy
-	return s.agentRunner.Run(ctx, &jobCopy)
+	if err := s.agentRunner.Run(ctx, &jobCopy); err != nil {
+		return fmt.Errorf("%s run agent: %w", jobLabel, err)
+	}
+	return nil
 }
 
 func (s *Scheduler) executeCustom(ctx context.Context, job *Job) error {

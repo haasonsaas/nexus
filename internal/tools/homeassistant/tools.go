@@ -42,7 +42,7 @@ func (t *CallServiceTool) Schema() json.RawMessage {
 
 func (t *CallServiceTool) Execute(ctx context.Context, params json.RawMessage) (*agent.ToolResult, error) {
 	if t == nil || t.client == nil {
-		return toolError("Home Assistant client not configured"), nil
+		return toolError("Home Assistant client not configured (enable channels.homeassistant)"), nil
 	}
 
 	var input struct {
@@ -88,7 +88,7 @@ func (t *GetStateTool) Schema() json.RawMessage {
 
 func (t *GetStateTool) Execute(ctx context.Context, params json.RawMessage) (*agent.ToolResult, error) {
 	if t == nil || t.client == nil {
-		return toolError("Home Assistant client not configured"), nil
+		return toolError("Home Assistant client not configured (enable channels.homeassistant)"), nil
 	}
 
 	var input struct {
@@ -132,7 +132,7 @@ func (t *ListEntitiesTool) Schema() json.RawMessage {
 
 func (t *ListEntitiesTool) Execute(ctx context.Context, params json.RawMessage) (*agent.ToolResult, error) {
 	if t == nil || t.client == nil {
-		return toolError("Home Assistant client not configured"), nil
+		return toolError("Home Assistant client not configured (enable channels.homeassistant)"), nil
 	}
 
 	var input struct {

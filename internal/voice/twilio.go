@@ -264,10 +264,9 @@ func (p *TwilioProvider) StartListening(ctx context.Context, input *StartListeni
 	return nil
 }
 
-// StopListening stops speech recognition (no-op for Twilio).
+// StopListening reports speech recognition stop as unsupported for Twilio.
 func (p *TwilioProvider) StopListening(ctx context.Context, callID, providerCallID string) error {
-	// Twilio's <Gather> automatically stops on speech end
-	return nil
+	return errors.New("twilio: stop listening not supported (gather ends automatically)")
 }
 
 // VerifyWebhook validates webhook authenticity using HMAC-SHA1.

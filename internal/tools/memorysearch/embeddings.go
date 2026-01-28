@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -118,6 +117,12 @@ func (e *remoteEmbedder) embedRemote(ctx context.Context, inputs []string) ([][]
 	if len(inputs) == 0 {
 		return nil, nil
 	}
+	provider := strings.TrimSpace(e.cfg.Provider)
+	if provider == "" {
+		provider = "unknown"
+	}
+	endpoint := strings.TrimSpace(e.url)
+
 	payload := struct {
 		Model string   `json:"model"`
 		Input []string `json:"input"`
@@ -132,7 +137,7 @@ func (e *remoteEmbedder) embedRemote(ctx context.Context, inputs []string) ([][]
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, e.url, bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("embeddings request build failed (provider=%s url=%s): %w", provider, endpoint, err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if apiKey := strings.TrimSpace(e.cfg.APIKey); apiKey != "" {
@@ -141,16 +146,16 @@ func (e *remoteEmbedder) embedRemote(ctx context.Context, inputs []string) ([][]
 
 	resp, err := e.client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("embeddings request failed (provider=%s url=%s): %w", provider, endpoint, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		data, readErr := io.ReadAll(io.LimitReader(resp.Body, 8192))
 		if readErr != nil {
-			return nil, fmt.Errorf("embeddings request failed with status %d and unreadable body: %w", resp.StatusCode, readErr)
+			return nil, fmt.Errorf("embeddings request failed (provider=%s url=%s) with status %d and unreadable body: %w", provider, endpoint, resp.StatusCode, readErr)
 		}
-		return nil, fmt.Errorf("embeddings request failed: %s", strings.TrimSpace(string(data)))
+		return nil, fmt.Errorf("embeddings request failed (provider=%s url=%s): %s", provider, endpoint, strings.TrimSpace(string(data)))
 	}
 
 	var parsed struct {
@@ -160,10 +165,10 @@ func (e *remoteEmbedder) embedRemote(ctx context.Context, inputs []string) ([][]
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("embeddings response decode failed (provider=%s url=%s): %w", provider, endpoint, err)
 	}
 	if len(parsed.Data) == 0 {
-		return nil, errors.New("embeddings response missing data")
+		return nil, fmt.Errorf("embeddings response missing data (provider=%s url=%s)", provider, endpoint)
 	}
 
 	vectors := make([][]float64, len(inputs))

@@ -514,50 +514,54 @@ func (s *Scheduler) buildJob(cfg config.CronJobConfig, now time.Time) (*Job, err
 	if strings.TrimSpace(cfg.ID) == "" {
 		return nil, fmt.Errorf("job id required")
 	}
+	jobLabel := fmt.Sprintf("job %q", cfg.ID)
+	if name := strings.TrimSpace(cfg.Name); name != "" {
+		jobLabel = fmt.Sprintf("%s (%s)", jobLabel, name)
+	}
 	if !cfg.Enabled {
-		return nil, fmt.Errorf("job disabled")
+		return nil, fmt.Errorf("%s disabled", jobLabel)
 	}
 	schedule, err := NewSchedule(cfg.Schedule)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s invalid schedule: %w", jobLabel, err)
 	}
 	jobType := JobType(strings.ToLower(strings.TrimSpace(cfg.Type)))
 	switch jobType {
 	case JobTypeWebhook:
 		if cfg.Webhook == nil || strings.TrimSpace(cfg.Webhook.URL) == "" {
-			return nil, fmt.Errorf("webhook job missing url")
+			return nil, fmt.Errorf("%s webhook missing url", jobLabel)
 		}
 	case JobTypeMessage:
 		if cfg.Message == nil {
-			return nil, fmt.Errorf("message job missing payload")
+			return nil, fmt.Errorf("%s message missing payload", jobLabel)
 		}
 		if strings.TrimSpace(cfg.Message.Channel) == "" || strings.TrimSpace(cfg.Message.ChannelID) == "" {
-			return nil, fmt.Errorf("message job missing channel")
+			return nil, fmt.Errorf("%s message missing channel", jobLabel)
 		}
 		if strings.TrimSpace(cfg.Message.Content) == "" && strings.TrimSpace(cfg.Message.Template) == "" {
-			return nil, fmt.Errorf("message job missing content")
+			return nil, fmt.Errorf("%s message missing content", jobLabel)
 		}
 		if len(cfg.Message.Tools) > 0 {
-			return nil, fmt.Errorf("message job cannot set tools")
+			return nil, fmt.Errorf("%s message cannot set tools", jobLabel)
 		}
 	case JobTypeAgent:
 		if cfg.Message == nil {
-			return nil, fmt.Errorf("agent job missing payload")
+			return nil, fmt.Errorf("%s agent missing payload", jobLabel)
 		}
 		if strings.TrimSpace(cfg.Message.Content) == "" && strings.TrimSpace(cfg.Message.Template) == "" {
-			return nil, fmt.Errorf("agent job missing content")
+			return nil, fmt.Errorf("%s agent missing content", jobLabel)
 		}
 		channel := strings.TrimSpace(cfg.Message.Channel)
 		channelID := strings.TrimSpace(cfg.Message.ChannelID)
 		if (channel == "" && channelID != "") || (channel != "" && channelID == "") {
-			return nil, fmt.Errorf("agent job missing channel")
+			return nil, fmt.Errorf("%s agent missing channel", jobLabel)
 		}
 	case JobTypeCustom:
 		if cfg.Custom == nil || strings.TrimSpace(cfg.Custom.Handler) == "" {
-			return nil, fmt.Errorf("custom job missing handler")
+			return nil, fmt.Errorf("%s custom missing handler", jobLabel)
 		}
 	default:
-		return nil, fmt.Errorf("unsupported job type %q", cfg.Type)
+		return nil, fmt.Errorf("%s unsupported job type %q", jobLabel, cfg.Type)
 	}
 
 	next, ok, err := schedule.Next(now)

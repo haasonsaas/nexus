@@ -66,7 +66,7 @@ func (s *Server) ApplyConfig(ctx context.Context, raw string, baseHash string) (
 	}
 	path := strings.TrimSpace(s.configPath)
 	if path == "" {
-		return nil, fmt.Errorf("config path not configured")
+		return nil, fmt.Errorf("config path not configured (start with --config)")
 	}
 
 	s.configApplyMu.Lock()

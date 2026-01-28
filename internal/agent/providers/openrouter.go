@@ -137,7 +137,7 @@ func (p *OpenRouterProvider) SupportsTools() bool {
 // Complete sends a completion request to OpenRouter and returns a streaming response.
 func (p *OpenRouterProvider) Complete(ctx context.Context, req *agent.CompletionRequest) (<-chan *agent.CompletionChunk, error) {
 	if p.client == nil {
-		return nil, NewProviderError("openrouter", req.Model, errors.New("OpenRouter client not initialized"))
+		return nil, NewProviderError("openrouter", req.Model, errors.New("OpenRouter client not initialized (set llm.providers.openrouter.api_key)"))
 	}
 
 	model := req.Model

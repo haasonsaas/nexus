@@ -187,7 +187,7 @@ func (p *BedrockProvider) SupportsTools() bool {
 // Complete sends a completion request to Bedrock and returns a streaming response.
 func (p *BedrockProvider) Complete(ctx context.Context, req *agent.CompletionRequest) (<-chan *agent.CompletionChunk, error) {
 	if p.client == nil {
-		return nil, NewProviderError("bedrock", req.Model, errors.New("Bedrock client not initialized"))
+		return nil, NewProviderError("bedrock", req.Model, errors.New("Bedrock client not initialized (check AWS credentials/region)"))
 	}
 
 	model := req.Model

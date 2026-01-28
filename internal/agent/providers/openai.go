@@ -277,7 +277,7 @@ func (p *OpenAIProvider) SupportsTools() bool {
 //
 // Errors:
 // Immediate errors (returned):
-//   - "OpenAI API key not configured": Client is nil (empty API key)
+//   - "OpenAI API key not configured (set llm.providers.openai.api_key)": Client is nil (empty API key)
 //   - "failed to convert messages": Message format conversion failed
 //   - "non-retryable error": Authentication or validation error
 //   - "max retries exceeded": All retry attempts exhausted
@@ -345,7 +345,7 @@ func (p *OpenAIProvider) Complete(ctx context.Context, req *agent.CompletionRequ
 	// Validate API key is configured
 	if p.client == nil {
 		return nil, p.wrapError(
-			NewProviderError("openai", req.Model, errors.New("OpenAI API key not configured")).WithStatus(http.StatusUnauthorized),
+			NewProviderError("openai", req.Model, errors.New("OpenAI API key not configured (set llm.providers.openai.api_key)")).WithStatus(http.StatusUnauthorized),
 			req.Model,
 		)
 	}

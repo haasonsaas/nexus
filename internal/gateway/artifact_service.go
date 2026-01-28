@@ -15,7 +15,7 @@ import (
 
 func (g *grpcService) ListArtifacts(ctx context.Context, req *proto.ListArtifactsRequest) (*proto.ListArtifactsResponse, error) {
 	if g.server == nil || g.server.artifactRepo == nil {
-		return nil, status.Error(codes.FailedPrecondition, "artifact storage is not configured")
+		return nil, status.Error(codes.FailedPrecondition, "artifact storage is not configured (set artifacts.backend)")
 	}
 	filter := artifacts.Filter{}
 	if req != nil {
@@ -40,7 +40,7 @@ func (g *grpcService) ListArtifacts(ctx context.Context, req *proto.ListArtifact
 
 func (g *grpcService) GetArtifact(ctx context.Context, req *proto.GetArtifactRequest) (*proto.GetArtifactResponse, error) {
 	if g.server == nil || g.server.artifactRepo == nil {
-		return nil, status.Error(codes.FailedPrecondition, "artifact storage is not configured")
+		return nil, status.Error(codes.FailedPrecondition, "artifact storage is not configured (set artifacts.backend)")
 	}
 	if req == nil || strings.TrimSpace(req.ArtifactId) == "" {
 		return nil, status.Error(codes.InvalidArgument, "artifact_id is required")
@@ -76,7 +76,7 @@ func (g *grpcService) GetArtifact(ctx context.Context, req *proto.GetArtifactReq
 
 func (g *grpcService) DeleteArtifact(ctx context.Context, req *proto.DeleteArtifactRequest) (*proto.DeleteArtifactResponse, error) {
 	if g.server == nil || g.server.artifactRepo == nil {
-		return nil, status.Error(codes.FailedPrecondition, "artifact storage is not configured")
+		return nil, status.Error(codes.FailedPrecondition, "artifact storage is not configured (set artifacts.backend)")
 	}
 	if req == nil || strings.TrimSpace(req.ArtifactId) == "" {
 		return nil, status.Error(codes.InvalidArgument, "artifact_id is required")

@@ -46,7 +46,7 @@ type ToolUsageCount struct {
 
 func (h *Handler) computeAnalyticsOverview(ctx context.Context, agentID string, period string) (*AnalyticsOverview, error) {
 	if h == nil || h.config == nil || h.config.SessionStore == nil {
-		return nil, fmt.Errorf("session store not configured")
+		return nil, fmt.Errorf("session store not configured (set database.url)")
 	}
 
 	dur, normalized, err := parseAnalyticsPeriod(period)
@@ -279,7 +279,7 @@ func dbToolStats(ctx context.Context, db *sql.DB, agentID string, since, until t
 
 func analyticsOverviewFromStore(ctx context.Context, store sessions.Store, agentID string, period string, since, until time.Time) (*AnalyticsOverview, error) {
 	if store == nil {
-		return nil, fmt.Errorf("session store not configured")
+		return nil, fmt.Errorf("session store not configured (set database.url)")
 	}
 	if strings.TrimSpace(agentID) == "" {
 		return nil, fmt.Errorf("agent id is required")

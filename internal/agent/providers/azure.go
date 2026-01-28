@@ -135,7 +135,7 @@ func (p *AzureOpenAIProvider) SupportsTools() bool {
 // Complete sends a completion request to Azure OpenAI and returns a streaming response.
 func (p *AzureOpenAIProvider) Complete(ctx context.Context, req *agent.CompletionRequest) (<-chan *agent.CompletionChunk, error) {
 	if p.client == nil {
-		return nil, NewProviderError("azure", req.Model, errors.New("Azure OpenAI client not initialized"))
+		return nil, NewProviderError("azure", req.Model, errors.New("Azure OpenAI client not initialized (set llm.providers.azure.api_key/base_url)"))
 	}
 
 	model := req.Model

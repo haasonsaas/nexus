@@ -220,7 +220,7 @@ func (s *provisioningService) applyProvisioning(ctx context.Context, session *pr
 		return fmt.Errorf("provisioning session is nil")
 	}
 	if s.server.configPath == "" {
-		return fmt.Errorf("config path not configured")
+		return fmt.Errorf("config path not configured (start with --config)")
 	}
 	prov := provisioning.NewChannelProvisioner(s.server.configPath, s.server.logger)
 	channelType := models.ChannelType(strings.ToLower(session.ChannelType))

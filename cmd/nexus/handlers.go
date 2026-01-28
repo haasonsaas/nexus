@@ -1402,7 +1402,7 @@ func buildLLMProvider(cfg *config.Config, providerID string) (agent.LLMProvider,
 	switch providerKey {
 	case "anthropic":
 		if effectiveCfg.APIKey == "" {
-			return nil, "", errors.New("anthropic api key is required")
+			return nil, "", errors.New("anthropic api key is required (set llm.providers.anthropic.api_key)")
 		}
 		provider, err := providers.NewAnthropicProvider(providers.AnthropicConfig{
 			APIKey:       effectiveCfg.APIKey,
@@ -1415,7 +1415,7 @@ func buildLLMProvider(cfg *config.Config, providerID string) (agent.LLMProvider,
 		return provider, resolveDefaultModel(effectiveCfg.DefaultModel, provider), nil
 	case "openai":
 		if effectiveCfg.APIKey == "" {
-			return nil, "", errors.New("openai api key is required")
+			return nil, "", errors.New("openai api key is required (set llm.providers.openai.api_key)")
 		}
 		provider := providers.NewOpenAIProviderWithConfig(providers.OpenAIConfig{
 			APIKey:  effectiveCfg.APIKey,
@@ -1424,7 +1424,7 @@ func buildLLMProvider(cfg *config.Config, providerID string) (agent.LLMProvider,
 		return provider, resolveDefaultModel(effectiveCfg.DefaultModel, provider), nil
 	case "openrouter":
 		if effectiveCfg.APIKey == "" {
-			return nil, "", errors.New("openrouter api key is required")
+			return nil, "", errors.New("openrouter api key is required (set llm.providers.openrouter.api_key)")
 		}
 		provider, err := providers.NewOpenRouterProvider(providers.OpenRouterConfig{
 			APIKey:       effectiveCfg.APIKey,
@@ -1436,7 +1436,7 @@ func buildLLMProvider(cfg *config.Config, providerID string) (agent.LLMProvider,
 		return provider, resolveDefaultModel(effectiveCfg.DefaultModel, provider), nil
 	case "google", "gemini":
 		if effectiveCfg.APIKey == "" {
-			return nil, "", errors.New("google api key is required")
+			return nil, "", fmt.Errorf("%s api key is required (set llm.providers.%s.api_key)", providerKey, providerKey)
 		}
 		provider, err := providers.NewGoogleProvider(providers.GoogleConfig{
 			APIKey:       effectiveCfg.APIKey,
@@ -1448,11 +1448,11 @@ func buildLLMProvider(cfg *config.Config, providerID string) (agent.LLMProvider,
 		return provider, resolveDefaultModel(effectiveCfg.DefaultModel, provider), nil
 	case "azure":
 		if effectiveCfg.APIKey == "" {
-			return nil, "", errors.New("azure api key is required")
+			return nil, "", errors.New("azure api key is required (set llm.providers.azure.api_key)")
 		}
 		endpoint := strings.TrimSpace(effectiveCfg.BaseURL)
 		if endpoint == "" {
-			return nil, "", errors.New("azure endpoint (base_url) is required")
+			return nil, "", errors.New("azure base_url is required (set llm.providers.azure.base_url)")
 		}
 		apiVersion := strings.TrimSpace(effectiveCfg.APIVersion)
 		if apiVersion == "" {

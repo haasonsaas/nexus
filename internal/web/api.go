@@ -444,7 +444,7 @@ func (h *Handler) apiSessionMessages(w http.ResponseWriter, r *http.Request) {
 // apiSessionPatch handles PATCH/POST /api/sessions/{id}.
 func (h *Handler) apiSessionPatch(w http.ResponseWriter, r *http.Request, sessionID string) {
 	if h.config.SessionStore == nil {
-		h.jsonError(w, "Session store not configured", http.StatusServiceUnavailable)
+		h.jsonError(w, "Session store not configured (set database.url)", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -619,7 +619,7 @@ func (h *Handler) apiProviderTest(w http.ResponseWriter, r *http.Request, provid
 		return
 	}
 	if h == nil || h.config == nil || h.config.ChannelRegistry == nil {
-		h.jsonError(w, "Channel registry not configured", http.StatusServiceUnavailable)
+		h.jsonError(w, "Channel registry not configured (gateway channels unavailable)", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -1008,7 +1008,7 @@ func (h *Handler) apiSkillsRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.config.SkillsManager == nil {
-		h.jsonError(w, "Skills not configured", http.StatusServiceUnavailable)
+		h.jsonError(w, "Skills not configured (skills manager unavailable)", http.StatusServiceUnavailable)
 		return
 	}
 	go func() {
@@ -1109,7 +1109,7 @@ func (h *Handler) apiArtifacts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.config.ArtifactRepo == nil {
-		h.jsonError(w, "Artifacts not configured", http.StatusServiceUnavailable)
+		h.jsonError(w, "Artifacts not configured (set artifacts.backend)", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -1156,7 +1156,7 @@ func (h *Handler) apiArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.config.ArtifactRepo == nil {
-		h.jsonError(w, "Artifacts not configured", http.StatusServiceUnavailable)
+		h.jsonError(w, "Artifacts not configured (set artifacts.backend)", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -1221,7 +1221,7 @@ func (h *Handler) apiArtifact(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) apiNodeTools(w http.ResponseWriter, r *http.Request, nodeID string, rest []string) {
 	if h.config.EdgeManager == nil {
-		h.jsonError(w, "Edge manager not configured", http.StatusServiceUnavailable)
+		h.jsonError(w, "Edge manager not configured (set edge.enabled)", http.StatusServiceUnavailable)
 		return
 	}
 

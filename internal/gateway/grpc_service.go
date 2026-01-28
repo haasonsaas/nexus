@@ -235,7 +235,7 @@ func (g *grpcService) handleSendMessage(ctx context.Context, stream proto.NexusG
 
 func (g *grpcService) resolveSession(ctx context.Context, req *proto.SendMessageRequest) (*models.Session, error) {
 	if g.server.sessions == nil {
-		return nil, status.Error(codes.FailedPrecondition, "session store not initialized")
+		return nil, status.Error(codes.FailedPrecondition, "session store not initialized (set database.url)")
 	}
 	if req.SessionId != "" {
 		session, err := g.server.sessions.Get(ctx, req.SessionId)
@@ -267,7 +267,7 @@ func (g *grpcService) resolveSession(ctx context.Context, req *proto.SendMessage
 
 func (g *grpcService) CreateSession(ctx context.Context, req *proto.CreateSessionRequest) (*proto.CreateSessionResponse, error) {
 	if g.server.sessions == nil {
-		return nil, status.Error(codes.FailedPrecondition, "session store not initialized")
+		return nil, status.Error(codes.FailedPrecondition, "session store not initialized (set database.url)")
 	}
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request is required")
@@ -301,7 +301,7 @@ func (g *grpcService) CreateSession(ctx context.Context, req *proto.CreateSessio
 
 func (g *grpcService) GetSession(ctx context.Context, req *proto.GetSessionRequest) (*proto.GetSessionResponse, error) {
 	if g.server.sessions == nil {
-		return nil, status.Error(codes.FailedPrecondition, "session store not initialized")
+		return nil, status.Error(codes.FailedPrecondition, "session store not initialized (set database.url)")
 	}
 	if req == nil || req.Id == "" {
 		return nil, status.Error(codes.InvalidArgument, "session id required")
@@ -315,7 +315,7 @@ func (g *grpcService) GetSession(ctx context.Context, req *proto.GetSessionReque
 
 func (g *grpcService) ListSessions(ctx context.Context, req *proto.ListSessionsRequest) (*proto.ListSessionsResponse, error) {
 	if g.server.sessions == nil {
-		return nil, status.Error(codes.FailedPrecondition, "session store not initialized")
+		return nil, status.Error(codes.FailedPrecondition, "session store not initialized (set database.url)")
 	}
 	agentID := ""
 	channel := models.ChannelType("")
@@ -348,7 +348,7 @@ func (g *grpcService) ListSessions(ctx context.Context, req *proto.ListSessionsR
 
 func (g *grpcService) UpdateSession(ctx context.Context, req *proto.UpdateSessionRequest) (*proto.UpdateSessionResponse, error) {
 	if g.server.sessions == nil {
-		return nil, status.Error(codes.FailedPrecondition, "session store not initialized")
+		return nil, status.Error(codes.FailedPrecondition, "session store not initialized (set database.url)")
 	}
 	if req == nil || req.Id == "" {
 		return nil, status.Error(codes.InvalidArgument, "session id required")
@@ -371,7 +371,7 @@ func (g *grpcService) UpdateSession(ctx context.Context, req *proto.UpdateSessio
 
 func (g *grpcService) DeleteSession(ctx context.Context, req *proto.DeleteSessionRequest) (*proto.DeleteSessionResponse, error) {
 	if g.server.sessions == nil {
-		return nil, status.Error(codes.FailedPrecondition, "session store not initialized")
+		return nil, status.Error(codes.FailedPrecondition, "session store not initialized (set database.url)")
 	}
 	if req == nil || req.Id == "" {
 		return nil, status.Error(codes.InvalidArgument, "session id required")

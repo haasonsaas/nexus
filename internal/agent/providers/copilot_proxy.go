@@ -124,7 +124,7 @@ func (p *CopilotProxyProvider) SupportsTools() bool {
 // Complete sends a completion request to the Copilot Proxy.
 func (p *CopilotProxyProvider) Complete(ctx context.Context, req *agent.CompletionRequest) (<-chan *agent.CompletionChunk, error) {
 	if p.client == nil {
-		return nil, NewProviderError("copilot-proxy", req.Model, errors.New("client not initialized"))
+		return nil, NewProviderError("copilot-proxy", req.Model, errors.New("client not initialized (set llm.providers.copilot-proxy.base_url)"))
 	}
 
 	model := req.Model

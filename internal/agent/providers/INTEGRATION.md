@@ -238,7 +238,7 @@ for chunk := range chunks {
 provider := providers.NewOpenAIProvider("")  // Empty key
 chunks, err := provider.Complete(ctx, req)
 if err != nil {
-    // Will return: "OpenAI API key not configured"
+    // Will return: "OpenAI API key not configured (set llm.providers.openai.api_key)"
     log.Printf("Configuration error: %v", err)
 }
 ```
@@ -413,8 +413,8 @@ log.Printf("Estimated tokens used: %d", estimatedTokens)
 
 ### Common Issues
 
-1. **"API key not configured"**
-   - Ensure `OPENAI_API_KEY` environment variable is set
+1. **"OpenAI API key not configured (set llm.providers.openai.api_key)"**
+   - Ensure `OPENAI_API_KEY` environment variable is set (if using env expansion in config)
    - Verify API key is valid in OpenAI dashboard
 
 2. **Rate limit errors**

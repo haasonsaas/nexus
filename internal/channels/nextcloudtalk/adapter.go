@@ -531,9 +531,9 @@ func (a *Adapter) Metrics() channels.MetricsSnapshot {
 	return a.health.Metrics()
 }
 
-// SendTypingIndicator is a no-op for Nextcloud Talk.
+// SendTypingIndicator reports typing indicators as unsupported for Nextcloud Talk.
 func (a *Adapter) SendTypingIndicator(ctx context.Context, msg *models.Message) error {
-	return nil
+	return channels.ErrNotSupported
 }
 
 // StartStreamingResponse sends an initial placeholder message and returns its ID.

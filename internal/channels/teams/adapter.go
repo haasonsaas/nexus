@@ -287,11 +287,9 @@ func (a *Adapter) Metrics() channels.MetricsSnapshot {
 	return a.health.Metrics()
 }
 
-// SendTypingIndicator sends a typing indicator (not directly supported by Graph API for bots).
+// SendTypingIndicator reports typing indicators as unsupported for Teams.
 func (a *Adapter) SendTypingIndicator(ctx context.Context, msg *models.Message) error {
-	// Teams doesn't have a direct typing indicator API for Graph
-	// This is a no-op but maintains interface compatibility
-	return nil
+	return channels.ErrNotSupported
 }
 
 // authenticate performs OAuth2 client credentials flow.

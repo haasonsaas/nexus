@@ -2,9 +2,11 @@ package email
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
+	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
@@ -276,8 +278,8 @@ func TestAdapter_SendTypingIndicator(t *testing.T) {
 
 	// SendTypingIndicator is a no-op for email
 	err := adapter.SendTypingIndicator(context.Background(), &models.Message{})
-	if err != nil {
-		t.Errorf("SendTypingIndicator should return nil for email, got: %v", err)
+	if !errors.Is(err, channels.ErrNotSupported) {
+		t.Errorf("expected not supported error for email, got: %v", err)
 	}
 }
 

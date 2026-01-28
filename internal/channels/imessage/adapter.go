@@ -409,12 +409,10 @@ func appleTimestampToTime(nano int64) time.Time {
 	return appleEpoch.Add(time.Duration(nano) * time.Nanosecond)
 }
 
-// SendTypingIndicator is a no-op for iMessage as it doesn't support
-// programmatic typing indicators.
+// SendTypingIndicator reports typing indicators as unsupported for iMessage.
 // This is part of the StreamingAdapter interface.
 func (a *Adapter) SendTypingIndicator(ctx context.Context, msg *models.Message) error {
-	// iMessage doesn't support programmatic typing indicators
-	return nil
+	return channels.ErrNotSupported
 }
 
 // StartStreamingResponse reports streaming as unsupported for iMessage.

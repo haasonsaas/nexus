@@ -380,7 +380,9 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 	// Send initial typing indicator if streaming is supported
 	if streamingEnabled.Load() {
 		if err := streamingAdapter.SendTypingIndicator(runCtx, outboundMsg); err != nil {
-			s.logger.Debug("failed to send typing indicator", "error", err)
+			if !errors.Is(err, channels.ErrNotSupported) {
+				s.logger.Debug("failed to send typing indicator", "error", err)
+			}
 		}
 		lastTyping = time.Now()
 	}
@@ -456,7 +458,9 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 			shouldRefreshTyping := streamingEnabled.Load() && streamingMsgID == ""
 			if shouldRefreshTyping && time.Since(lastTyping) >= streamingTypingInterval {
 				if err := streamingAdapter.SendTypingIndicator(runCtx, outboundMsg); err != nil {
-					s.logger.Debug("failed to refresh typing indicator", "error", err)
+					if !errors.Is(err, channels.ErrNotSupported) {
+						s.logger.Debug("failed to refresh typing indicator", "error", err)
+					}
 				}
 				lastTyping = time.Now()
 			}

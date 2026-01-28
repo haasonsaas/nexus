@@ -920,11 +920,10 @@ func (a *Adapter) sendCanvasEphemeral(ctx context.Context, channelID string, use
 	}
 }
 
-// SendTypingIndicator is a no-op for Slack as it doesn't support programmatic typing indicators.
+// SendTypingIndicator reports typing indicators as unsupported for Slack.
 // This is part of the StreamingAdapter interface.
 func (a *Adapter) SendTypingIndicator(ctx context.Context, msg *models.Message) error {
-	// Slack doesn't support programmatic typing indicators
-	return nil
+	return channels.ErrNotSupported
 }
 
 // StartStreamingResponse sends an initial placeholder message and returns its timestamp.

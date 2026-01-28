@@ -2,11 +2,13 @@ package teams
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
@@ -171,8 +173,8 @@ func TestAdapter_SendTypingIndicator(t *testing.T) {
 
 	// SendTypingIndicator is a no-op for Teams
 	err = adapter.SendTypingIndicator(context.Background(), &models.Message{})
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
+	if !errors.Is(err, channels.ErrNotSupported) {
+		t.Errorf("expected not supported error, got: %v", err)
 	}
 }
 

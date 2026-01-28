@@ -490,10 +490,9 @@ func (a *Adapter) convertPost(post *model.Post, eventData map[string]any) *model
 	return msg
 }
 
-// SendTypingIndicator is a no-op for Mattermost (typing not widely supported via bot).
+// SendTypingIndicator reports typing indicators as unsupported for Mattermost.
 func (a *Adapter) SendTypingIndicator(ctx context.Context, msg *models.Message) error {
-	// Mattermost has typing events but they're not commonly used by bots
-	return nil
+	return channels.ErrNotSupported
 }
 
 // StartStreamingResponse sends an initial placeholder message and returns its ID.

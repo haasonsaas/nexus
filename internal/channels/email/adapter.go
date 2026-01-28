@@ -358,9 +358,9 @@ func (a *Adapter) Metrics() channels.MetricsSnapshot {
 	return a.health.Metrics()
 }
 
-// SendTypingIndicator is a no-op for email (no typing indicators).
+// SendTypingIndicator reports typing indicators as unsupported for email.
 func (a *Adapter) SendTypingIndicator(ctx context.Context, msg *models.Message) error {
-	return nil
+	return channels.ErrNotSupported
 }
 
 // authenticate performs OAuth2 client credentials flow.

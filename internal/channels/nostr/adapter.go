@@ -513,9 +513,9 @@ func (a *Adapter) Npub() string {
 	return npub
 }
 
-// SendTypingIndicator is a no-op for Nostr.
+// SendTypingIndicator reports typing indicators as unsupported for Nostr.
 func (a *Adapter) SendTypingIndicator(ctx context.Context, msg *models.Message) error {
-	return nil
+	return channels.ErrNotSupported
 }
 
 // StartStreamingResponse reports streaming as unsupported for Nostr.

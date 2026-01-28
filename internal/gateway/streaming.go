@@ -7,6 +7,7 @@ package gateway
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -235,6 +236,9 @@ func (h *StreamingHandler) SendTypingIndicator(ctx context.Context, msg *models.
 	}
 
 	if err := h.streaming.SendTypingIndicator(ctx, msg); err != nil {
+		if errors.Is(err, channels.ErrNotSupported) {
+			return nil
+		}
 		return err
 	}
 	h.lastTyping = time.Now()

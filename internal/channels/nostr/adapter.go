@@ -518,16 +518,16 @@ func (a *Adapter) SendTypingIndicator(ctx context.Context, msg *models.Message) 
 	return nil
 }
 
-// StartStreamingResponse sends an initial placeholder message.
+// StartStreamingResponse reports streaming as unsupported for Nostr.
 func (a *Adapter) StartStreamingResponse(ctx context.Context, msg *models.Message) (string, error) {
 	// Nostr doesn't support message editing, so streaming isn't really possible
-	return "", nil
+	return "", channels.ErrStreamingNotSupported
 }
 
-// UpdateStreamingResponse updates a previously sent message.
+// UpdateStreamingResponse reports streaming as unsupported for Nostr.
 func (a *Adapter) UpdateStreamingResponse(ctx context.Context, msg *models.Message, messageID string, content string) error {
 	// Nostr doesn't support message editing
-	return nil
+	return channels.ErrStreamingNotSupported
 }
 
 // Helper functions

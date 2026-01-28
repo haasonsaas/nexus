@@ -188,4 +188,8 @@ func IsRetryable(err error) bool {
 var (
 	// ErrInvalidReactionEmoji indicates the reaction emoji is empty or invalid
 	ErrInvalidReactionEmoji = errors.New("reaction emoji is required when reactions are enabled")
+	// ErrNotSupported indicates an operation is not supported by the adapter.
+	ErrNotSupported = errors.New("not supported")
+	// ErrStreamingNotSupported indicates streaming responses are not supported by the adapter.
+	ErrStreamingNotSupported = errors.New("streaming responses are not supported")
 )

@@ -2,9 +2,11 @@ package personal
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
+	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
 
@@ -502,19 +504,19 @@ func TestBaseContactManager(t *testing.T) {
 		}
 	})
 
-	t.Run("Search returns nil", func(t *testing.T) {
+	t.Run("Search returns not supported", func(t *testing.T) {
 		results, err := manager.Search(ctx, "query")
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
+		if !errors.Is(err, channels.ErrNotSupported) {
+			t.Errorf("expected not supported error, got: %v", err)
 		}
 		if results != nil {
 			t.Error("expected nil results from stub")
 		}
 	})
 
-	t.Run("Sync returns nil", func(t *testing.T) {
-		if err := manager.Sync(ctx); err != nil {
-			t.Errorf("Sync() error = %v", err)
+	t.Run("Sync returns not supported", func(t *testing.T) {
+		if err := manager.Sync(ctx); !errors.Is(err, channels.ErrNotSupported) {
+			t.Errorf("expected not supported error, got: %v", err)
 		}
 	})
 
@@ -533,30 +535,30 @@ func TestBaseMediaHandler(t *testing.T) {
 	handler := &BaseMediaHandler{}
 	ctx := context.Background()
 
-	t.Run("Download returns nil", func(t *testing.T) {
+	t.Run("Download returns not supported", func(t *testing.T) {
 		data, mime, err := handler.Download(ctx, "media-1")
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
+		if !errors.Is(err, channels.ErrNotSupported) {
+			t.Errorf("expected not supported error, got: %v", err)
 		}
 		if data != nil || mime != "" {
 			t.Error("expected nil data and empty mime from stub")
 		}
 	})
 
-	t.Run("Upload returns empty", func(t *testing.T) {
+	t.Run("Upload returns not supported", func(t *testing.T) {
 		id, err := handler.Upload(ctx, []byte("data"), "image/png", "file.png")
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
+		if !errors.Is(err, channels.ErrNotSupported) {
+			t.Errorf("expected not supported error, got: %v", err)
 		}
 		if id != "" {
 			t.Error("expected empty ID from stub")
 		}
 	})
 
-	t.Run("GetURL returns empty", func(t *testing.T) {
+	t.Run("GetURL returns not supported", func(t *testing.T) {
 		url, err := handler.GetURL(ctx, "media-1")
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
+		if !errors.Is(err, channels.ErrNotSupported) {
+			t.Errorf("expected not supported error, got: %v", err)
 		}
 		if url != "" {
 			t.Error("expected empty URL from stub")
@@ -568,31 +570,31 @@ func TestBasePresenceManager(t *testing.T) {
 	pm := &BasePresenceManager{}
 	ctx := context.Background()
 
-	t.Run("SetTyping returns nil", func(t *testing.T) {
-		if err := pm.SetTyping(ctx, "peer-1", true); err != nil {
-			t.Errorf("SetTyping() error = %v", err)
+	t.Run("SetTyping returns not supported", func(t *testing.T) {
+		if err := pm.SetTyping(ctx, "peer-1", true); !errors.Is(err, channels.ErrNotSupported) {
+			t.Errorf("expected not supported error, got: %v", err)
 		}
 	})
 
-	t.Run("SetOnline returns nil", func(t *testing.T) {
-		if err := pm.SetOnline(ctx, true); err != nil {
-			t.Errorf("SetOnline() error = %v", err)
+	t.Run("SetOnline returns not supported", func(t *testing.T) {
+		if err := pm.SetOnline(ctx, true); !errors.Is(err, channels.ErrNotSupported) {
+			t.Errorf("expected not supported error, got: %v", err)
 		}
 	})
 
-	t.Run("Subscribe returns nil", func(t *testing.T) {
+	t.Run("Subscribe returns not supported", func(t *testing.T) {
 		ch, err := pm.Subscribe(ctx, "peer-1")
-		if err != nil {
-			t.Errorf("Subscribe() error = %v", err)
+		if !errors.Is(err, channels.ErrNotSupported) {
+			t.Errorf("expected not supported error, got: %v", err)
 		}
 		if ch != nil {
 			t.Error("expected nil channel from stub")
 		}
 	})
 
-	t.Run("MarkRead returns nil", func(t *testing.T) {
-		if err := pm.MarkRead(ctx, "peer-1", "msg-1"); err != nil {
-			t.Errorf("MarkRead() error = %v", err)
+	t.Run("MarkRead returns not supported", func(t *testing.T) {
+		if err := pm.MarkRead(ctx, "peer-1", "msg-1"); !errors.Is(err, channels.ErrNotSupported) {
+			t.Errorf("expected not supported error, got: %v", err)
 		}
 	})
 }

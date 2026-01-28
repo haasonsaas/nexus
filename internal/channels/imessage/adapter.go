@@ -417,18 +417,16 @@ func (a *Adapter) SendTypingIndicator(ctx context.Context, msg *models.Message) 
 	return nil
 }
 
-// StartStreamingResponse sends an initial message and returns an ID.
-// For iMessage, we send the message immediately since editing isn't supported.
+// StartStreamingResponse reports streaming as unsupported for iMessage.
 // This is part of the StreamingAdapter interface.
 func (a *Adapter) StartStreamingResponse(ctx context.Context, msg *models.Message) (string, error) {
 	// iMessage doesn't support message editing, so we can't do true streaming.
-	// Return empty string to indicate streaming is not available.
-	return "", nil
+	return "", channels.ErrStreamingNotSupported
 }
 
-// UpdateStreamingResponse is a no-op for iMessage as sent messages cannot be edited.
+// UpdateStreamingResponse reports streaming as unsupported for iMessage.
 // This is part of the StreamingAdapter interface.
 func (a *Adapter) UpdateStreamingResponse(ctx context.Context, msg *models.Message, messageID string, content string) error {
 	// iMessage doesn't support editing sent messages
-	return nil
+	return channels.ErrStreamingNotSupported
 }

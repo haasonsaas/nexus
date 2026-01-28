@@ -2,6 +2,7 @@ package personal
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 
@@ -210,11 +211,11 @@ func (m *BaseContactManager) Resolve(ctx context.Context, identifier string) (*C
 }
 
 func (m *BaseContactManager) Search(ctx context.Context, query string) ([]*Contact, error) {
-	return nil, nil
+	return nil, fmt.Errorf("contact search: %w", channels.ErrNotSupported)
 }
 
 func (m *BaseContactManager) Sync(ctx context.Context) error {
-	return nil
+	return fmt.Errorf("contact sync: %w", channels.ErrNotSupported)
 }
 
 func (m *BaseContactManager) GetByID(ctx context.Context, id string) (*Contact, error) {
@@ -228,32 +229,32 @@ func (m *BaseContactManager) GetByID(ctx context.Context, id string) (*Contact, 
 type BaseMediaHandler struct{}
 
 func (h *BaseMediaHandler) Download(ctx context.Context, mediaID string) ([]byte, string, error) {
-	return nil, "", nil
+	return nil, "", fmt.Errorf("media download: %w", channels.ErrNotSupported)
 }
 
 func (h *BaseMediaHandler) Upload(ctx context.Context, data []byte, mimeType string, filename string) (string, error) {
-	return "", nil
+	return "", fmt.Errorf("media upload: %w", channels.ErrNotSupported)
 }
 
 func (h *BaseMediaHandler) GetURL(ctx context.Context, mediaID string) (string, error) {
-	return "", nil
+	return "", fmt.Errorf("media url: %w", channels.ErrNotSupported)
 }
 
 // BasePresenceManager provides a stub implementation of PresenceManager.
 type BasePresenceManager struct{}
 
 func (p *BasePresenceManager) SetTyping(ctx context.Context, peerID string, typing bool) error {
-	return nil
+	return fmt.Errorf("presence typing: %w", channels.ErrNotSupported)
 }
 
 func (p *BasePresenceManager) SetOnline(ctx context.Context, online bool) error {
-	return nil
+	return fmt.Errorf("presence online: %w", channels.ErrNotSupported)
 }
 
 func (p *BasePresenceManager) Subscribe(ctx context.Context, peerID string) (<-chan PresenceEvent, error) {
-	return nil, nil
+	return nil, fmt.Errorf("presence subscribe: %w", channels.ErrNotSupported)
 }
 
 func (p *BasePresenceManager) MarkRead(ctx context.Context, peerID string, messageID string) error {
-	return nil
+	return fmt.Errorf("presence mark read: %w", channels.ErrNotSupported)
 }

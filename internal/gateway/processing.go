@@ -7,6 +7,7 @@ package gateway
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"strconv"
 	"strings"
 	"sync"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/agent"
+	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/pkg/models"
 	"go.opentelemetry.io/otel/trace"
@@ -415,9 +417,15 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 					var err error
 					streamingMsgID, err = streamingAdapter.StartStreamingResponse(runCtx, outboundMsg)
 					if err != nil {
-						s.logger.Warn("streaming fallback triggered, switching to non-streaming mode",
-							"error", err,
-							"session_id", session.ID)
+						if errors.Is(err, channels.ErrStreamingNotSupported) {
+							s.logger.Debug("streaming not supported, switching to non-streaming mode",
+								"channel", msg.Channel,
+								"session_id", session.ID)
+						} else {
+							s.logger.Warn("streaming fallback triggered, switching to non-streaming mode",
+								"error", err,
+								"session_id", session.ID)
+						}
 						// Fall back to non-streaming mode
 						streamingEnabled.Store(false)
 					} else {

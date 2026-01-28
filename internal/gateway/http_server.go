@@ -13,6 +13,7 @@ import (
 
 	"github.com/haasonsaas/nexus/internal/commands"
 	"github.com/haasonsaas/nexus/internal/config"
+	"github.com/haasonsaas/nexus/internal/infra"
 	"github.com/haasonsaas/nexus/internal/web"
 )
 
@@ -178,6 +179,9 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 				"latest":  latest,
 				"pending": pending,
 			}
+		}
+		if r.URL.Query().Get("checks") == "true" {
+			response["checks"] = infra.CheckHealth(r.Context())
 		}
 
 		data, err := json.Marshal(response)

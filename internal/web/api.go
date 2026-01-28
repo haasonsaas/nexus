@@ -26,6 +26,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/cron"
 	"github.com/haasonsaas/nexus/internal/doctor"
 	"github.com/haasonsaas/nexus/internal/edge"
+	"github.com/haasonsaas/nexus/internal/infra"
 	"github.com/haasonsaas/nexus/internal/observability"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/status"
@@ -58,16 +59,17 @@ func decodeJSONRequest(w http.ResponseWriter, r *http.Request, dst any) (int, er
 
 // SystemStatus holds system health information.
 type SystemStatus struct {
-	Uptime         time.Duration   `json:"uptime"`
-	UptimeString   string          `json:"uptime_string"`
-	GoVersion      string          `json:"go_version"`
-	NumGoroutines  int             `json:"num_goroutines"`
-	MemAllocMB     float64         `json:"mem_alloc_mb"`
-	MemSysMB       float64         `json:"mem_sys_mb"`
-	NumCPU         int             `json:"num_cpu"`
-	SessionCount   int             `json:"session_count"`
-	DatabaseStatus string          `json:"database_status"`
-	Channels       []ChannelStatus `json:"channels"`
+	Uptime         time.Duration       `json:"uptime"`
+	UptimeString   string              `json:"uptime_string"`
+	GoVersion      string              `json:"go_version"`
+	NumGoroutines  int                 `json:"num_goroutines"`
+	MemAllocMB     float64             `json:"mem_alloc_mb"`
+	MemSysMB       float64             `json:"mem_sys_mb"`
+	NumCPU         int                 `json:"num_cpu"`
+	SessionCount   int                 `json:"session_count"`
+	DatabaseStatus string              `json:"database_status"`
+	Channels       []ChannelStatus     `json:"channels"`
+	HealthChecks   *infra.HealthReport `json:"health_checks,omitempty"`
 }
 
 // ChannelStatus holds channel health information.
@@ -1506,6 +1508,11 @@ func (h *Handler) getSystemStatus(ctx context.Context) *SystemStatus {
 			}
 			status.Channels = append(status.Channels, entry)
 		}
+	}
+
+	if len(infra.DefaultHealthRegistry.Names()) > 0 {
+		report := infra.CheckHealth(ctx)
+		status.HealthChecks = &report
 	}
 
 	return status

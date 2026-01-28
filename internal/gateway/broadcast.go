@@ -34,6 +34,10 @@ type BroadcastConfig struct {
 	Groups map[string][]string `yaml:"groups"`
 }
 
+// BroadcastContextBuilder builds the prompt context for a broadcasted message.
+// It can attach system prompts, tool policies, or model overrides.
+type BroadcastContextBuilder func(context.Context, *models.Session, *models.Message) (context.Context, []SteeringRuleTrace)
+
 // BroadcastResult contains the result of processing a message by a single agent in a broadcast group.
 type BroadcastResult struct {
 	AgentID   string
@@ -96,6 +100,28 @@ func (m *BroadcastManager) ProcessBroadcast(
 	resolveConversationID func(*models.Message) (string, error),
 	getSystemPrompt func(context.Context, *models.Session, *models.Message) (string, []SteeringRuleTrace),
 ) ([]BroadcastResult, error) {
+	var builder BroadcastContextBuilder
+	if getSystemPrompt != nil {
+		builder = func(ctx context.Context, session *models.Session, msg *models.Message) (context.Context, []SteeringRuleTrace) {
+			systemPrompt, traces := getSystemPrompt(ctx, session, msg)
+			if systemPrompt != "" {
+				ctx = agent.WithSystemPrompt(ctx, systemPrompt)
+			}
+			return ctx, traces
+		}
+	}
+	return m.ProcessBroadcastWithContext(ctx, peerID, msg, resolveConversationID, builder)
+}
+
+// ProcessBroadcastWithContext processes a message across all agents configured for the peer.
+// It uses a context builder to attach system prompts, tool policies, or model overrides.
+func (m *BroadcastManager) ProcessBroadcastWithContext(
+	ctx context.Context,
+	peerID string,
+	msg *models.Message,
+	resolveConversationID func(*models.Message) (string, error),
+	buildContext BroadcastContextBuilder,
+) ([]BroadcastResult, error) {
 	agents := m.GetAgentsForPeer(peerID)
 	if len(agents) == 0 {
 		return nil, fmt.Errorf("no agents configured for peer %q", peerID)
@@ -116,10 +142,10 @@ func (m *BroadcastManager) ProcessBroadcast(
 
 	switch m.config.Strategy {
 	case BroadcastSequential:
-		return m.processSequential(ctx, agents, msg, channelID, getSystemPrompt)
+		return m.processSequential(ctx, agents, msg, channelID, buildContext)
 	default:
 		// Default to parallel if not specified or invalid
-		return m.processParallel(ctx, agents, msg, channelID, getSystemPrompt)
+		return m.processParallel(ctx, agents, msg, channelID, buildContext)
 	}
 }
 
@@ -129,7 +155,7 @@ func (m *BroadcastManager) processParallel(
 	agents []string,
 	msg *models.Message,
 	channelID string,
-	getSystemPrompt func(context.Context, *models.Session, *models.Message) (string, []SteeringRuleTrace),
+	buildContext BroadcastContextBuilder,
 ) ([]BroadcastResult, error) {
 	results := make([]BroadcastResult, len(agents))
 	var wg sync.WaitGroup
@@ -149,7 +175,7 @@ func (m *BroadcastManager) processParallel(
 					}
 				}
 			}()
-			result := m.processForAgent(ctx, aid, msg, channelID, getSystemPrompt)
+			result := m.processForAgent(ctx, aid, msg, channelID, buildContext)
 			results[idx] = result
 		}(i, agentID)
 	}
@@ -164,7 +190,7 @@ func (m *BroadcastManager) processSequential(
 	agents []string,
 	msg *models.Message,
 	channelID string,
-	getSystemPrompt func(context.Context, *models.Session, *models.Message) (string, []SteeringRuleTrace),
+	buildContext BroadcastContextBuilder,
 ) ([]BroadcastResult, error) {
 	results := make([]BroadcastResult, 0, len(agents))
 
@@ -175,7 +201,7 @@ func (m *BroadcastManager) processSequential(
 		default:
 		}
 
-		result := m.processForAgent(ctx, agentID, msg, channelID, getSystemPrompt)
+		result := m.processForAgent(ctx, agentID, msg, channelID, buildContext)
 		results = append(results, result)
 
 		// If one agent fails, we still continue with the others
@@ -196,7 +222,7 @@ func (m *BroadcastManager) processForAgent(
 	agentID string,
 	msg *models.Message,
 	channelID string,
-	getSystemPrompt func(context.Context, *models.Session, *models.Message) (string, []SteeringRuleTrace),
+	buildContext BroadcastContextBuilder,
 ) BroadcastResult {
 	result := BroadcastResult{
 		AgentID: agentID,
@@ -219,11 +245,11 @@ func (m *BroadcastManager) processForAgent(
 		msgCopy.CreatedAt = time.Now()
 	}
 
-	// Apply system prompt if available
+	// Apply context overrides if available
 	promptCtx := ctx
-	if getSystemPrompt != nil {
-		if systemPrompt, _ := getSystemPrompt(ctx, session, &msgCopy); systemPrompt != "" {
-			promptCtx = agent.WithSystemPrompt(promptCtx, systemPrompt)
+	if buildContext != nil {
+		if nextCtx, _ := buildContext(ctx, session, &msgCopy); nextCtx != nil {
+			promptCtx = nextCtx
 		}
 	}
 

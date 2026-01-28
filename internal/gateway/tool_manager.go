@@ -13,6 +13,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/attention"
 	"github.com/haasonsaas/nexus/internal/canvas"
 	"github.com/haasonsaas/nexus/internal/channels"
+	"github.com/haasonsaas/nexus/internal/commands"
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/cron"
 	"github.com/haasonsaas/nexus/internal/edge"
@@ -45,6 +46,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/tools/sandbox/firecracker"
 	"github.com/haasonsaas/nexus/internal/tools/servicenow"
 	sessiontools "github.com/haasonsaas/nexus/internal/tools/sessions"
+	systemtools "github.com/haasonsaas/nexus/internal/tools/system"
 	"github.com/haasonsaas/nexus/internal/tools/websearch"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
@@ -435,6 +437,17 @@ func (m *ToolManager) RegisterTools(ctx context.Context, runtime *agent.Runtime)
 		m.registerCoreTool(runtime, attention.NewStatsAttentionTool(m.attentionFeed))
 	}
 
+	// Register system diagnostics tools if integration is available
+	if m.gateway != nil && m.gateway.integration != nil {
+		healthProvider := &integrationHealthProvider{
+			base:  m.gateway.integration,
+			links: cfg.Tools.Links,
+		}
+		m.registerCoreTool(runtime, systemtools.NewHealthTool(healthProvider))
+		m.registerCoreTool(runtime, systemtools.NewDiagnosticTool(m.gateway.integration))
+		m.registerCoreTool(runtime, systemtools.NewUsageTool(m.gateway.integration))
+	}
+
 	// Register Home Assistant tools if enabled
 	if cfg.Channels.HomeAssistant.Enabled {
 		haClient, err := homeassistant.NewClient(homeassistant.Config{
@@ -514,6 +527,24 @@ func (m *ToolManager) registerEdgeTools(runtime *agent.Runtime) {
 		}))
 		m.Logger().Info("registered computer use tool", "edge_id", m.config.Tools.ComputerUse.EdgeID)
 	}
+}
+
+type integrationHealthProvider struct {
+	base  *Integration
+	links config.LinksConfig
+}
+
+func (p *integrationHealthProvider) Check(ctx context.Context, opts *commands.HealthCheckOptions) (*commands.HealthSummary, error) {
+	if p == nil || p.base == nil {
+		return nil, fmt.Errorf("health provider unavailable")
+	}
+	if opts == nil {
+		opts = &commands.HealthCheckOptions{}
+	}
+	if opts.LinkUnderstanding == nil {
+		opts.LinkUnderstanding = buildLinkUnderstandingHealth(p.links)
+	}
+	return p.base.Check(ctx, opts)
 }
 
 // ReloadMCPTools refreshes MCP tool registrations and policy aliases.

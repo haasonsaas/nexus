@@ -124,10 +124,21 @@ func (g *grpcService) handleSendMessage(ctx context.Context, stream proto.NexusG
 		}
 	}
 
+	var agentModel *models.Agent
+	if g.server.stores.Agents != nil && session != nil {
+		if model, err := g.server.stores.Agents.Get(ctx, session.AgentID); err == nil {
+			agentModel = model
+		}
+	}
+
 	promptCtx := ctx
-	systemPrompt, steeringTrace := g.server.systemPromptForMessage(ctx, session, msg, toolPolicyFromMessage(msg))
+	toolPolicy := g.server.resolveToolPolicy(agentModel, msg)
+	systemPrompt, steeringTrace := g.server.systemPromptForMessage(ctx, session, msg, toolPolicy)
 	if systemPrompt != "" {
 		promptCtx = agent.WithSystemPrompt(promptCtx, systemPrompt)
+	}
+	if g.server.toolPolicyResolver != nil && toolPolicy != nil {
+		promptCtx = agent.WithToolPolicy(promptCtx, g.server.toolPolicyResolver, toolPolicy)
 	}
 	if overrides := g.server.experimentOverrides(session, msg); overrides.Model != "" {
 		promptCtx = agent.WithModel(promptCtx, overrides.Model)

@@ -11,19 +11,21 @@ import (
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/config"
+	"github.com/haasonsaas/nexus/internal/infra"
 )
 
 type systemStatus struct {
-	Uptime         time.Duration   `json:"uptime"`
-	UptimeString   string          `json:"uptime_string"`
-	GoVersion      string          `json:"go_version"`
-	NumGoroutines  int             `json:"num_goroutines"`
-	MemAllocMB     float64         `json:"mem_alloc_mb"`
-	MemSysMB       float64         `json:"mem_sys_mb"`
-	NumCPU         int             `json:"num_cpu"`
-	SessionCount   int             `json:"session_count"`
-	DatabaseStatus string          `json:"database_status"`
-	Channels       []channelStatus `json:"channels"`
+	Uptime         time.Duration       `json:"uptime"`
+	UptimeString   string              `json:"uptime_string"`
+	GoVersion      string              `json:"go_version"`
+	NumGoroutines  int                 `json:"num_goroutines"`
+	MemAllocMB     float64             `json:"mem_alloc_mb"`
+	MemSysMB       float64             `json:"mem_sys_mb"`
+	NumCPU         int                 `json:"num_cpu"`
+	SessionCount   int                 `json:"session_count"`
+	DatabaseStatus string              `json:"database_status"`
+	Channels       []channelStatus     `json:"channels"`
+	HealthChecks   *infra.HealthReport `json:"health_checks,omitempty"`
 }
 
 type channelStatus struct {

@@ -280,6 +280,11 @@ func (i *Integration) CheckHealth(ctx context.Context, opts *commands.HealthChec
 	return i.healthChecker.Check(ctx, opts)
 }
 
+// Check satisfies system.HealthProvider.
+func (i *Integration) Check(ctx context.Context, opts *commands.HealthCheckOptions) (*commands.HealthSummary, error) {
+	return i.CheckHealth(ctx, opts)
+}
+
 // FormatHealthSummary formats a health summary for display.
 func FormatHealthSummary(summary *HealthCheckResult) string {
 	return commands.FormatHealthSummary(summary)
@@ -312,6 +317,16 @@ func (i *Integration) GetProviderUsage(ctx context.Context, provider string) (*u
 // GetAllProviderUsage returns usage data for all configured providers.
 func (i *Integration) GetAllProviderUsage(ctx context.Context) []*usage.ProviderUsage {
 	return i.usageCache.GetAll(ctx)
+}
+
+// Get satisfies system.UsageProvider.
+func (i *Integration) Get(ctx context.Context, provider string) (*usage.ProviderUsage, error) {
+	return i.GetProviderUsage(ctx, provider)
+}
+
+// GetAll satisfies system.UsageProvider.
+func (i *Integration) GetAll(ctx context.Context) []*usage.ProviderUsage {
+	return i.GetAllProviderUsage(ctx)
 }
 
 // FormatProviderUsage formats provider usage for display.

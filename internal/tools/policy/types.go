@@ -70,6 +70,9 @@ var DefaultGroups = map[string][]string{
 	// Messaging
 	"group:messaging": {"send_message"},
 
+	// System status tools
+	"group:system": {"system_health", "system_diagnostic", "provider_usage"},
+
 	// Jobs
 	"group:jobs": {"job_status"},
 
@@ -82,6 +85,7 @@ var DefaultGroups = map[string][]string{
 		"browser",
 		"send_message",
 		"job_status",
+		"system_health", "system_diagnostic", "provider_usage",
 	},
 
 	// MCP tools (dynamically populated via RegisterMCPServer)
@@ -98,13 +102,13 @@ var DefaultGroups = map[string][]string{
 // ProfileDefaults defines the default allow lists for each profile.
 var ProfileDefaults = map[Profile]*Policy{
 	ProfileMinimal: {
-		Allow: []string{"status"},
+		Allow: []string{"group:system"},
 	},
 	ProfileCoding: {
 		Allow: []string{"group:fs", "group:runtime", "group:web", "group:memory"},
 	},
 	ProfileMessaging: {
-		Allow: []string{"group:messaging", "status"},
+		Allow: []string{"group:messaging", "group:system"},
 	},
 	ProfileFull: {
 		// Full profile allows everything not explicitly denied

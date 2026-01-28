@@ -253,10 +253,7 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 		}
 	}
 	overrides := parseAgentToolOverrides(agentModel)
-	toolPolicy := toolPolicyFromAgent(agentModel)
-	if msgPolicy := toolPolicyFromMessage(msg); msgPolicy != nil {
-		toolPolicy = msgPolicy
-	}
+	toolPolicy := s.resolveToolPolicy(agentModel, msg)
 
 	var agentElevatedCfg *config.ElevatedConfig
 	if overrides.HasElevated {
@@ -687,12 +684,12 @@ func (s *Server) handleBroadcastMessage(ctx context.Context, peerID string, msg 
 	s.broadcastManager.runtime = runtime
 	s.broadcastManager.sessions = s.sessions
 
-	results, err := s.broadcastManager.ProcessBroadcast(
+	results, err := s.broadcastManager.ProcessBroadcastWithContext(
 		ctx,
 		peerID,
 		msg,
 		s.resolveConversationID,
-		func(ctx context.Context, session *models.Session, msg *models.Message) (string, []SteeringRuleTrace) {
+		func(ctx context.Context, session *models.Session, msg *models.Message) (context.Context, []SteeringRuleTrace) {
 			var agentModel *models.Agent
 			if s.stores.Agents != nil && session != nil {
 				model, err := s.stores.Agents.Get(ctx, session.AgentID)
@@ -700,11 +697,62 @@ func (s *Server) handleBroadcastMessage(ctx context.Context, peerID string, msg 
 					agentModel = model
 				}
 			}
-			toolPolicy := toolPolicyFromAgent(agentModel)
-			if msgPolicy := toolPolicyFromMessage(msg); msgPolicy != nil {
-				toolPolicy = msgPolicy
+
+			overrides := parseAgentToolOverrides(agentModel)
+			toolPolicy := s.resolveToolPolicy(agentModel, msg)
+
+			var agentElevatedCfg *config.ElevatedConfig
+			if overrides.HasElevated {
+				agentElevatedCfg = &overrides.Elevated
 			}
-			return s.systemPromptForMessage(ctx, session, msg, toolPolicy)
+			elevatedAllowed, _ := resolveElevatedPermission(s.config.Tools.Elevated, agentElevatedCfg, msg)
+			effectiveElevated := elevatedModeFromSession(session)
+
+			if directive, ok := parseElevatedDirective(msg.Content); ok && directive.Scope == elevatedScopeInline {
+				if directive.Cleaned != "" {
+					msg.Content = directive.Cleaned
+				}
+				if elevatedAllowed {
+					effectiveElevated = directive.Mode
+				}
+			}
+			if !elevatedAllowed {
+				effectiveElevated = agent.ElevatedOff
+			}
+
+			promptCtx := ctx
+			systemPrompt, steeringTrace := s.systemPromptForMessage(ctx, session, msg, toolPolicy)
+			if systemPrompt != "" {
+				promptCtx = agent.WithSystemPrompt(promptCtx, systemPrompt)
+			}
+			if overrides := s.experimentOverrides(session, msg); overrides.Model != "" {
+				promptCtx = agent.WithModel(promptCtx, overrides.Model)
+			}
+			if model := sessionModelOverride(session); model != "" {
+				promptCtx = agent.WithModel(promptCtx, model)
+			}
+			if effectiveElevated != agent.ElevatedOff {
+				promptCtx = agent.WithElevated(promptCtx, effectiveElevated)
+			}
+			if overrides.HasExecution || overrides.HasElevated {
+				override := runtimeOptionsOverrideFromExecution(overrides.Execution)
+				if overrides.HasElevated {
+					override.ElevatedTools = effectiveElevatedTools(s.config.Tools.Elevated, agentElevatedCfg)
+				}
+				promptCtx = agent.WithRuntimeOptions(promptCtx, override)
+			}
+			if s.toolPolicyResolver != nil && toolPolicy != nil {
+				promptCtx = agent.WithToolPolicy(promptCtx, s.toolPolicyResolver, toolPolicy)
+			}
+			if s.approvalChecker != nil && session != nil {
+				basePolicy := s.approvalChecker.PolicyFor("")
+				policy := approvalPolicyForAgent(basePolicy, overrides, s.toolPolicyResolver)
+				if policy != nil && policy != basePolicy {
+					s.approvalChecker.SetAgentPolicy(session.AgentID, policy)
+				}
+			}
+
+			return promptCtx, steeringTrace
 		},
 	)
 	if err != nil {

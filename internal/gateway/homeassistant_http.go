@@ -182,9 +182,19 @@ func (s *Server) handleHomeAssistantConversation(w http.ResponseWriter, r *http.
 	}
 
 	promptCtx := ctx
-	systemPrompt, _ := s.systemPromptForMessage(ctx, session, msg, toolPolicyFromMessage(msg))
+	var agentModel *models.Agent
+	if s.stores.Agents != nil && session != nil {
+		if model, err := s.stores.Agents.Get(ctx, session.AgentID); err == nil {
+			agentModel = model
+		}
+	}
+	toolPolicy := s.resolveToolPolicy(agentModel, msg)
+	systemPrompt, _ := s.systemPromptForMessage(ctx, session, msg, toolPolicy)
 	if systemPrompt != "" {
 		promptCtx = agent.WithSystemPrompt(promptCtx, systemPrompt)
+	}
+	if s.toolPolicyResolver != nil && toolPolicy != nil {
+		promptCtx = agent.WithToolPolicy(promptCtx, s.toolPolicyResolver, toolPolicy)
 	}
 	if overrides := s.experimentOverrides(session, msg); overrides.Model != "" {
 		promptCtx = agent.WithModel(promptCtx, overrides.Model)

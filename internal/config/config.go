@@ -860,12 +860,28 @@ type ToolsConfig struct {
 	MemorySearch MemorySearchConfig  `yaml:"memory_search"`
 	FactExtract  FactExtractConfig   `yaml:"fact_extraction"`
 	Links        LinksConfig         `yaml:"links"`
+	Policies     ToolPoliciesConfig  `yaml:"policies"`
 	Notes        string              `yaml:"notes"`
 	NotesFile    string              `yaml:"notes_file"`
 	Execution    ToolExecutionConfig `yaml:"execution"`
 	Elevated     ElevatedConfig      `yaml:"elevated"`
 	Jobs         ToolJobsConfig      `yaml:"jobs"`
 	ServiceNow   ServiceNowConfig    `yaml:"servicenow"`
+}
+
+// ToolPoliciesConfig defines default allow/deny policies for tools.
+type ToolPoliciesConfig struct {
+	// Default policy behavior: "allow" or "deny".
+	Default string `yaml:"default"`
+	// Rules define per-tool allow/deny behavior.
+	Rules []ToolPolicyRule `yaml:"rules"`
+}
+
+// ToolPolicyRule defines a policy action for a tool, optionally scoped by channel.
+type ToolPolicyRule struct {
+	Tool     string   `yaml:"tool"`
+	Action   string   `yaml:"action"`   // "allow" | "deny"
+	Channels []string `yaml:"channels"` // optional channel filters
 }
 
 type ServiceNowConfig struct {
@@ -1910,6 +1926,9 @@ func applyToolsDefaults(cfg *Config) {
 	}
 	if cfg.Tools.FactExtract.MaxFacts == 0 {
 		cfg.Tools.FactExtract.MaxFacts = 10
+	}
+	if strings.TrimSpace(cfg.Tools.Policies.Default) == "" {
+		cfg.Tools.Policies.Default = "allow"
 	}
 	applyMemorySearchEmbeddingsDefaults(&cfg.Tools.MemorySearch.Embeddings)
 	applyLinksDefaults(&cfg.Tools.Links)

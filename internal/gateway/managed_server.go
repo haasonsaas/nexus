@@ -7,6 +7,7 @@ package gateway
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/infra"
@@ -20,6 +21,7 @@ type ManagedServer struct {
 	toolManager      *ToolManager
 	schedulerManager *SchedulerManager
 	mediaManager     *MediaManager
+	healthChecksSet  bool
 }
 
 // ManagedServerConfig configures a ManagedServer.
@@ -89,17 +91,20 @@ func NewManagedServer(cfg ManagedServerConfig) (*ManagedServer, error) {
 	components.Register(toolManager)
 	components.Register(schedulerManager)
 
-	return &ManagedServer{
+	managed := &ManagedServer{
 		Server:           server,
 		components:       components,
 		toolManager:      toolManager,
 		schedulerManager: schedulerManager,
 		mediaManager:     mediaManager,
-	}, nil
+	}
+	managed.registerHealthChecks()
+	return managed, nil
 }
 
 // Start starts the managed server and all component managers.
 func (m *ManagedServer) Start(ctx context.Context) error {
+	m.registerHealthChecks()
 	// Start component managers first
 	if err := m.components.Start(ctx); err != nil {
 		return err
@@ -142,6 +147,35 @@ func (m *ManagedServer) Stop(ctx context.Context) error {
 
 	// Stop component managers in reverse order
 	return m.components.Stop(ctx)
+}
+
+func (m *ManagedServer) registerHealthChecks() {
+	if m == nil || m.components == nil || m.healthChecksSet {
+		return
+	}
+
+	for _, component := range m.components.Components() {
+		comp := component
+		checkName := "component:" + comp.Name()
+		infra.RegisterHealthCheck(infra.HealthCheckConfig{
+			Name:     checkName,
+			Critical: true,
+			Checker: func(ctx context.Context) infra.HealthCheckResult {
+				start := time.Now()
+				health := comp.Health(ctx)
+				return infra.HealthCheckResult{
+					Name:      checkName,
+					Status:    health.State,
+					Message:   health.Message,
+					Metadata:  health.Details,
+					Timestamp: time.Now(),
+					Latency:   time.Since(start),
+				}
+			},
+		})
+	}
+
+	m.healthChecksSet = true
 }
 
 // Health returns aggregated health status from all components.

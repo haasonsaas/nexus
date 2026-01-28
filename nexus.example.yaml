@@ -604,6 +604,15 @@ tools:
   notes: ""
   # Optional file path with tool notes (merged with inline notes)
   notes_file: ""
+  # Optional tool policy overrides (default allow/deny with per-channel rules)
+  policies:
+    default: allow
+    rules: []
+    # Example:
+    # rules:
+    #   - tool: browser
+    #     action: deny
+    #     channels: [telegram]
   # Optional memory search tool
   memory_search:
     enabled: false

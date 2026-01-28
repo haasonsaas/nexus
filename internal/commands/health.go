@@ -181,6 +181,7 @@ func (h *HealthChecker) Check(ctx context.Context, opts *HealthCheckOptions) (*H
 
 		var wg sync.WaitGroup
 		var mu sync.Mutex
+		probeFailed := false
 
 		for channel, prober := range probers {
 			summary.ChannelOrder = append(summary.ChannelOrder, channel)
@@ -205,11 +206,15 @@ func (h *HealthChecker) Check(ctx context.Context, opts *HealthCheckOptions) (*H
 						OK:    false,
 						Error: err.Error(),
 					}
+					probeFailed = true
 				} else if probe != nil {
 					health.Probe = probe
 					health.Linked = probe.OK
 					now := time.Now().UnixMilli()
 					health.LastProbeAt = &now
+					if !probe.OK {
+						probeFailed = true
+					}
 				}
 
 				summary.Channels[ch] = health
@@ -217,10 +222,13 @@ func (h *HealthChecker) Check(ctx context.Context, opts *HealthCheckOptions) (*H
 		}
 
 		wg.Wait()
+		if probeFailed {
+			summary.OK = false
+		}
 	}
 
 	// Add agent health from options
-	if opts.Agents != nil {
+	if h.config.IncludeAgents && opts.Agents != nil {
 		summary.Agents = opts.Agents
 	}
 	if opts.DefaultAgentID != "" {
@@ -228,7 +236,7 @@ func (h *HealthChecker) Check(ctx context.Context, opts *HealthCheckOptions) (*H
 	}
 
 	// Add sessions health from options
-	if opts.Sessions != nil {
+	if h.config.IncludeSessions && opts.Sessions != nil {
 		summary.Sessions = opts.Sessions
 	}
 	if opts.LinkUnderstanding != nil {

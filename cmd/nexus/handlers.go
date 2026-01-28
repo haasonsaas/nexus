@@ -4296,6 +4296,17 @@ func printSystemStatus(ctx context.Context, out io.Writer, jsonOutput bool, conf
 	}
 	fmt.Fprintln(out)
 
+	if status.HealthChecks != nil && len(status.HealthChecks.Checks) > 0 {
+		fmt.Fprintln(out, "Components")
+		for _, check := range status.HealthChecks.Checks {
+			fmt.Fprintf(out, "   %s: %s\n", check.Name, check.Status)
+			if check.Message != "" {
+				fmt.Fprintf(out, "     %s\n", check.Message)
+			}
+		}
+		fmt.Fprintln(out)
+	}
+
 	fmt.Fprintln(out, "LLM Providers")
 	fmt.Fprintln(out, "   Not reported by server status API")
 	fmt.Fprintln(out)

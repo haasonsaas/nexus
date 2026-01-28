@@ -28,6 +28,9 @@ var ToolGroups = map[string][]string{
 	// Automation/scheduling tools
 	"group:automation": {"cron", "gateway", "job_status"},
 
+	// System status tools
+	"group:system": {"system_health", "system_diagnostic", "provider_usage"},
+
 	// Messaging tools - send messages to users/channels
 	"group:messaging": {"message", "send_message"},
 
@@ -50,6 +53,8 @@ var ToolGroups = map[string][]string{
 		"message", "send_message",
 		// Jobs
 		"job_status",
+		// System
+		"system_health", "system_diagnostic", "provider_usage",
 		// Sessions
 		"sessions_list", "sessions_history", "sessions_send", "sessions_spawn", "session_status",
 	},
@@ -61,6 +66,7 @@ var ToolGroups = map[string][]string{
 		"memory_search", "memory_get",
 		"sessions_list", "sessions_history", "session_status",
 		"job_status",
+		"system_health", "system_diagnostic", "provider_usage",
 	},
 }
 
@@ -87,7 +93,7 @@ var ToolProfiles = map[string]*Policy{
 		Profile: ProfileMessaging,
 		Allow: []string{
 			"group:messaging",
-			"status",
+			"group:system",
 		},
 	},
 
@@ -107,7 +113,7 @@ var ToolProfiles = map[string]*Policy{
 	// Minimal profile - just status checks
 	"minimal": {
 		Profile: ProfileMinimal,
-		Allow:   []string{"status"},
+		Allow:   []string{"group:system"},
 	},
 }
 

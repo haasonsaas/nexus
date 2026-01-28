@@ -31,7 +31,7 @@ func TestToolPolicy_DenialMessage_NotInProfile(t *testing.T) {
 	resolver := policy.NewResolver()
 
 	pol := &policy.Policy{
-		Profile: policy.ProfileMinimal, // Only allows "status"
+		Profile: policy.ProfileMinimal, // Only allows system status tools
 	}
 
 	result := resolver.Decide(pol, "exec")
@@ -75,7 +75,8 @@ func TestToolPolicy_ProfileMinimal(t *testing.T) {
 		tool    string
 		allowed bool
 	}{
-		{"status", true},
+		{"system_health", true},
+		{"provider_usage", true},
 		{"exec", false},
 		{"read", false},
 		{"write", false},
@@ -137,7 +138,7 @@ func TestToolPolicy_ProfileMessaging(t *testing.T) {
 		allowed bool
 	}{
 		{"send_message", true},
-		{"status", true},
+		{"system_health", true},
 		{"exec", false},
 		{"read", false},
 		{"write", false},
@@ -161,7 +162,7 @@ func TestToolPolicy_ProfileFull(t *testing.T) {
 		Profile: policy.ProfileFull,
 	}
 
-	tools := []string{"read", "write", "edit", "exec", "web_search", "send_message", "status"}
+	tools := []string{"read", "write", "edit", "exec", "web_search", "send_message", "system_health"}
 
 	for _, tool := range tools {
 		t.Run(tool, func(t *testing.T) {

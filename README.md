@@ -335,6 +335,7 @@ tools:
   links:
     enabled: true
     max_links: 5
+    max_output_chars: 2000
     timeout_seconds: 30
     models:
       - type: cli

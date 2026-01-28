@@ -12,6 +12,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/haasonsaas/nexus/internal/commands"
+	"github.com/haasonsaas/nexus/internal/config"
 	"github.com/haasonsaas/nexus/internal/web"
 )
 
@@ -119,9 +120,13 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	if s.integration != nil {
 		// Quick health check without probing
 		probeChannels := r.URL.Query().Get("probe") == "true"
-		summary, err := s.integration.CheckHealth(r.Context(), &commands.HealthCheckOptions{
+		opts := &commands.HealthCheckOptions{
 			ProbeChannels: &probeChannels,
-		})
+		}
+		if s.config != nil {
+			opts.LinkUnderstanding = buildLinkUnderstandingHealth(s.config.Tools.Links)
+		}
+		summary, err := s.integration.CheckHealth(r.Context(), opts)
 		if err != nil {
 			payload := map[string]any{
 				"status": "error",
@@ -208,4 +213,23 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	if _, err := w.Write(data); err != nil && s.logger != nil {
 		s.logger.Debug("healthz write failed", "error", err)
 	}
+}
+
+func buildLinkUnderstandingHealth(cfg config.LinksConfig) *commands.LinkUnderstandingHealth {
+	summary := &commands.LinkUnderstandingHealth{
+		Enabled:        cfg.Enabled,
+		MaxLinks:       cfg.MaxLinks,
+		MaxOutputChars: cfg.MaxOutputChars,
+		TimeoutSeconds: cfg.TimeoutSeconds,
+		ModelCount:     len(cfg.Models),
+		ScopeMode:      "all",
+	}
+	if cfg.Scope != nil {
+		if cfg.Scope.Mode != "" {
+			summary.ScopeMode = cfg.Scope.Mode
+		}
+		summary.ScopeAllowlist = len(cfg.Scope.Allowlist)
+		summary.ScopeDenylist = len(cfg.Scope.Denylist)
+	}
+	return summary
 }

@@ -4,21 +4,23 @@ package commands
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 )
 
 // HealthSummary contains the overall health status.
 type HealthSummary struct {
-	OK             bool                      `json:"ok"`
-	Ts             int64                     `json:"ts"`
-	DurationMs     int64                     `json:"duration_ms"`
-	Channels       map[string]*ChannelHealth `json:"channels"`
-	ChannelOrder   []string                  `json:"channel_order"`
-	ChannelLabels  map[string]string         `json:"channel_labels"`
-	DefaultAgentID string                    `json:"default_agent_id"`
-	Agents         []*AgentHealth            `json:"agents"`
-	Sessions       *SessionsHealth           `json:"sessions"`
+	OK                bool                      `json:"ok"`
+	Ts                int64                     `json:"ts"`
+	DurationMs        int64                     `json:"duration_ms"`
+	Channels          map[string]*ChannelHealth `json:"channels"`
+	ChannelOrder      []string                  `json:"channel_order"`
+	ChannelLabels     map[string]string         `json:"channel_labels"`
+	DefaultAgentID    string                    `json:"default_agent_id"`
+	Agents            []*AgentHealth            `json:"agents"`
+	LinkUnderstanding *LinkUnderstandingHealth  `json:"link_understanding,omitempty"`
+	Sessions          *SessionsHealth           `json:"sessions"`
 }
 
 // ChannelHealth contains health status for a channel.
@@ -55,6 +57,18 @@ type AgentHealth struct {
 	IsDefault bool             `json:"is_default"`
 	Heartbeat *HeartbeatHealth `json:"heartbeat"`
 	Sessions  *SessionsHealth  `json:"sessions,omitempty"`
+}
+
+// LinkUnderstandingHealth contains link understanding configuration status.
+type LinkUnderstandingHealth struct {
+	Enabled        bool   `json:"enabled"`
+	MaxLinks       int    `json:"max_links"`
+	MaxOutputChars int    `json:"max_output_chars"`
+	TimeoutSeconds int    `json:"timeout_seconds"`
+	ModelCount     int    `json:"model_count"`
+	ScopeMode      string `json:"scope_mode"`
+	ScopeAllowlist int    `json:"scope_allowlist,omitempty"`
+	ScopeDenylist  int    `json:"scope_denylist,omitempty"`
 }
 
 // HeartbeatHealth contains heartbeat configuration status.
@@ -217,6 +231,9 @@ func (h *HealthChecker) Check(ctx context.Context, opts *HealthCheckOptions) (*H
 	if opts.Sessions != nil {
 		summary.Sessions = opts.Sessions
 	}
+	if opts.LinkUnderstanding != nil {
+		summary.LinkUnderstanding = opts.LinkUnderstanding
+	}
 
 	summary.DurationMs = time.Since(startedAt).Milliseconds()
 	return summary, nil
@@ -224,11 +241,12 @@ func (h *HealthChecker) Check(ctx context.Context, opts *HealthCheckOptions) (*H
 
 // HealthCheckOptions configures a health check.
 type HealthCheckOptions struct {
-	TimeoutMs      int64
-	ProbeChannels  *bool
-	DefaultAgentID string
-	Agents         []*AgentHealth
-	Sessions       *SessionsHealth
+	TimeoutMs         int64
+	ProbeChannels     *bool
+	DefaultAgentID    string
+	Agents            []*AgentHealth
+	Sessions          *SessionsHealth
+	LinkUnderstanding *LinkUnderstandingHealth
 }
 
 // FormatHealthSummary formats a health summary for display.
@@ -284,6 +302,40 @@ func FormatHealthSummary(summary *HealthSummary) string {
 				}
 				result += fmt.Sprintf("    %s (%s ago)\n", s.Key, age)
 			}
+		}
+	}
+
+	if summary.LinkUnderstanding != nil {
+		lu := summary.LinkUnderstanding
+		status := "disabled"
+		if lu.Enabled {
+			status = "enabled"
+		}
+		details := make([]string, 0, 6)
+		if lu.MaxLinks > 0 {
+			details = append(details, fmt.Sprintf("max_links=%d", lu.MaxLinks))
+		}
+		if lu.MaxOutputChars > 0 {
+			details = append(details, fmt.Sprintf("max_output_chars=%d", lu.MaxOutputChars))
+		}
+		if lu.TimeoutSeconds > 0 {
+			details = append(details, fmt.Sprintf("timeout=%ds", lu.TimeoutSeconds))
+		}
+		details = append(details, fmt.Sprintf("models=%d", lu.ModelCount))
+		if lu.ScopeMode != "" {
+			details = append(details, fmt.Sprintf("scope=%s", lu.ScopeMode))
+		}
+		if lu.ScopeMode == "allowlist" {
+			details = append(details, fmt.Sprintf("allowlist=%d", lu.ScopeAllowlist))
+		}
+		if lu.ScopeMode == "denylist" {
+			details = append(details, fmt.Sprintf("denylist=%d", lu.ScopeDenylist))
+		}
+
+		if len(details) > 0 {
+			result += fmt.Sprintf("\nLink Understanding: %s (%s)\n", status, strings.Join(details, ", "))
+		} else {
+			result += fmt.Sprintf("\nLink Understanding: %s\n", status)
 		}
 	}
 

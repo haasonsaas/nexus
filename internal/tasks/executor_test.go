@@ -165,7 +165,7 @@ func TestRoutingExecutor_UnknownExecutionType(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for unknown execution type")
 	}
-	if !errors.Is(err, nil) && err.Error() != "unknown execution type: unknown_type" {
+	if err.Error() != "task \"test\" unknown execution type: unknown_type" {
 		t.Errorf("unexpected error: %v", err)
 	}
 }

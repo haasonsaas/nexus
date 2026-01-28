@@ -239,11 +239,15 @@ func (e *RoutingExecutor) Execute(ctx context.Context, task *ScheduledTask, exec
 	if task == nil {
 		return "", fmt.Errorf("task is required")
 	}
+	taskLabel := fmt.Sprintf("task %q", task.ID)
+	if name := strings.TrimSpace(task.Name); name != "" {
+		taskLabel = fmt.Sprintf("%s (%s)", taskLabel, name)
+	}
 
 	switch task.Config.ExecutionType {
 	case ExecutionTypeMessage:
 		if e.messageExecutor == nil {
-			return "", fmt.Errorf("message executor not configured")
+			return "", fmt.Errorf("%s message executor not configured", taskLabel)
 		}
 		e.logger.Info("routing task to message executor",
 			"task_id", task.ID,
@@ -254,7 +258,7 @@ func (e *RoutingExecutor) Execute(ctx context.Context, task *ScheduledTask, exec
 	case ExecutionTypeAgent, "":
 		// Default to agent executor
 		if e.agentExecutor == nil {
-			return "", fmt.Errorf("agent executor not configured")
+			return "", fmt.Errorf("%s agent executor not configured", taskLabel)
 		}
 		e.logger.Info("routing task to agent executor",
 			"task_id", task.ID,
@@ -263,6 +267,6 @@ func (e *RoutingExecutor) Execute(ctx context.Context, task *ScheduledTask, exec
 		return e.agentExecutor.Execute(ctx, task, exec)
 
 	default:
-		return "", fmt.Errorf("unknown execution type: %s", task.Config.ExecutionType)
+		return "", fmt.Errorf("%s unknown execution type: %s", taskLabel, task.Config.ExecutionType)
 	}
 }

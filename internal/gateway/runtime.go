@@ -380,7 +380,7 @@ func (s *Server) buildProvider(providerID string) (agent.LLMProvider, string, er
 	}
 	effectiveCfg, err := resolveProviderProfile(providerCfg, profileID)
 	if err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("provider %q: %w", providerID, err)
 	}
 
 	switch providerKey {

@@ -586,6 +586,17 @@ func (s *Scheduler) buildJob(cfg config.CronJobConfig, now time.Time) (*Job, err
 	}, nil
 }
 
+func formatJobLabel(job *Job) string {
+	if job == nil {
+		return "job <nil>"
+	}
+	label := fmt.Sprintf("job %q", job.ID)
+	if name := strings.TrimSpace(job.Name); name != "" {
+		label = fmt.Sprintf("%s (%s)", label, name)
+	}
+	return label
+}
+
 func (s *Scheduler) executeJob(ctx context.Context, job *Job) error {
 	if job == nil {
 		return errors.New("job is nil")
@@ -605,23 +616,24 @@ func (s *Scheduler) executeJob(ctx context.Context, job *Job) error {
 }
 
 func (s *Scheduler) executeMessage(ctx context.Context, job *Job) error {
+	jobLabel := formatJobLabel(job)
 	if s.messageSender == nil {
-		return errors.New("message sender not configured")
+		return fmt.Errorf("%s message sender not configured", jobLabel)
 	}
 	if job.Message == nil {
-		return errors.New("missing message payload")
+		return fmt.Errorf("%s missing message payload", jobLabel)
 	}
 	channel := strings.TrimSpace(job.Message.Channel)
 	channelID := strings.TrimSpace(job.Message.ChannelID)
 	if channel == "" || channelID == "" {
-		return errors.New("message payload missing channel")
+		return fmt.Errorf("%s message payload missing channel", jobLabel)
 	}
 	content, err := s.renderMessageContent(job.Message)
 	if err != nil {
-		return err
+		return fmt.Errorf("%s render message content: %w", jobLabel, err)
 	}
 	if strings.TrimSpace(content) == "" {
-		return errors.New("message payload missing content")
+		return fmt.Errorf("%s message payload missing content", jobLabel)
 	}
 	messageCopy := *job.Message
 	messageCopy.Content = content
@@ -629,23 +641,24 @@ func (s *Scheduler) executeMessage(ctx context.Context, job *Job) error {
 }
 
 func (s *Scheduler) executeAgent(ctx context.Context, job *Job) error {
+	jobLabel := formatJobLabel(job)
 	if s.agentRunner == nil {
-		return errors.New("agent runner not configured")
+		return fmt.Errorf("%s agent runner not configured", jobLabel)
 	}
 	if job.Message == nil {
-		return errors.New("missing agent payload")
+		return fmt.Errorf("%s missing agent payload", jobLabel)
 	}
 	content, err := s.renderMessageContent(job.Message)
 	if err != nil {
-		return err
+		return fmt.Errorf("%s render message content: %w", jobLabel, err)
 	}
 	if strings.TrimSpace(content) == "" {
-		return errors.New("agent payload missing content")
+		return fmt.Errorf("%s agent payload missing content", jobLabel)
 	}
 	channel := strings.TrimSpace(job.Message.Channel)
 	channelID := strings.TrimSpace(job.Message.ChannelID)
 	if (channel == "" && channelID != "") || (channel != "" && channelID == "") {
-		return errors.New("agent payload missing channel")
+		return fmt.Errorf("%s agent payload missing channel", jobLabel)
 	}
 	jobCopy := *job
 	msgCopy := *job.Message
@@ -655,26 +668,28 @@ func (s *Scheduler) executeAgent(ctx context.Context, job *Job) error {
 }
 
 func (s *Scheduler) executeCustom(ctx context.Context, job *Job) error {
+	jobLabel := formatJobLabel(job)
 	if job.Custom == nil {
-		return errors.New("missing custom payload")
+		return fmt.Errorf("%s missing custom payload", jobLabel)
 	}
 	handlerName := strings.ToLower(strings.TrimSpace(job.Custom.Handler))
 	if handlerName == "" {
-		return errors.New("custom handler missing")
+		return fmt.Errorf("%s custom handler missing", jobLabel)
 	}
 	s.mu.Lock()
 	handler := s.customHandlers[handlerName]
 	s.mu.Unlock()
 	if handler == nil {
-		return fmt.Errorf("custom handler not registered: %s", job.Custom.Handler)
+		return fmt.Errorf("%s custom handler not registered: %s", jobLabel, job.Custom.Handler)
 	}
 	return handler.Handle(ctx, job, job.Custom.Args)
 }
 
 func (s *Scheduler) executeWebhook(ctx context.Context, job *Job) error {
+	jobLabel := formatJobLabel(job)
 	cfg := job.Webhook
 	if cfg == nil {
-		return errors.New("missing webhook config")
+		return fmt.Errorf("%s missing webhook config", jobLabel)
 	}
 	method := strings.ToUpper(strings.TrimSpace(cfg.Method))
 	if method == "" {
@@ -689,7 +704,7 @@ func (s *Scheduler) executeWebhook(ctx context.Context, job *Job) error {
 		req.Header.Set(key, value)
 	}
 	if err := applyWebhookAuth(req, cfg.Auth); err != nil {
-		return err
+		return fmt.Errorf("%s webhook auth: %w", jobLabel, err)
 	}
 
 	client := s.httpClient

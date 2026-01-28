@@ -1396,7 +1396,7 @@ func buildLLMProvider(cfg *config.Config, providerID string) (agent.LLMProvider,
 	}
 	effectiveCfg, err := resolveProviderProfile(providerCfg, profileID)
 	if err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("provider %q: %w", providerID, err)
 	}
 
 	switch providerKey {

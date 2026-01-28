@@ -263,7 +263,7 @@ func (m *Manager) embedChunks(ctx context.Context, chunks []*models.DocumentChun
 // Search performs semantic search over indexed documents.
 func (m *Manager) Search(ctx context.Context, req *models.DocumentSearchRequest) (*models.DocumentSearchResponse, error) {
 	if m.embedder == nil {
-		return nil, fmt.Errorf("embedder not configured")
+		return nil, fmt.Errorf("embedder not configured (set rag.embeddings.provider)")
 	}
 	// Generate query embedding
 	queryEmbedding, err := m.embedder.Embed(ctx, req.Query)

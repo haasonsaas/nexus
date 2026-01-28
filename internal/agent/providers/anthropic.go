@@ -195,7 +195,7 @@ type AnthropicConfig struct {
 //   - error: Returns error if APIKey is empty
 //
 // Errors:
-//   - "anthropic: API key is required": When config.APIKey is empty string
+//   - "anthropic: API key is required (set llm.providers.anthropic.api_key)": When config.APIKey is empty string
 //
 // Example:
 //
@@ -208,7 +208,7 @@ type AnthropicConfig struct {
 //	}
 func NewAnthropicProvider(config AnthropicConfig) (*AnthropicProvider, error) {
 	if config.APIKey == "" {
-		return nil, errors.New("anthropic: API key is required")
+		return nil, errors.New("anthropic: API key is required (set llm.providers.anthropic.api_key)")
 	}
 
 	// Apply defaults for optional configuration

@@ -618,7 +618,7 @@ func (s *Scheduler) executeJob(ctx context.Context, job *Job) error {
 func (s *Scheduler) executeMessage(ctx context.Context, job *Job) error {
 	jobLabel := formatJobLabel(job)
 	if s.messageSender == nil {
-		return fmt.Errorf("%s message sender not configured", jobLabel)
+		return fmt.Errorf("%s message sender not configured (call WithMessageSender or SetMessageSender)", jobLabel)
 	}
 	if job.Message == nil {
 		return fmt.Errorf("%s missing message payload", jobLabel)
@@ -646,7 +646,7 @@ func (s *Scheduler) executeMessage(ctx context.Context, job *Job) error {
 func (s *Scheduler) executeAgent(ctx context.Context, job *Job) error {
 	jobLabel := formatJobLabel(job)
 	if s.agentRunner == nil {
-		return fmt.Errorf("%s agent runner not configured", jobLabel)
+		return fmt.Errorf("%s agent runner not configured (call WithAgentRunner or SetAgentRunner)", jobLabel)
 	}
 	if job.Message == nil {
 		return fmt.Errorf("%s missing agent payload", jobLabel)

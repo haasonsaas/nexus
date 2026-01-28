@@ -74,7 +74,7 @@ type OpenRouterConfig struct {
 //	})
 func NewOpenRouterProvider(cfg OpenRouterConfig) (*OpenRouterProvider, error) {
 	if cfg.APIKey == "" {
-		return nil, errors.New("openrouter: API key is required")
+		return nil, errors.New("openrouter: API key is required (set llm.providers.openrouter.api_key)")
 	}
 
 	if cfg.MaxRetries <= 0 {

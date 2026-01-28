@@ -143,13 +143,13 @@ type GoogleConfig struct {
 //   - error: Returns error if APIKey is empty or client initialization fails
 //
 // Errors:
-//   - "google: API key is required": When config.APIKey is empty string
+//   - "google: API key is required (set llm.providers.google.api_key)": When config.APIKey is empty string
 //   - "google: failed to create client": When SDK client creation fails
 //
 // Example:
 //
 //	provider, err := NewGoogleProvider(GoogleConfig{
-//	    APIKey:     os.Getenv("GOOGLE_API_KEY"),
+//	    APIKey:     os.Getenv("GOOGLE_AI_API_KEY"),
 //	    MaxRetries: 5,  // Override default
 //	})
 //	if err != nil {
@@ -157,7 +157,7 @@ type GoogleConfig struct {
 //	}
 func NewGoogleProvider(config GoogleConfig) (*GoogleProvider, error) {
 	if config.APIKey == "" {
-		return nil, errors.New("google: API key is required")
+		return nil, errors.New("google: API key is required (set llm.providers.google.api_key)")
 	}
 
 	// Apply defaults for optional configuration

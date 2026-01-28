@@ -247,7 +247,7 @@ func (e *RoutingExecutor) Execute(ctx context.Context, task *ScheduledTask, exec
 	switch task.Config.ExecutionType {
 	case ExecutionTypeMessage:
 		if e.messageExecutor == nil {
-			return "", fmt.Errorf("%s message executor not configured", taskLabel)
+			return "", fmt.Errorf("%s message executor not configured (provide message executor to NewRoutingExecutor)", taskLabel)
 		}
 		e.logger.Info("routing task to message executor",
 			"task_id", task.ID,
@@ -258,7 +258,7 @@ func (e *RoutingExecutor) Execute(ctx context.Context, task *ScheduledTask, exec
 	case ExecutionTypeAgent, "":
 		// Default to agent executor
 		if e.agentExecutor == nil {
-			return "", fmt.Errorf("%s agent executor not configured", taskLabel)
+			return "", fmt.Errorf("%s agent executor not configured (provide agent executor to NewRoutingExecutor)", taskLabel)
 		}
 		e.logger.Info("routing task to agent executor",
 			"task_id", task.ID,

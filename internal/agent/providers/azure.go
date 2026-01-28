@@ -76,11 +76,11 @@ type AzureOpenAIConfig struct {
 //	})
 func NewAzureOpenAIProvider(cfg AzureOpenAIConfig) (*AzureOpenAIProvider, error) {
 	if cfg.Endpoint == "" {
-		return nil, errors.New("azure: endpoint is required")
+		return nil, errors.New("azure: endpoint is required (set llm.providers.azure.base_url)")
 	}
 
 	if cfg.APIKey == "" {
-		return nil, errors.New("azure: API key is required")
+		return nil, errors.New("azure: API key is required (set llm.providers.azure.api_key)")
 	}
 
 	if cfg.APIVersion == "" {

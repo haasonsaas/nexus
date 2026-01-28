@@ -5,8 +5,8 @@ package plugins
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"runtime/debug"
 	"sort"
 	"sync"
 )
@@ -188,20 +188,26 @@ func (r *HookRunner) RunVoid(ctx context.Context, hookName HookName, event HookE
 			defer func() {
 				if rec := recover(); rec != nil {
 					if r.logger != nil {
-						r.logger.Error("hook %s from %s panicked: %v", hookName, reg.PluginID, rec)
+						r.logger.Error(
+							"hook panicked",
+							"hook", hookName,
+							"plugin", reg.PluginID,
+							"panic", rec,
+							"stack", string(debug.Stack()),
+						)
 					}
 				}
 			}()
 
 			_, err := reg.Handler(ctx, event)
 			if err != nil {
-				msg := fmt.Sprintf("hook %s from %s failed: %v", hookName, reg.PluginID, err)
-				if r.catchErrors {
-					if r.logger != nil {
-						r.logger.Error(msg)
-					}
-				} else {
-					panic(msg)
+				if r.logger != nil {
+					r.logger.Error(
+						"hook failed",
+						"hook", hookName,
+						"plugin", reg.PluginID,
+						"error", err,
+					)
 				}
 			}
 		}(reg)
@@ -232,7 +238,7 @@ func (r *HookRunner) RunModifying(ctx context.Context, hookName HookName, event 
 		handlerResult, err := func() (res HookResult, err error) {
 			defer func() {
 				if rec := recover(); rec != nil {
-					err = fmt.Errorf("panic: %v", rec)
+					err = fmt.Errorf("panic: %v\n%s", rec, debug.Stack())
 				}
 			}()
 			return reg.Handler(ctx, event)
@@ -242,11 +248,16 @@ func (r *HookRunner) RunModifying(ctx context.Context, hookName HookName, event 
 			msg := fmt.Sprintf("hook %s from %s failed: %v", hookName, reg.PluginID, err)
 			if r.catchErrors {
 				if r.logger != nil {
-					r.logger.Error(msg)
+					r.logger.Error(
+						"hook failed",
+						"hook", hookName,
+						"plugin", reg.PluginID,
+						"error", err,
+					)
 				}
 				continue
 			}
-			return nil, errors.New(msg)
+			return nil, fmt.Errorf("hook %s from %s failed: %w", hookName, reg.PluginID, err)
 		}
 
 		// Merge results based on hook type

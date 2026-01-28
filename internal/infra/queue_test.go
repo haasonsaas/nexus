@@ -3,6 +3,7 @@ package infra
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -190,6 +191,44 @@ func TestCommandQueue_ContextCancellation(t *testing.T) {
 
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("expected DeadlineExceeded, got %v", err)
+	}
+}
+
+func TestCommandQueue_NilContext(t *testing.T) {
+	q := NewCommandQueue()
+
+	result, err := q.EnqueueInLane(nil, "main", func(ctx context.Context) (any, error) {
+		if ctx == nil {
+			return nil, errors.New("nil ctx")
+		}
+		return "ok", nil
+	}, nil)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != "ok" {
+		t.Fatalf("expected ok, got %v", result)
+	}
+}
+
+func TestCommandQueue_NilTask(t *testing.T) {
+	q := NewCommandQueue()
+
+	if _, err := q.EnqueueInLane(context.Background(), "main", nil, nil); err == nil {
+		t.Fatal("expected error for nil task")
+	}
+}
+
+func TestCommandQueue_TaskPanic(t *testing.T) {
+	q := NewCommandQueue()
+
+	_, err := q.Enqueue(context.Background(), func(ctx context.Context) (any, error) {
+		panic("boom")
+	}, nil)
+
+	if err == nil || !strings.Contains(err.Error(), "panic") {
+		t.Fatalf("expected panic error, got %v", err)
 	}
 }
 

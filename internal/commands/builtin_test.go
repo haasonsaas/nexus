@@ -6,6 +6,13 @@ import (
 	"testing"
 )
 
+func requireBuiltins(t *testing.T, r *Registry) {
+	t.Helper()
+	if err := RegisterBuiltins(r); err != nil {
+		t.Fatalf("RegisterBuiltins: %v", err)
+	}
+}
+
 func TestTitleCase(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -30,7 +37,7 @@ func TestTitleCase(t *testing.T) {
 
 func TestRegisterBuiltins(t *testing.T) {
 	r := NewRegistry(nil)
-	RegisterBuiltins(r)
+	requireBuiltins(t, r)
 
 	// Verify expected commands are registered
 	expectedCommands := []string{
@@ -76,7 +83,7 @@ func TestRegisterBuiltins(t *testing.T) {
 
 func TestBuiltinHandlers_Status(t *testing.T) {
 	r := NewRegistry(nil)
-	RegisterBuiltins(r)
+	requireBuiltins(t, r)
 
 	result, err := r.Execute(context.Background(), &Invocation{Name: "status"})
 	if err != nil {
@@ -89,7 +96,7 @@ func TestBuiltinHandlers_Status(t *testing.T) {
 
 func TestBuiltinHandlers_New(t *testing.T) {
 	r := NewRegistry(nil)
-	RegisterBuiltins(r)
+	requireBuiltins(t, r)
 
 	t.Run("without model", func(t *testing.T) {
 		result, err := r.Execute(context.Background(), &Invocation{Name: "new"})
@@ -114,7 +121,7 @@ func TestBuiltinHandlers_New(t *testing.T) {
 
 func TestBuiltinHandlers_Model(t *testing.T) {
 	r := NewRegistry(nil)
-	RegisterBuiltins(r)
+	requireBuiltins(t, r)
 
 	t.Run("get model without context", func(t *testing.T) {
 		result, err := r.Execute(context.Background(), &Invocation{Name: "model"})
@@ -155,7 +162,7 @@ func TestBuiltinHandlers_Model(t *testing.T) {
 
 func TestBuiltinHandlers_Stop(t *testing.T) {
 	r := NewRegistry(nil)
-	RegisterBuiltins(r)
+	requireBuiltins(t, r)
 
 	t.Run("with active run", func(t *testing.T) {
 		result, err := r.Execute(context.Background(), &Invocation{
@@ -186,7 +193,7 @@ func TestBuiltinHandlers_Stop(t *testing.T) {
 
 func TestBuiltinHandlers_Whoami(t *testing.T) {
 	r := NewRegistry(nil)
-	RegisterBuiltins(r)
+	requireBuiltins(t, r)
 
 	t.Run("with context", func(t *testing.T) {
 		result, err := r.Execute(context.Background(), &Invocation{
@@ -224,7 +231,7 @@ func TestBuiltinHandlers_Whoami(t *testing.T) {
 
 func TestBuiltinHandlers_Memory(t *testing.T) {
 	r := NewRegistry(nil)
-	RegisterBuiltins(r)
+	requireBuiltins(t, r)
 
 	t.Run("without query", func(t *testing.T) {
 		result, err := r.Execute(context.Background(), &Invocation{Name: "memory"})
@@ -252,7 +259,7 @@ func TestBuiltinHandlers_Memory(t *testing.T) {
 
 func TestBuiltinHandlers_Send(t *testing.T) {
 	r := NewRegistry(nil)
-	RegisterBuiltins(r)
+	requireBuiltins(t, r)
 
 	tests := []struct {
 		name           string
@@ -305,7 +312,7 @@ func TestBuiltinHandlers_Send(t *testing.T) {
 
 func TestBuiltinHandlers_Think(t *testing.T) {
 	r := NewRegistry(nil)
-	RegisterBuiltins(r)
+	requireBuiltins(t, r)
 
 	t.Run("enable with default budget", func(t *testing.T) {
 		result, err := r.Execute(context.Background(), &Invocation{Name: "think", Args: "on"})
@@ -384,7 +391,7 @@ func TestBuiltinHandlers_Think(t *testing.T) {
 
 func TestBuiltinHandlers_Context(t *testing.T) {
 	r := NewRegistry(nil)
-	RegisterBuiltins(r)
+	requireBuiltins(t, r)
 
 	t.Run("without context", func(t *testing.T) {
 		result, err := r.Execute(context.Background(), &Invocation{Name: "context"})
@@ -445,7 +452,7 @@ func TestBuiltinHandlers_Context(t *testing.T) {
 
 func TestBuiltinHandlers_Help(t *testing.T) {
 	r := NewRegistry(nil)
-	RegisterBuiltins(r)
+	requireBuiltins(t, r)
 
 	t.Run("list all commands", func(t *testing.T) {
 		result, err := r.Execute(context.Background(), &Invocation{Name: "help"})
@@ -493,7 +500,7 @@ func TestBuiltinHandlers_Help(t *testing.T) {
 
 func TestBuiltinHandlers_Undo(t *testing.T) {
 	r := NewRegistry(nil)
-	RegisterBuiltins(r)
+	requireBuiltins(t, r)
 
 	result, err := r.Execute(context.Background(), &Invocation{Name: "undo"})
 	if err != nil {
@@ -506,7 +513,7 @@ func TestBuiltinHandlers_Undo(t *testing.T) {
 
 func TestBuiltinHandlers_Compact(t *testing.T) {
 	r := NewRegistry(nil)
-	RegisterBuiltins(r)
+	requireBuiltins(t, r)
 
 	result, err := r.Execute(context.Background(), &Invocation{Name: "compact"})
 	if err != nil {

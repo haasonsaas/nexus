@@ -9,10 +9,14 @@ import (
 )
 
 // RegisterBuiltins registers the built-in commands.
-func RegisterBuiltins(r *Registry) {
+func RegisterBuiltins(r *Registry) error {
+	var firstErr error
 	mustRegister := func(cmd *Command) {
+		if firstErr != nil {
+			return
+		}
 		if err := r.Register(cmd); err != nil {
-			panic(fmt.Sprintf("failed to register builtin command %q: %v", cmd.Name, err))
+			firstErr = fmt.Errorf("register builtin command %q: %w", cmd.Name, err)
 		}
 	}
 
@@ -426,6 +430,8 @@ func RegisterBuiltins(r *Registry) {
 			}, nil
 		},
 	})
+
+	return firstErr
 }
 
 // titleCase converts the first letter to uppercase.

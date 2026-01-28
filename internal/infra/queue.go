@@ -2,6 +2,8 @@ package infra
 
 import (
 	"context"
+	"fmt"
+	"runtime/debug"
 	"sync"
 	"time"
 )
@@ -98,6 +100,15 @@ func (q *CommandQueue) EnqueueInLane(ctx context.Context, lane string, task func
 	if opts == nil {
 		opts = &QueueOptions{WarnAfter: 2 * time.Second}
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if task == nil {
+		return nil, fmt.Errorf("task is nil")
+	}
 
 	resultCh := make(chan taskResult, 1)
 	entry := &queueEntry{
@@ -160,14 +171,29 @@ func (q *CommandQueue) drainLane(l *laneState) {
 
 		// Execute task
 		go func(e *queueEntry) {
-			value, err := e.task(e.ctx)
+			var (
+				value any
+				err   error
+			)
+			defer func() {
+				if rec := recover(); rec != nil {
+					err = fmt.Errorf("task panicked: %v\n%s", rec, debug.Stack())
+				}
 
-			q.mu.Lock()
-			l.active--
-			l.cond.Broadcast()
-			q.mu.Unlock()
+				q.mu.Lock()
+				l.active--
+				l.cond.Broadcast()
+				q.mu.Unlock()
 
-			e.result <- taskResult{value: value, err: err}
+				e.result <- taskResult{value: value, err: err}
+			}()
+
+			if e.ctx.Err() != nil {
+				err = e.ctx.Err()
+				return
+			}
+
+			value, err = e.task(e.ctx)
 		}(entry)
 	}
 }

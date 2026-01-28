@@ -363,7 +363,9 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 	mcpManager := mcp.NewManager(&cfg.MCP, logger)
 	toolPolicyResolver := policy.NewResolver()
 	commandRegistry := commands.NewRegistry(logger)
-	commands.RegisterBuiltins(commandRegistry)
+	if err := commands.RegisterBuiltins(commandRegistry); err != nil {
+		return nil, fmt.Errorf("register builtins: %w", err)
+	}
 	commandParser := commands.NewParser(commandRegistry)
 
 	modelCatalog := modelcatalog.NewCatalog()

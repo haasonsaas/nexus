@@ -608,6 +608,10 @@ func (m *ToolManager) registerSandboxTool(ctx context.Context, runtime *agent.Ru
 			SandboxClass:   cfg.Daytona.SandboxClass,
 			WorkspaceDir:   cfg.Daytona.WorkspaceDir,
 			NetworkAllow:   cfg.Daytona.NetworkAllow,
+			ReuseSandbox:   cfg.Daytona.ReuseSandbox,
+			AutoStop:       cfg.Daytona.AutoStop,
+			AutoArchive:    cfg.Daytona.AutoArchive,
+			AutoDelete:     cfg.Daytona.AutoDelete,
 		}))
 	case "firecracker":
 		if err := m.setupFirecrackerBackend(ctx, &cfg); err != nil {

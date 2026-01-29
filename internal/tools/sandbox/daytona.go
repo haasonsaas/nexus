@@ -35,6 +35,10 @@ type DaytonaConfig struct {
 	SandboxClass   string
 	WorkspaceDir   string
 	NetworkAllow   string
+	ReuseSandbox   bool
+	AutoStop       *time.Duration
+	AutoArchive    *time.Duration
+	AutoDelete     *time.Duration
 }
 
 type daytonaClient struct {
@@ -207,6 +211,14 @@ type daytonaExecutor struct {
 	language string
 	config   *Config
 	client   *daytonaClient
+
+	reuseSandbox  bool
+	sandboxID     string
+	sandboxCPU    int32
+	sandboxMem    int32
+	sandboxTarget string
+	toolboxClient *toolbox.APIClient
+	sandboxMu     sync.Mutex
 }
 
 func newDaytonaExecutor(language string, config *Config) (*daytonaExecutor, error) {
@@ -215,9 +227,10 @@ func newDaytonaExecutor(language string, config *Config) (*daytonaExecutor, erro
 	}
 
 	return &daytonaExecutor{
-		language: language,
-		config:   config,
-		client:   config.daytonaClient,
+		language:     language,
+		config:       config,
+		client:       config.daytonaClient,
+		reuseSandbox: config.Daytona != nil && config.Daytona.ReuseSandbox,
 	}, nil
 }
 
@@ -226,27 +239,11 @@ func (d *daytonaExecutor) Run(ctx context.Context, params *ExecuteParams, worksp
 		return nil, errors.New("missing execution params")
 	}
 
-	sandbox, err := d.createSandbox(ctx, params)
+	_, _, toolboxClient, cleanup, err := d.ensureSandbox(ctx, params)
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		_, _, err := d.client.apiClient.SandboxAPI.DeleteSandbox(d.client.authContext(context.Background()), sandbox.GetId()).Execute()
-		if err != nil {
-			// Best-effort cleanup; execution result already returned.
-		}
-	}()
-
-	if sandbox.GetState() != apiclient.SANDBOXSTATE_STARTED {
-		if err := d.waitForSandbox(ctx, sandbox.GetId()); err != nil {
-			return nil, err
-		}
-	}
-
-	toolboxClient, err := d.client.toolboxClient(ctx, sandbox.GetId(), sandbox.GetTarget())
-	if err != nil {
-		return nil, err
-	}
+	defer cleanup()
 
 	workDir, err := d.resolveWorkspaceDir(ctx, toolboxClient)
 	if err != nil {
@@ -257,6 +254,7 @@ func (d *daytonaExecutor) Run(ctx context.Context, params *ExecuteParams, worksp
 	if err := d.createFolder(ctx, toolboxClient, runDir); err != nil {
 		return nil, err
 	}
+	defer d.cleanupRunDir(context.Background(), toolboxClient, runDir)
 
 	uploadedFiles, err := d.uploadWorkspace(ctx, toolboxClient, workspace, runDir)
 	if err != nil {
@@ -296,10 +294,107 @@ func (d *daytonaExecutor) Language() string {
 }
 
 func (d *daytonaExecutor) Close() error {
+	if d.reuseSandbox {
+		d.sandboxMu.Lock()
+		sandboxID := d.sandboxID
+		d.sandboxID = ""
+		d.toolboxClient = nil
+		d.sandboxTarget = ""
+		d.sandboxMu.Unlock()
+		if sandboxID != "" {
+			_ = d.deleteSandbox(context.Background(), sandboxID)
+		}
+	}
 	return nil
 }
 
-func (d *daytonaExecutor) createSandbox(ctx context.Context, params *ExecuteParams) (*apiclient.Sandbox, error) {
+func (d *daytonaExecutor) ensureSandbox(ctx context.Context, params *ExecuteParams) (string, string, *toolbox.APIClient, func(), error) {
+	if !d.reuseSandbox {
+		sandbox, _, _, err := d.createSandbox(ctx, params)
+		if err != nil {
+			return "", "", nil, nil, err
+		}
+		if sandbox.GetState() != apiclient.SANDBOXSTATE_STARTED {
+			if err := d.waitForSandbox(ctx, sandbox.GetId()); err != nil {
+				return "", "", nil, nil, err
+			}
+		}
+		toolboxClient, err := d.client.toolboxClient(ctx, sandbox.GetId(), sandbox.GetTarget())
+		if err != nil {
+			return "", "", nil, nil, err
+		}
+		cleanup := func() {
+			_ = d.deleteSandbox(context.Background(), sandbox.GetId())
+		}
+		return sandbox.GetId(), sandbox.GetTarget(), toolboxClient, cleanup, nil
+	}
+
+	requestedCPU := cpuToVCPU(params.CPULimit)
+	requestedMem := memToGB(params.MemLimit)
+
+	d.sandboxMu.Lock()
+	sandboxID := d.sandboxID
+	sandboxTarget := d.sandboxTarget
+	toolboxClient := d.toolboxClient
+	sandboxCPU := d.sandboxCPU
+	sandboxMem := d.sandboxMem
+	d.sandboxMu.Unlock()
+
+	if sandboxID != "" && (sandboxCPU != requestedCPU || sandboxMem != requestedMem) {
+		_ = d.deleteSandbox(context.Background(), sandboxID)
+		sandboxID = ""
+	}
+
+	if sandboxID == "" {
+		sandbox, cpu, mem, err := d.createSandbox(ctx, params)
+		if err != nil {
+			return "", "", nil, nil, err
+		}
+		if sandbox.GetState() != apiclient.SANDBOXSTATE_STARTED {
+			if err := d.waitForSandbox(ctx, sandbox.GetId()); err != nil {
+				return "", "", nil, nil, err
+			}
+		}
+		toolboxClient, err = d.client.toolboxClient(ctx, sandbox.GetId(), sandbox.GetTarget())
+		if err != nil {
+			return "", "", nil, nil, err
+		}
+		d.sandboxMu.Lock()
+		d.sandboxID = sandbox.GetId()
+		d.toolboxClient = toolboxClient
+		d.sandboxTarget = sandbox.GetTarget()
+		d.sandboxCPU = cpu
+		d.sandboxMem = mem
+		d.sandboxMu.Unlock()
+		sandboxID = sandbox.GetId()
+		sandboxTarget = sandbox.GetTarget()
+	} else {
+		if err := d.ensureSandboxRunning(ctx, sandboxID); err != nil {
+			d.sandboxMu.Lock()
+			d.sandboxID = ""
+			d.toolboxClient = nil
+			d.sandboxTarget = ""
+			d.sandboxCPU = 0
+			d.sandboxMem = 0
+			d.sandboxMu.Unlock()
+			return d.ensureSandbox(ctx, params)
+		}
+		if toolboxClient == nil {
+			var err error
+			toolboxClient, err = d.client.toolboxClient(ctx, sandboxID, sandboxTarget)
+			if err != nil {
+				return "", "", nil, nil, err
+			}
+			d.sandboxMu.Lock()
+			d.toolboxClient = toolboxClient
+			d.sandboxMu.Unlock()
+		}
+	}
+
+	return sandboxID, sandboxTarget, toolboxClient, func() {}, nil
+}
+
+func (d *daytonaExecutor) createSandbox(ctx context.Context, params *ExecuteParams) (*apiclient.Sandbox, int32, int32, error) {
 	createReq := apiclient.NewCreateSandbox()
 	name := fmt.Sprintf("nexus-%s", uuid.NewString())
 	createReq.SetName(name)
@@ -329,32 +424,38 @@ func (d *daytonaExecutor) createSandbox(ctx context.Context, params *ExecutePara
 		createReq.SetNetworkBlockAll(true)
 	}
 
-	if params.CPULimit > 0 {
-		vcpus := int32((params.CPULimit + 999) / 1000)
-		if vcpus < 1 {
-			vcpus = 1
-		}
+	vcpus := cpuToVCPU(params.CPULimit)
+	if vcpus > 0 {
 		createReq.SetCpu(vcpus)
 	}
-	if params.MemLimit > 0 {
-		memGB := int32((params.MemLimit + 1023) / 1024)
-		if memGB < 1 {
-			memGB = 1
-		}
+	memGB := memToGB(params.MemLimit)
+	if memGB > 0 {
 		createReq.SetMemory(memGB)
+	}
+
+	if d.config.Daytona != nil {
+		if minutes := durationToMinutes(d.config.Daytona.AutoStop); minutes != nil {
+			createReq.SetAutoStopInterval(*minutes)
+		}
+		if minutes := durationToMinutes(d.config.Daytona.AutoArchive); minutes != nil {
+			createReq.SetAutoArchiveInterval(*minutes)
+		}
+		if minutes := durationToMinutes(d.config.Daytona.AutoDelete); minutes != nil {
+			createReq.SetAutoDeleteInterval(*minutes)
+		}
 	}
 
 	sandbox, httpResp, err := d.client.apiClient.SandboxAPI.CreateSandbox(d.client.authContext(ctx)).CreateSandbox(*createReq).Execute()
 	if err != nil {
-		return nil, fmt.Errorf("daytona create sandbox: %w", formatAPIError(err, httpResp))
+		return nil, 0, 0, fmt.Errorf("daytona create sandbox: %w", formatAPIError(err, httpResp))
 	}
 
 	state := sandbox.GetState()
 	if state == apiclient.SANDBOXSTATE_ERROR || state == apiclient.SANDBOXSTATE_BUILD_FAILED {
-		return nil, fmt.Errorf("daytona sandbox failed to start: %s", state)
+		return nil, 0, 0, fmt.Errorf("daytona sandbox failed to start: %s", state)
 	}
 
-	return sandbox, nil
+	return sandbox, vcpus, memGB, nil
 }
 
 func (d *daytonaExecutor) waitForSandbox(ctx context.Context, sandboxID string) error {
@@ -379,6 +480,26 @@ func (d *daytonaExecutor) waitForSandbox(ctx context.Context, sandboxID string) 
 			return ctx.Err()
 		case <-ticker.C:
 		}
+	}
+}
+
+func (d *daytonaExecutor) ensureSandboxRunning(ctx context.Context, sandboxID string) error {
+	sandbox, httpResp, err := d.client.apiClient.SandboxAPI.GetSandbox(d.client.authContext(ctx), sandboxID).Execute()
+	if err != nil {
+		return fmt.Errorf("daytona sandbox status: %w", formatAPIError(err, httpResp))
+	}
+
+	switch sandbox.GetState() {
+	case apiclient.SANDBOXSTATE_STARTED:
+		return nil
+	case apiclient.SANDBOXSTATE_STOPPED:
+		_, httpResp, err := d.client.apiClient.SandboxAPI.StartSandbox(d.client.authContext(ctx), sandboxID).Execute()
+		if err != nil {
+			return fmt.Errorf("daytona start sandbox: %w", formatAPIError(err, httpResp))
+		}
+		return d.waitForSandbox(ctx, sandboxID)
+	default:
+		return fmt.Errorf("daytona sandbox unavailable: %s", sandbox.GetState())
 	}
 }
 
@@ -486,6 +607,18 @@ func (d *daytonaExecutor) applyReadOnlyAccess(ctx context.Context, toolboxClient
 	return nil
 }
 
+func (d *daytonaExecutor) cleanupRunDir(ctx context.Context, toolboxClient *toolbox.APIClient, runDir string) {
+	httpResp, err := toolboxClient.FileSystemAPI.DeleteFile(ctx).Path(runDir).Recursive(true).Execute()
+	if err != nil && httpResp != nil && httpResp.StatusCode != http.StatusNotFound {
+		_ = err
+	}
+}
+
+func (d *daytonaExecutor) deleteSandbox(ctx context.Context, sandboxID string) error {
+	_, _, err := d.client.apiClient.SandboxAPI.DeleteSandbox(d.client.authContext(ctx), sandboxID).Execute()
+	return err
+}
+
 func getShellCommand(language string) string {
 	switch language {
 	case "python":
@@ -537,4 +670,34 @@ func formatToolboxError(err error, resp *http.Response) error {
 		return err
 	}
 	return fmt.Errorf("%s (status %s)", err.Error(), resp.Status)
+}
+
+func cpuToVCPU(millicores int) int32 {
+	if millicores <= 0 {
+		return 0
+	}
+	vcpus := int32((millicores + 999) / 1000)
+	if vcpus < 1 {
+		return 1
+	}
+	return vcpus
+}
+
+func memToGB(memMB int) int32 {
+	if memMB <= 0 {
+		return 0
+	}
+	memGB := int32((memMB + 1023) / 1024)
+	if memGB < 1 {
+		return 1
+	}
+	return memGB
+}
+
+func durationToMinutes(value *time.Duration) *int32 {
+	if value == nil {
+		return nil
+	}
+	minutes := int32(*value / time.Minute)
+	return &minutes
 }

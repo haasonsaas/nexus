@@ -278,6 +278,8 @@ executor, err := sandbox.NewExecutor(
         APIKey:   "your-api-key", // or rely on DAYTONA_API_KEY
         APIURL:   "https://app.daytona.io/api",
         Snapshot: "default", // optional
+        // ReuseSandbox keeps a sandbox alive across executions (faster, less isolated).
+        ReuseSandbox: false,
     }),
 )
 ```

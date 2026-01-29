@@ -1202,6 +1202,12 @@ func TestConfigOptions(t *testing.T) {
 	if !cfg.NetworkEnabled {
 		t.Error("WithNetworkEnabled: NetworkEnabled should be true")
 	}
+
+	daytonaCfg := DaytonaConfig{APIKey: "test-key", ReuseSandbox: true}
+	WithDaytonaConfig(daytonaCfg)(cfg)
+	if cfg.Daytona == nil || cfg.Daytona.APIKey != "test-key" || !cfg.Daytona.ReuseSandbox {
+		t.Error("WithDaytonaConfig: Daytona config not applied")
+	}
 }
 
 func TestPoolStats_Struct(t *testing.T) {

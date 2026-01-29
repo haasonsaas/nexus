@@ -298,6 +298,10 @@ data:
           api_key: ${DAYTONA_API_KEY}
           api_url: https://app.daytona.io/api
           target: ""
+          reuse_sandbox: false
+          # auto_stop_interval: 30m
+          # auto_archive_interval: 2h
+          # auto_delete_interval: 24h
       browser:
         enabled: true
         headless: true

@@ -674,6 +674,10 @@ tools:
       class: ""
       workspace_dir: ""
       network_allow_list: ""
+      reuse_sandbox: false
+      # auto_stop_interval: 30m
+      # auto_archive_interval: 2h
+      # auto_delete_interval: 24h
   browser:
     enabled: true
     headless: true

@@ -511,6 +511,10 @@ func (s *Server) registerTools(ctx context.Context, runtime *agent.Runtime) erro
 				SandboxClass:   s.config.Tools.Sandbox.Daytona.SandboxClass,
 				WorkspaceDir:   s.config.Tools.Sandbox.Daytona.WorkspaceDir,
 				NetworkAllow:   s.config.Tools.Sandbox.Daytona.NetworkAllow,
+				ReuseSandbox:   s.config.Tools.Sandbox.Daytona.ReuseSandbox,
+				AutoStop:       s.config.Tools.Sandbox.Daytona.AutoStop,
+				AutoArchive:    s.config.Tools.Sandbox.Daytona.AutoArchive,
+				AutoDelete:     s.config.Tools.Sandbox.Daytona.AutoDelete,
 			}))
 		case "firecracker":
 			fcConfig := firecracker.DefaultBackendConfig()

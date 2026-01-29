@@ -1027,16 +1027,20 @@ type SandboxConfig struct {
 
 // SandboxDaytonaConfig configures the Daytona sandbox backend.
 type SandboxDaytonaConfig struct {
-	APIKey         string `yaml:"api_key"`
-	JWTToken       string `yaml:"jwt_token"`
-	OrganizationID string `yaml:"organization_id"`
-	APIURL         string `yaml:"api_url"`
-	Target         string `yaml:"target"`
-	Snapshot       string `yaml:"snapshot"`
-	Image          string `yaml:"image"`
-	SandboxClass   string `yaml:"class"`
-	WorkspaceDir   string `yaml:"workspace_dir"`
-	NetworkAllow   string `yaml:"network_allow_list"`
+	APIKey         string         `yaml:"api_key"`
+	JWTToken       string         `yaml:"jwt_token"`
+	OrganizationID string         `yaml:"organization_id"`
+	APIURL         string         `yaml:"api_url"`
+	Target         string         `yaml:"target"`
+	Snapshot       string         `yaml:"snapshot"`
+	Image          string         `yaml:"image"`
+	SandboxClass   string         `yaml:"class"`
+	WorkspaceDir   string         `yaml:"workspace_dir"`
+	NetworkAllow   string         `yaml:"network_allow_list"`
+	ReuseSandbox   bool           `yaml:"reuse_sandbox"`
+	AutoStop       *time.Duration `yaml:"auto_stop_interval"`
+	AutoArchive    *time.Duration `yaml:"auto_archive_interval"`
+	AutoDelete     *time.Duration `yaml:"auto_delete_interval"`
 }
 
 // SandboxSnapshotConfig controls Firecracker snapshot behavior.

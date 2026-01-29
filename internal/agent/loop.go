@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -1032,7 +1033,7 @@ func (l *AgenticLoop) persistToolCalls(ctx context.Context, session *models.Sess
 	for i := range toolCalls {
 		tc := toolCalls[i]
 		if err := l.config.ToolEvents.AddToolCall(ctx, session.ID, assistantMsgID, &tc); err != nil {
-			// Best-effort persistence; ignore failures.
+			slog.Default().Debug("failed to persist tool call event", "error", err, "tool", tc.Name, "tool_call_id", tc.ID)
 		}
 	}
 }
@@ -1043,7 +1044,7 @@ func (l *AgenticLoop) persistToolResult(ctx context.Context, session *models.Ses
 	}
 	guarded := guardToolResult(l.config.ToolResultGuard, tc.Name, res, resolver)
 	if err := l.config.ToolEvents.AddToolResult(ctx, session.ID, assistantMsgID, &tc, &guarded); err != nil {
-		// Best-effort persistence; ignore failures.
+		slog.Default().Debug("failed to persist tool result event", "error", err, "tool", tc.Name, "tool_call_id", tc.ID)
 	}
 }
 
@@ -1061,7 +1062,7 @@ func (l *AgenticLoop) queueAsyncJob(tc models.ToolCall) models.ToolResult {
 	}
 	if l.config.JobStore != nil {
 		if err := l.config.JobStore.Create(context.Background(), job); err != nil {
-			// Best-effort enqueue; ignore failures.
+			slog.Default().Debug("failed to enqueue async tool job", "error", err, "tool", tc.Name, "tool_call_id", tc.ID, "job_id", job.ID)
 		}
 	}
 
@@ -1107,7 +1108,7 @@ func (l *AgenticLoop) runToolJob(tc models.ToolCall, job *jobs.Job) {
 	job.Status = jobs.StatusRunning
 	job.StartedAt = time.Now()
 	if err := l.config.JobStore.Update(ctx, job); err != nil {
-		// Best-effort job tracking; ignore failures.
+		slog.Default().Debug("failed to update async tool job status", "error", err, "tool", tc.Name, "tool_call_id", tc.ID, "job_id", job.ID, "status", job.Status)
 	}
 
 	execResult := l.executor.Execute(ctx, tc)
@@ -1116,7 +1117,7 @@ func (l *AgenticLoop) runToolJob(tc models.ToolCall, job *jobs.Job) {
 		job.Error = execResult.Error.Error()
 		job.FinishedAt = time.Now()
 		if err := l.config.JobStore.Update(ctx, job); err != nil {
-			// Best-effort job tracking; ignore failures.
+			slog.Default().Debug("failed to persist async tool job failure", "error", err, "tool", tc.Name, "tool_call_id", tc.ID, "job_id", job.ID)
 		}
 		return
 	}
@@ -1142,7 +1143,7 @@ func (l *AgenticLoop) runToolJob(tc models.ToolCall, job *jobs.Job) {
 
 	job.FinishedAt = time.Now()
 	if err := l.config.JobStore.Update(ctx, job); err != nil {
-		// Best-effort job tracking; ignore failures.
+		slog.Default().Debug("failed to persist async tool job completion", "error", err, "tool", tc.Name, "tool_call_id", tc.ID, "job_id", job.ID, "status", job.Status)
 	}
 }
 

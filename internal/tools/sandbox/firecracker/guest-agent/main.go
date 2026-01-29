@@ -59,6 +59,8 @@ type GuestRequest struct {
 	CPULimit  int               `json:"cpu_limit,omitempty"`
 	MemLimit  int               `json:"mem_limit,omitempty"`
 	Workspace string            `json:"workspace,omitempty"`
+	// WorkspaceAccess controls workspace permissions: ro, rw, none.
+	WorkspaceAccess string `json:"workspace_access,omitempty"`
 }
 
 // GuestResponse represents a response to the host.
@@ -299,6 +301,7 @@ func (a *Agent) handleExecute(req *GuestRequest) *GuestResponse {
 	}
 
 	// Write additional files
+	writtenFiles := []string{codePath}
 	for name, content := range req.Files {
 		safeName := filepath.Base(name)
 		filePath := filepath.Join(workspace, safeName)
@@ -306,6 +309,16 @@ func (a *Agent) handleExecute(req *GuestRequest) *GuestResponse {
 			return &GuestResponse{
 				ID:    req.ID,
 				Error: fmt.Sprintf("Failed to write file %s: %v", name, err),
+			}
+		}
+		writtenFiles = append(writtenFiles, filePath)
+	}
+
+	if isReadOnlyAccess(req.WorkspaceAccess) {
+		if err := applyReadOnlyAccess(workspace, writtenFiles); err != nil {
+			return &GuestResponse{
+				ID:    req.ID,
+				Error: fmt.Sprintf("Failed to apply read-only workspace: %v", err),
 			}
 		}
 	}
@@ -413,6 +426,7 @@ func (a *Agent) handleFileSync(req *GuestRequest) *GuestResponse {
 		}
 	}
 
+	writtenFiles := []string{}
 	for name, content := range req.Files {
 		safeName := filepath.Base(name)
 		filePath := filepath.Join(workspace, safeName)
@@ -420,6 +434,16 @@ func (a *Agent) handleFileSync(req *GuestRequest) *GuestResponse {
 			return &GuestResponse{
 				ID:    req.ID,
 				Error: fmt.Sprintf("Failed to write file %s: %v", name, err),
+			}
+		}
+		writtenFiles = append(writtenFiles, filePath)
+	}
+
+	if isReadOnlyAccess(req.WorkspaceAccess) {
+		if err := applyReadOnlyAccess(workspace, writtenFiles); err != nil {
+			return &GuestResponse{
+				ID:    req.ID,
+				Error: fmt.Sprintf("Failed to apply read-only workspace: %v", err),
 			}
 		}
 	}
@@ -541,6 +565,27 @@ func buildCommand(ctx context.Context, language, workspace string) *exec.Cmd {
 	}
 
 	return cmd
+}
+
+func isReadOnlyAccess(mode string) bool {
+	value := strings.ToLower(strings.TrimSpace(mode))
+	switch value {
+	case "", "ro", "readonly", "read-only":
+		return true
+	case "rw", "readwrite", "read-write", "none":
+		return false
+	default:
+		return true
+	}
+}
+
+func applyReadOnlyAccess(workspace string, files []string) error {
+	for _, file := range files {
+		if err := os.Chmod(file, 0444); err != nil {
+			return err
+		}
+	}
+	return os.Chmod(workspace, 0555)
 }
 
 // setResourceLimits sets CPU and memory limits for the command.

@@ -52,6 +52,8 @@ type GuestRequest struct {
 	CPULimit  int               `json:"cpu_limit,omitempty"`
 	MemLimit  int               `json:"mem_limit,omitempty"`
 	Workspace string            `json:"workspace,omitempty"`
+	// WorkspaceAccess controls workspace permissions: ro, rw, none.
+	WorkspaceAccess string `json:"workspace_access,omitempty"`
 }
 
 // RequestType identifies the type of guest request.
@@ -275,14 +277,16 @@ func (vc *VsockConnection) Send(ctx context.Context, req *GuestRequest) (*GuestR
 }
 
 // Execute sends an execution request to the guest.
-func (vc *VsockConnection) Execute(ctx context.Context, code, language, stdin string, files map[string]string, timeout int) (*GuestResponse, error) {
+func (vc *VsockConnection) Execute(ctx context.Context, code, language, stdin string, files map[string]string, timeout int, workspace string, workspaceAccess string) (*GuestResponse, error) {
 	req := &GuestRequest{
-		Type:     RequestTypeExecute,
-		Code:     code,
-		Language: language,
-		Stdin:    stdin,
-		Files:    files,
-		Timeout:  timeout,
+		Type:            RequestTypeExecute,
+		Code:            code,
+		Language:        language,
+		Stdin:           stdin,
+		Files:           files,
+		Timeout:         timeout,
+		Workspace:       workspace,
+		WorkspaceAccess: workspaceAccess,
 	}
 
 	return vc.Send(ctx, req)
@@ -344,11 +348,12 @@ func (vc *VsockConnection) Shutdown(ctx context.Context) error {
 }
 
 // SyncFiles sends files to the guest.
-func (vc *VsockConnection) SyncFiles(ctx context.Context, files map[string]string, workspace string) error {
+func (vc *VsockConnection) SyncFiles(ctx context.Context, files map[string]string, workspace string, workspaceAccess string) error {
 	req := &GuestRequest{
-		Type:      RequestTypeFileSync,
-		Files:     files,
-		Workspace: workspace,
+		Type:            RequestTypeFileSync,
+		Files:           files,
+		Workspace:       workspace,
+		WorkspaceAccess: workspaceAccess,
 	}
 
 	resp, err := vc.Send(ctx, req)

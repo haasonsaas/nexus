@@ -588,7 +588,9 @@ func (d *daytonaExecutor) isReadOnlyAccess(mode WorkspaceAccessMode) bool {
 	switch mode {
 	case WorkspaceReadWrite:
 		return false
-	case WorkspaceNone, WorkspaceReadOnly:
+	case WorkspaceNone:
+		return false
+	case WorkspaceReadOnly:
 		return true
 	case "":
 		return true

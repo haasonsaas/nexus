@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -226,23 +225,11 @@ func (b *Backend) Run(ctx context.Context, params *sandbox.ExecuteParams, worksp
 		return nil, fmt.Errorf("failed to connect to guest: %w", err)
 	}
 
-	// Prepare files to sync
-	files := make(map[string]string)
-	files[getMainFilename(params.Language)] = params.Code
-	for name, content := range params.Files {
-		files[filepath.Base(name)] = content
-	}
-
-	// Sync files to guest
-	if err := vsock.SyncFiles(ctx, files, "/workspace"); err != nil {
-		return nil, fmt.Errorf("failed to sync files: %w", err)
-	}
-
 	// Execute the code
 	execCtx, cancel := context.WithTimeout(ctx, time.Duration(params.Timeout)*time.Second)
 	defer cancel()
 
-	response, err := vsock.Execute(execCtx, params.Code, params.Language, params.Stdin, params.Files, params.Timeout)
+	response, err := vsock.Execute(execCtx, params.Code, params.Language, params.Stdin, params.Files, params.Timeout, "/workspace", string(params.WorkspaceAccess))
 	if err != nil {
 		if execCtx.Err() == context.DeadlineExceeded {
 			return &sandbox.ExecuteResult{

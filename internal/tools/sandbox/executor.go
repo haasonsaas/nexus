@@ -462,7 +462,9 @@ func (d *dockerExecutor) runWithCopiedWorkspace(ctx context.Context, params *Exe
 	}
 
 	defer func() {
-		_ = exec.CommandContext(context.Background(), "docker", "rm", "-f", containerID).Run()
+		if err := exec.CommandContext(context.Background(), "docker", "rm", "-f", containerID).Run(); err != nil {
+			// Best-effort cleanup.
+		}
 	}()
 
 	copySrc := filepath.Join(workspace, ".")

@@ -94,6 +94,51 @@ func resolveDaytonaConfig(cfg *DaytonaConfig) (*DaytonaConfig, error) {
 	if resolved.Target == "" {
 		resolved.Target = strings.TrimSpace(os.Getenv("DAYTONA_TARGET"))
 	}
+	if resolved.Snapshot == "" {
+		resolved.Snapshot = strings.TrimSpace(os.Getenv("DAYTONA_SNAPSHOT"))
+	}
+	if resolved.Image == "" {
+		resolved.Image = strings.TrimSpace(os.Getenv("DAYTONA_IMAGE"))
+	}
+	if resolved.SandboxClass == "" {
+		resolved.SandboxClass = strings.TrimSpace(os.Getenv("DAYTONA_SANDBOX_CLASS"))
+		if resolved.SandboxClass == "" {
+			resolved.SandboxClass = strings.TrimSpace(os.Getenv("DAYTONA_CLASS"))
+		}
+	}
+	if resolved.WorkspaceDir == "" {
+		resolved.WorkspaceDir = strings.TrimSpace(os.Getenv("DAYTONA_WORKSPACE_DIR"))
+	}
+	if resolved.NetworkAllow == "" {
+		resolved.NetworkAllow = strings.TrimSpace(os.Getenv("DAYTONA_NETWORK_ALLOW_LIST"))
+	}
+	if resolved.AutoStop == nil {
+		if raw := strings.TrimSpace(os.Getenv("DAYTONA_AUTO_STOP_INTERVAL")); raw != "" {
+			parsed, err := time.ParseDuration(raw)
+			if err != nil {
+				return nil, fmt.Errorf("daytona auto stop interval: %w", err)
+			}
+			resolved.AutoStop = &parsed
+		}
+	}
+	if resolved.AutoArchive == nil {
+		if raw := strings.TrimSpace(os.Getenv("DAYTONA_AUTO_ARCHIVE_INTERVAL")); raw != "" {
+			parsed, err := time.ParseDuration(raw)
+			if err != nil {
+				return nil, fmt.Errorf("daytona auto archive interval: %w", err)
+			}
+			resolved.AutoArchive = &parsed
+		}
+	}
+	if resolved.AutoDelete == nil {
+		if raw := strings.TrimSpace(os.Getenv("DAYTONA_AUTO_DELETE_INTERVAL")); raw != "" {
+			parsed, err := time.ParseDuration(raw)
+			if err != nil {
+				return nil, fmt.Errorf("daytona auto delete interval: %w", err)
+			}
+			resolved.AutoDelete = &parsed
+		}
+	}
 
 	if resolved.APIKey == "" && resolved.JWTToken == "" {
 		return nil, errors.New("daytona api key or jwt token is required")

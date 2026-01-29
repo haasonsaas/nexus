@@ -673,15 +673,15 @@ tools:
       organization_id: ${DAYTONA_ORGANIZATION_ID:-}
       api_url: ${DAYTONA_API_URL:-https://app.daytona.io/api}
       target: ${DAYTONA_TARGET:-}
-      snapshot: ""
-      image: ""
-      class: ""
-      workspace_dir: ""
-      network_allow_list: ""
+      snapshot: ${DAYTONA_SNAPSHOT:-}
+      image: ${DAYTONA_IMAGE:-}
+      class: ${DAYTONA_SANDBOX_CLASS:-}
+      workspace_dir: ${DAYTONA_WORKSPACE_DIR:-}
+      network_allow_list: ${DAYTONA_NETWORK_ALLOW_LIST:-}
       reuse_sandbox: false
-      # auto_stop_interval: 30m
-      # auto_archive_interval: 2h
-      # auto_delete_interval: 24h
+      # auto_stop_interval: ${DAYTONA_AUTO_STOP_INTERVAL:-30m}
+      # auto_archive_interval: ${DAYTONA_AUTO_ARCHIVE_INTERVAL:-2h}
+      # auto_delete_interval: ${DAYTONA_AUTO_DELETE_INTERVAL:-24h}
   browser:
     enabled: true
     headless: true

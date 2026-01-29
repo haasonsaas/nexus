@@ -609,6 +609,9 @@ func (l *AgenticLoop) streamPhase(ctx context.Context, state *LoopState, chunks 
 	var textBuilder strings.Builder
 
 	for chunk := range completion {
+		if chunk == nil {
+			continue
+		}
 		if chunk.Error != nil {
 			return nil, chunk.Error
 		}
@@ -636,6 +639,9 @@ func (l *AgenticLoop) streamPhase(ctx context.Context, state *LoopState, chunks 
 				return nil, fmt.Errorf("tool calls exceed maximum of %d per iteration", MaxToolCallsPerIteration)
 			}
 			toolCalls = append(toolCalls, *chunk.ToolCall)
+		}
+		if chunk.Done {
+			break
 		}
 	}
 

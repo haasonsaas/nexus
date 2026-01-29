@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -449,22 +450,126 @@ func (t *LocationGetTool) Execute(ctx context.Context, params json.RawMessage) (
 }
 
 func (t *LocationGetTool) executeMac(ctx context.Context, p LocationGetParams) (*ToolResult, error) {
-	// Use CoreLocation via a small Swift helper or AppleScript
-	// For now, return a placeholder that explains how to get location
-	script := `
-tell application "System Events"
-    -- macOS doesn't expose location via AppleScript directly
-    -- Need to use CoreLocation framework
-end tell
-`
-	_ = script
+	if _, err := exec.LookPath("whereami"); err == nil {
+		cmd := exec.CommandContext(ctx, "whereami")
+		output, err := cmd.Output()
+		if err != nil {
+			return &ToolResult{
+				Content: fmt.Sprintf("location query failed: %v", err),
+				IsError: true,
+			}, nil
+		}
 
-	// In production, this would use a small helper binary that accesses CoreLocation
-	return &ToolResult{
-		Content: "Location services require a native helper. Location: unavailable (helper not installed)",
-		IsError: true,
-	}, nil
+		lines := strings.Split(string(output), "\n")
+		result := make(map[string]string)
+		for _, line := range lines {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				key := strings.TrimSpace(parts[0])
+				val := strings.TrimSpace(parts[1])
+				result[key] = val
+			}
+		}
+		jsonResult, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return &ToolResult{
+				Content: fmt.Sprintf("failed to encode location result: %v", err),
+				IsError: true,
+			}, nil
+		}
+		return &ToolResult{Content: string(jsonResult)}, nil
+	}
+
+	if _, err := exec.LookPath("swift"); err != nil {
+		return &ToolResult{
+			Content: "location requires swift (Xcode Command Line Tools) or whereami",
+			IsError: true,
+		}, nil
+	}
+
+	cmd := exec.CommandContext(ctx, "swift", "-e", macLocationScript)
+	cmd.Env = os.Environ()
+	if p.HighAccuracy {
+		cmd.Env = append(cmd.Env, "NEXUS_LOCATION_ACCURACY=best")
+	} else {
+		cmd.Env = append(cmd.Env, "NEXUS_LOCATION_ACCURACY=hundred")
+	}
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return &ToolResult{
+			Content: fmt.Sprintf("location query failed: %v\n%s", err, strings.TrimSpace(string(output))),
+			IsError: true,
+		}, nil
+	}
+
+	content := strings.TrimSpace(string(output))
+	if content == "" {
+		return &ToolResult{
+			Content: "location unavailable",
+			IsError: true,
+		}, nil
+	}
+	if strings.HasPrefix(content, "{") {
+		var payload map[string]any
+		if err := json.Unmarshal([]byte(content), &payload); err == nil {
+			if errValue, ok := payload["error"]; ok && fmt.Sprint(errValue) != "" {
+				return &ToolResult{Content: content, IsError: true}, nil
+			}
+		}
+	}
+	return &ToolResult{Content: content}, nil
 }
+
+const macLocationScript = `
+import CoreLocation
+import Foundation
+
+class LocationDelegate: NSObject, CLLocationManagerDelegate {
+    var location: CLLocation?
+    let semaphore = DispatchSemaphore(value: 0)
+
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        location = locations.last
+        semaphore.signal()
+    }
+
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        semaphore.signal()
+    }
+}
+
+let manager = CLLocationManager()
+let delegate = LocationDelegate()
+manager.delegate = delegate
+
+let accuracy = ProcessInfo.processInfo.environment["NEXUS_LOCATION_ACCURACY"] ?? "hundred"
+switch accuracy {
+case "best":
+    manager.desiredAccuracy = kCLLocationAccuracyBest
+case "high":
+    manager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
+default:
+    manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+}
+
+manager.requestWhenInUseAuthorization()
+manager.requestLocation()
+
+_ = delegate.semaphore.wait(timeout: .now() + 10)
+
+if let loc = delegate.location {
+    let payload: [String: Any] = [
+        "latitude": loc.coordinate.latitude,
+        "longitude": loc.coordinate.longitude,
+        "accuracy": loc.horizontalAccuracy,
+        "altitude": loc.altitude
+    ]
+    let data = try JSONSerialization.data(withJSONObject: payload, options: [])
+    FileHandle.standardOutput.write(data)
+} else {
+    FileHandle.standardOutput.write("{\"error\":\"Location unavailable\"}".data(using: .utf8)!)
+}
+`
 
 // =============================================================================
 // Run Tool

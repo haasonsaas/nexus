@@ -252,7 +252,67 @@ func runLinuxComputerAction(ctx context.Context, action string, params computerU
 		if strings.TrimSpace(params.Text) == "" {
 			return &ToolResult{Content: "text is required for key", IsError: true}, nil
 		}
-		return runLinuxCmd(ctx, "xdotool", "key", params.Text)
+		if action == "key" {
+			return runLinuxCmd(ctx, "xdotool", "key", params.Text)
+		}
+		hold := time.Duration(params.DurationMs) * time.Millisecond
+		if hold <= 0 && params.DurationSeconds > 0 {
+			hold = time.Duration(params.DurationSeconds * float64(time.Second))
+		}
+		if hold <= 0 {
+			hold = 200 * time.Millisecond
+		}
+		if _, err := runLinuxCmd(ctx, "xdotool", "keydown", params.Text); err != nil {
+			return nil, err
+		}
+		timer := time.NewTimer(hold)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+		case <-timer.C:
+		}
+		if _, err := runLinuxCmd(ctx, "xdotool", "keyup", params.Text); err != nil {
+			return nil, err
+		}
+		return &ToolResult{Content: "ok"}, nil
+	case "left_mouse_down":
+		if len(params.Coordinate) >= 2 {
+			if _, err := runLinuxCmd(ctx, "xdotool", "mousemove", strconv.Itoa(params.Coordinate[0]), strconv.Itoa(params.Coordinate[1])); err != nil {
+				return nil, err
+			}
+		}
+		return runLinuxCmd(ctx, "xdotool", "mousedown", "1")
+	case "left_mouse_up":
+		if len(params.Coordinate) >= 2 {
+			if _, err := runLinuxCmd(ctx, "xdotool", "mousemove", strconv.Itoa(params.Coordinate[0]), strconv.Itoa(params.Coordinate[1])); err != nil {
+				return nil, err
+			}
+		}
+		return runLinuxCmd(ctx, "xdotool", "mouseup", "1")
+	case "left_click_drag":
+		start := params.StartCoordinate
+		if len(start) < 2 {
+			start = params.Coordinate
+		}
+		if len(start) >= 2 {
+			if _, err := runLinuxCmd(ctx, "xdotool", "mousemove", strconv.Itoa(start[0]), strconv.Itoa(start[1])); err != nil {
+				return nil, err
+			}
+		}
+		end := params.EndCoordinate
+		if len(end) < 2 {
+			end = params.Coordinate
+		}
+		if len(end) < 2 {
+			return &ToolResult{Content: "end_coordinate or coordinate is required for left_click_drag", IsError: true}, nil
+		}
+		if _, err := runLinuxCmd(ctx, "xdotool", "mousedown", "1"); err != nil {
+			return nil, err
+		}
+		if _, err := runLinuxCmd(ctx, "xdotool", "mousemove", strconv.Itoa(end[0]), strconv.Itoa(end[1])); err != nil {
+			return nil, err
+		}
+		return runLinuxCmd(ctx, "xdotool", "mouseup", "1")
 	case "cursor_position":
 		cmd := exec.CommandContext(ctx, "xdotool", "getmouselocation", "--shell")
 		output, err := cmd.CombinedOutput()

@@ -228,6 +228,19 @@ func handleScreenCapture(ctx context.Context, input string) (*ToolResult, error)
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
+		if params.WindowName != "" {
+			if params.Region != nil {
+				return &ToolResult{Content: "window_name cannot be combined with region", IsError: true}, nil
+			}
+			windowID, err := findMacWindowIDByName(ctx, params.WindowName)
+			if err != nil {
+				return &ToolResult{Content: fmt.Sprintf("window capture failed: %v", err), IsError: true}, nil
+			}
+			args := []string{"-x", "-l", fmt.Sprintf("%d", windowID), tmpFile}
+			cmd = exec.CommandContext(ctx, "screencapture", args...)
+			break
+		}
+
 		args := []string{"-x", tmpFile} // -x: no sound
 		if params.Display > 0 {
 			args = append(args, "-D", fmt.Sprintf("%d", params.Display))
@@ -236,7 +249,6 @@ func handleScreenCapture(ctx context.Context, input string) (*ToolResult, error)
 			args = append(args, "-R",
 				fmt.Sprintf("%d,%d,%d,%d", params.Region.X, params.Region.Y, params.Region.Width, params.Region.Height))
 		}
-		// Window-name capture is not supported yet; fall back to full screen capture.
 		cmd = exec.CommandContext(ctx, "screencapture", args...)
 
 	case "linux":
@@ -301,6 +313,79 @@ func handleScreenCapture(ctx context.Context, input string) (*ToolResult, error)
 		},
 	}, nil
 }
+
+type macWindowInfo struct {
+	ID    int    `json:"id"`
+	Name  string `json:"name"`
+	Owner string `json:"owner"`
+}
+
+func findMacWindowIDByName(ctx context.Context, windowName string) (int, error) {
+	if strings.TrimSpace(windowName) == "" {
+		return 0, fmt.Errorf("window name is empty")
+	}
+	if _, err := exec.LookPath("swift"); err != nil {
+		return 0, fmt.Errorf("window_name capture requires swift (Xcode Command Line Tools)")
+	}
+	cmd := exec.CommandContext(ctx, "swift", "-e", macWindowListScript)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return 0, fmt.Errorf("list windows failed: %v\n%s", err, strings.TrimSpace(string(output)))
+	}
+	var windows []macWindowInfo
+	if err := json.Unmarshal(output, &windows); err != nil {
+		return 0, fmt.Errorf("parse window list: %w", err)
+	}
+
+	needle := strings.ToLower(strings.TrimSpace(windowName))
+	if needle == "" {
+		return 0, fmt.Errorf("window name is empty")
+	}
+
+	for _, w := range windows {
+		if strings.ToLower(strings.TrimSpace(w.Name)) == needle {
+			return w.ID, nil
+		}
+	}
+	for _, w := range windows {
+		if strings.ToLower(strings.TrimSpace(w.Owner)) == needle {
+			return w.ID, nil
+		}
+	}
+	for _, w := range windows {
+		if w.Name != "" && strings.Contains(strings.ToLower(w.Name), needle) {
+			return w.ID, nil
+		}
+	}
+	for _, w := range windows {
+		if w.Owner != "" && strings.Contains(strings.ToLower(w.Owner), needle) {
+			return w.ID, nil
+		}
+	}
+
+	return 0, fmt.Errorf("no window matched %q", windowName)
+}
+
+const macWindowListScript = `
+import ApplicationServices
+import Foundation
+
+let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+let infoList = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []
+var results: [[String: Any]] = []
+
+for info in infoList {
+    guard let windowID = info[kCGWindowNumber as String] as? Int else { continue }
+    let layer = info[kCGWindowLayer as String] as? Int ?? 0
+    if layer != 0 { continue }
+    let name = info[kCGWindowName as String] as? String ?? ""
+    let owner = info[kCGWindowOwnerName as String] as? String ?? ""
+    results.append(["id": windowID, "name": name, "owner": owner])
+}
+
+let data = try JSONSerialization.data(withJSONObject: results, options: [])
+FileHandle.standardOutput.write(data)
+`
 
 // locationGetTool gets the current GPS location.
 func locationGetTool() *Tool {

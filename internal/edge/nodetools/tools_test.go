@@ -308,7 +308,6 @@ func TestLocationGetTool_Execute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
-	// The mac implementation returns placeholder content
 	if result.Content == "" {
 		t.Error("expected non-empty content")
 	}

@@ -303,8 +303,19 @@ func (a *Agent) handleExecute(req *GuestRequest) *GuestResponse {
 	// Write additional files
 	writtenFiles := []string{codePath}
 	for name, content := range req.Files {
-		safeName := filepath.Base(name)
-		filePath := filepath.Join(workspace, safeName)
+		filePath, err := safeWorkspacePath(workspace, name)
+		if err != nil {
+			return &GuestResponse{
+				ID:    req.ID,
+				Error: fmt.Sprintf("Failed to write file %s: %v", name, err),
+			}
+		}
+		if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+			return &GuestResponse{
+				ID:    req.ID,
+				Error: fmt.Sprintf("Failed to write file %s: %v", name, err),
+			}
+		}
 		if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
 			return &GuestResponse{
 				ID:    req.ID,
@@ -428,8 +439,19 @@ func (a *Agent) handleFileSync(req *GuestRequest) *GuestResponse {
 
 	writtenFiles := []string{}
 	for name, content := range req.Files {
-		safeName := filepath.Base(name)
-		filePath := filepath.Join(workspace, safeName)
+		filePath, err := safeWorkspacePath(workspace, name)
+		if err != nil {
+			return &GuestResponse{
+				ID:    req.ID,
+				Error: fmt.Sprintf("Failed to write file %s: %v", name, err),
+			}
+		}
+		if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+			return &GuestResponse{
+				ID:    req.ID,
+				Error: fmt.Sprintf("Failed to write file %s: %v", name, err),
+			}
+		}
 		if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
 			return &GuestResponse{
 				ID:    req.ID,
@@ -452,6 +474,23 @@ func (a *Agent) handleFileSync(req *GuestRequest) *GuestResponse {
 		ID:      req.ID,
 		Success: true,
 	}
+}
+
+func safeWorkspacePath(baseDir, name string) (string, error) {
+	normalized := strings.ReplaceAll(strings.TrimSpace(name), "\\", "/")
+	cleaned := filepath.Clean(filepath.FromSlash(normalized))
+	if cleaned == "" || cleaned == "." {
+		return "", fmt.Errorf("invalid filename: %q", name)
+	}
+	if filepath.IsAbs(cleaned) || cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
+		cleaned = filepath.Base(cleaned)
+	}
+	target := filepath.Join(baseDir, cleaned)
+	rel, err := filepath.Rel(baseDir, target)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return "", fmt.Errorf("invalid filename: %q", name)
+	}
+	return target, nil
 }
 
 // sendResponse sends a response to the host.

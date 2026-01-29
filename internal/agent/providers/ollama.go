@@ -281,6 +281,9 @@ func buildOllamaMessages(req *agent.CompletionRequest) []ollamaChatMessage {
 			if len(msg.ToolResults) > 0 {
 				for _, tr := range msg.ToolResults {
 					toolName := toolNames[tr.ToolCallID]
+					if toolName == "" {
+						toolName = tr.ToolCallID
+					}
 					messages = append(messages, ollamaChatMessage{
 						Role:     "tool",
 						Content:  tr.Content,

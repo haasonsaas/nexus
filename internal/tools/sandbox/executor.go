@@ -167,7 +167,7 @@ func (e *Executor) Schema() json.RawMessage {
 			"workspace_access": {
 				"type": "string",
 				"description": "Workspace access mode: readonly (ro), readwrite (rw), or none",
-				"enum": ["ro", "rw", "readonly", "readwrite", "none"]
+				"enum": ["ro", "rw", "readonly", "readwrite", "read-only", "read-write", "write", "none", "disabled"]
 			}
 		},
 		"required": ["language", "code"]

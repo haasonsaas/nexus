@@ -203,6 +203,8 @@ func (e *Executor) Execute(ctx context.Context, params json.RawMessage) (*agent.
 	}
 	if execParams.WorkspaceAccess == "" {
 		execParams.WorkspaceAccess = e.workspaceAccess
+	} else {
+		execParams.WorkspaceAccess = ParseWorkspaceAccess(string(execParams.WorkspaceAccess))
 	}
 
 	// Execute with timeout

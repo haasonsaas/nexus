@@ -441,7 +441,7 @@ func (d *dockerExecutor) baseDockerArgs(params *ExecuteParams) []string {
 	return args
 }
 
-func (d *dockerExecutor) runWithCopiedWorkspace(ctx context.Context, params *ExecuteParams, workspace string) (*ExecuteResult, error) {
+func (d *dockerExecutor) runWithCopiedWorkspace(ctx context.Context, params *ExecuteParams, workspace string) (result *ExecuteResult, runErr error) {
 	createArgs := []string{"create"}
 	createArgs = append(createArgs, d.baseDockerArgs(params)...)
 	createArgs = append(createArgs, "--tmpfs", "/workspace:rw", "-w", "/workspace")
@@ -463,7 +463,13 @@ func (d *dockerExecutor) runWithCopiedWorkspace(ctx context.Context, params *Exe
 
 	defer func() {
 		if err := exec.CommandContext(context.Background(), "docker", "rm", "-f", containerID).Run(); err != nil {
-			// Best-effort cleanup.
+			if result == nil {
+				return
+			}
+			if result.Stderr != "" {
+				result.Stderr += "\n"
+			}
+			result.Stderr += fmt.Sprintf("docker cleanup error: %v", err)
 		}
 	}()
 
@@ -481,7 +487,8 @@ func (d *dockerExecutor) runWithCopiedWorkspace(ctx context.Context, params *Exe
 	}
 	startArgs = append(startArgs, containerID)
 
-	return d.runDockerCommand(ctx, startArgs, params.Stdin)
+	result, runErr = d.runDockerCommand(ctx, startArgs, params.Stdin)
+	return result, runErr
 }
 
 func (d *dockerExecutor) runDockerCommand(ctx context.Context, args []string, stdin string) (*ExecuteResult, error) {

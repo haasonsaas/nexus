@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/agent"
@@ -116,14 +117,14 @@ func (p *AzureOpenAIProvider) Name() string {
 	return "azure"
 }
 
-// Models returns a placeholder list of models.
-// Azure deployments are custom-named, so this returns common deployment patterns.
+// Models returns configured Azure deployment names.
 func (p *AzureOpenAIProvider) Models() []agent.Model {
+	if strings.TrimSpace(p.defaultModel) == "" {
+		return nil
+	}
+	modelID := strings.TrimSpace(p.defaultModel)
 	return []agent.Model{
-		{ID: "gpt-4o", Name: "GPT-4o (Azure)", ContextSize: 128000, SupportsVision: true},
-		{ID: "gpt-4-turbo", Name: "GPT-4 Turbo (Azure)", ContextSize: 128000, SupportsVision: true},
-		{ID: "gpt-4", Name: "GPT-4 (Azure)", ContextSize: 8192, SupportsVision: false},
-		{ID: "gpt-35-turbo", Name: "GPT-3.5 Turbo (Azure)", ContextSize: 16385, SupportsVision: false},
+		{ID: modelID, Name: fmt.Sprintf("%s (Azure)", modelID)},
 	}
 }
 

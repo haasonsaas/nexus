@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/haasonsaas/nexus/internal/agent"
@@ -109,7 +110,7 @@ func (p *OpenRouterProvider) Name() string {
 // Models returns a curated list of popular models available via OpenRouter.
 // OpenRouter supports 200+ models; this returns commonly used ones.
 func (p *OpenRouterProvider) Models() []agent.Model {
-	return []agent.Model{
+	models := []agent.Model{
 		// OpenAI models
 		{ID: "openai/gpt-4o", Name: "GPT-4o", ContextSize: 128000, SupportsVision: true},
 		{ID: "openai/gpt-4-turbo", Name: "GPT-4 Turbo", ContextSize: 128000, SupportsVision: true},
@@ -126,6 +127,16 @@ func (p *OpenRouterProvider) Models() []agent.Model {
 		{ID: "mistralai/mixtral-8x7b-instruct", Name: "Mixtral 8x7B", ContextSize: 32768, SupportsVision: false},
 		{ID: "nousresearch/nous-hermes-2-mixtral-8x7b-dpo", Name: "Nous Hermes 2 Mixtral", ContextSize: 32768, SupportsVision: false},
 	}
+	defaultModel := strings.TrimSpace(p.defaultModel)
+	if defaultModel == "" {
+		return models
+	}
+	for _, m := range models {
+		if m.ID == defaultModel {
+			return models
+		}
+	}
+	return append([]agent.Model{{ID: defaultModel, Name: defaultModel + " (OpenRouter)"}}, models...)
 }
 
 // SupportsTools indicates whether this provider supports tool/function calling.

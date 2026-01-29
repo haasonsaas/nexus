@@ -157,7 +157,7 @@ func (p *BedrockProvider) Name() string {
 // Models returns the list of available models on Bedrock.
 // Note: Actual availability depends on your AWS account's model access.
 func (p *BedrockProvider) Models() []agent.Model {
-	return []agent.Model{
+	models := []agent.Model{
 		// Anthropic Claude models
 		{ID: "anthropic.claude-3-opus-20240229-v1:0", Name: "Claude 3 Opus (Bedrock)", ContextSize: 200000, SupportsVision: true},
 		{ID: "anthropic.claude-3-sonnet-20240229-v1:0", Name: "Claude 3 Sonnet (Bedrock)", ContextSize: 200000, SupportsVision: true},
@@ -176,6 +176,16 @@ func (p *BedrockProvider) Models() []agent.Model {
 		{ID: "cohere.command-r-plus-v1:0", Name: "Command R+ (Bedrock)", ContextSize: 128000, SupportsVision: false},
 		{ID: "cohere.command-r-v1:0", Name: "Command R (Bedrock)", ContextSize: 128000, SupportsVision: false},
 	}
+	defaultModel := strings.TrimSpace(p.defaultModel)
+	if defaultModel == "" {
+		return models
+	}
+	for _, m := range models {
+		if m.ID == defaultModel {
+			return models
+		}
+	}
+	return append([]agent.Model{{ID: defaultModel, Name: defaultModel + " (Bedrock)"}}, models...)
 }
 
 // SupportsTools indicates whether this provider supports tool/function calling.

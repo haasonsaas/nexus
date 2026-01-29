@@ -188,7 +188,7 @@ func (a *Adapter) Contacts() personal.ContactManager {
 
 // Media returns the media handler.
 func (a *Adapter) Media() personal.MediaHandler {
-	return &personal.BaseMediaHandler{}
+	return &mediaHandler{adapter: a}
 }
 
 // Presence returns the presence manager.
@@ -366,7 +366,16 @@ func (a *Adapter) pollNewMessages(ctx context.Context) {
 			raw.GroupName = displayName.String
 		}
 
+		if attachments, err := a.fetchMessageAttachments(ctx, rowID); err == nil {
+			raw.Attachments = attachments
+		} else {
+			a.Logger().Debug("failed to load attachments", "error", err, "message_id", rowID)
+		}
+
 		msg := a.NormalizeInbound(raw)
+		if len(raw.Attachments) > 0 {
+			a.ProcessAttachments(raw, msg)
+		}
 		a.Emit(msg)
 	}
 }

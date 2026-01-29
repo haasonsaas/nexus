@@ -35,6 +35,9 @@ type Adapter struct {
 	pending   map[int64]chan json.RawMessage
 	pendingMu sync.Mutex
 
+	attachments   map[string]attachmentRecord
+	attachmentsMu sync.RWMutex
+
 	cancelFunc context.CancelFunc
 	wg         sync.WaitGroup
 }
@@ -58,6 +61,7 @@ func New(cfg *Config, logger *slog.Logger) (*Adapter, error) {
 		BaseAdapter: personal.NewBaseAdapter(models.ChannelSignal, &cfg.Personal, logger),
 		config:      cfg,
 		pending:     make(map[int64]chan json.RawMessage),
+		attachments: make(map[string]attachmentRecord),
 	}
 
 	return adapter, nil
@@ -243,7 +247,7 @@ func (a *Adapter) Contacts() personal.ContactManager {
 
 // Media returns the media handler.
 func (a *Adapter) Media() personal.MediaHandler {
-	return &personal.BaseMediaHandler{}
+	return &mediaHandler{adapter: a}
 }
 
 // Presence returns the presence manager.
@@ -429,11 +433,31 @@ func (a *Adapter) handleReceive(params json.RawMessage) {
 
 	// Handle attachments
 	for _, att := range dm.Attachments {
+		attachmentID := strings.TrimSpace(att.ID)
+		if attachmentID != "" {
+			storedPath := strings.TrimSpace(att.StoredFilename)
+			if storedPath != "" {
+				storedPath = expandPath(storedPath)
+			}
+			a.trackAttachment(attachmentID, attachmentRecord{
+				peerID:     raw.PeerID,
+				groupID:    raw.GroupID,
+				filename:   att.Filename,
+				mimeType:   att.ContentType,
+				storedPath: storedPath,
+				size:       att.Size,
+			})
+		}
+		attachmentURL := ""
+		if att.StoredFilename != "" {
+			attachmentURL = "file://" + expandPath(att.StoredFilename)
+		}
 		raw.Attachments = append(raw.Attachments, personal.RawAttachment{
 			ID:       att.ID,
 			MIMEType: att.ContentType,
 			Filename: att.Filename,
 			Size:     att.Size,
+			URL:      attachmentURL,
 		})
 	}
 
@@ -526,10 +550,11 @@ type signalGroupInfo struct {
 }
 
 type signalAttachment struct {
-	ID          string `json:"id"`
-	ContentType string `json:"contentType"`
-	Filename    string `json:"filename"`
-	Size        int64  `json:"size"`
+	ID             string `json:"id"`
+	ContentType    string `json:"contentType"`
+	Filename       string `json:"filename"`
+	StoredFilename string `json:"storedFilename"`
+	Size           int64  `json:"size"`
 }
 
 type signalQuote struct {

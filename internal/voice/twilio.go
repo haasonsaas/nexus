@@ -264,9 +264,44 @@ func (p *TwilioProvider) StartListening(ctx context.Context, input *StartListeni
 	return nil
 }
 
-// StopListening reports speech recognition stop as unsupported for Twilio.
+// StopListening stops speech recognition by redirecting the call back to the webhook.
 func (p *TwilioProvider) StopListening(ctx context.Context, callID, providerCallID string) error {
-	return errors.New("twilio: stop listening not supported (gather ends automatically)")
+	if providerCallID == "" {
+		if callID != "" {
+			return fmt.Errorf("twilio: provider call ID is required for call %q", callID)
+		}
+		return errors.New("twilio: provider call ID is required")
+	}
+
+	p.mu.RLock()
+	webhookURL := p.webhookURLs[providerCallID]
+	p.mu.RUnlock()
+
+	if webhookURL == "" {
+		label := providerCallID
+		if label == "" {
+			label = callID
+		}
+		if label != "" {
+			return fmt.Errorf("twilio: missing webhook URL for call %q (initiate call with WebhookURL)", label)
+		}
+		return errors.New("twilio: missing webhook URL for call (initiate call with WebhookURL)")
+	}
+
+	twiml := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Redirect method="POST">%s</Redirect>
+</Response>`, escapeXML(webhookURL))
+
+	params := url.Values{
+		"Twiml": {twiml},
+	}
+
+	if _, err := p.apiRequest(ctx, fmt.Sprintf("/Calls/%s.json", providerCallID), params); err != nil {
+		return fmt.Errorf("twilio: failed to stop listening: %w", err)
+	}
+
+	return nil
 }
 
 // VerifyWebhook validates webhook authenticity using HMAC-SHA1.

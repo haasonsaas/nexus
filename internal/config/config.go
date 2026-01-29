@@ -2768,6 +2768,14 @@ func validateConfig(cfg *Config) error {
 	if cfg.LLM.Routing.UnhealthyCooldown < 0 {
 		issues = append(issues, "llm.routing.unhealthy_cooldown must be >= 0")
 	}
+	if cfg.Plugins.Isolation.Enabled {
+		backend := strings.ToLower(strings.TrimSpace(cfg.Plugins.Isolation.Backend))
+		if backend == "" {
+			issues = append(issues, "plugins.isolation.backend is required when isolation is enabled")
+		} else {
+			issues = append(issues, fmt.Sprintf("plugins.isolation.backend %q is not implemented; disable plugins.isolation.enabled", backend))
+		}
+	}
 
 	if pluginIssues := pluginValidationIssues(cfg); len(pluginIssues) > 0 {
 		issues = append(issues, pluginIssues...)

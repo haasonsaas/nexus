@@ -177,6 +177,8 @@ func (p *Pool) createExecutor(language string) (RuntimeExecutor, error) {
 		return newDockerExecutor(language, p.config.DefaultCPU, p.config.DefaultMemory, p.config.NetworkEnabled)
 	case BackendFirecracker:
 		return newFirecrackerExecutor(language, p.config.DefaultCPU, p.config.DefaultMemory, p.config.NetworkEnabled)
+	case BackendDaytona:
+		return newDaytonaExecutor(language, p.config)
 	default:
 		return nil, fmt.Errorf("unsupported backend: %s", p.config.Backend)
 	}

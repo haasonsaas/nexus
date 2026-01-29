@@ -1135,6 +1135,9 @@ func TestBackendConstants(t *testing.T) {
 	if BackendFirecracker != "firecracker" {
 		t.Errorf("BackendFirecracker = %q, want %q", BackendFirecracker, "firecracker")
 	}
+	if BackendDaytona != "daytona" {
+		t.Errorf("BackendDaytona = %q, want %q", BackendDaytona, "daytona")
+	}
 }
 
 func TestConfig_Struct(t *testing.T) {

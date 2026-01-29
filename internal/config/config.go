@@ -1004,6 +1004,7 @@ type SandboxConfig struct {
 	NetworkEnabled bool                  `yaml:"network_enabled"`
 	Limits         ResourceLimits        `yaml:"limits"`
 	Snapshots      SandboxSnapshotConfig `yaml:"snapshots"`
+	Daytona        SandboxDaytonaConfig  `yaml:"daytona"`
 
 	// Mode controls which agents use sandboxing:
 	// - "off": sandboxing disabled (default when enabled=false)
@@ -1022,6 +1023,20 @@ type SandboxConfig struct {
 
 	// WorkspaceAccess controls workspace access mode: "readonly" or "readwrite".
 	WorkspaceAccess string `yaml:"workspace_access"`
+}
+
+// SandboxDaytonaConfig configures the Daytona sandbox backend.
+type SandboxDaytonaConfig struct {
+	APIKey         string `yaml:"api_key"`
+	JWTToken       string `yaml:"jwt_token"`
+	OrganizationID string `yaml:"organization_id"`
+	APIURL         string `yaml:"api_url"`
+	Target         string `yaml:"target"`
+	Snapshot       string `yaml:"snapshot"`
+	Image          string `yaml:"image"`
+	SandboxClass   string `yaml:"class"`
+	WorkspaceDir   string `yaml:"workspace_dir"`
+	NetworkAllow   string `yaml:"network_allow_list"`
 }
 
 // SandboxSnapshotConfig controls Firecracker snapshot behavior.

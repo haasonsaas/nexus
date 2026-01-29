@@ -7,7 +7,7 @@ A secure code execution sandbox for the Nexus project that implements the `agent
 - **Multiple Runtime Support**: Python 3, Node.js, Go, and Bash
 - **Resource Limits**: CPU, memory, and time constraints
 - **Network Isolation**: No network access by default
-- **Secure Execution**: Docker-based sandboxing (default) with optional Firecracker microVM backend (Linux-only)
+- **Secure Execution**: Docker-based sandboxing (default), optional Firecracker microVM backend (Linux-only), or Daytona remote sandboxes
 - **VM Pool Management**: Pre-warmed container pool for fast execution
 - **Stream Capture**: Full stdout, stderr, and exit code capture
 - **File Mounting**: Support for mounting additional files
@@ -24,6 +24,7 @@ A secure code execution sandbox for the Nexus project that implements the `agent
 
 - **Docker** (default): Uses Docker containers with restricted resources and networking
 - **Firecracker**: Optional microVM-based execution (Linux-only; falls back to Docker if unavailable)
+- **Daytona**: Remote sandbox execution via the Daytona API (requires API credentials)
 
 ## Usage
 

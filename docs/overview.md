@@ -8,7 +8,7 @@ Nexus is a multi-channel AI agent orchestration platform written in Go. It conne
 2. **Hybrid Deployment** - Runs as managed SaaS or self-hosted on any Kubernetes cluster
 3. **Channel Agnostic** - Unified message format across all platforms
 4. **Provider Agnostic** - Swap LLM providers without changing agent logic
-5. **Secure by Default** - Tool execution in sandboxed runners (Docker by default; optional Firecracker), encrypted credentials
+5. **Secure by Default** - Tool execution in sandboxed runners (Docker by default; optional Firecracker or Daytona), encrypted credentials
 
 ## High-Level Architecture
 
@@ -97,7 +97,7 @@ Nexus is a multi-channel AI agent orchestration platform written in Go. It conne
 3. **Router** - Resolves user → session, applies rate limits
 4. **Session Manager** - Loads conversation context from CockroachDB
 5. **LLM Orchestrator** - Sends prompt to configured provider
-6. **Tool Executor** - Executes tool calls in a sandbox (Docker by default; optional Firecracker)
+6. **Tool Executor** - Executes tool calls in a sandbox (Docker by default; optional Firecracker or Daytona)
 7. **Response Stream** - Streams response back via gRPC
 8. **Channel Adapter** - Formats and sends reply to originating channel
 
@@ -198,7 +198,7 @@ type Tool interface {
 
 ### Sandbox Isolation
 
-- **Sandbox backends** - Docker (default) and optional Firecracker microVMs for stronger isolation
+- **Sandbox backends** - Docker (default), optional Firecracker microVMs, or Daytona remote sandboxes for stronger isolation
 - **Network Policies** - Restricted egress, no inter-session communication
 - **Resource Limits** - CPU, memory, execution time caps
 - **Ephemeral Storage** - Container/VM state destroyed after execution

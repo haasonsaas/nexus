@@ -647,7 +647,7 @@ tools:
       denylist: []
   sandbox:
     enabled: true
-    backend: docker # docker | firecracker
+    backend: docker # docker | firecracker | daytona
     # Number of pre-warmed sandboxes
     pool_size: 5
     max_pool_size: 10
@@ -663,6 +663,17 @@ tools:
       enabled: false
       refresh_interval: 30m
       max_age: 6h
+    daytona:
+      api_key: ${DAYTONA_API_KEY:-}
+      jwt_token: ${DAYTONA_JWT_TOKEN:-}
+      organization_id: ${DAYTONA_ORGANIZATION_ID:-}
+      api_url: ${DAYTONA_API_URL:-https://app.daytona.io/api}
+      target: ${DAYTONA_TARGET:-}
+      snapshot: ""
+      image: ""
+      class: ""
+      workspace_dir: ""
+      network_allow_list: ""
   browser:
     enabled: true
     headless: true

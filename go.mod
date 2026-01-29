@@ -96,6 +96,8 @@ require (
 	github.com/containerd/fifo v1.0.0 // indirect
 	github.com/containernetworking/cni v1.0.1 // indirect
 	github.com/containernetworking/plugins v1.0.1 // indirect
+	github.com/daytonaio/daytona/libs/api-client-go v0.0.0-20260128154817-2e2bf16516bc // indirect
+	github.com/daytonaio/daytona/libs/toolbox-api-client-go v0.0.0-20260128154817-2e2bf16516bc // indirect
 	github.com/deckarep/golang-set/v2 v2.7.0 // indirect
 	github.com/decred/dcrd/crypto/blake256 v1.1.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0 // indirect

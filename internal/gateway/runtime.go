@@ -498,6 +498,20 @@ func (s *Server) registerTools(ctx context.Context, runtime *agent.Runtime) erro
 		switch backend {
 		case "", "docker":
 			// default
+		case "daytona":
+			opts = append(opts, sandbox.WithBackend(sandbox.BackendDaytona))
+			opts = append(opts, sandbox.WithDaytonaConfig(sandbox.DaytonaConfig{
+				APIKey:         s.config.Tools.Sandbox.Daytona.APIKey,
+				JWTToken:       s.config.Tools.Sandbox.Daytona.JWTToken,
+				OrganizationID: s.config.Tools.Sandbox.Daytona.OrganizationID,
+				APIURL:         s.config.Tools.Sandbox.Daytona.APIURL,
+				Target:         s.config.Tools.Sandbox.Daytona.Target,
+				Snapshot:       s.config.Tools.Sandbox.Daytona.Snapshot,
+				Image:          s.config.Tools.Sandbox.Daytona.Image,
+				SandboxClass:   s.config.Tools.Sandbox.Daytona.SandboxClass,
+				WorkspaceDir:   s.config.Tools.Sandbox.Daytona.WorkspaceDir,
+				NetworkAllow:   s.config.Tools.Sandbox.Daytona.NetworkAllow,
+			}))
 		case "firecracker":
 			fcConfig := firecracker.DefaultBackendConfig()
 			fcConfig.NetworkEnabled = s.config.Tools.Sandbox.NetworkEnabled

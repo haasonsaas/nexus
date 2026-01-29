@@ -595,6 +595,20 @@ func (m *ToolManager) registerSandboxTool(ctx context.Context, runtime *agent.Ru
 	switch backend {
 	case "", "docker":
 		// Default Docker backend
+	case "daytona":
+		opts = append(opts, sandbox.WithBackend(sandbox.BackendDaytona))
+		opts = append(opts, sandbox.WithDaytonaConfig(sandbox.DaytonaConfig{
+			APIKey:         cfg.Daytona.APIKey,
+			JWTToken:       cfg.Daytona.JWTToken,
+			OrganizationID: cfg.Daytona.OrganizationID,
+			APIURL:         cfg.Daytona.APIURL,
+			Target:         cfg.Daytona.Target,
+			Snapshot:       cfg.Daytona.Snapshot,
+			Image:          cfg.Daytona.Image,
+			SandboxClass:   cfg.Daytona.SandboxClass,
+			WorkspaceDir:   cfg.Daytona.WorkspaceDir,
+			NetworkAllow:   cfg.Daytona.NetworkAllow,
+		}))
 	case "firecracker":
 		if err := m.setupFirecrackerBackend(ctx, &cfg); err != nil {
 			m.Logger().Warn("firecracker backend unavailable, falling back to docker", "error", err)

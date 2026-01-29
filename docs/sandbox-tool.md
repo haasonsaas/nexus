@@ -2,7 +2,7 @@
 
 The Nexus sandbox tool provides secure, isolated code execution for multiple programming languages.
 
-Backends: Docker (default) with an optional Firecracker microVM backend on supported Linux hosts.
+Backends: Docker (default), optional Firecracker microVM backend on supported Linux hosts, and Daytona for remote sandbox execution.
 
 ## Quick Start
 
@@ -266,6 +266,19 @@ executor, err := sandbox.NewExecutor(
 
     // Enable network access (disabled by default)
     sandbox.WithNetworkEnabled(false),
+)
+```
+
+### Daytona Backend
+
+```go
+executor, err := sandbox.NewExecutor(
+    sandbox.WithBackend(sandbox.BackendDaytona),
+    sandbox.WithDaytonaConfig(sandbox.DaytonaConfig{
+        APIKey:   "your-api-key", // or rely on DAYTONA_API_KEY
+        APIURL:   "https://app.daytona.io/api",
+        Snapshot: "default", // optional
+    }),
 )
 ```
 

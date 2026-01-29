@@ -58,7 +58,7 @@ type ExecuteResult struct {
 }
 
 // NewExecutor creates a new sandbox executor with the given options.
-// It initializes the executor pool and configures the backend (Docker or Firecracker).
+// It initializes the executor pool and configures the backend (Docker, Firecracker, or Daytona).
 func NewExecutor(opts ...Option) (*Executor, error) {
 	config := &Config{
 		Backend:        BackendDocker,
@@ -72,6 +72,19 @@ func NewExecutor(opts ...Option) (*Executor, error) {
 
 	for _, opt := range opts {
 		opt(config)
+	}
+
+	if config.Backend == BackendDaytona {
+		resolved, err := resolveDaytonaConfig(config.Daytona)
+		if err != nil {
+			return nil, err
+		}
+		config.Daytona = resolved
+		client, err := newDaytonaClient(resolved)
+		if err != nil {
+			return nil, err
+		}
+		config.daytonaClient = client
 	}
 
 	// Check if Firecracker is available
@@ -489,14 +502,18 @@ type Config struct {
 	DefaultCPU     int
 	DefaultMemory  int
 	NetworkEnabled bool
+	Daytona        *DaytonaConfig
+
+	daytonaClient *daytonaClient
 }
 
-// Backend represents the sandbox backend technology (Docker or Firecracker).
+// Backend represents the sandbox backend technology (Docker, Firecracker, Daytona).
 type Backend string
 
 const (
 	BackendFirecracker Backend = "firecracker"
 	BackendDocker      Backend = "docker"
+	BackendDaytona     Backend = "daytona"
 )
 
 // Option is a functional option for configuring the executor at creation time.
@@ -548,5 +565,12 @@ func WithDefaultMemory(megabytes int) Option {
 func WithNetworkEnabled(enabled bool) Option {
 	return func(c *Config) {
 		c.NetworkEnabled = enabled
+	}
+}
+
+// WithDaytonaConfig sets Daytona-specific backend configuration.
+func WithDaytonaConfig(cfg DaytonaConfig) Option {
+	return func(c *Config) {
+		c.Daytona = &cfg
 	}
 }

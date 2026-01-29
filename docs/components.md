@@ -369,7 +369,7 @@ internal/tools/
 ├── registry.go         # Tool registration and dispatch
 ├── schema.go           # JSON Schema generation
 ├── sandbox/
-│   ├── executor.go     # Sandbox tool (Docker default; Firecracker optional)
+│   ├── executor.go     # Sandbox tool (Docker default; Firecracker/Daytona optional)
 │   ├── pool.go         # Executor pool management
 │   ├── modes.go        # Backend selection/modes
 │   └── firecracker/    # Firecracker backend (Linux-only)
@@ -388,7 +388,7 @@ internal/tools/
 The sandbox executes untrusted code with strong resource limits and network isolation.
 
 - Default backend: Docker containers (no network by default).
-- Optional backend: Firecracker microVMs (supported Linux hosts).
+- Optional backend: Firecracker microVMs (supported Linux hosts) or Daytona remote sandboxes.
 
 ```go
 executor, err := sandbox.NewExecutor(

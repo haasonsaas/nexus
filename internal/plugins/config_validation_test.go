@@ -124,10 +124,13 @@ llm:
 
 	parsed, err := config.Load(cfg)
 	if err != nil {
-		t.Fatalf("Load() error = %v", err)
+		if !strings.Contains(err.Error(), "plugins.isolation.backend") {
+			t.Fatalf("expected isolation validation error, got %v", err)
+		}
+		return
 	}
-	if err := ValidateConfig(parsed); err != nil {
-		t.Fatalf("expected validation to pass, got %v", err)
+	if err := ValidateConfig(parsed); err == nil {
+		t.Fatalf("expected validation to fail when isolation is enabled")
 	}
 }
 

@@ -302,7 +302,9 @@ func (d *daytonaExecutor) Close() error {
 		d.sandboxTarget = ""
 		d.sandboxMu.Unlock()
 		if sandboxID != "" {
-			_ = d.deleteSandbox(context.Background(), sandboxID)
+			if err := d.deleteSandbox(context.Background(), sandboxID); err != nil {
+				_ = err
+			}
 		}
 	}
 	return nil
@@ -343,7 +345,9 @@ func (d *daytonaExecutor) ensureSandbox(ctx context.Context, params *ExecutePara
 	d.sandboxMu.Unlock()
 
 	if sandboxID != "" && (sandboxCPU != requestedCPU || sandboxMem != requestedMem) {
-		_ = d.deleteSandbox(context.Background(), sandboxID)
+		if err := d.deleteSandbox(context.Background(), sandboxID); err != nil {
+			_ = err
+		}
 		sandboxID = ""
 	}
 

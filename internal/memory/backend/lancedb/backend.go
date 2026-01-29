@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math"
 	"os"
 	"path/filepath"
@@ -77,8 +78,8 @@ func New(cfg Config) (*Backend, error) {
 
 	// Load existing data
 	if err := b.load(); err != nil {
-		// Non-fatal, start with empty data
-		_ = err
+		// Non-fatal, start with empty data but surface the issue.
+		slog.Warn("lancedb load failed; starting with empty data", "path", cfg.Path, "error", err)
 	}
 
 	return b, nil

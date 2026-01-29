@@ -4,6 +4,7 @@ package subagent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -37,6 +38,7 @@ type SubAgent struct {
 type Manager struct {
 	mu          sync.RWMutex
 	agents      map[string]*SubAgent
+	cancels     map[string]context.CancelFunc
 	runtime     *agent.Runtime
 	maxActive   int
 	activeCount int64
@@ -51,6 +53,7 @@ func NewManager(runtime *agent.Runtime, maxActive int) *Manager {
 	}
 	return &Manager{
 		agents:    make(map[string]*SubAgent),
+		cancels:   make(map[string]context.CancelFunc),
 		runtime:   runtime,
 		maxActive: maxActive,
 	}
@@ -85,6 +88,8 @@ func (m *Manager) Spawn(ctx context.Context, parentID, parentSession, name, task
 
 	m.mu.Lock()
 	m.agents[subagent.ID] = subagent
+	subCtx, cancel := context.WithCancel(context.Background())
+	m.cancels[subagent.ID] = cancel
 	announcer := m.announcer
 	m.mu.Unlock()
 
@@ -100,7 +105,7 @@ func (m *Manager) Spawn(ctx context.Context, parentID, parentSession, name, task
 	}
 
 	// Run sub-agent in background
-	go m.runSubAgent(context.Background(), subagent)
+	go m.runSubAgent(subCtx, subagent)
 
 	return subagent, nil
 }
@@ -108,6 +113,7 @@ func (m *Manager) Spawn(ctx context.Context, parentID, parentSession, name, task
 // runSubAgent executes the sub-agent's task.
 func (m *Manager) runSubAgent(ctx context.Context, sa *SubAgent) {
 	defer atomic.AddInt64(&m.activeCount, -1)
+	defer m.clearCancel(sa.ID)
 
 	// Create a mock session for the sub-agent
 	session := &models.Session{
@@ -138,6 +144,10 @@ func (m *Manager) runSubAgent(ctx context.Context, sa *SubAgent) {
 
 	chunks, err := m.runtime.Process(ctx, session, msg)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			m.markCancelled(sa.ID, "cancelled")
+			return
+		}
 		m.completeSubAgent(sa.ID, "", err.Error())
 		return
 	}
@@ -145,6 +155,10 @@ func (m *Manager) runSubAgent(ctx context.Context, sa *SubAgent) {
 	var result string
 	for chunk := range chunks {
 		if chunk.Error != nil {
+			if errors.Is(chunk.Error, context.Canceled) || errors.Is(chunk.Error, context.DeadlineExceeded) {
+				m.markCancelled(sa.ID, "cancelled")
+				return
+			}
 			m.completeSubAgent(sa.ID, "", chunk.Error.Error())
 			return
 		}
@@ -153,7 +167,38 @@ func (m *Manager) runSubAgent(ctx context.Context, sa *SubAgent) {
 		}
 	}
 
+	if ctx.Err() != nil {
+		m.markCancelled(sa.ID, "cancelled")
+		return
+	}
+
 	m.completeSubAgent(sa.ID, result, "")
+}
+
+func (m *Manager) clearCancel(id string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.cancels, id)
+}
+
+func (m *Manager) markCancelled(id, reason string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	sa, ok := m.agents[id]
+	if !ok {
+		return
+	}
+	if sa.Status == "cancelled" {
+		return
+	}
+
+	if reason == "" {
+		reason = "cancelled"
+	}
+	sa.Status = "cancelled"
+	sa.CompletedAt = time.Now()
+	sa.Error = reason
 }
 
 // completeSubAgent marks a sub-agent as completed.
@@ -163,6 +208,9 @@ func (m *Manager) completeSubAgent(id, result, errMsg string) {
 
 	sa, ok := m.agents[id]
 	if !ok {
+		return
+	}
+	if sa.Status == "cancelled" {
 		return
 	}
 
@@ -200,20 +248,28 @@ func (m *Manager) List(parentID string) []*SubAgent {
 
 // Cancel cancels a running sub-agent by ID, returning an error if not found or not running.
 func (m *Manager) Cancel(id string) error {
+	var cancel context.CancelFunc
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	sa, ok := m.agents[id]
 	if !ok {
+		m.mu.Unlock()
 		return fmt.Errorf("sub-agent not found: %s", id)
 	}
 	if sa.Status != "running" {
+		m.mu.Unlock()
 		return fmt.Errorf("sub-agent not running: %s", sa.Status)
 	}
 
 	sa.Status = "cancelled"
 	sa.CompletedAt = time.Now()
 	sa.Error = "cancelled by user"
+	cancel = m.cancels[id]
+	delete(m.cancels, id)
+	m.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
 	return nil
 }
 

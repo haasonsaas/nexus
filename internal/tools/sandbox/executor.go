@@ -281,9 +281,16 @@ func prepareWorkspace(params *ExecuteParams, workspaceRoot string) (string, erro
 
 	// Write additional files
 	for filename, content := range params.Files {
-		// Sanitize filename to prevent directory traversal
-		filename = filepath.Base(filename)
-		if err := os.WriteFile(filepath.Join(workspace, filename), []byte(content), 0644); err != nil {
+		target, err := safeWorkspacePath(workspace, filename)
+		if err != nil {
+			os.RemoveAll(workspace)
+			return "", err
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			os.RemoveAll(workspace)
+			return "", err
+		}
+		if err := os.WriteFile(target, []byte(content), 0644); err != nil {
 			os.RemoveAll(workspace)
 			return "", err
 		}
@@ -298,6 +305,23 @@ func prepareWorkspace(params *ExecuteParams, workspaceRoot string) (string, erro
 	}
 
 	return workspace, nil
+}
+
+func safeWorkspacePath(baseDir, name string) (string, error) {
+	normalized := strings.ReplaceAll(strings.TrimSpace(name), "\\", "/")
+	cleaned := filepath.Clean(filepath.FromSlash(normalized))
+	if cleaned == "" || cleaned == "." {
+		return "", fmt.Errorf("invalid filename: %q", name)
+	}
+	if filepath.IsAbs(cleaned) || cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
+		cleaned = filepath.Base(cleaned)
+	}
+	target := filepath.Join(baseDir, cleaned)
+	rel, err := filepath.Rel(baseDir, target)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return "", fmt.Errorf("invalid filename: %q", name)
+	}
+	return target, nil
 }
 
 // getMainFilename returns the filename for the code based on language.

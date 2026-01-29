@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"os"
@@ -548,29 +549,46 @@ func (d *daytonaExecutor) createFolder(ctx context.Context, toolboxClient *toolb
 }
 
 func (d *daytonaExecutor) uploadWorkspace(ctx context.Context, toolboxClient *toolbox.APIClient, localDir, remoteDir string) ([]string, error) {
-	entries, err := os.ReadDir(localDir)
-	if err != nil {
-		return nil, fmt.Errorf("daytona read workspace: %w", err)
-	}
-
-	uploaded := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
+	uploaded := []string{}
+	err := filepath.WalkDir(localDir, func(current string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return fmt.Errorf("daytona read workspace: %w", walkErr)
 		}
-		localPath := filepath.Join(localDir, entry.Name())
-		file, err := os.Open(localPath)
+		if current == localDir {
+			return nil
+		}
+
+		rel, err := filepath.Rel(localDir, current)
 		if err != nil {
-			return nil, fmt.Errorf("daytona open workspace file: %w", err)
+			return fmt.Errorf("daytona resolve workspace path: %w", err)
+		}
+		rel = filepath.ToSlash(rel)
+		remotePath := path.Join(remoteDir, rel)
+
+		if entry.IsDir() {
+			if err := d.createFolder(ctx, toolboxClient, remotePath); err != nil {
+				return err
+			}
+			return nil
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return nil
 		}
 
-		remotePath := path.Join(remoteDir, entry.Name())
+		file, err := os.Open(current)
+		if err != nil {
+			return fmt.Errorf("daytona open workspace file: %w", err)
+		}
 		_, httpResp, uploadErr := toolboxClient.FileSystemAPI.UploadFile(ctx).Path(remotePath).File(file).Execute()
 		file.Close()
 		if uploadErr != nil {
-			return nil, fmt.Errorf("daytona upload file: %w", formatToolboxError(uploadErr, httpResp))
+			return fmt.Errorf("daytona upload file: %w", formatToolboxError(uploadErr, httpResp))
 		}
 		uploaded = append(uploaded, remotePath)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return uploaded, nil

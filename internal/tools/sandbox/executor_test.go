@@ -1275,8 +1275,15 @@ func TestPrepareWorkspace(t *testing.T) {
 		Language: "python",
 		Code:     "print('hello')",
 		Files: map[string]string{
-			"data.txt":      "some data",
-			"../escape.txt": "should be sanitized",
+			"data.txt":              "some data",
+			"nested/config.json":    `{"ok": true}`,
+			"../escape.txt":         "should be sanitized",
+			"nested/../merged.log":  "merged",
+			"./relative/file.txt":   "relative",
+			"nested/./child.txt":    "child",
+			"nested//double.txt":    "double",
+			"nested\\windows.txt":   "windows",
+			"nested\\dir\\file.txt": "nested windows",
 		},
 		Stdin: "input",
 	}
@@ -1302,6 +1309,26 @@ func TestPrepareWorkspace(t *testing.T) {
 	dataPath := filepath.Join(workspace, "data.txt")
 	if _, err := os.Stat(dataPath); err != nil {
 		t.Errorf("data file not found: %v", err)
+	}
+
+	nestedPath := filepath.Join(workspace, "nested", "config.json")
+	if _, err := os.Stat(nestedPath); err != nil {
+		t.Errorf("nested file not found: %v", err)
+	}
+
+	relativePath := filepath.Join(workspace, "relative", "file.txt")
+	if _, err := os.Stat(relativePath); err != nil {
+		t.Errorf("relative file not found: %v", err)
+	}
+
+	windowsPath := filepath.Join(workspace, "nested", "windows.txt")
+	if _, err := os.Stat(windowsPath); err != nil {
+		t.Errorf("windows-style file not found: %v", err)
+	}
+
+	windowsNestedPath := filepath.Join(workspace, "nested", "dir", "file.txt")
+	if _, err := os.Stat(windowsNestedPath); err != nil {
+		t.Errorf("windows nested file not found: %v", err)
 	}
 
 	// Check stdin file exists

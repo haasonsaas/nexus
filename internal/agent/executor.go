@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"runtime/debug"
+	"sort"
 	"sync"
 	"time"
 
@@ -166,13 +167,29 @@ func (e *Executor) ExecuteAll(ctx context.Context, calls []models.ToolCall) []*E
 
 	results := make([]*ExecutionResult, len(calls))
 	var wg sync.WaitGroup
+	ordered := e.orderedCallIndexes(calls)
+	maxConcurrency := e.config.MaxConcurrency
+	if e.sem == nil || maxConcurrency <= 0 {
+		maxConcurrency = len(calls)
+	}
+	sem := make(chan struct{}, maxConcurrency)
 
-	for i, call := range calls {
-		wg.Add(1)
-		go func(idx int, tc models.ToolCall) {
-			defer wg.Done()
-			results[idx] = e.Execute(ctx, tc)
-		}(i, call)
+	for _, idx := range ordered {
+		if ctx.Err() != nil {
+			results[idx] = e.contextErrorResult(calls[idx], ctx.Err())
+			continue
+		}
+		select {
+		case sem <- struct{}{}:
+			wg.Add(1)
+			go func(i int) {
+				defer wg.Done()
+				defer func() { <-sem }()
+				results[i] = e.execute(ctx, calls[i], false)
+			}(idx)
+		case <-ctx.Done():
+			results[idx] = e.contextErrorResult(calls[idx], ctx.Err())
+		}
 	}
 
 	wg.Wait()
@@ -182,6 +199,10 @@ func (e *Executor) ExecuteAll(ctx context.Context, calls []models.ToolCall) []*E
 // Execute executes a single tool call with retry logic and timeout handling.
 // Acquires a semaphore slot for backpressure control before execution.
 func (e *Executor) Execute(ctx context.Context, call models.ToolCall) *ExecutionResult {
+	return e.execute(ctx, call, true)
+}
+
+func (e *Executor) execute(ctx context.Context, call models.ToolCall, useSemaphore bool) *ExecutionResult {
 	start := time.Now()
 	result := &ExecutionResult{
 		ToolCallID: call.ID,
@@ -190,7 +211,7 @@ func (e *Executor) Execute(ctx context.Context, call models.ToolCall) *Execution
 	}
 
 	// Acquire semaphore for backpressure
-	if e.sem != nil {
+	if useSemaphore && e.sem != nil {
 		select {
 		case e.sem <- struct{}{}:
 			defer func() { <-e.sem }()
@@ -298,6 +319,42 @@ func (e *Executor) Execute(ctx context.Context, call models.ToolCall) *Execution
 	}
 	e.metrics.mu.Unlock()
 
+	return result
+}
+
+func (e *Executor) orderedCallIndexes(calls []models.ToolCall) []int {
+	indexes := make([]int, len(calls))
+	for i := range calls {
+		indexes[i] = i
+	}
+	sort.SliceStable(indexes, func(i, j int) bool {
+		priI := e.toolPriority(calls[indexes[i]].Name)
+		priJ := e.toolPriority(calls[indexes[j]].Name)
+		if priI == priJ {
+			return indexes[i] < indexes[j]
+		}
+		return priI > priJ
+	})
+	return indexes
+}
+
+func (e *Executor) toolPriority(name string) int {
+	if cfg := e.getToolConfig(name); cfg != nil {
+		return cfg.Priority
+	}
+	return 0
+}
+
+func (e *Executor) contextErrorResult(call models.ToolCall, err error) *ExecutionResult {
+	result := &ExecutionResult{
+		ToolCallID: call.ID,
+		ToolName:   call.Name,
+		Attempts:   0,
+	}
+	result.Error = NewToolError(call.Name, err).
+		WithType(ToolErrorTimeout).
+		WithToolCallID(call.ID)
+	result.Duration = 0
 	return result
 }
 

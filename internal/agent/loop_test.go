@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -94,14 +95,38 @@ func TestAgenticLoop_DefaultConfig(t *testing.T) {
 	if config.MaxTokens != 4096 {
 		t.Errorf("MaxTokens = %d, want 4096", config.MaxTokens)
 	}
+	if config.MaxToolCalls != 0 {
+		t.Errorf("MaxToolCalls = %d, want 0", config.MaxToolCalls)
+	}
+	if config.MaxWallTime != 0 {
+		t.Errorf("MaxWallTime = %v, want 0", config.MaxWallTime)
+	}
 	if !config.EnableBackpressure {
 		t.Error("EnableBackpressure should be true")
 	}
 	if !config.StreamToolResults {
 		t.Error("StreamToolResults should be true")
 	}
+	if config.DisableToolEvents {
+		t.Error("DisableToolEvents should be false")
+	}
 	if config.ExecutorConfig == nil {
 		t.Error("ExecutorConfig should not be nil")
+	}
+}
+
+func TestAgenticLoop_DisableBackpressure(t *testing.T) {
+	provider := &loopTestProvider{
+		responses: [][]CompletionChunk{
+			{{Text: "ok"}, {Done: true}},
+		},
+	}
+	config := DefaultLoopConfig()
+	config.EnableBackpressure = false
+
+	loop := NewAgenticLoop(provider, NewToolRegistry(), newLoopMemoryStore(), config)
+	if loop.executor.sem != nil {
+		t.Fatal("expected executor semaphore to be nil when backpressure disabled")
 	}
 }
 
@@ -430,6 +455,62 @@ func TestAgenticLoop_MaxIterationsReached(t *testing.T) {
 
 	if !errors.Is(loopError.Cause, ErrMaxIterations) {
 		t.Errorf("expected ErrMaxIterations, got %v", loopError.Cause)
+	}
+}
+
+func TestAgenticLoop_MaxToolCallsExceeded(t *testing.T) {
+	provider := &loopTestProvider{
+		responses: [][]CompletionChunk{
+			{
+				{ToolCall: &models.ToolCall{
+					ID:    "call-1",
+					Name:  "noop",
+					Input: json.RawMessage(`{}`),
+				}},
+				{ToolCall: &models.ToolCall{
+					ID:    "call-2",
+					Name:  "noop",
+					Input: json.RawMessage(`{}`),
+				}},
+				{Done: true},
+			},
+		},
+	}
+
+	registry := NewToolRegistry()
+	registry.Register(&testExecTool{
+		name: "noop",
+		execFunc: func(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
+			return &ToolResult{Content: "ok"}, nil
+		},
+	})
+
+	store := newLoopMemoryStore()
+	config := DefaultLoopConfig()
+	config.MaxToolCalls = 1
+
+	loop := NewAgenticLoop(provider, registry, store, config)
+
+	session := &models.Session{ID: "session-1"}
+	msg := &models.Message{Role: models.RoleUser, Content: "loop"}
+
+	ch, err := loop.Run(context.Background(), session, msg)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	var gotErr error
+	for chunk := range ch {
+		if chunk.Error != nil {
+			gotErr = chunk.Error
+		}
+	}
+
+	if gotErr == nil {
+		t.Fatal("expected error for max tool calls")
+	}
+	if !strings.Contains(gotErr.Error(), "tool calls exceed maximum") {
+		t.Errorf("unexpected error: %v", gotErr)
 	}
 }
 

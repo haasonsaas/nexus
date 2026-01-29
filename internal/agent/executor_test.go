@@ -215,6 +215,55 @@ func TestExecutor_ExecuteAll_Parallel(t *testing.T) {
 	}
 }
 
+func TestExecutor_ExecuteAll_PriorityOrder(t *testing.T) {
+	var (
+		mu    sync.Mutex
+		order []string
+	)
+
+	registry := NewToolRegistry()
+	registry.Register(&mockTool{
+		name: "low",
+		execFunc: func(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
+			mu.Lock()
+			order = append(order, "low")
+			mu.Unlock()
+			return &ToolResult{Content: "ok"}, nil
+		},
+	})
+	registry.Register(&mockTool{
+		name: "high",
+		execFunc: func(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
+			mu.Lock()
+			order = append(order, "high")
+			mu.Unlock()
+			return &ToolResult{Content: "ok"}, nil
+		},
+	})
+
+	config := DefaultExecutorConfig()
+	config.MaxConcurrency = 1
+	executor := NewExecutor(registry, config)
+	executor.ConfigureTool("low", &ToolConfig{Priority: 0})
+	executor.ConfigureTool("high", &ToolConfig{Priority: 10})
+
+	calls := []models.ToolCall{
+		{ID: "call-1", Name: "low", Input: json.RawMessage(`{}`)},
+		{ID: "call-2", Name: "high", Input: json.RawMessage(`{}`)},
+	}
+
+	executor.ExecuteAll(context.Background(), calls)
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(order) != 2 {
+		t.Fatalf("execution order length = %d, want 2", len(order))
+	}
+	if order[0] != "high" {
+		t.Errorf("first execution = %q, want %q", order[0], "high")
+	}
+}
+
 func TestExecutor_Backpressure(t *testing.T) {
 	registry := NewToolRegistry()
 	registry.Register(&mockTool{

@@ -1853,11 +1853,14 @@ const processBufferSize = 10
 // Each chunk may contain text, tool results, tool events, runtime events, or errors.
 // Consumers should check each field and handle accordingly.
 type ResponseChunk struct {
-	Text       string               `json:"text,omitempty"`
-	ToolResult *models.ToolResult   `json:"tool_result,omitempty"`
-	ToolEvent  *models.ToolEvent    `json:"tool_event,omitempty"`
-	Event      *models.RuntimeEvent `json:"event,omitempty"`
-	Error      error                `json:"-"`
+	Text          string               `json:"text,omitempty"`
+	Thinking      string               `json:"thinking,omitempty"`
+	ThinkingStart bool                 `json:"thinking_start,omitempty"`
+	ThinkingEnd   bool                 `json:"thinking_end,omitempty"`
+	ToolResult    *models.ToolResult   `json:"tool_result,omitempty"`
+	ToolEvent     *models.ToolEvent    `json:"tool_event,omitempty"`
+	Event         *models.RuntimeEvent `json:"event,omitempty"`
+	Error         error                `json:"-"`
 	// Artifacts contains any files/media produced by tool executions.
 	// These should be converted to message attachments when sending to channels.
 	Artifacts []Artifact `json:"artifacts,omitempty"`

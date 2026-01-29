@@ -302,9 +302,7 @@ func resolveFilePath(mediaID string) (string, bool) {
 	if raw == "" {
 		return "", false
 	}
-	if strings.HasPrefix(raw, "file://") {
-		raw = strings.TrimPrefix(raw, "file://")
-	}
+	raw = strings.TrimPrefix(raw, "file://")
 	if strings.HasPrefix(raw, "~/") || strings.HasPrefix(raw, string(os.PathSeparator)) {
 		path := expandPath(raw)
 		if _, err := os.Stat(path); err == nil {

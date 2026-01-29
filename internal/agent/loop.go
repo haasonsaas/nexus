@@ -1031,7 +1031,9 @@ func (l *AgenticLoop) persistToolCalls(ctx context.Context, session *models.Sess
 	}
 	for i := range toolCalls {
 		tc := toolCalls[i]
-		_ = l.config.ToolEvents.AddToolCall(ctx, session.ID, assistantMsgID, &tc)
+		if err := l.config.ToolEvents.AddToolCall(ctx, session.ID, assistantMsgID, &tc); err != nil {
+			// Best-effort persistence; ignore failures.
+		}
 	}
 }
 
@@ -1040,7 +1042,9 @@ func (l *AgenticLoop) persistToolResult(ctx context.Context, session *models.Ses
 		return
 	}
 	guarded := guardToolResult(l.config.ToolResultGuard, tc.Name, res, resolver)
-	_ = l.config.ToolEvents.AddToolResult(ctx, session.ID, assistantMsgID, &tc, &guarded)
+	if err := l.config.ToolEvents.AddToolResult(ctx, session.ID, assistantMsgID, &tc, &guarded); err != nil {
+		// Best-effort persistence; ignore failures.
+	}
 }
 
 func (l *AgenticLoop) isAsyncTool(name string, resolver *policy.Resolver) bool {
@@ -1056,7 +1060,9 @@ func (l *AgenticLoop) queueAsyncJob(tc models.ToolCall) models.ToolResult {
 		CreatedAt:  time.Now(),
 	}
 	if l.config.JobStore != nil {
-		_ = l.config.JobStore.Create(context.Background(), job)
+		if err := l.config.JobStore.Create(context.Background(), job); err != nil {
+			// Best-effort enqueue; ignore failures.
+		}
 	}
 
 	payload, err := json.Marshal(map[string]any{
@@ -1100,14 +1106,18 @@ func (l *AgenticLoop) runToolJob(tc models.ToolCall, job *jobs.Job) {
 	ctx := context.Background()
 	job.Status = jobs.StatusRunning
 	job.StartedAt = time.Now()
-	_ = l.config.JobStore.Update(ctx, job)
+	if err := l.config.JobStore.Update(ctx, job); err != nil {
+		// Best-effort job tracking; ignore failures.
+	}
 
 	execResult := l.executor.Execute(ctx, tc)
 	if execResult.Error != nil {
 		job.Status = jobs.StatusFailed
 		job.Error = execResult.Error.Error()
 		job.FinishedAt = time.Now()
-		_ = l.config.JobStore.Update(ctx, job)
+		if err := l.config.JobStore.Update(ctx, job); err != nil {
+			// Best-effort job tracking; ignore failures.
+		}
 		return
 	}
 
@@ -1131,7 +1141,9 @@ func (l *AgenticLoop) runToolJob(tc models.ToolCall, job *jobs.Job) {
 	}
 
 	job.FinishedAt = time.Now()
-	_ = l.config.JobStore.Update(ctx, job)
+	if err := l.config.JobStore.Update(ctx, job); err != nil {
+		// Best-effort job tracking; ignore failures.
+	}
 }
 
 type loopSummaryProvider struct {

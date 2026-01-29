@@ -287,7 +287,6 @@ func (m *ToolManager) RegisterTools(ctx context.Context, runtime *agent.Runtime)
 		m.mu.Unlock()
 		return nil
 	}
-	cfg := m.config
 	prevTools := append([]string(nil), m.registeredTools...)
 	prevMCP := append([]string(nil), m.mcpTools...)
 	browserPool := m.browserPool

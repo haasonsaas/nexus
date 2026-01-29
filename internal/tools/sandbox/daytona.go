@@ -324,7 +324,9 @@ func (d *daytonaExecutor) ensureSandbox(ctx context.Context, params *ExecutePara
 			return "", "", nil, nil, err
 		}
 		cleanup := func() {
-			_ = d.deleteSandbox(context.Background(), sandbox.GetId())
+			if err := d.deleteSandbox(context.Background(), sandbox.GetId()); err != nil {
+				_ = err
+			}
 		}
 		return sandbox.GetId(), sandbox.GetTarget(), toolboxClient, cleanup, nil
 	}

@@ -130,6 +130,43 @@ func (p *onceToolProvider) Models() []Model { return nil }
 
 func (p *onceToolProvider) SupportsTools() bool { return true }
 
+type sequenceProvider struct {
+	responses     [][]CompletionChunk
+	currentCall   int32
+	name          string
+	supportsTools bool
+}
+
+func (p *sequenceProvider) Complete(ctx context.Context, req *CompletionRequest) (<-chan *CompletionChunk, error) {
+	call := int(atomic.AddInt32(&p.currentCall, 1)) - 1
+	ch := make(chan *CompletionChunk, 10)
+	go func() {
+		defer close(ch)
+		if call < len(p.responses) {
+			for _, chunk := range p.responses[call] {
+				select {
+				case ch <- &chunk:
+				case <-ctx.Done():
+					ch <- &CompletionChunk{Error: ctx.Err()}
+					return
+				}
+			}
+		}
+	}()
+	return ch, nil
+}
+
+func (p *sequenceProvider) Name() string {
+	if p.name != "" {
+		return p.name
+	}
+	return "sequence"
+}
+
+func (p *sequenceProvider) Models() []Model { return nil }
+
+func (p *sequenceProvider) SupportsTools() bool { return p.supportsTools }
+
 type stubStore struct{}
 
 func (stubStore) Create(ctx context.Context, session *models.Session) error { return nil }
@@ -331,6 +368,25 @@ func (b *blockingTool) Execute(ctx context.Context, params json.RawMessage) (*To
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+type orderRecordingTool struct {
+	name  string
+	mu    *sync.Mutex
+	order *[]string
+}
+
+func (t *orderRecordingTool) Name() string { return t.name }
+
+func (t *orderRecordingTool) Description() string { return "records execution order" }
+
+func (t *orderRecordingTool) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
+
+func (t *orderRecordingTool) Execute(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
+	t.mu.Lock()
+	*t.order = append(*t.order, t.name)
+	t.mu.Unlock()
+	return &ToolResult{Content: "ok"}, nil
 }
 
 type flakyTool struct {
@@ -810,6 +866,99 @@ func TestProcessToolTimeout(t *testing.T) {
 
 	if gotResult == nil || !gotResult.IsError {
 		t.Fatalf("expected timeout error result, got %+v", gotResult)
+	}
+}
+
+func TestProcessToolPriorityOrder(t *testing.T) {
+	provider := &sequenceProvider{
+		supportsTools: true,
+		responses: [][]CompletionChunk{
+			{
+				{ToolCall: &models.ToolCall{ID: "call-low", Name: "low", Input: json.RawMessage(`{}`)}},
+				{ToolCall: &models.ToolCall{ID: "call-high", Name: "high", Input: json.RawMessage(`{}`)}},
+				{Done: true},
+			},
+			{
+				{Text: "done"},
+				{Done: true},
+			},
+		},
+	}
+
+	var mu sync.Mutex
+	order := make([]string, 0, 2)
+	runtime := NewRuntimeWithOptions(provider, stubStore{}, RuntimeOptions{
+		MaxIterations:   2,
+		ToolParallelism: 1,
+	})
+	runtime.RegisterTool(&orderRecordingTool{name: "low", mu: &mu, order: &order})
+	runtime.RegisterTool(&orderRecordingTool{name: "high", mu: &mu, order: &order})
+	runtime.ConfigureTool("high", &ToolConfig{Priority: 10})
+	runtime.ConfigureTool("low", &ToolConfig{Priority: -1})
+
+	session := &models.Session{ID: "session-1", Channel: models.ChannelTelegram}
+	msg := &models.Message{Role: models.RoleUser, Content: "hi"}
+	ch, err := runtime.Process(context.Background(), session, msg)
+	if err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+
+	for range ch {
+	}
+
+	if len(order) != 2 {
+		t.Fatalf("expected 2 tool executions, got %d", len(order))
+	}
+	if got := strings.Join(order, ","); got != "high,low" {
+		t.Fatalf("execution order = %q, want %q", got, "high,low")
+	}
+}
+
+func TestRuntime_ThinkingStreaming(t *testing.T) {
+	provider := &sequenceProvider{
+		responses: [][]CompletionChunk{
+			{
+				{ThinkingStart: true},
+				{Thinking: "step1"},
+				{Thinking: "step2"},
+				{ThinkingEnd: true},
+				{Text: "ok"},
+				{Done: true},
+			},
+		},
+	}
+	runtime := NewRuntime(provider, stubStore{})
+
+	session := &models.Session{ID: "session-1", Channel: models.ChannelTelegram}
+	msg := &models.Message{Role: models.RoleUser, Content: "hi"}
+	ch, err := runtime.Process(context.Background(), session, msg)
+	if err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+
+	var got []string
+	gotStart := false
+	gotEnd := false
+	for chunk := range ch {
+		if chunk.Error != nil {
+			t.Fatalf("unexpected error: %v", chunk.Error)
+		}
+		if chunk.ThinkingStart {
+			gotStart = true
+		}
+		if chunk.Thinking != "" {
+			got = append(got, chunk.Thinking)
+		}
+		if chunk.ThinkingEnd {
+			gotEnd = true
+		}
+	}
+
+	if !gotStart || !gotEnd {
+		t.Fatalf("expected thinking start/end, got start=%v end=%v", gotStart, gotEnd)
+	}
+	if gotText := strings.Join(got, ""); gotText != "step1step2" {
+		t.Fatalf("thinking text = %q, want %q", gotText, "step1step2")
 	}
 }
 

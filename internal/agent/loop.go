@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	agentctx "github.com/haasonsaas/nexus/internal/agent/context"
 	"github.com/haasonsaas/nexus/internal/jobs"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/internal/tools/policy"
@@ -70,6 +71,12 @@ type LoopConfig struct {
 	// ToolEvents persists tool call/result events when set.
 	ToolEvents ToolEventStore
 
+	// PackOptions controls context packing behavior (nil = defaults).
+	PackOptions *agentctx.PackOptions
+
+	// SummarizeConfig enables conversation summarization (nil = disabled).
+	SummarizeConfig *agentctx.SummarizationConfig
+
 	// BranchStore provides branch-aware storage operations
 	// If nil, standard session history is used
 	BranchStore sessions.BranchStore
@@ -77,6 +84,7 @@ type LoopConfig struct {
 
 // DefaultLoopConfig returns the default loop configuration.
 func DefaultLoopConfig() *LoopConfig {
+	packOpts := agentctx.DefaultPackOptions()
 	return &LoopConfig{
 		MaxIterations:      10,
 		MaxTokens:          4096,
@@ -85,6 +93,7 @@ func DefaultLoopConfig() *LoopConfig {
 		ExecutorConfig:     DefaultExecutorConfig(),
 		EnableBackpressure: true,
 		StreamToolResults:  true,
+		PackOptions:        &packOpts,
 	}
 }
 
@@ -102,6 +111,10 @@ func sanitizeLoopConfig(config *LoopConfig) *LoopConfig {
 	}
 	if cfg.ExecutorConfig == nil {
 		cfg.ExecutorConfig = defaults.ExecutorConfig
+	}
+	if cfg.PackOptions == nil {
+		opts := agentctx.DefaultPackOptions()
+		cfg.PackOptions = &opts
 	}
 	if cfg.MaxToolCalls < 0 {
 		cfg.MaxToolCalls = 0
@@ -179,7 +192,7 @@ func (l *AgenticLoop) SetDefaultSystem(system string) {
 	l.defaultSystem = system
 }
 
-// ConfigureTool sets per-tool configuration overrides for timeout, retry, and priority.
+// ConfigureTool sets per-tool configuration overrides for timeout, retry, backoff, and priority.
 func (l *AgenticLoop) ConfigureTool(name string, config *ToolConfig) {
 	l.executor.ConfigureTool(name, config)
 }
@@ -197,6 +210,8 @@ type LoopState struct {
 	LastError       error
 	BranchID        string // Current branch for branch-aware loops
 	AssistantMsgID  string
+	System          string
+	History         []*models.Message
 }
 
 // Run executes the agentic loop and streams results through a channel.
@@ -249,6 +264,25 @@ func (l *AgenticLoop) Run(ctx context.Context, session *models.Session, msg *mod
 		}
 
 		if err := l.persistInboundMessage(runCtx, session, msg, state.BranchID); err != nil {
+			chunks <- &ResponseChunk{Error: &LoopError{
+				Phase:     PhaseInit,
+				Iteration: 0,
+				Cause:     err,
+			}}
+			return
+		}
+
+		summaryMsg, err := l.maybeSummarize(runCtx, session, state)
+		if err != nil {
+			chunks <- &ResponseChunk{Error: &LoopError{
+				Phase:     PhaseInit,
+				Iteration: 0,
+				Cause:     err,
+			}}
+			return
+		}
+
+		if err := l.buildInitialMessages(runCtx, state, msg, summaryMsg); err != nil {
 			chunks <- &ResponseChunk{Error: &LoopError{
 				Phase:     PhaseInit,
 				Iteration: 0,
@@ -428,30 +462,91 @@ func (l *AgenticLoop) initializeState(ctx context.Context, session *models.Sessi
 	}
 
 	history = repairTranscript(history)
+	state.History = history
+	return nil
+}
 
-	// Build messages from history
-	state.Messages = make([]CompletionMessage, 0, len(history)+1)
-	for _, m := range history {
-		state.Messages = append(state.Messages, CompletionMessage{
-			Role:        string(m.Role),
-			Content:     m.Content,
-			ToolCalls:   m.ToolCalls,
-			ToolResults: m.ToolResults,
-			Attachments: m.Attachments,
-		})
+func (l *AgenticLoop) maybeSummarize(ctx context.Context, session *models.Session, state *LoopState) (*models.Message, error) {
+	if state == nil {
+		return nil, errors.New("loop state is nil")
+	}
+	currentSummary := agentctx.FindLatestSummary(state.History)
+	if l.config == nil || l.config.SummarizeConfig == nil {
+		return currentSummary, nil
 	}
 
-	// Add the new message
-	role := msg.Role
-	if role == "" {
-		role = models.RoleUser
+	cfg := *l.config.SummarizeConfig
+	summarizer := agentctx.NewSummarizer(&loopSummaryProvider{loop: l}, cfg)
+	if !summarizer.ShouldSummarize(state.History, currentSummary) {
+		return currentSummary, nil
 	}
-	state.Messages = append(state.Messages, CompletionMessage{
-		Role:        string(role),
-		Content:     msg.Content,
-		Attachments: msg.Attachments,
-	})
 
+	newSummary, err := summarizer.Summarize(ctx, session.ID, state.History, currentSummary)
+	if err != nil {
+		return nil, err
+	}
+	if newSummary == nil {
+		return currentSummary, nil
+	}
+	if state.BranchID != "" {
+		newSummary.BranchID = state.BranchID
+	}
+	if err := l.appendMessage(ctx, session, state.BranchID, newSummary); err != nil {
+		return nil, err
+	}
+	return newSummary, nil
+}
+
+func (l *AgenticLoop) buildInitialMessages(ctx context.Context, state *LoopState, msg *models.Message, summary *models.Message) error {
+	if state == nil {
+		return errors.New("loop state is nil")
+	}
+	if msg == nil {
+		return errors.New("message is nil")
+	}
+
+	packOpts := agentctx.DefaultPackOptions()
+	if l.config != nil && l.config.PackOptions != nil {
+		packOpts = *l.config.PackOptions
+	}
+	packer := agentctx.NewPacker(packOpts)
+	packResult := packer.PackWithDiagnostics(state.History, msg, summary)
+	packed := packResult.Messages
+
+	systemParts := make([]string, 0)
+	if system, ok := systemPromptFromContext(ctx); ok {
+		systemParts = append(systemParts, system)
+	} else if l.defaultSystem != "" {
+		systemParts = append(systemParts, l.defaultSystem)
+	}
+
+	nonSystemPacked := make([]*models.Message, 0, len(packed))
+	for _, m := range packed {
+		if m == nil {
+			continue
+		}
+		if m.Role == models.RoleSystem {
+			if strings.TrimSpace(m.Content) != "" {
+				systemParts = append(systemParts, m.Content)
+			}
+			continue
+		}
+		nonSystemPacked = append(nonSystemPacked, m)
+	}
+
+	messages, err := buildCompletionMessages(nonSystemPacked)
+	if err != nil {
+		return err
+	}
+	if transform := ContextTransformFromContext(ctx); transform != nil {
+		messages, err = transform(ctx, messages)
+		if err != nil {
+			return fmt.Errorf("context transform failed: %w", err)
+		}
+	}
+
+	state.System = strings.Join(systemParts, "\n\n")
+	state.Messages = messages
 	return nil
 }
 
@@ -473,16 +568,13 @@ func (l *AgenticLoop) streamPhase(ctx context.Context, state *LoopState, chunks 
 	// Build completion request
 	req := &CompletionRequest{
 		Model:     l.defaultModel,
-		System:    l.defaultSystem,
+		System:    state.System,
 		Messages:  state.Messages,
 		Tools:     tools,
 		MaxTokens: l.config.MaxTokens,
 	}
 
 	// Apply context overrides
-	if system, ok := systemPromptFromContext(ctx); ok {
-		req.System = system
-	}
 	if model, ok := modelFromContext(ctx); ok {
 		req.Model = model
 	}
@@ -898,6 +990,34 @@ func (l *AgenticLoop) appendMessage(ctx context.Context, session *models.Session
 	return l.sessions.AppendMessage(ctx, session.ID, msg)
 }
 
+func buildCompletionMessages(history []*models.Message) ([]CompletionMessage, error) {
+	out := make([]CompletionMessage, 0, len(history))
+	for _, m := range history {
+		if m == nil {
+			continue
+		}
+		if m.Role == "" {
+			return nil, fmt.Errorf("history message missing role (id=%s)", m.ID)
+		}
+
+		cm := CompletionMessage{Role: string(m.Role)}
+		if m.Content != "" {
+			cm.Content = m.Content
+		}
+		if len(m.Attachments) > 0 {
+			cm.Attachments = m.Attachments
+		}
+		if len(m.ToolCalls) > 0 {
+			cm.ToolCalls = m.ToolCalls
+		}
+		if len(m.ToolResults) > 0 {
+			cm.ToolResults = m.ToolResults
+		}
+		out = append(out, cm)
+	}
+	return out, nil
+}
+
 func (l *AgenticLoop) emitToolEvent(chunks chan<- *ResponseChunk, event *models.ToolEvent) {
 	if l.config.DisableToolEvents || event == nil {
 		return
@@ -1014,6 +1134,54 @@ func (l *AgenticLoop) runToolJob(tc models.ToolCall, job *jobs.Job) {
 	_ = l.config.JobStore.Update(ctx, job)
 }
 
+type loopSummaryProvider struct {
+	loop *AgenticLoop
+}
+
+func (p *loopSummaryProvider) Summarize(ctx context.Context, messages []*models.Message, maxLength int) (string, error) {
+	if p == nil || p.loop == nil || p.loop.provider == nil {
+		return "", ErrNoProvider
+	}
+	prompt := agentctx.BuildSummarizationPrompt(messages, maxLength)
+
+	req := &CompletionRequest{
+		Messages: []CompletionMessage{
+			{Role: "user", Content: prompt},
+		},
+		MaxTokens: 1024,
+		System:    "You summarize conversations. Return only the summary text.",
+	}
+	if p.loop.defaultModel != "" {
+		req.Model = p.loop.defaultModel
+	}
+
+	ch, err := p.loop.provider.Complete(ctx, req)
+	if err != nil {
+		return "", err
+	}
+
+	var b strings.Builder
+	for chunk := range ch {
+		if chunk == nil {
+			continue
+		}
+		if chunk.ToolCall != nil {
+			return "", fmt.Errorf("unexpected tool call during summarization: %s", chunk.ToolCall.Name)
+		}
+		if chunk.Error != nil {
+			return "", chunk.Error
+		}
+		if chunk.Done {
+			break
+		}
+		if chunk.Text != "" {
+			b.WriteString(chunk.Text)
+		}
+	}
+
+	return strings.TrimSpace(b.String()), nil
+}
+
 // AgenticRuntime wraps the AgenticLoop to provide a Runtime-compatible interface.
 // This allows the loop to be used interchangeably with the standard Runtime.
 type AgenticRuntime struct {
@@ -1045,7 +1213,7 @@ func (r *AgenticRuntime) RegisterTool(tool Tool) {
 	r.loop.executor.registry.Register(tool)
 }
 
-// ConfigureTool sets per-tool configuration for timeout, retry, and priority.
+// ConfigureTool sets per-tool configuration for timeout, retry, backoff, and priority.
 func (r *AgenticRuntime) ConfigureTool(name string, config *ToolConfig) {
 	r.loop.ConfigureTool(name, config)
 }

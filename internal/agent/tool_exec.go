@@ -42,6 +42,20 @@ func DefaultToolExecConfig() ToolExecConfig {
 	}
 }
 
+func mergeToolExecConfig(base ToolExecConfig, override ToolExecConfig) ToolExecConfig {
+	merged := base
+	if override.PerToolTimeout > 0 {
+		merged.PerToolTimeout = override.PerToolTimeout
+	}
+	if override.MaxAttempts > 0 {
+		merged.MaxAttempts = override.MaxAttempts
+	}
+	if override.RetryBackoff > 0 {
+		merged.RetryBackoff = override.RetryBackoff
+	}
+	return merged
+}
+
 // ToolExecutor handles concurrent tool execution with timeouts and retry logic.
 type ToolExecutor struct {
 	registry *ToolRegistry
@@ -83,6 +97,16 @@ type EventCallback func(*models.RuntimeEvent)
 // Results are returned in the same order as the input tool calls.
 // The emit callback is called for lifecycle events (non-blocking, never blocks execution).
 func (e *ToolExecutor) ExecuteConcurrently(ctx context.Context, toolCalls []models.ToolCall, emit EventCallback) []ToolExecResult {
+	return e.ExecuteConcurrentlyWithOverrides(ctx, toolCalls, emit, nil)
+}
+
+// ExecuteConcurrentlyWithOverrides executes tool calls with optional per-call config overrides.
+func (e *ToolExecutor) ExecuteConcurrentlyWithOverrides(
+	ctx context.Context,
+	toolCalls []models.ToolCall,
+	emit EventCallback,
+	override func(models.ToolCall) ToolExecConfig,
+) []ToolExecResult {
 	results := make([]ToolExecResult, len(toolCalls))
 
 	// Semaphore for concurrency limiting
@@ -90,107 +114,121 @@ func (e *ToolExecutor) ExecuteConcurrently(ctx context.Context, toolCalls []mode
 	var wg sync.WaitGroup
 
 	for i, tc := range toolCalls {
-		wg.Add(1)
-		go func(idx int, call models.ToolCall) {
-			defer wg.Done()
+		if ctx.Err() != nil {
+			results[i] = ToolExecResult{
+				Index:    i,
+				ToolCall: tc,
+				Result: models.ToolResult{
+					ToolCallID: tc.ID,
+					Content:    "context canceled",
+					IsError:    true,
+				},
+			}
+			continue
+		}
 
-			// Acquire semaphore
-			select {
-			case sem <- struct{}{}:
+		select {
+		case sem <- struct{}{}:
+			callCfg := e.config
+			if override != nil {
+				callCfg = mergeToolExecConfig(callCfg, override(tc))
+			}
+			wg.Add(1)
+			go func(idx int, call models.ToolCall, cfg ToolExecConfig) {
+				defer wg.Done()
 				defer func() { <-sem }()
-			case <-ctx.Done():
-				results[idx] = ToolExecResult{
-					Index:    idx,
-					ToolCall: call,
-					Result: models.ToolResult{
-						ToolCallID: call.ID,
-						Content:    "context canceled",
-						IsError:    true,
-					},
-				}
-				return
-			}
 
-			startTime := time.Now()
-			var result models.ToolResult
-			var timedOut bool
-			maxAttempts := e.config.MaxAttempts
-			if maxAttempts <= 0 {
-				maxAttempts = 1
-			}
-
-			for attempt := 1; attempt <= maxAttempts; attempt++ {
-				// Emit tool_started event
-				if emit != nil {
-					emit(models.NewToolEvent(models.EventToolStarted, call.Name, call.ID).
-						WithMeta("attempt", attempt))
+				startTime := time.Now()
+				var result models.ToolResult
+				var timedOut bool
+				maxAttempts := cfg.MaxAttempts
+				if maxAttempts <= 0 {
+					maxAttempts = 1
 				}
 
-				// Execute with timeout and add correlation ID
-				toolCtx, cancel := context.WithTimeout(ctx, e.config.PerToolTimeout)
-				toolCtx = observability.AddToolCallID(toolCtx, call.ID)
-				result, timedOut = e.executeWithTimeout(toolCtx, call)
-				cancel()
-
-				if !result.IsError {
-					break
-				}
-
-				if attempt < maxAttempts {
+				for attempt := 1; attempt <= maxAttempts; attempt++ {
+					// Emit tool_started event
 					if emit != nil {
-						eventType := models.EventToolFailed
-						if timedOut {
-							eventType = models.EventToolTimeout
-						}
-						emit(models.NewToolEvent(eventType, call.Name, call.ID).
-							WithMeta("attempt", attempt).
-							WithMeta("retrying", true))
+						emit(models.NewToolEvent(models.EventToolStarted, call.Name, call.ID).
+							WithMeta("attempt", attempt))
 					}
-					if e.config.RetryBackoff > 0 {
-						canceled := false
-						select {
-						case <-time.After(e.config.RetryBackoff):
-						case <-ctx.Done():
-							result = models.ToolResult{
-								ToolCallID: call.ID,
-								Content:    "tool execution canceled",
-								IsError:    true,
+
+					// Execute with timeout and add correlation ID
+					toolCtx, cancel := context.WithTimeout(ctx, cfg.PerToolTimeout)
+					toolCtx = observability.AddToolCallID(toolCtx, call.ID)
+					result, timedOut = e.executeWithTimeout(toolCtx, call, cfg.PerToolTimeout)
+					cancel()
+
+					if !result.IsError {
+						break
+					}
+
+					if attempt < maxAttempts {
+						if emit != nil {
+							eventType := models.EventToolFailed
+							if timedOut {
+								eventType = models.EventToolTimeout
 							}
-							canceled = true
+							emit(models.NewToolEvent(eventType, call.Name, call.ID).
+								WithMeta("attempt", attempt).
+								WithMeta("retrying", true))
 						}
-						if canceled {
-							break
+						if cfg.RetryBackoff > 0 {
+							canceled := false
+							select {
+							case <-time.After(cfg.RetryBackoff):
+							case <-ctx.Done():
+								result = models.ToolResult{
+									ToolCallID: call.ID,
+									Content:    "tool execution canceled",
+									IsError:    true,
+								}
+								canceled = true
+							}
+							if canceled {
+								break
+							}
 						}
 					}
 				}
-			}
 
-			endTime := time.Now()
+				endTime := time.Now()
 
-			results[idx] = ToolExecResult{
-				Index:     idx,
-				ToolCall:  call,
-				Result:    result,
-				StartTime: startTime,
-				EndTime:   endTime,
-				TimedOut:  timedOut,
-			}
-
-			// Emit completion event
-			if emit != nil {
-				var eventType models.RuntimeEventType
-				if timedOut {
-					eventType = models.EventToolTimeout
-				} else if result.IsError {
-					eventType = models.EventToolFailed
-				} else {
-					eventType = models.EventToolCompleted
+				results[idx] = ToolExecResult{
+					Index:     idx,
+					ToolCall:  call,
+					Result:    result,
+					StartTime: startTime,
+					EndTime:   endTime,
+					TimedOut:  timedOut,
 				}
-				event := models.NewToolEvent(eventType, call.Name, call.ID)
-				event.WithMeta("duration_ms", endTime.Sub(startTime).Milliseconds())
-				emit(event)
+
+				// Emit completion event
+				if emit != nil {
+					var eventType models.RuntimeEventType
+					if timedOut {
+						eventType = models.EventToolTimeout
+					} else if result.IsError {
+						eventType = models.EventToolFailed
+					} else {
+						eventType = models.EventToolCompleted
+					}
+					event := models.NewToolEvent(eventType, call.Name, call.ID)
+					event.WithMeta("duration_ms", endTime.Sub(startTime).Milliseconds())
+					emit(event)
+				}
+			}(i, tc, callCfg)
+		case <-ctx.Done():
+			results[i] = ToolExecResult{
+				Index:    i,
+				ToolCall: tc,
+				Result: models.ToolResult{
+					ToolCallID: tc.ID,
+					Content:    "context canceled",
+					IsError:    true,
+				},
 			}
-		}(i, tc)
+		}
 	}
 
 	wg.Wait()
@@ -198,7 +236,7 @@ func (e *ToolExecutor) ExecuteConcurrently(ctx context.Context, toolCalls []mode
 }
 
 // executeWithTimeout executes a single tool call with timeout handling.
-func (e *ToolExecutor) executeWithTimeout(ctx context.Context, call models.ToolCall) (models.ToolResult, bool) {
+func (e *ToolExecutor) executeWithTimeout(ctx context.Context, call models.ToolCall, timeout time.Duration) (models.ToolResult, bool) {
 	type execResult struct {
 		result *ToolResult
 		err    error
@@ -230,7 +268,7 @@ func (e *ToolExecutor) executeWithTimeout(ctx context.Context, call models.ToolC
 		// Distinguish between timeout and cancellation
 		var content string
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			content = fmt.Sprintf("tool execution timed out after %v", e.config.PerToolTimeout)
+			content = fmt.Sprintf("tool execution timed out after %v", timeout)
 		} else {
 			content = "tool execution canceled"
 		}
@@ -273,7 +311,7 @@ func (e *ToolExecutor) ExecuteSequentially(ctx context.Context, toolCalls []mode
 		for attempt := 1; attempt <= maxAttempts; attempt++ {
 			toolCtx, cancel := context.WithTimeout(ctx, e.config.PerToolTimeout)
 			toolCtx = observability.AddToolCallID(toolCtx, tc.ID)
-			result, timedOut = e.executeWithTimeout(toolCtx, tc)
+			result, timedOut = e.executeWithTimeout(toolCtx, tc, e.config.PerToolTimeout)
 			cancel()
 			if !result.IsError {
 				break

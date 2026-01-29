@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	agentctx "github.com/haasonsaas/nexus/internal/agent/context"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
@@ -735,6 +736,115 @@ func TestAgenticLoop_ContextSystemPromptOverride(t *testing.T) {
 	}
 }
 
+func TestAgenticLoop_PacksSystemMessagesIntoSystem(t *testing.T) {
+	var capturedSystem string
+	var capturedMessages []CompletionMessage
+	provider := &loopTestProvider{
+		completeFunc: func(ctx context.Context, req *CompletionRequest) (<-chan *CompletionChunk, error) {
+			capturedSystem = req.System
+			capturedMessages = req.Messages
+			ch := make(chan *CompletionChunk, 1)
+			ch <- &CompletionChunk{Done: true}
+			close(ch)
+			return ch, nil
+		},
+	}
+
+	store := newLoopMemoryStore()
+	store.history = []*models.Message{
+		{ID: "sys-1", Role: models.RoleSystem, Content: "system history"},
+		{ID: "user-1", Role: models.RoleUser, Content: "hello"},
+	}
+
+	loop := NewAgenticLoop(provider, NewToolRegistry(), store, DefaultLoopConfig())
+
+	session := &models.Session{ID: "session-1"}
+	msg := &models.Message{Role: models.RoleUser, Content: "next"}
+
+	ch, err := loop.Run(context.Background(), session, msg)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	for range ch {
+	}
+
+	if capturedSystem != "system history" {
+		t.Fatalf("system = %q, want %q", capturedSystem, "system history")
+	}
+	for _, cm := range capturedMessages {
+		if cm.Role == string(models.RoleSystem) {
+			t.Fatalf("system role should not appear in messages: %+v", cm)
+		}
+	}
+}
+
+func TestAgenticLoop_SummarizationPersistsAndUsed(t *testing.T) {
+	const summaryText = "summary text"
+	var capturedSystem string
+	provider := &loopTestProvider{
+		completeFunc: func(ctx context.Context, req *CompletionRequest) (<-chan *CompletionChunk, error) {
+			ch := make(chan *CompletionChunk, 2)
+			if strings.Contains(req.System, "You summarize conversations") {
+				ch <- &CompletionChunk{Text: summaryText}
+				ch <- &CompletionChunk{Done: true}
+			} else {
+				capturedSystem = req.System
+				ch <- &CompletionChunk{Done: true}
+			}
+			close(ch)
+			return ch, nil
+		},
+	}
+
+	store := newLoopMemoryStore()
+	store.history = []*models.Message{
+		{ID: "m1", Role: models.RoleUser, Content: "one"},
+		{ID: "m2", Role: models.RoleAssistant, Content: "two"},
+		{ID: "m3", Role: models.RoleUser, Content: "three"},
+	}
+
+	config := DefaultLoopConfig()
+	config.SummarizeConfig = &agentctx.SummarizationConfig{
+		MaxMsgsBeforeSummary: 1,
+		KeepRecentMessages:   1,
+		MaxSummaryLength:     200,
+	}
+
+	loop := NewAgenticLoop(provider, NewToolRegistry(), store, config)
+
+	session := &models.Session{ID: "session-1"}
+	msg := &models.Message{Role: models.RoleUser, Content: "incoming"}
+
+	ch, err := loop.Run(context.Background(), session, msg)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	for range ch {
+	}
+
+	var summary *models.Message
+	for _, m := range store.messages {
+		if m == nil || m.Metadata == nil {
+			continue
+		}
+		if val, ok := m.Metadata[agentctx.SummaryMetadataKey]; ok {
+			if b, ok := val.(bool); ok && b {
+				summary = m
+				break
+			}
+		}
+	}
+	if summary == nil {
+		t.Fatal("expected summary message to be persisted")
+	}
+	if summary.Content != summaryText {
+		t.Fatalf("summary content = %q, want %q", summary.Content, summaryText)
+	}
+	if !strings.Contains(capturedSystem, summaryText) {
+		t.Fatalf("expected summary in system prompt, got %q", capturedSystem)
+	}
+}
+
 func TestAgenticLoop_MultipleToolCalls(t *testing.T) {
 	var toolExecutions int32
 	provider := &loopTestProvider{
@@ -1081,7 +1191,7 @@ func TestLoopError_Error(t *testing.T) {
 }
 
 func containsIgnoreCase(s, substr string) bool {
-	return len(s) >= len(substr)
+	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 }
 
 func TestLoopError_Unwrap(t *testing.T) {

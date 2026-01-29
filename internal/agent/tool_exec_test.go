@@ -829,7 +829,7 @@ func TestExecuteWithTimeout_Cancellation(t *testing.T) {
 	result, timedOut := executor.executeWithTimeout(ctx, models.ToolCall{
 		ID:   "1",
 		Name: "blocking",
-	})
+	}, config.PerToolTimeout)
 
 	if timedOut {
 		t.Error("should not be marked as timeout for cancellation")

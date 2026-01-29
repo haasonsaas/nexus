@@ -73,6 +73,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -585,6 +586,9 @@ type Runtime struct {
 	// plugins holds registered plugins for event hooks
 	plugins *PluginRegistry
 
+	toolConfigMu sync.RWMutex
+	toolConfig   map[string]*ToolConfig
+
 	// jobSem limits concurrent async job goroutines to prevent unbounded growth
 	jobSem chan struct{}
 }
@@ -623,6 +627,7 @@ func NewRuntimeWithOptions(provider LLMProvider, sessions sessions.Store, opts R
 		opts:         opts,
 		plugins:      NewPluginRegistry(),
 		jobSem:       make(chan struct{}, maxConcurrentJobs),
+		toolConfig:   make(map[string]*ToolConfig),
 		sessionLocks: make(map[string]*sessionLock),
 	}
 	if opts.MaxIterations > 0 {
@@ -860,6 +865,54 @@ func (r *Runtime) buildCompletionMessages(history []*models.Message) ([]Completi
 //	runtime.RegisterTool(browser.New(browserConfig))
 func (r *Runtime) RegisterTool(tool Tool) {
 	r.tools.Register(tool)
+}
+
+// ConfigureTool sets per-tool configuration overrides for timeout, retry, backoff, and priority.
+func (r *Runtime) ConfigureTool(name string, config *ToolConfig) {
+	if r == nil {
+		return
+	}
+	r.toolConfigMu.Lock()
+	defer r.toolConfigMu.Unlock()
+	if r.toolConfig == nil {
+		r.toolConfig = make(map[string]*ToolConfig)
+	}
+	r.toolConfig[name] = config
+}
+
+func (r *Runtime) toolPriority(name string) int {
+	r.toolConfigMu.RLock()
+	defer r.toolConfigMu.RUnlock()
+	if r.toolConfig == nil {
+		return 0
+	}
+	if cfg, ok := r.toolConfig[name]; ok && cfg != nil {
+		return cfg.Priority
+	}
+	return 0
+}
+
+func (r *Runtime) toolExecOverrides(name string) ToolExecConfig {
+	r.toolConfigMu.RLock()
+	defer r.toolConfigMu.RUnlock()
+	if r.toolConfig == nil {
+		return ToolExecConfig{}
+	}
+	cfg, ok := r.toolConfig[name]
+	if !ok || cfg == nil {
+		return ToolExecConfig{}
+	}
+	overrides := ToolExecConfig{}
+	if cfg.Timeout > 0 {
+		overrides.PerToolTimeout = cfg.Timeout
+	}
+	if cfg.Retries >= 0 {
+		overrides.MaxAttempts = cfg.Retries + 1
+	}
+	if cfg.RetryBackoff > 0 {
+		overrides.RetryBackoff = cfg.RetryBackoff
+	}
+	return overrides
 }
 
 // UnregisterTool removes a tool from the runtime by name.
@@ -1255,6 +1308,19 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 			if chunk.Error != nil {
 				emitter.RunError(ctx, chunk.Error, true)
 				return chunk.Error
+			}
+			if chunk.ThinkingStart || chunk.Thinking != "" || chunk.ThinkingEnd {
+				if chunks, ok := ctx.Value(chunksChanKey{}).(chan<- *ResponseChunk); ok {
+					if chunk.ThinkingStart {
+						chunks <- &ResponseChunk{ThinkingStart: true}
+					}
+					if chunk.Thinking != "" {
+						chunks <- &ResponseChunk{Thinking: chunk.Thinking}
+					}
+					if chunk.ThinkingEnd {
+						chunks <- &ResponseChunk{ThinkingEnd: true}
+					}
+				}
 			}
 			if chunk.Done {
 				inputTokens = chunk.InputTokens
@@ -1696,25 +1762,55 @@ func (r *Runtime) executeToolsWithEvents(ctx context.Context, toolExec *ToolExec
 		return nil
 	}
 
+	type callWithIndex struct {
+		idx      int
+		call     models.ToolCall
+		priority int
+	}
+	ordered := make([]callWithIndex, len(calls))
+	for i, tc := range calls {
+		ordered[i] = callWithIndex{
+			idx:      i,
+			call:     tc,
+			priority: r.toolPriority(tc.Name),
+		}
+	}
+	sort.SliceStable(ordered, func(i, j int) bool {
+		if ordered[i].priority == ordered[j].priority {
+			return ordered[i].idx < ordered[j].idx
+		}
+		return ordered[i].priority > ordered[j].priority
+	})
+	sortedCalls := make([]models.ToolCall, len(ordered))
+	for i, entry := range ordered {
+		sortedCalls[i] = entry.call
+	}
+
 	// Emit tool.started for each tool
-	for _, tc := range calls {
+	for _, tc := range sortedCalls {
 		emitter.ToolStarted(ctx, tc.ID, tc.Name, tc.Input)
 	}
 
 	// Execute concurrently
 	startTimes := make(map[string]time.Time)
-	for _, tc := range calls {
+	for _, tc := range sortedCalls {
 		startTimes[tc.ID] = time.Now()
 	}
 
-	results := toolExec.ExecuteConcurrently(ctx, calls, nil) // no compatibility event callback
+	results := toolExec.ExecuteConcurrentlyWithOverrides(ctx, sortedCalls, nil, func(call models.ToolCall) ToolExecConfig {
+		return r.toolExecOverrides(call.Name)
+	})
 
 	// Emit tool.finished or tool.timed_out for each result
-	for _, er := range results {
-		if er.Index < 0 || er.Index >= len(calls) {
+	for i := range results {
+		er := results[i]
+		if er.Index < 0 || er.Index >= len(sortedCalls) {
 			continue
 		}
-		tc := calls[er.Index]
+		entry := ordered[er.Index]
+		origIdx := entry.idx
+		results[i].Index = origIdx
+		tc := entry.call
 		elapsed := time.Since(startTimes[tc.ID])
 
 		if er.TimedOut {
@@ -2001,7 +2097,9 @@ func (r *Runtime) runToolJob(tc models.ToolCall, job *jobs.Job, toolExec *ToolEx
 	var result models.ToolResult
 	var execErr error
 	if toolExec != nil {
-		execResults := toolExec.ExecuteConcurrently(ctx, []models.ToolCall{tc}, nil)
+		execResults := toolExec.ExecuteConcurrentlyWithOverrides(ctx, []models.ToolCall{tc}, nil, func(call models.ToolCall) ToolExecConfig {
+			return r.toolExecOverrides(call.Name)
+		})
 		if len(execResults) > 0 {
 			result = execResults[0].Result
 		} else {

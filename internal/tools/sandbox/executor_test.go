@@ -744,7 +744,8 @@ func TestDockerExecutor_Run(t *testing.T) {
 		Timeout:  5,
 	}
 
-	workspace, err := prepareWorkspace(params)
+	workspaceRoot := t.TempDir()
+	workspace, err := prepareWorkspace(params, workspaceRoot)
 	if err != nil {
 		t.Fatalf("Failed to prepare workspace: %v", err)
 	}
@@ -1208,6 +1209,36 @@ func TestConfigOptions(t *testing.T) {
 	if cfg.Daytona == nil || cfg.Daytona.APIKey != "test-key" || !cfg.Daytona.ReuseSandbox {
 		t.Error("WithDaytonaConfig: Daytona config not applied")
 	}
+
+	WithWorkspaceRoot("/tmp/sandbox")(cfg)
+	if cfg.WorkspaceRoot != "/tmp/sandbox" {
+		t.Errorf("WithWorkspaceRoot: WorkspaceRoot = %q, want %q", cfg.WorkspaceRoot, "/tmp/sandbox")
+	}
+
+	WithDefaultWorkspaceAccess(WorkspaceReadWrite)(cfg)
+	if cfg.WorkspaceAccess != WorkspaceReadWrite {
+		t.Errorf("WithDefaultWorkspaceAccess: WorkspaceAccess = %q, want %q", cfg.WorkspaceAccess, WorkspaceReadWrite)
+	}
+}
+
+func TestParseWorkspaceAccess(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected WorkspaceAccessMode
+	}{
+		{"readonly", WorkspaceReadOnly},
+		{"ro", WorkspaceReadOnly},
+		{"readwrite", WorkspaceReadWrite},
+		{"rw", WorkspaceReadWrite},
+		{"none", WorkspaceNone},
+		{"unknown", WorkspaceReadOnly},
+	}
+
+	for _, tt := range tests {
+		if got := ParseWorkspaceAccess(tt.input); got != tt.expected {
+			t.Errorf("ParseWorkspaceAccess(%q) = %q, want %q", tt.input, got, tt.expected)
+		}
+	}
 }
 
 func TestPoolStats_Struct(t *testing.T) {
@@ -1250,11 +1281,16 @@ func TestPrepareWorkspace(t *testing.T) {
 		Stdin: "input",
 	}
 
-	workspace, err := prepareWorkspace(params)
+	workspaceRoot := t.TempDir()
+	workspace, err := prepareWorkspace(params, workspaceRoot)
 	if err != nil {
 		t.Fatalf("prepareWorkspace failed: %v", err)
 	}
 	defer os.RemoveAll(workspace)
+
+	if rel, err := filepath.Rel(workspaceRoot, workspace); err != nil || strings.HasPrefix(rel, "..") {
+		t.Fatalf("workspace not under root: root=%q workspace=%q rel=%q err=%v", workspaceRoot, workspace, rel, err)
+	}
 
 	// Check main file exists
 	mainPath := filepath.Join(workspace, "main.py")
@@ -1515,7 +1551,7 @@ func TestPrepareWorkspace_NoStdin(t *testing.T) {
 		Stdin:    "",
 	}
 
-	workspace, err := prepareWorkspace(params)
+	workspace, err := prepareWorkspace(params, t.TempDir())
 	if err != nil {
 		t.Fatalf("prepareWorkspace failed: %v", err)
 	}
@@ -1553,7 +1589,7 @@ func TestPrepareWorkspace_AllLanguages(t *testing.T) {
 				Code:     "test code",
 			}
 
-			workspace, err := prepareWorkspace(params)
+			workspace, err := prepareWorkspace(params, t.TempDir())
 			if err != nil {
 				t.Fatalf("prepareWorkspace failed: %v", err)
 			}

@@ -588,6 +588,12 @@ func (s *Server) registerTools(ctx context.Context, runtime *agent.Runtime) erro
 		if s.config.Tools.Sandbox.NetworkEnabled {
 			opts = append(opts, sandbox.WithNetworkEnabled(true))
 		}
+		if strings.TrimSpace(s.config.Tools.Sandbox.WorkspaceRoot) != "" {
+			opts = append(opts, sandbox.WithWorkspaceRoot(strings.TrimSpace(s.config.Tools.Sandbox.WorkspaceRoot)))
+		}
+		if strings.TrimSpace(s.config.Tools.Sandbox.WorkspaceAccess) != "" {
+			opts = append(opts, sandbox.WithDefaultWorkspaceAccess(sandbox.ParseWorkspaceAccess(s.config.Tools.Sandbox.WorkspaceAccess)))
+		}
 		if err := sandbox.Register(runtime, opts...); err != nil {
 			return fmt.Errorf("sandbox tool: %w", err)
 		}

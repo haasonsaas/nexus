@@ -3,6 +3,7 @@ package sandbox
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -16,8 +17,10 @@ import (
 // Executor implements the agent.Tool interface for secure sandboxed code execution.
 // It supports Python, Node.js, Go, and Bash with configurable resource limits.
 type Executor struct {
-	pool           *Pool
-	useFirecracker bool
+	pool            *Pool
+	useFirecracker  bool
+	workspaceRoot   string
+	workspaceAccess WorkspaceAccessMode
 }
 
 // WorkspaceAccessMode controls how the workspace is mounted in the sandbox.
@@ -61,13 +64,14 @@ type ExecuteResult struct {
 // It initializes the executor pool and configures the backend (Docker, Firecracker, or Daytona).
 func NewExecutor(opts ...Option) (*Executor, error) {
 	config := &Config{
-		Backend:        BackendDocker,
-		PoolSize:       3,
-		MaxPoolSize:    10,
-		DefaultTimeout: 30 * time.Second,
-		DefaultCPU:     1000, // 1 core
-		DefaultMemory:  512,  // 512 MB
-		NetworkEnabled: false,
+		Backend:         BackendDocker,
+		PoolSize:        3,
+		MaxPoolSize:     10,
+		DefaultTimeout:  30 * time.Second,
+		DefaultCPU:      1000, // 1 core
+		DefaultMemory:   512,  // 512 MB
+		NetworkEnabled:  false,
+		WorkspaceAccess: WorkspaceReadOnly,
 	}
 
 	for _, opt := range opts {
@@ -104,8 +108,10 @@ func NewExecutor(opts ...Option) (*Executor, error) {
 	}
 
 	return &Executor{
-		pool:           pool,
-		useFirecracker: useFirecracker,
+		pool:            pool,
+		useFirecracker:  useFirecracker,
+		workspaceRoot:   config.WorkspaceRoot,
+		workspaceAccess: config.WorkspaceAccess,
 	}, nil
 }
 
@@ -195,6 +201,9 @@ func (e *Executor) Execute(ctx context.Context, params json.RawMessage) (*agent.
 	if execParams.MemLimit == 0 {
 		execParams.MemLimit = 512
 	}
+	if execParams.WorkspaceAccess == "" {
+		execParams.WorkspaceAccess = e.workspaceAccess
+	}
 
 	// Execute with timeout
 	execCtx, cancel := context.WithTimeout(ctx, time.Duration(execParams.Timeout)*time.Second)
@@ -226,7 +235,7 @@ func (e *Executor) executeCode(ctx context.Context, params *ExecuteParams) (*Exe
 	defer e.pool.Put(executor)
 
 	// Prepare workspace
-	workspace, err := prepareWorkspace(params)
+	workspace, err := prepareWorkspace(params, e.workspaceRoot)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare workspace: %w", err)
 	}
@@ -248,8 +257,15 @@ func (e *Executor) executeCode(ctx context.Context, params *ExecuteParams) (*Exe
 }
 
 // prepareWorkspace creates a scratch directory with code and files.
-func prepareWorkspace(params *ExecuteParams) (string, error) {
-	workspace, err := os.MkdirTemp("", "sandbox-*")
+func prepareWorkspace(params *ExecuteParams, workspaceRoot string) (string, error) {
+	workspaceRoot = strings.TrimSpace(workspaceRoot)
+	if workspaceRoot != "" {
+		if err := os.MkdirAll(workspaceRoot, 0o755); err != nil {
+			return "", err
+		}
+	}
+
+	workspace, err := os.MkdirTemp(workspaceRoot, "sandbox-*")
 	if err != nil {
 		return "", err
 	}
@@ -379,8 +395,36 @@ func newDockerExecutor(language string, cpuLimit, memLimit int, networkEnabled b
 
 // Run executes code in a Docker container.
 func (d *dockerExecutor) Run(ctx context.Context, params *ExecuteParams, workspace string) (*ExecuteResult, error) {
+	if params.WorkspaceAccess == WorkspaceNone {
+		return d.runWithCopiedWorkspace(ctx, params, workspace)
+	}
+
 	// Build Docker command
 	args := []string{"run", "--rm"}
+	args = append(args, d.baseDockerArgs(params)...)
+
+	// Mount workspace based on access mode
+	switch params.WorkspaceAccess {
+	case WorkspaceReadWrite:
+		args = append(args, "-v", fmt.Sprintf("%s:/workspace:rw", workspace))
+	case WorkspaceReadOnly, "":
+		// Default to read-only for security
+		args = append(args, "-v", fmt.Sprintf("%s:/workspace:ro", workspace))
+	default:
+		// Unknown mode - fall back to read-only
+		args = append(args, "-v", fmt.Sprintf("%s:/workspace:ro", workspace))
+	}
+	args = append(args, "-w", "/workspace")
+
+	// Add image and command
+	args = append(args, d.image)
+	args = append(args, getRunCommand(params.Language)...)
+
+	return d.runDockerCommand(ctx, args, params.Stdin)
+}
+
+func (d *dockerExecutor) baseDockerArgs(params *ExecuteParams) []string {
+	args := []string{}
 	if !d.networkEnabled {
 		args = append(args, "--network", "none")
 	}
@@ -391,46 +435,65 @@ func (d *dockerExecutor) Run(ctx context.Context, params *ExecuteParams, workspa
 		"--pids-limit", "100",
 		"--ulimit", "nofile=1024:1024",
 	)
-
-	// Mount workspace based on access mode
-	switch params.WorkspaceAccess {
-	case WorkspaceReadWrite:
-		args = append(args, "-v", fmt.Sprintf("%s:/workspace:rw", workspace))
-	case WorkspaceNone:
-		// Don't mount the workspace at all
-	case WorkspaceReadOnly, "":
-		// Default to read-only for security
-		args = append(args, "-v", fmt.Sprintf("%s:/workspace:ro", workspace))
-	default:
-		// Unknown mode - fall back to read-only
-		args = append(args, "-v", fmt.Sprintf("%s:/workspace:ro", workspace))
-	}
-	args = append(args, "-w", "/workspace")
-
-	// Add stdin if provided
 	if params.Stdin != "" {
 		args = append(args, "-i")
 	}
+	return args
+}
 
-	// Add image and command
-	args = append(args, d.image)
-	args = append(args, getRunCommand(params.Language)...)
+func (d *dockerExecutor) runWithCopiedWorkspace(ctx context.Context, params *ExecuteParams, workspace string) (*ExecuteResult, error) {
+	createArgs := []string{"create"}
+	createArgs = append(createArgs, d.baseDockerArgs(params)...)
+	createArgs = append(createArgs, "--tmpfs", "/workspace:rw", "-w", "/workspace")
+	createArgs = append(createArgs, d.image)
+	createArgs = append(createArgs, getRunCommand(params.Language)...)
 
-	cmd := exec.CommandContext(ctx, "docker", args...)
-
-	// Set up stdin
-	if params.Stdin != "" {
-		cmd.Stdin = strings.NewReader(params.Stdin)
+	var createOut, createErr strings.Builder
+	createCmd := exec.CommandContext(ctx, "docker", createArgs...)
+	createCmd.Stdout = &createOut
+	createCmd.Stderr = &createErr
+	if err := createCmd.Run(); err != nil {
+		return nil, fmt.Errorf("docker create: %w: %s", err, strings.TrimSpace(createErr.String()))
 	}
 
-	// Capture stdout and stderr
+	containerID := strings.TrimSpace(createOut.String())
+	if containerID == "" {
+		return nil, errors.New("docker create returned empty container id")
+	}
+
+	defer func() {
+		_ = exec.CommandContext(context.Background(), "docker", "rm", "-f", containerID).Run()
+	}()
+
+	copySrc := filepath.Join(workspace, ".")
+	copyCmd := exec.CommandContext(ctx, "docker", "cp", copySrc, containerID+":/workspace")
+	var copyErr strings.Builder
+	copyCmd.Stderr = &copyErr
+	if err := copyCmd.Run(); err != nil {
+		return nil, fmt.Errorf("docker cp workspace: %w: %s", err, strings.TrimSpace(copyErr.String()))
+	}
+
+	startArgs := []string{"start", "-a"}
+	if params.Stdin != "" {
+		startArgs = append(startArgs, "-i")
+	}
+	startArgs = append(startArgs, containerID)
+
+	return d.runDockerCommand(ctx, startArgs, params.Stdin)
+}
+
+func (d *dockerExecutor) runDockerCommand(ctx context.Context, args []string, stdin string) (*ExecuteResult, error) {
+	cmd := exec.CommandContext(ctx, "docker", args...)
+
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
+	}
+
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	// Run the command
 	err := cmd.Run()
-
 	result := &ExecuteResult{
 		Stdout: stdout.String(),
 		Stderr: stderr.String(),
@@ -495,14 +558,16 @@ func getRunCommand(language string) []string {
 // Config holds executor configuration including backend type, pool sizing,
 // resource limits, and network access settings.
 type Config struct {
-	Backend        Backend
-	PoolSize       int
-	MaxPoolSize    int
-	DefaultTimeout time.Duration
-	DefaultCPU     int
-	DefaultMemory  int
-	NetworkEnabled bool
-	Daytona        *DaytonaConfig
+	Backend         Backend
+	PoolSize        int
+	MaxPoolSize     int
+	DefaultTimeout  time.Duration
+	DefaultCPU      int
+	DefaultMemory   int
+	NetworkEnabled  bool
+	Daytona         *DaytonaConfig
+	WorkspaceRoot   string
+	WorkspaceAccess WorkspaceAccessMode
 
 	daytonaClient *daytonaClient
 }
@@ -572,5 +637,19 @@ func WithNetworkEnabled(enabled bool) Option {
 func WithDaytonaConfig(cfg DaytonaConfig) Option {
 	return func(c *Config) {
 		c.Daytona = &cfg
+	}
+}
+
+// WithWorkspaceRoot sets the root directory for sandbox workspaces.
+func WithWorkspaceRoot(root string) Option {
+	return func(c *Config) {
+		c.WorkspaceRoot = root
+	}
+}
+
+// WithDefaultWorkspaceAccess sets the default workspace access mode.
+func WithDefaultWorkspaceAccess(mode WorkspaceAccessMode) Option {
+	return func(c *Config) {
+		c.WorkspaceAccess = mode
 	}
 }

@@ -656,6 +656,10 @@ tools:
     # Maximum execution time per request
     timeout: 30s
     network_enabled: false
+    # Root directory for sandbox workspaces (defaults to system temp)
+    workspace_root: ""
+    # Workspace access: readonly | readwrite | ro | rw | none
+    workspace_access: readonly
     limits:
       max_cpu: 1000 # millicores
       max_memory: 512MB

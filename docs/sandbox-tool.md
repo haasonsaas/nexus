@@ -266,8 +266,16 @@ executor, err := sandbox.NewExecutor(
 
     // Enable network access (disabled by default)
     sandbox.WithNetworkEnabled(false),
+
+    // Optional workspace root and access defaults
+    sandbox.WithWorkspaceRoot("/var/lib/nexus/sandboxes"),
+    sandbox.WithDefaultWorkspaceAccess(sandbox.WorkspaceReadOnly),
 )
 ```
+
+`WorkspaceRoot` controls where sandbox workspaces are staged on disk (defaults to the system temp dir).
+`WorkspaceAccess` controls how the workspace is provided to the sandbox: read-only (`ro`, default),
+read-write (`rw`), or `none` to copy files into an isolated tmpfs without a host mount.
 
 ### Daytona Backend
 

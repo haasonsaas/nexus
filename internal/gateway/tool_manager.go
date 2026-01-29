@@ -642,6 +642,12 @@ func (m *ToolManager) registerSandboxTool(ctx context.Context, runtime *agent.Ru
 	if cfg.NetworkEnabled {
 		opts = append(opts, sandbox.WithNetworkEnabled(true))
 	}
+	if strings.TrimSpace(cfg.WorkspaceRoot) != "" {
+		opts = append(opts, sandbox.WithWorkspaceRoot(strings.TrimSpace(cfg.WorkspaceRoot)))
+	}
+	if strings.TrimSpace(cfg.WorkspaceAccess) != "" {
+		opts = append(opts, sandbox.WithDefaultWorkspaceAccess(sandbox.ParseWorkspaceAccess(cfg.WorkspaceAccess)))
+	}
 
 	executor, err := sandbox.NewExecutor(opts...)
 	if err != nil {

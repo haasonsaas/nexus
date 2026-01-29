@@ -1021,7 +1021,7 @@ type SandboxConfig struct {
 	// WorkspaceRoot is the root directory for sandboxed workspaces.
 	WorkspaceRoot string `yaml:"workspace_root"`
 
-	// WorkspaceAccess controls workspace access mode: "readonly" or "readwrite".
+	// WorkspaceAccess controls workspace access mode: "readonly", "readwrite", "ro", "rw", or "none".
 	WorkspaceAccess string `yaml:"workspace_access"`
 }
 

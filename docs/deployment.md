@@ -291,6 +291,8 @@ data:
         backend: docker
         pool_size: 10
         timeout: 60s
+        workspace_root: /var/lib/nexus/sandboxes
+        workspace_access: readonly
         limits:
           max_cpu: 1
           max_memory: 512MB

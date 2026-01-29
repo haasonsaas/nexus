@@ -288,11 +288,16 @@ data:
           timeout: 15s
       sandbox:
         enabled: true
+        backend: docker
         pool_size: 10
         timeout: 60s
         limits:
           max_cpu: 1
           max_memory: 512MB
+        daytona:
+          api_key: ${DAYTONA_API_KEY}
+          api_url: https://app.daytona.io/api
+          target: ""
       browser:
         enabled: true
         headless: true

@@ -255,8 +255,14 @@ func (d *daytonaExecutor) Run(ctx context.Context, params *ExecuteParams, worksp
 		return nil, err
 	}
 
-	if err := d.uploadWorkspace(ctx, toolboxClient, workspace, runDir); err != nil {
+	uploadedFiles, err := d.uploadWorkspace(ctx, toolboxClient, workspace, runDir)
+	if err != nil {
 		return nil, err
+	}
+	if d.isReadOnlyAccess(params.WorkspaceAccess) {
+		if err := d.applyReadOnlyAccess(ctx, toolboxClient, runDir, uploadedFiles); err != nil {
+			return nil, err
+		}
 	}
 
 	command := d.buildCommand(params)
@@ -411,12 +417,13 @@ func (d *daytonaExecutor) createFolder(ctx context.Context, toolboxClient *toolb
 	return fmt.Errorf("daytona create folder: %w", formatToolboxError(err, httpResp))
 }
 
-func (d *daytonaExecutor) uploadWorkspace(ctx context.Context, toolboxClient *toolbox.APIClient, localDir, remoteDir string) error {
+func (d *daytonaExecutor) uploadWorkspace(ctx context.Context, toolboxClient *toolbox.APIClient, localDir, remoteDir string) ([]string, error) {
 	entries, err := os.ReadDir(localDir)
 	if err != nil {
-		return fmt.Errorf("daytona read workspace: %w", err)
+		return nil, fmt.Errorf("daytona read workspace: %w", err)
 	}
 
+	uploaded := make([]string, 0, len(entries))
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -424,18 +431,19 @@ func (d *daytonaExecutor) uploadWorkspace(ctx context.Context, toolboxClient *to
 		localPath := filepath.Join(localDir, entry.Name())
 		file, err := os.Open(localPath)
 		if err != nil {
-			return fmt.Errorf("daytona open workspace file: %w", err)
+			return nil, fmt.Errorf("daytona open workspace file: %w", err)
 		}
 
 		remotePath := path.Join(remoteDir, entry.Name())
 		_, httpResp, uploadErr := toolboxClient.FileSystemAPI.UploadFile(ctx).Path(remotePath).File(file).Execute()
 		file.Close()
 		if uploadErr != nil {
-			return fmt.Errorf("daytona upload file: %w", formatToolboxError(uploadErr, httpResp))
+			return nil, fmt.Errorf("daytona upload file: %w", formatToolboxError(uploadErr, httpResp))
 		}
+		uploaded = append(uploaded, remotePath)
 	}
 
-	return nil
+	return uploaded, nil
 }
 
 func (d *daytonaExecutor) buildCommand(params *ExecuteParams) string {
@@ -444,6 +452,35 @@ func (d *daytonaExecutor) buildCommand(params *ExecuteParams) string {
 		command = fmt.Sprintf("%s < stdin.txt", command)
 	}
 	return command
+}
+
+func (d *daytonaExecutor) isReadOnlyAccess(mode WorkspaceAccessMode) bool {
+	switch mode {
+	case WorkspaceReadWrite:
+		return false
+	case WorkspaceNone, WorkspaceReadOnly:
+		return true
+	case "":
+		return true
+	default:
+		return true
+	}
+}
+
+func (d *daytonaExecutor) applyReadOnlyAccess(ctx context.Context, toolboxClient *toolbox.APIClient, runDir string, files []string) error {
+	for _, file := range files {
+		httpResp, err := toolboxClient.FileSystemAPI.SetFilePermissions(ctx).Path(file).Mode("0444").Execute()
+		if err != nil {
+			return fmt.Errorf("daytona set file permissions: %w", formatToolboxError(err, httpResp))
+		}
+	}
+
+	httpResp, err := toolboxClient.FileSystemAPI.SetFilePermissions(ctx).Path(runDir).Mode("0555").Execute()
+	if err != nil {
+		return fmt.Errorf("daytona set directory permissions: %w", formatToolboxError(err, httpResp))
+	}
+
+	return nil
 }
 
 func getShellCommand(language string) string {

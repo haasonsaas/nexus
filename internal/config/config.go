@@ -602,6 +602,8 @@ type SlackConfig struct {
 	BotToken      string `yaml:"bot_token"`
 	AppToken      string `yaml:"app_token"`
 	SigningSecret string `yaml:"signing_secret"`
+	// UploadAttachments enables Slack file uploads for outbound attachments.
+	UploadAttachments bool `yaml:"upload_attachments"`
 
 	DM    ChannelPolicyConfig `yaml:"dm"`
 	Group ChannelPolicyConfig `yaml:"group"`

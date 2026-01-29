@@ -159,6 +159,16 @@ func (a *TestableAdapter) Send(ctx context.Context, msg *models.Message) error {
 	a.health.RecordMessageSent()
 	a.health.RecordSendLatency(time.Since(startTime))
 
+	if len(msg.Attachments) > 0 {
+		threadTS := ""
+		if ts, ok := msg.Metadata["slack_thread_ts"].(string); ok && ts != "" {
+			threadTS = ts
+		} else if timestamp != "" {
+			threadTS = timestamp
+		}
+		uploadSlackAttachments(ctx, a.cfg, a.apiClient, a.rateLimiter, a.logger, a.health, channelID, threadTS, msg.Attachments)
+	}
+
 	// Handle reactions if specified
 	if reaction, ok := msg.Metadata["slack_reaction"].(string); ok && reaction != "" {
 		msgRef := slack.ItemRef{

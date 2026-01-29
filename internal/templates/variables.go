@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 	"text/template"
+	"time"
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
@@ -187,7 +188,7 @@ func defaultFuncMap() template.FuncMap {
 
 		// Date/time (using string format)
 		"now": func() string {
-			return "{{now}}" // Placeholder - actual time should be injected
+			return time.Now().UTC().Format(time.RFC3339)
 		},
 
 		// Markdown helpers

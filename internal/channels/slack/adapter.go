@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -34,6 +35,14 @@ type Config struct {
 
 	// Logger is an optional slog.Logger instance
 	Logger *slog.Logger
+
+	// UploadAttachments enables Slack file uploads for outbound attachments.
+	// When false, attachments are only rendered in Block Kit if possible.
+	UploadAttachments bool
+
+	// HTTPClient is used to download attachment data for uploads.
+	// Defaults to http.DefaultClient.
+	HTTPClient *http.Client
 
 	// Canvas controls canvas entrypoints like /canvas and message shortcuts.
 	Canvas CanvasConfig
@@ -83,6 +92,9 @@ func (c *Config) Validate() error {
 
 	if c.Logger == nil {
 		c.Logger = slog.Default()
+	}
+	if c.HTTPClient == nil {
+		c.HTTPClient = http.DefaultClient
 	}
 	if strings.TrimSpace(c.Canvas.Command) == "" {
 		c.Canvas.Command = "/canvas"
@@ -306,13 +318,13 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 
 	// Handle attachments (file uploads)
 	if len(msg.Attachments) > 0 {
-		for _, att := range msg.Attachments {
-			// For file uploads, we would need the actual file data
-			// This is a placeholder for the file upload logic
-			a.logger.Debug("would upload file",
-				"filename", att.Filename,
-				"url", att.URL)
+		threadTS := ""
+		if ts, ok := msg.Metadata["slack_thread_ts"].(string); ok && ts != "" {
+			threadTS = ts
+		} else if timestamp != "" {
+			threadTS = timestamp
 		}
+		uploadSlackAttachments(ctx, a.cfg, a.client, a.rateLimiter, a.logger, a.health, channelID, threadTS, msg.Attachments)
 	}
 
 	// Handle reactions if specified in metadata

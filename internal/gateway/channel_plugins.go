@@ -160,9 +160,10 @@ func (slackPlugin) Build(cfg *config.Config, logger *slog.Logger) (channels.Adap
 		return nil, errors.New("slack bot token and app token are required")
 	}
 	return slack.NewAdapter(slack.Config{
-		BotToken: cfg.Channels.Slack.BotToken,
-		AppToken: cfg.Channels.Slack.AppToken,
-		Logger:   logger,
+		BotToken:          cfg.Channels.Slack.BotToken,
+		AppToken:          cfg.Channels.Slack.AppToken,
+		Logger:            logger,
+		UploadAttachments: cfg.Channels.Slack.UploadAttachments,
 		Canvas: slack.CanvasConfig{
 			Enabled:           cfg.Channels.Slack.Canvas.Enabled,
 			Command:           cfg.Channels.Slack.Canvas.Command,

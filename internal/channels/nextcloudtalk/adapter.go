@@ -557,7 +557,12 @@ func (a *Adapter) StartStreamingResponse(ctx context.Context, msg *models.Messag
 func (a *Adapter) UpdateStreamingResponse(ctx context.Context, msg *models.Message, messageID string, content string) error {
 	// Nextcloud Talk bot API doesn't support message editing
 	// Fall back to sending a new message
-	return nil
+	if msg == nil {
+		return errors.New("message is nil")
+	}
+	updated := *msg
+	updated.Content = content
+	return a.Send(ctx, &updated)
 }
 
 // Helper functions

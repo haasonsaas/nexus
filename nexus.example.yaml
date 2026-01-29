@@ -331,6 +331,7 @@ channels:
     bot_token: ${SLACK_BOT_TOKEN}      # xoxb-...
     app_token: ${SLACK_APP_TOKEN}      # xapp-... (for Socket Mode)
     signing_secret: ${SLACK_SIGNING_SECRET}
+    upload_attachments: false
     dm:
       policy: pairing
       # allow_from: ["U1234567890"]

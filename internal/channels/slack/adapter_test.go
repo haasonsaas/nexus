@@ -1,10 +1,13 @@
 package slack
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -2762,6 +2765,81 @@ func TestTestableAdapter_SendWithAttachments(t *testing.T) {
 	// Verify options were sent
 	if len(sentOptions) == 0 {
 		t.Error("Expected message options to be set")
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+func TestTestableAdapter_SendWithAttachments_UploadEnabled(t *testing.T) {
+	var uploaded slack.UploadFileV2Parameters
+	mock := &MockSlackClient{
+		PostMessageContextFunc: func(ctx context.Context, channelID string, options ...slack.MsgOption) (string, string, error) {
+			return channelID, "1234567890.123456", nil
+		},
+		UploadFileV2ContextFunc: func(ctx context.Context, params slack.UploadFileV2Parameters) (*slack.FileSummary, error) {
+			uploaded = params
+			return &slack.FileSummary{ID: "F1"}, nil
+		},
+	}
+	attachmentData := []byte("file-data")
+	httpClient := &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode:    http.StatusOK,
+				Body:          io.NopCloser(bytes.NewReader(attachmentData)),
+				ContentLength: int64(len(attachmentData)),
+				Header:        http.Header{"Content-Type": []string{"text/plain"}},
+			}, nil
+		}),
+	}
+	cfg := Config{
+		BotToken:          "xoxb-test-token",
+		AppToken:          "xapp-test-token",
+		RateLimit:         1000,
+		UploadAttachments: true,
+		HTTPClient:        httpClient,
+	}
+
+	adapter, err := NewTestableAdapter(cfg, mock)
+	if err != nil {
+		t.Fatalf("NewTestableAdapter() error = %v", err)
+	}
+
+	msg := &models.Message{
+		Content: "Message with attachments",
+		Metadata: map[string]any{
+			"slack_channel": "C123456",
+		},
+		Attachments: []models.Attachment{
+			{
+				ID:       "F1",
+				Type:     "document",
+				URL:      "https://example.com/file.txt",
+				Filename: "file.txt",
+			},
+		},
+	}
+
+	ctx := context.Background()
+	if err := adapter.Send(ctx, msg); err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+
+	if uploaded.Filename != "file.txt" {
+		t.Errorf("expected upload filename file.txt, got %q", uploaded.Filename)
+	}
+	if uploaded.FileSize != len(attachmentData) {
+		t.Errorf("expected upload size %d, got %d", len(attachmentData), uploaded.FileSize)
+	}
+	if uploaded.Channel != "C123456" {
+		t.Errorf("expected upload channel C123456, got %q", uploaded.Channel)
+	}
+	if uploaded.ThreadTimestamp != "1234567890.123456" {
+		t.Errorf("expected thread timestamp to match message ts, got %q", uploaded.ThreadTimestamp)
 	}
 }
 

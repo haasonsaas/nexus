@@ -29,6 +29,7 @@ Your Slack app needs the following bot token scopes:
 - `channels:read` - To view channel information
 - `chat:write` - To send messages
 - `files:read` - To access file attachments
+- `files:write` - To upload file attachments (required when UploadAttachments is enabled)
 - `im:history` - To read direct messages
 - `im:read` - To view direct message channels
 - `im:write` - To send direct messages
@@ -54,6 +55,7 @@ import (
 cfg := slack.Config{
     BotToken: "xoxb-your-bot-token",
     AppToken: "xapp-your-app-level-token",
+    UploadAttachments: true, // Upload outbound attachments as files
 }
 
 // Initialize the adapter
@@ -66,6 +68,8 @@ if err := adapter.Start(ctx); err != nil {
 }
 defer adapter.Stop(ctx)
 ```
+
+When `UploadAttachments` is enabled, attachment URLs must be reachable by the server so they can be fetched and uploaded to Slack.
 
 ### Receiving Messages
 

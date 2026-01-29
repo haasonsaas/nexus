@@ -231,7 +231,10 @@ func (d *daytonaExecutor) Run(ctx context.Context, params *ExecuteParams, worksp
 		return nil, err
 	}
 	defer func() {
-		_, _, _ = d.client.apiClient.SandboxAPI.DeleteSandbox(d.client.authContext(context.Background()), sandbox.GetId()).Execute()
+		_, _, err := d.client.apiClient.SandboxAPI.DeleteSandbox(d.client.authContext(context.Background()), sandbox.GetId()).Execute()
+		if err != nil {
+			// Best-effort cleanup; execution result already returned.
+		}
 	}()
 
 	if sandbox.GetState() != apiclient.SANDBOXSTATE_STARTED {

@@ -13,7 +13,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/haasonsaas/nexus/internal/agent"
+	"github.com/haasonsaas/nexus/internal/agent/toolconv"
+	"github.com/haasonsaas/nexus/pkg/models"
+	openai "github.com/sashabaranov/go-openai"
 )
 
 // OllamaConfig configures the Ollama provider.
@@ -62,18 +66,15 @@ func (p *OllamaProvider) Models() []agent.Model {
 	return []agent.Model{{ID: p.defaultModel, Name: p.defaultModel}}
 }
 
-// SupportsTools returns false; Ollama tool support is not wired yet.
+// SupportsTools returns true when tool definitions can be supplied.
 func (p *OllamaProvider) SupportsTools() bool {
-	return false
+	return true
 }
 
 // Complete sends a streaming chat request to Ollama.
 func (p *OllamaProvider) Complete(ctx context.Context, req *agent.CompletionRequest) (<-chan *agent.CompletionChunk, error) {
 	if req == nil {
 		return nil, errors.New("request is nil")
-	}
-	if len(req.Tools) > 0 {
-		return nil, NewProviderError("ollama", req.Model, errors.New("tool calling not supported"))
 	}
 
 	model := strings.TrimSpace(req.Model)
@@ -88,6 +89,9 @@ func (p *OllamaProvider) Complete(ctx context.Context, req *agent.CompletionRequ
 		Model:    model,
 		Stream:   true,
 		Messages: buildOllamaMessages(req),
+	}
+	if len(req.Tools) > 0 {
+		payload.Tools = toolconv.ToOpenAITools(req.Tools)
 	}
 	if req.MaxTokens > 0 {
 		payload.Options = map[string]any{"num_predict": req.MaxTokens}
@@ -131,6 +135,7 @@ func (p *OllamaProvider) streamResponse(ctx context.Context, body io.ReadCloser,
 	buf := make([]byte, 0, 1024*64)
 	scanner.Buffer(buf, 1024*1024)
 
+	emitted := map[string]struct{}{}
 	for scanner.Scan() {
 		select {
 		case <-ctx.Done():
@@ -153,8 +158,35 @@ func (p *OllamaProvider) streamResponse(ctx context.Context, body io.ReadCloser,
 			out <- &agent.CompletionChunk{Error: NewProviderError("ollama", model, errors.New(resp.Error)), Done: true}
 			return
 		}
-		if resp.Message != nil && resp.Message.Content != "" {
-			out <- &agent.CompletionChunk{Text: resp.Message.Content}
+		if resp.Message != nil {
+			if resp.Message.Content != "" {
+				out <- &agent.CompletionChunk{Text: resp.Message.Content}
+			}
+			if len(resp.Message.ToolCalls) > 0 {
+				for _, tc := range resp.Message.ToolCalls {
+					callID := strings.TrimSpace(tc.ID)
+					if callID == "" {
+						callID = toolCallKey(tc)
+						if callID == "" {
+							callID = uuid.NewString()
+						}
+					}
+					if _, ok := emitted[callID]; ok {
+						continue
+					}
+					emitted[callID] = struct{}{}
+					toolCall := &models.ToolCall{
+						ID:   callID,
+						Name: strings.TrimSpace(tc.Function.Name),
+					}
+					if len(tc.Function.Arguments) > 0 {
+						toolCall.Input = tc.Function.Arguments
+					} else {
+						toolCall.Input = json.RawMessage(`{}`)
+					}
+					out <- &agent.CompletionChunk{ToolCall: toolCall}
+				}
+			}
 		}
 		if resp.Done {
 			out <- &agent.CompletionChunk{
@@ -175,13 +207,16 @@ func (p *OllamaProvider) streamResponse(ctx context.Context, body io.ReadCloser,
 type ollamaChatRequest struct {
 	Model    string              `json:"model"`
 	Messages []ollamaChatMessage `json:"messages"`
+	Tools    []openai.Tool       `json:"tools,omitempty"`
 	Stream   bool                `json:"stream"`
 	Options  map[string]any      `json:"options,omitempty"`
 }
 
 type ollamaChatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role      string           `json:"role"`
+	Content   string           `json:"content,omitempty"`
+	ToolCalls []ollamaToolCall `json:"tool_calls,omitempty"`
+	ToolName  string           `json:"tool_name,omitempty"`
 }
 
 type ollamaChatResponse struct {
@@ -192,8 +227,27 @@ type ollamaChatResponse struct {
 	PromptEvalCount int                `json:"prompt_eval_count"`
 }
 
+type ollamaToolCall struct {
+	ID       string             `json:"id,omitempty"`
+	Type     string             `json:"type,omitempty"`
+	Function ollamaToolFunction `json:"function"`
+}
+
+type ollamaToolFunction struct {
+	Name      string          `json:"name"`
+	Arguments json.RawMessage `json:"arguments,omitempty"`
+}
+
 func buildOllamaMessages(req *agent.CompletionRequest) []ollamaChatMessage {
 	messages := make([]ollamaChatMessage, 0, len(req.Messages)+1)
+	toolNames := map[string]string{}
+	for _, msg := range req.Messages {
+		for _, tc := range msg.ToolCalls {
+			if tc.ID != "" && tc.Name != "" {
+				toolNames[tc.ID] = tc.Name
+			}
+		}
+	}
 	if system := strings.TrimSpace(req.System); system != "" {
 		messages = append(messages, ollamaChatMessage{Role: "system", Content: system})
 	}
@@ -202,7 +256,55 @@ func buildOllamaMessages(req *agent.CompletionRequest) []ollamaChatMessage {
 		if role == "" {
 			role = "user"
 		}
-		messages = append(messages, ollamaChatMessage{Role: role, Content: msg.Content})
+		switch role {
+		case "assistant":
+			ollamaMsg := ollamaChatMessage{Role: role, Content: msg.Content}
+			if len(msg.ToolCalls) > 0 {
+				ollamaMsg.ToolCalls = make([]ollamaToolCall, len(msg.ToolCalls))
+				for i, tc := range msg.ToolCalls {
+					args := tc.Input
+					if len(args) == 0 {
+						args = json.RawMessage(`{}`)
+					}
+					ollamaMsg.ToolCalls[i] = ollamaToolCall{
+						ID:   tc.ID,
+						Type: "function",
+						Function: ollamaToolFunction{
+							Name:      tc.Name,
+							Arguments: args,
+						},
+					}
+				}
+			}
+			messages = append(messages, ollamaMsg)
+		case "tool":
+			if len(msg.ToolResults) > 0 {
+				for _, tr := range msg.ToolResults {
+					toolName := toolNames[tr.ToolCallID]
+					messages = append(messages, ollamaChatMessage{
+						Role:     "tool",
+						Content:  tr.Content,
+						ToolName: toolName,
+					})
+				}
+			} else {
+				messages = append(messages, ollamaChatMessage{Role: role, Content: msg.Content})
+			}
+		default:
+			messages = append(messages, ollamaChatMessage{Role: role, Content: msg.Content})
+		}
 	}
 	return messages
+}
+
+func toolCallKey(tc ollamaToolCall) string {
+	if strings.TrimSpace(tc.ID) != "" {
+		return strings.TrimSpace(tc.ID)
+	}
+	name := strings.TrimSpace(tc.Function.Name)
+	args := strings.TrimSpace(string(tc.Function.Arguments))
+	if name == "" && args == "" {
+		return ""
+	}
+	return name + ":" + args
 }

@@ -2,6 +2,8 @@
 package signal
 
 import (
+	"time"
+
 	"github.com/haasonsaas/nexus/internal/channels"
 	"github.com/haasonsaas/nexus/internal/channels/personal"
 )
@@ -22,14 +24,19 @@ type Config struct {
 
 	// Personal contains shared personal channel settings.
 	Personal personal.Config `yaml:"personal"`
+
+	// AttachmentMaxAge controls how long cached attachments are retained.
+	// Use a duration string like "168h". Leave empty to disable pruning.
+	AttachmentMaxAge string `yaml:"attachment_max_age"`
 }
 
 // DefaultConfig returns a Config with sensible defaults.
 func DefaultConfig() *Config {
 	return &Config{
-		Enabled:       false,
-		SignalCLIPath: "signal-cli",
-		ConfigDir:     "~/.config/signal-cli",
+		Enabled:          false,
+		SignalCLIPath:    "signal-cli",
+		ConfigDir:        "~/.config/signal-cli",
+		AttachmentMaxAge: "168h",
 		Personal: personal.Config{
 			SyncOnStart: true,
 			Presence: personal.PresenceConfig{
@@ -52,6 +59,12 @@ func (c *Config) Validate() error {
 
 	if c.SignalCLIPath == "" {
 		return channels.ErrConfig("signal: signal_cli_path is required", nil)
+	}
+
+	if c.AttachmentMaxAge != "" {
+		if _, err := time.ParseDuration(c.AttachmentMaxAge); err != nil {
+			return channels.ErrConfig("signal: invalid attachment_max_age", err)
+		}
 	}
 
 	return nil

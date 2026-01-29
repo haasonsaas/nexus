@@ -368,6 +368,8 @@ channels:
     account: ${SIGNAL_ACCOUNT} # +15555550123
     signal_cli_path: signal-cli
     config_dir: ~/.config/signal-cli
+    # Attachment cache pruning (duration). Empty disables pruning.
+    attachment_max_age: 168h
     dm:
       policy: pairing
     group:

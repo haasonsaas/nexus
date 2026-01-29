@@ -30,6 +30,9 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.ConfigDir != "~/.config/signal-cli" {
 		t.Errorf("expected ConfigDir to be '~/.config/signal-cli', got %s", cfg.ConfigDir)
 	}
+	if cfg.AttachmentMaxAge != "168h" {
+		t.Errorf("expected AttachmentMaxAge to be '168h', got %s", cfg.AttachmentMaxAge)
+	}
 	if !cfg.Personal.SyncOnStart {
 		t.Error("expected SyncOnStart to be true by default")
 	}
@@ -52,6 +55,7 @@ func TestDefaultConfigAllFields(t *testing.T) {
 		{"Enabled", cfg.Enabled, false},
 		{"SignalCLIPath", cfg.SignalCLIPath, "signal-cli"},
 		{"ConfigDir", cfg.ConfigDir, "~/.config/signal-cli"},
+		{"AttachmentMaxAge", cfg.AttachmentMaxAge, "168h"},
 		{"Account", cfg.Account, ""},
 		{"SyncOnStart", cfg.Personal.SyncOnStart, true},
 		{"SendReadReceipts", cfg.Personal.Presence.SendReadReceipts, true},

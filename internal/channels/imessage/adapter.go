@@ -132,14 +132,34 @@ func (a *Adapter) Send(ctx context.Context, msg *models.Message) error {
 		return channels.ErrInvalidInput(channels.MissingMetadata("peer_id", msgID), nil)
 	}
 
+	var attachmentPaths []string
+	for _, att := range msg.Attachments {
+		path, err := a.resolveAttachmentPathForSend(ctx, att)
+		if err != nil {
+			return err
+		}
+		if path != "" {
+			attachmentPaths = append(attachmentPaths, path)
+		}
+	}
+
+	if strings.TrimSpace(msg.Content) == "" && len(attachmentPaths) == 0 {
+		return channels.ErrInvalidInput("message content or attachments required", nil)
+	}
+
 	// Build AppleScript
-	script := fmt.Sprintf(`
-		tell application "Messages"
-			set targetService to 1st account whose service type = iMessage
-			set targetBuddy to participant %q of targetService
-			send %q to targetBuddy
-		end tell
-	`, peerID, escapeAppleScript(msg.Content))
+	var sb strings.Builder
+	sb.WriteString(`tell application "Messages"` + "\n")
+	sb.WriteString(fmt.Sprintf("set targetService to 1st account whose service type = iMessage\n"))
+	sb.WriteString(fmt.Sprintf("set targetBuddy to participant %q of targetService\n", escapeAppleScript(peerID)))
+	for _, path := range attachmentPaths {
+		sb.WriteString(fmt.Sprintf("send POSIX file %q to targetBuddy\n", escapeAppleScript(path)))
+	}
+	if strings.TrimSpace(msg.Content) != "" {
+		sb.WriteString(fmt.Sprintf("send %q to targetBuddy\n", escapeAppleScript(msg.Content)))
+	}
+	sb.WriteString("end tell\n")
+	script := sb.String()
 
 	cmd := exec.CommandContext(ctx, "osascript", "-e", script)
 	if output, err := cmd.CombinedOutput(); err != nil {

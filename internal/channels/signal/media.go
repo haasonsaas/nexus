@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/haasonsaas/nexus/internal/channels"
@@ -162,13 +163,7 @@ func (a *Adapter) storeAttachmentFile(id string, record attachmentRecord, data [
 	if len(data) == 0 {
 		return "", channels.ErrInvalidInput("media data required", nil)
 	}
-	baseDir := ""
-	if a != nil && a.config != nil {
-		baseDir = strings.TrimSpace(a.config.Personal.MediaPath)
-	}
-	if baseDir == "" {
-		baseDir = os.TempDir()
-	}
+	baseDir := a.attachmentCacheDir()
 	if err := os.MkdirAll(baseDir, 0755); err != nil {
 		return "", channels.ErrConnection("failed to prepare media directory", err)
 	}
@@ -188,7 +183,58 @@ func (a *Adapter) storeAttachmentFile(id string, record attachmentRecord, data [
 	if err := os.WriteFile(path, data, 0644); err != nil {
 		return "", channels.ErrConnection("failed to write attachment file", err)
 	}
+	a.pruneAttachmentCache(baseDir)
 	return path, nil
+}
+
+func (a *Adapter) attachmentCacheDir() string {
+	baseDir := ""
+	if a != nil && a.config != nil {
+		baseDir = strings.TrimSpace(a.config.Personal.MediaPath)
+	}
+	if baseDir == "" {
+		baseDir = os.TempDir()
+	}
+	return filepath.Join(baseDir, "signal-attachments")
+}
+
+func (a *Adapter) attachmentMaxAge() time.Duration {
+	if a == nil || a.config == nil {
+		return 0
+	}
+	raw := strings.TrimSpace(a.config.AttachmentMaxAge)
+	if raw == "" {
+		return 0
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0
+	}
+	return d
+}
+
+func (a *Adapter) pruneAttachmentCache(dir string) {
+	maxAge := a.attachmentMaxAge()
+	if maxAge <= 0 {
+		return
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().Add(-maxAge)
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().Before(cutoff) {
+			_ = os.Remove(filepath.Join(dir, entry.Name()))
+		}
+	}
 }
 
 func (a *Adapter) fetchAttachment(ctx context.Context, id string, record attachmentRecord) ([]byte, error) {

@@ -6,9 +6,12 @@ package imessage
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"fmt"
+	"io"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -16,7 +19,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/haasonsaas/nexus/internal/channels"
+	channelcontext "github.com/haasonsaas/nexus/internal/channels/context"
 	"github.com/haasonsaas/nexus/internal/channels/personal"
+	"github.com/haasonsaas/nexus/pkg/models"
 )
 
 type mediaHandler struct {
@@ -73,6 +78,70 @@ func (m *mediaHandler) GetURL(ctx context.Context, mediaID string) (string, erro
 		return "", err
 	}
 	return "file://" + info.path, nil
+}
+
+func (a *Adapter) resolveAttachmentPathForSend(ctx context.Context, att models.Attachment) (string, error) {
+	if a == nil {
+		return "", channels.ErrUnavailable("media handler unavailable", nil)
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	if att.URL != "" {
+		return a.resolveAttachmentURL(ctx, att.URL, att.MimeType, att.Filename)
+	}
+
+	if att.ID != "" {
+		if path, ok := resolveFilePath(att.ID); ok {
+			return path, nil
+		}
+		info, err := a.lookupAttachment(ctx, att.ID)
+		if err != nil {
+			return "", err
+		}
+		return info.path, nil
+	}
+
+	return "", channels.ErrInvalidInput("attachment url or id required", nil)
+}
+
+func (a *Adapter) resolveAttachmentURL(ctx context.Context, rawURL string, mimeType string, filename string) (string, error) {
+	raw := strings.TrimSpace(rawURL)
+	if raw == "" {
+		return "", channels.ErrInvalidInput("attachment url required", nil)
+	}
+	if strings.HasPrefix(raw, "file://") || strings.HasPrefix(raw, "~/") || strings.HasPrefix(raw, string(os.PathSeparator)) {
+		path := expandPath(strings.TrimPrefix(raw, "file://"))
+		if _, err := os.Stat(path); err != nil {
+			return "", channels.ErrNotFound("attachment file not found", err)
+		}
+		return path, nil
+	}
+	if strings.HasPrefix(raw, "data:") {
+		data, dataMime, err := decodeDataURL(raw)
+		if err != nil {
+			return "", err
+		}
+		if mimeType == "" {
+			mimeType = dataMime
+		}
+		return a.writeAttachmentFile(data, mimeType, filename)
+	}
+
+	parsed, err := url.Parse(raw)
+	if err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") {
+		data, respMime, err := downloadAttachmentURL(ctx, raw)
+		if err != nil {
+			return "", err
+		}
+		if mimeType == "" {
+			mimeType = respMime
+		}
+		return a.writeAttachmentFile(data, mimeType, filename)
+	}
+
+	return "", channels.ErrInvalidInput("unsupported attachment url", nil)
 }
 
 type attachmentInfo struct {
@@ -211,6 +280,7 @@ func (a *Adapter) writeAttachmentFile(data []byte, mimeType string, filename str
 	if baseDir == "" {
 		baseDir = os.TempDir()
 	}
+	baseDir = filepath.Join(baseDir, "imessage-attachments")
 	if err := os.MkdirAll(baseDir, 0755); err != nil {
 		return "", channels.ErrConnection("failed to prepare media directory", err)
 	}
@@ -314,3 +384,77 @@ func extensionForMime(mimeType string) string {
 }
 
 var _ personal.MediaHandler = (*mediaHandler)(nil)
+
+func downloadAttachmentURL(ctx context.Context, rawURL string) ([]byte, string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, "", err
+	}
+
+	maxBytes := channelcontext.GetChannelInfo("imessage").MaxAttachmentBytes
+	if maxBytes <= 0 {
+		maxBytes = 100 * 1024 * 1024
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, "", channels.ErrInvalidInput("invalid attachment url", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, "", channels.ErrConnection("failed to download attachment", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return nil, "", channels.ErrConnection(fmt.Sprintf("download failed (%d)", resp.StatusCode), nil)
+	}
+
+	reader := io.LimitReader(resp.Body, maxBytes+1)
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, "", channels.ErrConnection("failed to read attachment", err)
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, "", channels.ErrInvalidInput(fmt.Sprintf("attachment too large (%d bytes)", len(data)), nil)
+	}
+
+	return data, resp.Header.Get("Content-Type"), nil
+}
+
+func decodeDataURL(raw string) ([]byte, string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, "", channels.ErrInvalidInput("attachment data url is empty", nil)
+	}
+	if !strings.HasPrefix(raw, "data:") {
+		return nil, "", channels.ErrInvalidInput("invalid data url", nil)
+	}
+	parts := strings.SplitN(raw[5:], ",", 2)
+	if len(parts) != 2 {
+		return nil, "", channels.ErrInvalidInput("invalid data url", nil)
+	}
+	meta := parts[0]
+	payload := parts[1]
+	mimeType := ""
+	isBase64 := false
+	for _, part := range strings.Split(meta, ";") {
+		if part == "base64" {
+			isBase64 = true
+			continue
+		}
+		if strings.Contains(part, "/") {
+			mimeType = part
+		}
+	}
+	if !isBase64 {
+		return nil, "", channels.ErrInvalidInput("data url must be base64 encoded", nil)
+	}
+	data, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil {
+		return nil, "", channels.ErrInternal("failed to decode attachment data", err)
+	}
+	return data, mimeType, nil
+}

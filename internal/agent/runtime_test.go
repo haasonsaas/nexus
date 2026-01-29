@@ -1172,6 +1172,37 @@ func TestProcessMaxIterationsExceeded(t *testing.T) {
 	_ = calls
 }
 
+func TestProcessMaxToolCallsExceeded(t *testing.T) {
+	provider := &multiToolProvider{}
+	runtime := NewRuntimeWithOptions(provider, stubStore{}, RuntimeOptions{
+		MaxIterations:   1,
+		ToolParallelism: 1,
+		MaxToolCalls:    1,
+	})
+	runtime.RegisterTool(&testTool{name: "block"})
+
+	session := &models.Session{ID: "session-1", Channel: models.ChannelTelegram}
+	msg := &models.Message{Role: models.RoleUser, Content: "loop"}
+
+	ch, err := runtime.Process(context.Background(), session, msg)
+	if err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+
+	var gotErr error
+	for chunk := range ch {
+		if chunk.Error != nil {
+			gotErr = chunk.Error
+		}
+	}
+	if gotErr == nil {
+		t.Fatal("expected error for max tool calls")
+	}
+	if !strings.Contains(gotErr.Error(), "tool calls exceed maximum") {
+		t.Errorf("unexpected error: %v", gotErr)
+	}
+}
+
 type streamingProvider struct {
 	chunks []string
 }

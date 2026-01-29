@@ -561,7 +561,15 @@ func TestResultsToMessages(t *testing.T) {
 	results := []*ExecutionResult{
 		{
 			ToolCallID: "call-1",
-			Result:     &ToolResult{Content: "success"},
+			Result: &ToolResult{
+				Content: "success",
+				Artifacts: []Artifact{{
+					ID:       "att-1",
+					Type:     "image",
+					MimeType: "image/png",
+					Data:     []byte("x"),
+				}},
+			},
 		},
 		{
 			ToolCallID: "call-2",
@@ -588,6 +596,12 @@ func TestResultsToMessages(t *testing.T) {
 	}
 	if messages[0].IsError {
 		t.Error("msg 0 should not be error")
+	}
+	if len(messages[0].Attachments) != 1 {
+		t.Errorf("msg 0 attachments = %d, want 1", len(messages[0].Attachments))
+	}
+	if messages[0].Attachments[0].ID != "att-1" {
+		t.Errorf("msg 0 attachment ID = %q, want %q", messages[0].Attachments[0].ID, "att-1")
 	}
 
 	// Second: error from Error field

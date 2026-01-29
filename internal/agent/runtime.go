@@ -1206,6 +1206,11 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 	if maxIters <= 0 {
 		maxIters = 5
 	}
+	maxToolCalls := runOpts.MaxToolCalls
+	if maxToolCalls < 0 {
+		maxToolCalls = 0
+	}
+	totalToolCalls := 0
 
 	for iter := 0; iter < maxIters; iter++ {
 		select {
@@ -1265,6 +1270,12 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 				emitter.ModelDelta(ctx, chunk.Text)
 			}
 			if chunk.ToolCall != nil {
+				// Check total tool call limit to prevent runaway loops
+				if maxToolCalls > 0 && totalToolCalls >= maxToolCalls {
+					err := fmt.Errorf("tool calls exceed maximum of %d for request", maxToolCalls)
+					emitter.RunError(ctx, err, true)
+					return err
+				}
 				// Check tool call limit to prevent DOS
 				if len(toolCalls) >= MaxToolCallsPerIteration {
 					emitter.RunError(ctx, fmt.Errorf("too many tool calls in single iteration (max %d)", MaxToolCallsPerIteration), true)
@@ -1273,6 +1284,7 @@ func (r *Runtime) run(ctx context.Context, session *models.Session, msg *models.
 
 				tc := *chunk.ToolCall
 				toolCalls = append(toolCalls, tc)
+				totalToolCalls++
 
 				// Persist tool call event immediately (best-effort)
 				if r.toolEvents != nil {

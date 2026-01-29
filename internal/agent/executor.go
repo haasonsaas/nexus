@@ -46,6 +46,30 @@ func DefaultExecutorConfig() *ExecutorConfig {
 	}
 }
 
+func sanitizeExecutorConfig(config *ExecutorConfig) *ExecutorConfig {
+	if config == nil {
+		return DefaultExecutorConfig()
+	}
+	cfg := *config
+	defaults := DefaultExecutorConfig()
+	if cfg.MaxConcurrency <= 0 {
+		cfg.MaxConcurrency = defaults.MaxConcurrency
+	}
+	if cfg.DefaultTimeout <= 0 {
+		cfg.DefaultTimeout = defaults.DefaultTimeout
+	}
+	if cfg.DefaultRetries < 0 {
+		cfg.DefaultRetries = defaults.DefaultRetries
+	}
+	if cfg.RetryBackoff < 0 {
+		cfg.RetryBackoff = defaults.RetryBackoff
+	}
+	if cfg.MaxRetryBackoff <= 0 {
+		cfg.MaxRetryBackoff = defaults.MaxRetryBackoff
+	}
+	return &cfg
+}
+
 // ToolConfig holds per-tool configuration overrides for timeout, retry, and priority settings.
 type ToolConfig struct {
 	// Timeout overrides the default timeout for this tool
@@ -91,9 +115,10 @@ type ExecutorMetrics struct {
 // NewExecutor creates a new parallel tool executor with the given registry and configuration.
 // If config is nil, DefaultExecutorConfig is used.
 func NewExecutor(registry *ToolRegistry, config *ExecutorConfig) *Executor {
-	if config == nil {
-		config = DefaultExecutorConfig()
+	if registry == nil {
+		registry = NewToolRegistry()
 	}
+	config = sanitizeExecutorConfig(config)
 
 	return &Executor{
 		registry:   registry,
@@ -165,15 +190,17 @@ func (e *Executor) Execute(ctx context.Context, call models.ToolCall) *Execution
 	}
 
 	// Acquire semaphore for backpressure
-	select {
-	case e.sem <- struct{}{}:
-		defer func() { <-e.sem }()
-	case <-ctx.Done():
-		result.Error = NewToolError(call.Name, ctx.Err()).
-			WithType(ToolErrorTimeout).
-			WithToolCallID(call.ID)
-		result.Duration = time.Since(start)
-		return result
+	if e.sem != nil {
+		select {
+		case e.sem <- struct{}{}:
+			defer func() { <-e.sem }()
+		case <-ctx.Done():
+			result.Error = NewToolError(call.Name, ctx.Err()).
+				WithType(ToolErrorTimeout).
+				WithToolCallID(call.ID)
+			result.Duration = time.Since(start)
+			return result
+		}
 	}
 
 	// Get tool config
@@ -361,10 +388,12 @@ func ResultsToMessages(results []*ExecutionResult) []models.ToolResult {
 				IsError:    true,
 			}
 		} else if r.Result != nil {
+			attachments := artifactsToAttachments(r.Result.Artifacts)
 			toolResults[i] = models.ToolResult{
-				ToolCallID: r.ToolCallID,
-				Content:    r.Result.Content,
-				IsError:    r.Result.IsError,
+				ToolCallID:  r.ToolCallID,
+				Content:     r.Result.Content,
+				IsError:     r.Result.IsError,
+				Attachments: attachments,
 			}
 		}
 	}

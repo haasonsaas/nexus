@@ -2,8 +2,12 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/haasonsaas/nexus/internal/sessions"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
@@ -46,6 +50,24 @@ func DefaultLoopConfig() *LoopConfig {
 	}
 }
 
+func sanitizeLoopConfig(config *LoopConfig) *LoopConfig {
+	if config == nil {
+		return DefaultLoopConfig()
+	}
+	cfg := *config
+	defaults := DefaultLoopConfig()
+	if cfg.MaxIterations <= 0 {
+		cfg.MaxIterations = defaults.MaxIterations
+	}
+	if cfg.MaxTokens <= 0 {
+		cfg.MaxTokens = defaults.MaxTokens
+	}
+	if cfg.ExecutorConfig == nil {
+		cfg.ExecutorConfig = defaults.ExecutorConfig
+	}
+	return &cfg
+}
+
 // AgenticLoop implements a multi-turn agentic conversation loop.
 //
 // The loop operates as a state machine:
@@ -82,11 +104,15 @@ type AgenticLoop struct {
 // NewAgenticLoop creates a new agentic loop with the given provider, tool registry, and session store.
 // If config is nil, DefaultLoopConfig is used.
 func NewAgenticLoop(provider LLMProvider, registry *ToolRegistry, sessions sessions.Store, config *LoopConfig) *AgenticLoop {
-	if config == nil {
-		config = DefaultLoopConfig()
+	config = sanitizeLoopConfig(config)
+	if registry == nil {
+		registry = NewToolRegistry()
 	}
 
 	executor := NewExecutor(registry, config.ExecutorConfig)
+	if !config.EnableBackpressure {
+		executor.sem = nil
+	}
 
 	return &AgenticLoop{
 		provider: provider,
@@ -127,6 +153,22 @@ type LoopState struct {
 // Run executes the agentic loop and streams results through a channel.
 // The channel is closed when the loop completes or an error occurs.
 func (l *AgenticLoop) Run(ctx context.Context, session *models.Session, msg *models.Message) (<-chan *ResponseChunk, error) {
+	if l.provider == nil {
+		return nil, ErrNoProvider
+	}
+	if l.config == nil {
+		return nil, errors.New("loop config is nil")
+	}
+	if session == nil {
+		return nil, errors.New("session is nil")
+	}
+	if msg == nil {
+		return nil, errors.New("message is nil")
+	}
+	if l.sessions == nil && (l.config == nil || l.config.BranchStore == nil) {
+		return nil, errors.New("no session store configured")
+	}
+
 	chunks := make(chan *ResponseChunk, processBufferSize)
 
 	go func() {
@@ -139,6 +181,15 @@ func (l *AgenticLoop) Run(ctx context.Context, session *models.Session, msg *mod
 
 		// Initialize: Load history and build initial messages
 		if err := l.initializeState(ctx, session, msg, state); err != nil {
+			chunks <- &ResponseChunk{Error: &LoopError{
+				Phase:     PhaseInit,
+				Iteration: 0,
+				Cause:     err,
+			}}
+			return
+		}
+
+		if err := l.persistInboundMessage(ctx, session, msg, state.BranchID); err != nil {
 			chunks <- &ResponseChunk{Error: &LoopError{
 				Phase:     PhaseInit,
 				Iteration: 0,
@@ -172,8 +223,19 @@ func (l *AgenticLoop) Run(ctx context.Context, session *models.Session, msg *mod
 				return
 			}
 
+			if err := l.persistAssistantMessage(ctx, session, state, toolCalls); err != nil {
+				chunks <- &ResponseChunk{Error: &LoopError{
+					Phase:     PhaseStream,
+					Iteration: state.Iteration,
+					Cause:     err,
+				}}
+				return
+			}
+
 			// If no tool calls, we're done
 			if len(toolCalls) == 0 {
+				l.addAssistantMessage(state, toolCalls)
+				state.AccumulatedText = ""
 				state.Phase = PhaseComplete
 				return
 			}
@@ -184,6 +246,15 @@ func (l *AgenticLoop) Run(ctx context.Context, session *models.Session, msg *mod
 
 			toolResults, err := l.executeToolsPhase(ctx, state, chunks)
 			if err != nil {
+				chunks <- &ResponseChunk{Error: &LoopError{
+					Phase:     PhaseExecuteTools,
+					Iteration: state.Iteration,
+					Cause:     err,
+				}}
+				return
+			}
+
+			if err := l.persistToolMessage(ctx, session, state.BranchID, toolResults); err != nil {
 				chunks <- &ResponseChunk{Error: &LoopError{
 					Phase:     PhaseExecuteTools,
 					Iteration: state.Iteration,
@@ -217,27 +288,20 @@ func (l *AgenticLoop) initializeState(ctx context.Context, session *models.Sessi
 	var err error
 
 	// Use branch-aware history if branch store is configured and message has a branch
-	if l.config.BranchStore != nil && msg.BranchID != "" {
-		state.BranchID = msg.BranchID
-		history, err = l.config.BranchStore.GetBranchHistory(ctx, msg.BranchID, 50)
+	if l.config.BranchStore != nil {
+		if msg.BranchID != "" {
+			state.BranchID = msg.BranchID
+		} else {
+			branch, branchErr := l.config.BranchStore.EnsurePrimaryBranch(ctx, session.ID)
+			if branchErr != nil {
+				return fmt.Errorf("failed to ensure primary branch: %w", branchErr)
+			}
+			state.BranchID = branch.ID
+			msg.BranchID = branch.ID
+		}
+		history, err = l.config.BranchStore.GetBranchHistory(ctx, state.BranchID, 50)
 		if err != nil {
 			return fmt.Errorf("failed to get branch history: %w", err)
-		}
-	} else if l.config.BranchStore != nil {
-		// Try to get primary branch for session
-		branch, branchErr := l.config.BranchStore.GetPrimaryBranch(ctx, session.ID)
-		if branchErr == nil {
-			state.BranchID = branch.ID
-			history, err = l.config.BranchStore.GetBranchHistory(ctx, branch.ID, 50)
-			if err != nil {
-				return fmt.Errorf("failed to get branch history: %w", err)
-			}
-		} else {
-			// Fall back to standard session history
-			history, err = l.sessions.GetHistory(ctx, session.ID, 50)
-			if err != nil {
-				return fmt.Errorf("failed to get history: %w", err)
-			}
 		}
 	} else {
 		// Standard session history
@@ -247,18 +311,27 @@ func (l *AgenticLoop) initializeState(ctx context.Context, session *models.Sessi
 		}
 	}
 
+	history = repairTranscript(history)
+
 	// Build messages from history
 	state.Messages = make([]CompletionMessage, 0, len(history)+1)
 	for _, m := range history {
 		state.Messages = append(state.Messages, CompletionMessage{
-			Role:    string(m.Role),
-			Content: m.Content,
+			Role:        string(m.Role),
+			Content:     m.Content,
+			ToolCalls:   m.ToolCalls,
+			ToolResults: m.ToolResults,
+			Attachments: m.Attachments,
 		})
 	}
 
 	// Add the new message
+	role := msg.Role
+	if role == "" {
+		role = models.RoleUser
+	}
 	state.Messages = append(state.Messages, CompletionMessage{
-		Role:        string(msg.Role),
+		Role:        string(role),
 		Content:     msg.Content,
 		Attachments: msg.Attachments,
 	})
@@ -298,7 +371,7 @@ func (l *AgenticLoop) streamPhase(ctx context.Context, state *LoopState, chunks 
 
 	// Collect response
 	var toolCalls []models.ToolCall
-	var textBuilder string
+	var textBuilder strings.Builder
 
 	for chunk := range completion {
 		if chunk.Error != nil {
@@ -306,17 +379,23 @@ func (l *AgenticLoop) streamPhase(ctx context.Context, state *LoopState, chunks 
 		}
 
 		if chunk.Text != "" {
-			textBuilder += chunk.Text
+			if textBuilder.Len()+len(chunk.Text) > MaxResponseTextSize {
+				return nil, fmt.Errorf("response text exceeds maximum size of %d bytes", MaxResponseTextSize)
+			}
+			textBuilder.WriteString(chunk.Text)
 			chunks <- &ResponseChunk{Text: chunk.Text}
 		}
 
 		if chunk.ToolCall != nil {
+			if len(toolCalls) >= MaxToolCallsPerIteration {
+				return nil, fmt.Errorf("tool calls exceed maximum of %d per iteration", MaxToolCallsPerIteration)
+			}
 			toolCalls = append(toolCalls, *chunk.ToolCall)
 		}
 	}
 
 	// Store accumulated text for message history
-	state.AccumulatedText = textBuilder
+	state.AccumulatedText = textBuilder.String()
 
 	return toolCalls, nil
 }
@@ -341,10 +420,12 @@ func (l *AgenticLoop) executeToolsPhase(ctx context.Context, state *LoopState, c
 				IsError:    true,
 			}
 		} else if r.Result != nil {
+			attachments := artifactsToAttachments(r.Result.Artifacts)
 			toolResults[i] = models.ToolResult{
-				ToolCallID: r.ToolCallID,
-				Content:    r.Result.Content,
-				IsError:    r.Result.IsError,
+				ToolCallID:  r.ToolCallID,
+				Content:     r.Result.Content,
+				IsError:     r.Result.IsError,
+				Attachments: attachments,
 			}
 		}
 
@@ -365,11 +446,7 @@ func (l *AgenticLoop) executeToolsPhase(ctx context.Context, state *LoopState, c
 // continuePhase adds the assistant message with tool calls and tool results to history.
 func (l *AgenticLoop) continuePhase(state *LoopState, toolCalls []models.ToolCall, toolResults []models.ToolResult) {
 	// Add assistant message with tool calls
-	state.Messages = append(state.Messages, CompletionMessage{
-		Role:      "assistant",
-		Content:   state.AccumulatedText,
-		ToolCalls: toolCalls,
-	})
+	l.addAssistantMessage(state, toolCalls)
 
 	// Add tool results message
 	state.Messages = append(state.Messages, CompletionMessage{
@@ -381,6 +458,113 @@ func (l *AgenticLoop) continuePhase(state *LoopState, toolCalls []models.ToolCal
 	state.AccumulatedText = ""
 	state.PendingTools = nil
 	state.ToolResults = nil
+}
+
+func (l *AgenticLoop) addAssistantMessage(state *LoopState, toolCalls []models.ToolCall) {
+	state.Messages = append(state.Messages, CompletionMessage{
+		Role:      "assistant",
+		Content:   state.AccumulatedText,
+		ToolCalls: toolCalls,
+	})
+}
+
+func (l *AgenticLoop) persistInboundMessage(ctx context.Context, session *models.Session, msg *models.Message, branchID string) error {
+	if msg == nil {
+		return errors.New("message is nil")
+	}
+	if msg.ID == "" {
+		msg.ID = uuid.NewString()
+	}
+	if msg.SessionID == "" {
+		msg.SessionID = session.ID
+	}
+	if msg.Channel == "" {
+		msg.Channel = session.Channel
+	}
+	if msg.ChannelID == "" {
+		msg.ChannelID = session.ChannelID
+	}
+	if msg.Role == "" {
+		msg.Role = models.RoleUser
+	}
+	if msg.Direction == "" {
+		msg.Direction = models.DirectionInbound
+	}
+	if msg.CreatedAt.IsZero() {
+		msg.CreatedAt = time.Now()
+	}
+	if branchID != "" {
+		msg.BranchID = branchID
+	}
+	return l.appendMessage(ctx, session, branchID, msg)
+}
+
+func (l *AgenticLoop) persistAssistantMessage(ctx context.Context, session *models.Session, state *LoopState, toolCalls []models.ToolCall) error {
+	assistantMsg := &models.Message{
+		ID:        uuid.NewString(),
+		SessionID: session.ID,
+		Channel:   session.Channel,
+		ChannelID: session.ChannelID,
+		Direction: models.DirectionOutbound,
+		Role:      models.RoleAssistant,
+		Content:   state.AccumulatedText,
+		ToolCalls: toolCalls,
+		CreatedAt: time.Now(),
+	}
+	if state.BranchID != "" {
+		assistantMsg.BranchID = state.BranchID
+	}
+	return l.appendMessage(ctx, session, state.BranchID, assistantMsg)
+}
+
+func (l *AgenticLoop) persistToolMessage(ctx context.Context, session *models.Session, branchID string, toolResults []models.ToolResult) error {
+	if len(toolResults) == 0 {
+		return nil
+	}
+	resultsForStorage := make([]models.ToolResult, len(toolResults))
+	for i := range toolResults {
+		resultsForStorage[i] = toolResults[i]
+		resultsForStorage[i].Attachments = nil
+	}
+	toolMsg := &models.Message{
+		ID:          uuid.NewString(),
+		SessionID:   session.ID,
+		Channel:     session.Channel,
+		ChannelID:   session.ChannelID,
+		Direction:   models.DirectionInbound,
+		Role:        models.RoleTool,
+		ToolResults: resultsForStorage,
+		CreatedAt:   time.Now(),
+	}
+	if branchID != "" {
+		toolMsg.BranchID = branchID
+	}
+	return l.appendMessage(ctx, session, branchID, toolMsg)
+}
+
+func (l *AgenticLoop) appendMessage(ctx context.Context, session *models.Session, branchID string, msg *models.Message) error {
+	if msg == nil {
+		return nil
+	}
+	branch := strings.TrimSpace(branchID)
+	if branch == "" {
+		branch = strings.TrimSpace(msg.BranchID)
+	}
+	if l.config != nil && l.config.BranchStore != nil {
+		if branch == "" {
+			primary, err := l.config.BranchStore.EnsurePrimaryBranch(ctx, session.ID)
+			if err != nil {
+				return err
+			}
+			branch = primary.ID
+		}
+		msg.BranchID = branch
+		return l.config.BranchStore.AppendMessageToBranch(ctx, session.ID, branch, msg)
+	}
+	if l.sessions == nil {
+		return errors.New("no session store configured")
+	}
+	return l.sessions.AppendMessage(ctx, session.ID, msg)
 }
 
 // AgenticRuntime wraps the AgenticLoop to provide a Runtime-compatible interface.

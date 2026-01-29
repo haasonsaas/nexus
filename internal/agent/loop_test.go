@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -212,6 +213,160 @@ func TestAgenticLoop_SingleToolCall(t *testing.T) {
 
 	if provider.currentCall != 2 {
 		t.Errorf("provider called %d times, want 2", provider.currentCall)
+	}
+}
+
+func TestAgenticLoop_PersistsMessages(t *testing.T) {
+	provider := &loopTestProvider{
+		responses: [][]CompletionChunk{
+			{
+				{ToolCall: &models.ToolCall{
+					ID:    "call-1",
+					Name:  "echo",
+					Input: json.RawMessage(`{"text":"hi"}`),
+				}},
+				{Done: true},
+			},
+			{
+				{Text: "done"},
+				{Done: true},
+			},
+		},
+	}
+
+	registry := NewToolRegistry()
+	registry.Register(&testExecTool{
+		name: "echo",
+		execFunc: func(ctx context.Context, params json.RawMessage) (*ToolResult, error) {
+			return &ToolResult{Content: "ok"}, nil
+		},
+	})
+
+	store := newLoopMemoryStore()
+	config := DefaultLoopConfig()
+	loop := NewAgenticLoop(provider, registry, store, config)
+
+	session := &models.Session{ID: "session-1", Channel: models.ChannelAPI, ChannelID: "channel-1"}
+	msg := &models.Message{Role: models.RoleUser, Content: "hi"}
+
+	ch, err := loop.Run(context.Background(), session, msg)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	for chunk := range ch {
+		if chunk.Error != nil {
+			t.Fatalf("unexpected error: %v", chunk.Error)
+		}
+	}
+
+	if len(store.messages) != 4 {
+		t.Fatalf("got %d persisted messages, want 4", len(store.messages))
+	}
+
+	wantRoles := []models.Role{
+		models.RoleUser,
+		models.RoleAssistant,
+		models.RoleTool,
+		models.RoleAssistant,
+	}
+	for i, want := range wantRoles {
+		if store.messages[i].Role != want {
+			t.Errorf("message %d role = %s, want %s", i, store.messages[i].Role, want)
+		}
+	}
+	if len(store.messages[1].ToolCalls) != 1 {
+		t.Errorf("assistant message tool calls = %d, want 1", len(store.messages[1].ToolCalls))
+	}
+	if len(store.messages[2].ToolResults) != 1 {
+		t.Errorf("tool message results = %d, want 1", len(store.messages[2].ToolResults))
+	}
+	if store.messages[3].Content != "done" {
+		t.Errorf("final assistant content = %q, want %q", store.messages[3].Content, "done")
+	}
+}
+
+func TestAgenticLoop_HistoryPreservesToolContext(t *testing.T) {
+	store := newLoopMemoryStore()
+	store.history = []*models.Message{
+		{
+			Role:    models.RoleUser,
+			Content: "history user",
+			Attachments: []models.Attachment{{
+				ID:   "att-1",
+				Type: "image",
+				URL:  "https://example.com/image.png",
+			}},
+		},
+		{
+			Role:    models.RoleAssistant,
+			Content: "history assistant",
+			ToolCalls: []models.ToolCall{{
+				ID:    "tc-1",
+				Name:  "echo",
+				Input: json.RawMessage(`{}`),
+			}},
+		},
+		{
+			Role: models.RoleTool,
+			ToolResults: []models.ToolResult{{
+				ToolCallID: "tc-1",
+				Content:    "ok",
+				Attachments: []models.Attachment{{
+					ID:   "att-2",
+					Type: "document",
+					URL:  "file:///tmp/out.txt",
+				}},
+			}},
+		},
+	}
+
+	var mu sync.Mutex
+	var captured []CompletionMessage
+	provider := &loopTestProvider{
+		completeFunc: func(ctx context.Context, req *CompletionRequest) (<-chan *CompletionChunk, error) {
+			mu.Lock()
+			captured = append([]CompletionMessage(nil), req.Messages...)
+			mu.Unlock()
+			ch := make(chan *CompletionChunk, 1)
+			ch <- &CompletionChunk{Text: "ok"}
+			close(ch)
+			return ch, nil
+		},
+	}
+
+	registry := NewToolRegistry()
+	loop := NewAgenticLoop(provider, registry, store, DefaultLoopConfig())
+
+	session := &models.Session{ID: "session-1"}
+	msg := &models.Message{Role: models.RoleUser, Content: "new"}
+
+	ch, err := loop.Run(context.Background(), session, msg)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	for chunk := range ch {
+		if chunk.Error != nil {
+			t.Fatalf("unexpected error: %v", chunk.Error)
+		}
+	}
+
+	mu.Lock()
+	got := captured
+	mu.Unlock()
+	if len(got) < 4 {
+		t.Fatalf("got %d messages, want at least 4", len(got))
+	}
+	if len(got[0].Attachments) != 1 {
+		t.Errorf("history user attachments = %d, want 1", len(got[0].Attachments))
+	}
+	if len(got[1].ToolCalls) != 1 {
+		t.Errorf("history assistant tool calls = %d, want 1", len(got[1].ToolCalls))
+	}
+	if len(got[2].ToolResults) != 1 {
+		t.Fatalf("history tool results = %d, want 1", len(got[2].ToolResults))
+	}
+	if len(got[2].ToolResults[0].Attachments) != 1 {
+		t.Errorf("history tool result attachments = %d, want 1", len(got[2].ToolResults[0].Attachments))
 	}
 }
 

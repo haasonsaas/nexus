@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -252,6 +253,24 @@ func handleScreenCapture(ctx context.Context, input string) (*ToolResult, error)
 		cmd = exec.CommandContext(ctx, "screencapture", args...)
 
 	case "linux":
+		if params.WindowName != "" {
+			if params.Region != nil {
+				return &ToolResult{Content: "window_name cannot be combined with region", IsError: true}, nil
+			}
+			if _, err := exec.LookPath("import"); err != nil {
+				return &ToolResult{
+					Content: "Window capture requires ImageMagick (install with: sudo apt install imagemagick)",
+					IsError: true,
+				}, nil
+			}
+			windowID, err := findLinuxWindowIDByName(ctx, params.WindowName)
+			if err != nil {
+				return &ToolResult{Content: fmt.Sprintf("window capture failed: %v", err), IsError: true}, nil
+			}
+			cmd = exec.CommandContext(ctx, "import", "-window", windowID, tmpFile)
+			break
+		}
+
 		if _, err := exec.LookPath("scrot"); err == nil {
 			args := []string{tmpFile}
 			if params.Region != nil {
@@ -386,6 +405,35 @@ for info in infoList {
 let data = try JSONSerialization.data(withJSONObject: results, options: [])
 FileHandle.standardOutput.write(data)
 `
+
+func findLinuxWindowIDByName(ctx context.Context, windowName string) (string, error) {
+	needle := strings.TrimSpace(windowName)
+	if needle == "" {
+		return "", fmt.Errorf("window name is empty")
+	}
+	if _, err := exec.LookPath("xdotool"); err != nil {
+		return "", fmt.Errorf("window_name capture requires xdotool (install with: sudo apt install xdotool)")
+	}
+	pattern := regexp.QuoteMeta(needle)
+	searchArgs := []string{"search", "--onlyvisible", "--name", pattern}
+	cmd := exec.CommandContext(ctx, "xdotool", searchArgs...)
+	output, err := cmd.Output()
+	if err != nil || len(output) == 0 {
+		cmd = exec.CommandContext(ctx, "xdotool", "search", "--name", pattern)
+		output, err = cmd.Output()
+		if err != nil {
+			return "", fmt.Errorf("xdotool search failed: %v", err)
+		}
+	}
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	for _, line := range lines {
+		id := strings.TrimSpace(line)
+		if id != "" {
+			return id, nil
+		}
+	}
+	return "", fmt.Errorf("no window matched %q", windowName)
+}
 
 // locationGetTool gets the current GPS location.
 func locationGetTool() *Tool {

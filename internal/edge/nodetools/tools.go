@@ -118,7 +118,7 @@ func (p *Provider) registerMacTools() {
 func (p *Provider) registerLinuxTools() {
 	p.Register(&CameraSnapTool{logger: p.logger, platform: "linux"})
 	p.Register(&ScreenRecordTool{logger: p.logger, platform: "linux"})
-	// Location typically not available on Linux desktop
+	p.Register(&LocationGetTool{logger: p.logger, platform: "linux"})
 }
 
 func (p *Provider) registerWindowsTools() {
@@ -444,6 +444,8 @@ func (t *LocationGetTool) Execute(ctx context.Context, params json.RawMessage) (
 	switch t.platform {
 	case "darwin":
 		return t.executeMac(ctx, p)
+	case "linux":
+		return t.executeLinux(ctx, p)
 	default:
 		return &ToolResult{Content: "location not supported on this platform", IsError: true}, nil
 	}
@@ -518,6 +520,31 @@ func (t *LocationGetTool) executeMac(ctx context.Context, p LocationGetParams) (
 		}
 	}
 	return &ToolResult{Content: content}, nil
+}
+
+func (t *LocationGetTool) executeLinux(ctx context.Context, p LocationGetParams) (*ToolResult, error) {
+	if _, err := exec.LookPath("gpspipe"); err == nil {
+		cmd := exec.CommandContext(ctx, "gpspipe", "-w", "-n", "1")
+		output, err := cmd.Output()
+		if err != nil {
+			return &ToolResult{
+				Content: fmt.Sprintf("gps query failed: %v", err),
+				IsError: true,
+			}, nil
+		}
+		content := strings.TrimSpace(string(output))
+		if content == "" {
+			return &ToolResult{
+				Content: "location unavailable",
+				IsError: true,
+			}, nil
+		}
+		return &ToolResult{Content: content}, nil
+	}
+	return &ToolResult{
+		Content: "location requires gpsd (install with: sudo apt install gpsd gpsd-clients)",
+		IsError: true,
+	}, nil
 }
 
 const macLocationScript = `

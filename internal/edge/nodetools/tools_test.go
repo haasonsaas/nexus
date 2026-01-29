@@ -317,7 +317,7 @@ func TestLocationGetTool_Execute(t *testing.T) {
 }
 
 func TestLocationGetTool_Execute_UnsupportedPlatform(t *testing.T) {
-	tool := &LocationGetTool{platform: "linux"}
+	tool := &LocationGetTool{platform: "windows"}
 	ctx := context.Background()
 
 	params, _ := json.Marshal(LocationGetParams{})
@@ -330,6 +330,24 @@ func TestLocationGetTool_Execute_UnsupportedPlatform(t *testing.T) {
 	}
 	if !strings.Contains(result.Content, "not supported") {
 		t.Errorf("expected 'not supported' message, got: %s", result.Content)
+	}
+}
+
+func TestLocationGetTool_Execute_LinuxMissingGpsd(t *testing.T) {
+	t.Setenv("PATH", "")
+	tool := &LocationGetTool{platform: "linux"}
+	ctx := context.Background()
+
+	params, _ := json.Marshal(LocationGetParams{})
+	result, err := tool.Execute(ctx, params)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if !result.IsError {
+		t.Error("expected error when gpsd is unavailable")
+	}
+	if !strings.Contains(result.Content, "gpsd") {
+		t.Errorf("expected gpsd hint, got: %s", result.Content)
 	}
 }
 

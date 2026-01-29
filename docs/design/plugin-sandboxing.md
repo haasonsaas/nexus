@@ -58,11 +58,13 @@ Config lives under `plugins.isolation` (intentionally not `plugins.sandbox`):
 - If sandbox fails to start, skip plugin and log a warning.
 - Support allowlist to force sandbox for untrusted plugins.
 
+Current implementation: enabling isolation without a supported backend will skip plugin loading (fail-closed) and log a warning.
+
 ---
 
 ## Rollout
 
 1. Enforce manifest-declared capabilities (tools/channels/commands/services/hooks) for runtime plugin registration. ✅
-2. Add config + runner abstraction. ✅ (config scaffold + loader selection; isolation flag falls back to in-process with a warning; backend not implemented yet)
+2. Add config + runner abstraction. ✅ (config scaffold + loader selection; isolation flag fails closed when backend unavailable)
 3. Implement Docker backend (out-of-process plugin host).
 4. Extend with Firecracker backend + snapshots (reuse existing sandbox pool patterns).

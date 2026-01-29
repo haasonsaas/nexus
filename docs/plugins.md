@@ -84,8 +84,9 @@ plugins:
 
 The `plugins.isolation` config block is reserved for out-of-process plugin execution (Docker / Firecracker).
 
-Today, true isolation is not implemented. If `plugins.isolation.enabled` is set, Nexus logs a warning and continues to load
-runtime plugins in-process.
+Today, true isolation is not implemented. If `plugins.isolation.enabled` is set, Nexus will **skip loading** runtime plugins
+when the requested isolation backend is unavailable (fail-closed) and log a warning instead of falling back to in-process
+execution.
 
 ## Security Notes
 

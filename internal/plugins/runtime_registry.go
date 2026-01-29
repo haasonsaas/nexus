@@ -103,6 +103,9 @@ func (r *RuntimeRegistry) LoadChannels(cfg *config.Config, registry *channels.Re
 		pluginEntry := r.ensureEntry(id, entry.Path, loader)
 		plugin, err := pluginEntry.load(entry.Path)
 		if err != nil {
+			if isIsolationUnavailable(err) {
+				continue
+			}
 			return err
 		}
 		pluginEntry.channelsOnce.Do(func() {
@@ -144,6 +147,9 @@ func (r *RuntimeRegistry) LoadTools(cfg *config.Config, runtime *agent.Runtime) 
 		pluginEntry := r.ensureEntry(id, entry.Path, loader)
 		plugin, err := pluginEntry.load(entry.Path)
 		if err != nil {
+			if isIsolationUnavailable(err) {
+				continue
+			}
 			return err
 		}
 		pluginEntry.toolsOnce.Do(func() {
@@ -185,6 +191,9 @@ func (r *RuntimeRegistry) LoadCLI(cfg *config.Config, rootCmd *cobra.Command, lo
 		pluginEntry := r.ensureEntry(id, entry.Path, loader)
 		plugin, err := pluginEntry.load(entry.Path)
 		if err != nil {
+			if isIsolationUnavailable(err) {
+				continue
+			}
 			return err
 		}
 
@@ -236,6 +245,9 @@ func (r *RuntimeRegistry) LoadServices(cfg *config.Config, manager *ServiceManag
 		pluginEntry := r.ensureEntry(id, entry.Path, loader)
 		plugin, err := pluginEntry.load(entry.Path)
 		if err != nil {
+			if isIsolationUnavailable(err) {
+				continue
+			}
 			return err
 		}
 
@@ -286,6 +298,9 @@ func (r *RuntimeRegistry) LoadHooks(cfg *config.Config, registry *hooks.Registry
 		pluginEntry := r.ensureEntry(id, entry.Path, loader)
 		plugin, err := pluginEntry.load(entry.Path)
 		if err != nil {
+			if isIsolationUnavailable(err) {
+				continue
+			}
 			return err
 		}
 
@@ -336,6 +351,9 @@ func (r *RuntimeRegistry) LoadFullPlugins(cfg *config.Config, api *PluginAPIBuil
 		pluginEntry := r.ensureEntry(id, entry.Path, loader)
 		plugin, err := pluginEntry.load(entry.Path)
 		if err != nil {
+			if isIsolationUnavailable(err) {
+				continue
+			}
 			return err
 		}
 
@@ -450,6 +468,14 @@ func (e *runtimeEntry) load(path string) (pluginsdk.RuntimePlugin, error) {
 		if e.loadErr == nil && e.loaded != nil && e.manifest == nil {
 			e.manifest = e.loaded.Manifest()
 		}
+		if e.loadErr != nil && isIsolationUnavailable(e.loadErr) {
+			slog.Warn(
+				"plugin isolation enabled but backend unavailable; skipping plugin",
+				"plugin_id", e.id,
+				"path", path,
+				"error", e.loadErr,
+			)
+		}
 	})
 	if e.loadErr != nil {
 		return nil, e.loadErr
@@ -477,20 +503,9 @@ func (inProcessRuntimePluginLoader) Load(pluginID string, path string) (pluginsd
 	return loadRuntimePlugin(resolvePluginBinary(path, pluginID))
 }
 
-type fallbackIsolationRuntimePluginLoader struct{}
-
-var isolationFallbackOnce sync.Once
-
-func (fallbackIsolationRuntimePluginLoader) Load(pluginID string, path string) (pluginsdk.RuntimePlugin, error) {
-	isolationFallbackOnce.Do(func() {
-		slog.Warn(pluginIsolationFallbackMessage)
-	})
-	return loadRuntimePlugin(resolvePluginBinary(path, pluginID))
-}
-
 func runtimePluginLoaderForConfig(cfg *config.Config) runtimePluginLoader {
 	if cfg != nil && cfg.Plugins.Isolation.Enabled {
-		return fallbackIsolationRuntimePluginLoader{}
+		return newIsolationRuntimePluginLoader(cfg.Plugins.Isolation)
 	}
 	return inProcessRuntimePluginLoader{}
 }

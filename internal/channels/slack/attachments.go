@@ -76,6 +76,10 @@ func uploadSlackAttachment(ctx context.Context, client SlackAPIClient, httpClien
 }
 
 func fetchSlackAttachment(ctx context.Context, httpClient *http.Client, att models.Attachment, maxBytes int64) ([]byte, string, string, error) {
+	return fetchSlackAttachmentWithHeaders(ctx, httpClient, att, maxBytes, nil)
+}
+
+func fetchSlackAttachmentWithHeaders(ctx context.Context, httpClient *http.Client, att models.Attachment, maxBytes int64, headers map[string]string) ([]byte, string, string, error) {
 	parsed, err := url.Parse(att.URL)
 	if err != nil {
 		return nil, "", "", fmt.Errorf("parse attachment url: %w", err)
@@ -94,6 +98,12 @@ func fetchSlackAttachment(ctx context.Context, httpClient *http.Client, att mode
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, att.URL, nil)
 	if err != nil {
 		return nil, "", "", fmt.Errorf("build attachment request: %w", err)
+	}
+	for key, value := range headers {
+		if strings.TrimSpace(key) == "" {
+			continue
+		}
+		req.Header.Set(key, value)
 	}
 
 	resp, err := httpClient.Do(req)
@@ -154,4 +164,46 @@ func filenameFromURL(parsed *url.URL) string {
 		return ""
 	}
 	return base
+}
+
+// DownloadAttachment fetches Slack attachment bytes using the bot token for auth.
+func (a *Adapter) DownloadAttachment(ctx context.Context, msg *models.Message, attachment *models.Attachment) ([]byte, string, string, error) {
+	if a == nil {
+		return nil, "", "", errors.New("adapter is nil")
+	}
+	return downloadSlackAttachment(ctx, a.cfg, attachment)
+}
+
+// DownloadAttachment fetches Slack attachment bytes using the bot token for auth.
+func (a *TestableAdapter) DownloadAttachment(ctx context.Context, msg *models.Message, attachment *models.Attachment) ([]byte, string, string, error) {
+	if a == nil {
+		return nil, "", "", errors.New("adapter is nil")
+	}
+	return downloadSlackAttachment(ctx, a.cfg, attachment)
+}
+
+func downloadSlackAttachment(ctx context.Context, cfg Config, attachment *models.Attachment) ([]byte, string, string, error) {
+	if attachment == nil {
+		return nil, "", "", errors.New("attachment is nil")
+	}
+	if strings.TrimSpace(attachment.URL) == "" {
+		return nil, "", "", errors.New("attachment url is empty")
+	}
+
+	httpClient := cfg.HTTPClient
+	if httpClient == nil {
+		httpClient = http.DefaultClient
+	}
+
+	maxBytes := channelcontext.GetChannelInfo(string(models.ChannelSlack)).MaxAttachmentBytes
+	headers := map[string]string{}
+	if strings.TrimSpace(cfg.BotToken) != "" {
+		headers["Authorization"] = "Bearer " + cfg.BotToken
+	}
+
+	data, filename, mimeType, err := fetchSlackAttachmentWithHeaders(ctx, httpClient, *attachment, maxBytes, headers)
+	if err != nil {
+		return nil, "", "", err
+	}
+	return data, mimeType, filename, nil
 }

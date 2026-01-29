@@ -2843,6 +2843,52 @@ func TestTestableAdapter_SendWithAttachments_UploadEnabled(t *testing.T) {
 	}
 }
 
+func TestTestableAdapter_DownloadAttachment(t *testing.T) {
+	var authHeader string
+	httpClient := &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			authHeader = req.Header.Get("Authorization")
+			return &http.Response{
+				StatusCode:    http.StatusOK,
+				Body:          io.NopCloser(strings.NewReader("payload")),
+				ContentLength: int64(len("payload")),
+				Header:        http.Header{"Content-Type": []string{"text/plain"}},
+			}, nil
+		}),
+	}
+	cfg := Config{
+		BotToken:   "xoxb-test-token",
+		AppToken:   "xapp-test-token",
+		HTTPClient: httpClient,
+	}
+	adapter, err := NewTestableAdapter(cfg, &MockSlackClient{})
+	if err != nil {
+		t.Fatalf("NewTestableAdapter() error = %v", err)
+	}
+
+	data, mimeType, filename, err := adapter.DownloadAttachment(context.Background(), nil, &models.Attachment{
+		URL:      "https://example.com/file.txt",
+		Filename: "file.txt",
+		MimeType: "text/plain",
+		Size:     int64(len("payload")),
+	})
+	if err != nil {
+		t.Fatalf("DownloadAttachment() error = %v", err)
+	}
+	if authHeader != "Bearer xoxb-test-token" {
+		t.Errorf("expected Authorization header to be set, got %q", authHeader)
+	}
+	if string(data) != "payload" {
+		t.Errorf("expected payload, got %q", string(data))
+	}
+	if mimeType != "text/plain" {
+		t.Errorf("expected mimeType text/plain, got %q", mimeType)
+	}
+	if filename != "file.txt" {
+		t.Errorf("expected filename file.txt, got %q", filename)
+	}
+}
+
 func TestTestableAdapter_SendGenericError(t *testing.T) {
 	mock := &MockSlackClient{
 		PostMessageContextFunc: func(ctx context.Context, channelID string, options ...slack.MsgOption) (string, string, error) {

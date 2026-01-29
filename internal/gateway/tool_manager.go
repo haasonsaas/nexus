@@ -317,7 +317,7 @@ func (m *ToolManager) RegisterTools(ctx context.Context, runtime *agent.Runtime)
 	if m.config == nil {
 		return nil
 	}
-	cfg = m.config
+	cfg := m.config
 
 	fileCfg := files.Config{Workspace: cfg.Workspace.Path}
 	m.registerCoreTool(runtime, files.NewReadTool(fileCfg))

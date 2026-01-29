@@ -312,6 +312,9 @@ func TestLocationGetTool_Execute(t *testing.T) {
 	if result.Content == "" {
 		t.Error("expected non-empty content")
 	}
+	if !result.IsError {
+		t.Error("expected error when helper is unavailable")
+	}
 }
 
 func TestLocationGetTool_Execute_UnsupportedPlatform(t *testing.T) {

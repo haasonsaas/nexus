@@ -462,7 +462,7 @@ end tell
 	// In production, this would use a small helper binary that accesses CoreLocation
 	return &ToolResult{
 		Content: "Location services require a native helper. Location: unavailable (helper not installed)",
-		IsError: false,
+		IsError: true,
 	}, nil
 }
 

@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"math"
 	"net"
 	"os"
@@ -484,6 +485,10 @@ func safeWorkspacePath(baseDir, name string) (string, error) {
 	}
 	if filepath.IsAbs(cleaned) || cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
 		cleaned = filepath.Base(cleaned)
+		cleaned = strings.TrimLeft(cleaned, string(filepath.Separator))
+		if cleaned == "" || cleaned == "." {
+			return "", fmt.Errorf("invalid filename: %q", name)
+		}
 	}
 	target := filepath.Join(baseDir, cleaned)
 	rel, err := filepath.Rel(baseDir, target)
@@ -624,7 +629,15 @@ func applyReadOnlyAccess(workspace string, files []string) error {
 			return err
 		}
 	}
-	return os.Chmod(workspace, 0555)
+	return filepath.WalkDir(workspace, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return os.Chmod(path, 0555)
+		}
+		return nil
+	})
 }
 
 // setResourceLimits sets CPU and memory limits for the command.

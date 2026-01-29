@@ -311,22 +311,6 @@ type BackendStats struct {
 	Overlay OverlayStats `json:"overlay"`
 }
 
-// getMainFilename returns the filename for the code based on language.
-func getMainFilename(language string) string {
-	switch language {
-	case "python":
-		return "main.py"
-	case "nodejs":
-		return "main.js"
-	case "go":
-		return "main.go"
-	case "bash":
-		return "main.sh"
-	default:
-		return "main.txt"
-	}
-}
-
 // FirecrackerExecutor wraps Backend to implement RuntimeExecutor interface.
 type FirecrackerExecutor struct {
 	backend  *Backend

@@ -257,12 +257,12 @@ func (d *daytonaExecutor) Run(ctx context.Context, params *ExecuteParams, worksp
 	}
 	defer d.cleanupRunDir(context.Background(), toolboxClient, runDir)
 
-	uploadedFiles, err := d.uploadWorkspace(ctx, toolboxClient, workspace, runDir)
+	uploadedFiles, uploadedDirs, err := d.uploadWorkspace(ctx, toolboxClient, workspace, runDir)
 	if err != nil {
 		return nil, err
 	}
 	if d.isReadOnlyAccess(params.WorkspaceAccess) {
-		if err := d.applyReadOnlyAccess(ctx, toolboxClient, runDir, uploadedFiles); err != nil {
+		if err := d.applyReadOnlyAccess(ctx, toolboxClient, runDir, uploadedFiles, uploadedDirs); err != nil {
 			return nil, err
 		}
 	}
@@ -548,8 +548,9 @@ func (d *daytonaExecutor) createFolder(ctx context.Context, toolboxClient *toolb
 	return fmt.Errorf("daytona create folder: %w", formatToolboxError(err, httpResp))
 }
 
-func (d *daytonaExecutor) uploadWorkspace(ctx context.Context, toolboxClient *toolbox.APIClient, localDir, remoteDir string) ([]string, error) {
-	uploaded := []string{}
+func (d *daytonaExecutor) uploadWorkspace(ctx context.Context, toolboxClient *toolbox.APIClient, localDir, remoteDir string) ([]string, []string, error) {
+	uploadedFiles := []string{}
+	uploadedDirs := []string{}
 	err := filepath.WalkDir(localDir, func(current string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return fmt.Errorf("daytona read workspace: %w", walkErr)
@@ -569,6 +570,7 @@ func (d *daytonaExecutor) uploadWorkspace(ctx context.Context, toolboxClient *to
 			if err := d.createFolder(ctx, toolboxClient, remotePath); err != nil {
 				return err
 			}
+			uploadedDirs = append(uploadedDirs, remotePath)
 			return nil
 		}
 		if entry.Type()&os.ModeSymlink != 0 {
@@ -584,14 +586,14 @@ func (d *daytonaExecutor) uploadWorkspace(ctx context.Context, toolboxClient *to
 		if uploadErr != nil {
 			return fmt.Errorf("daytona upload file: %w", formatToolboxError(uploadErr, httpResp))
 		}
-		uploaded = append(uploaded, remotePath)
+		uploadedFiles = append(uploadedFiles, remotePath)
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return uploaded, nil
+	return uploadedFiles, uploadedDirs, nil
 }
 
 func (d *daytonaExecutor) buildCommand(params *ExecuteParams) string {
@@ -617,17 +619,30 @@ func (d *daytonaExecutor) isReadOnlyAccess(mode WorkspaceAccessMode) bool {
 	}
 }
 
-func (d *daytonaExecutor) applyReadOnlyAccess(ctx context.Context, toolboxClient *toolbox.APIClient, runDir string, files []string) error {
+func (d *daytonaExecutor) applyReadOnlyAccess(ctx context.Context, toolboxClient *toolbox.APIClient, runDir string, files, dirs []string) error {
 	for _, file := range files {
 		httpResp, err := toolboxClient.FileSystemAPI.SetFilePermissions(ctx).Path(file).Mode("0444").Execute()
 		if err != nil {
 			return fmt.Errorf("daytona set file permissions: %w", formatToolboxError(err, httpResp))
 		}
 	}
-
-	httpResp, err := toolboxClient.FileSystemAPI.SetFilePermissions(ctx).Path(runDir).Mode("0555").Execute()
-	if err != nil {
-		return fmt.Errorf("daytona set directory permissions: %w", formatToolboxError(err, httpResp))
+	dirSet := map[string]struct{}{runDir: {}}
+	for _, dir := range dirs {
+		if dir != "" {
+			dirSet[dir] = struct{}{}
+		}
+	}
+	for _, file := range files {
+		dir := path.Dir(file)
+		if dir != "" && dir != "." {
+			dirSet[dir] = struct{}{}
+		}
+	}
+	for dir := range dirSet {
+		httpResp, err := toolboxClient.FileSystemAPI.SetFilePermissions(ctx).Path(dir).Mode("0555").Execute()
+		if err != nil {
+			return fmt.Errorf("daytona set directory permissions: %w", formatToolboxError(err, httpResp))
+		}
 	}
 
 	return nil

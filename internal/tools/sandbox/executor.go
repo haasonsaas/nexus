@@ -163,6 +163,11 @@ func (e *Executor) Schema() json.RawMessage {
 			"mem_limit": {
 				"type": "integer",
 				"description": "Memory limit in MB (default: 512)"
+			},
+			"workspace_access": {
+				"type": "string",
+				"description": "Workspace access mode: readonly (ro), readwrite (rw), or none",
+				"enum": ["ro", "rw", "readonly", "readwrite", "none"]
 			}
 		},
 		"required": ["language", "code"]
@@ -315,6 +320,10 @@ func safeWorkspacePath(baseDir, name string) (string, error) {
 	}
 	if filepath.IsAbs(cleaned) || cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
 		cleaned = filepath.Base(cleaned)
+		cleaned = strings.TrimLeft(cleaned, string(filepath.Separator))
+		if cleaned == "" || cleaned == "." {
+			return "", fmt.Errorf("invalid filename: %q", name)
+		}
 	}
 	target := filepath.Join(baseDir, cleaned)
 	rel, err := filepath.Rel(baseDir, target)

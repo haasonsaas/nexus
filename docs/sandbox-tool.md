@@ -316,6 +316,9 @@ params := sandbox.ExecuteParams{
 
     // Standard input
     Stdin: "input data",
+
+    // Per-execution workspace access override (ro/rw/none)
+    WorkspaceAccess: sandbox.WorkspaceReadOnly,
 }
 ```
 

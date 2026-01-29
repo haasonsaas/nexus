@@ -11,6 +11,7 @@ A secure code execution sandbox for the Nexus project that implements the `agent
 - **VM Pool Management**: Pre-warmed container pool for fast execution
 - **Stream Capture**: Full stdout, stderr, and exit code capture
 - **File Mounting**: Support for mounting additional files
+- **Workspace Access**: Read-only (default), read-write, or no host workspace mount
 
 ## Architecture
 
@@ -107,6 +108,17 @@ print(f"Received: {data}")
 }
 ```
 
+### With Workspace Access
+
+```go
+params := sandbox.ExecuteParams{
+    Language: "python",
+    Code:     `print("Hello")`,
+    // "ro" (default), "rw", or "none"
+    WorkspaceAccess: sandbox.WorkspaceReadOnly,
+}
+```
+
 ## Tool Interface
 
 The executor implements the `agent.Tool` interface:
@@ -157,6 +169,11 @@ type Tool interface {
     "mem_limit": {
       "type": "integer",
       "description": "Memory limit in MB (default: 512)"
+    },
+    "workspace_access": {
+      "type": "string",
+      "description": "Workspace access mode: readonly (ro), readwrite (rw), or none",
+      "enum": ["ro", "rw", "readonly", "readwrite", "none"]
     }
   },
   "required": ["language", "code"]

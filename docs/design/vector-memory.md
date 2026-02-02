@@ -732,7 +732,9 @@ memory:
   indexing:
     auto_index_messages: true      # Index all messages
     min_content_length: 10         # Skip very short messages
+    max_content_length: 0          # Optional cap for auto-indexed content (0 = no cap)
     batch_size: 100                # Batch size for bulk indexing
+    allowed_roles: ["user", "assistant"]
 
   # Search defaults
   search:

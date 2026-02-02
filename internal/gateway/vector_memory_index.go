@@ -22,7 +22,7 @@ func (s *Server) maybeIndexVectorMemory(_ context.Context, session *models.Sessi
 	if session == nil || msg == nil {
 		return
 	}
-	if msg.Role != models.RoleUser && msg.Role != models.RoleAssistant {
+	if !roleAllowed(msg.Role, cfg.Indexing.AllowedRoles) {
 		return
 	}
 
@@ -38,6 +38,13 @@ func (s *Server) maybeIndexVectorMemory(_ context.Context, session *models.Sessi
 	if createdAt.IsZero() {
 		createdAt = time.Now()
 	}
+	truncated := false
+	originalLen := len(content)
+	if cfg.Indexing.MaxContentLength > 0 && len(content) > cfg.Indexing.MaxContentLength {
+		content = content[:cfg.Indexing.MaxContentLength] + "...[truncated]"
+		truncated = true
+	}
+
 	metadata := models.MemoryMetadata{
 		Source: "auto-index",
 		Role:   string(msg.Role),
@@ -49,6 +56,8 @@ func (s *Server) maybeIndexVectorMemory(_ context.Context, session *models.Sessi
 			"channel":    string(msg.Channel),
 			"direction":  string(msg.Direction),
 			"scope":      "session",
+			"truncated":  truncated,
+			"length":     originalLen,
 		},
 	}
 	if msg.ID != "" {
@@ -71,4 +80,24 @@ func (s *Server) maybeIndexVectorMemory(_ context.Context, session *models.Sessi
 			s.logger.Warn("vector memory auto-index failed", "error", err)
 		}
 	}(entry)
+}
+
+func roleAllowed(role models.Role, allowed []string) bool {
+	if len(allowed) == 0 {
+		return role == models.RoleUser || role == models.RoleAssistant
+	}
+	roleName := strings.ToLower(strings.TrimSpace(string(role)))
+	if roleName == "" {
+		return false
+	}
+	for _, entry := range allowed {
+		entry = strings.ToLower(strings.TrimSpace(entry))
+		if entry == "" {
+			continue
+		}
+		if entry == roleName {
+			return true
+		}
+	}
+	return false
 }

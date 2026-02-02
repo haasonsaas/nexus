@@ -53,6 +53,7 @@ Global and channel scopes allow shared memory between agents. Agents can write e
 - Use `vector_memory_write` to store shared entries (tagged `summary`, `decision`, `fact`).
 - Use `vector_memory_search` for scoped or hierarchical recall.
 - `vector_memory.indexing.auto_index_messages` seeds session memory automatically.
+- `vector_memory.indexing.allowed_roles` and `max_content_length` let you tune auto-indexing scope and size.
 
 ---
 

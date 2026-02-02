@@ -119,9 +119,11 @@ type EmbeddingsConfig struct {
 
 // IndexingConfig contains configuration for automatic indexing.
 type IndexingConfig struct {
-	AutoIndexMessages bool `yaml:"auto_index_messages"`
-	MinContentLength  int  `yaml:"min_content_length"`
-	BatchSize         int  `yaml:"batch_size"`
+	AutoIndexMessages bool     `yaml:"auto_index_messages"`
+	MinContentLength  int      `yaml:"min_content_length"`
+	MaxContentLength  int      `yaml:"max_content_length"`
+	BatchSize         int      `yaml:"batch_size"`
+	AllowedRoles      []string `yaml:"allowed_roles"`
 }
 
 // SearchConfig contains default search parameters.

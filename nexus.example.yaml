@@ -231,7 +231,9 @@ vector_memory:
   indexing:
     auto_index_messages: false
     min_content_length: 10
+    max_content_length: 0
     batch_size: 100
+    allowed_roles: ["user", "assistant"]
   search:
     default_limit: 10
     default_threshold: 0.7

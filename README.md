@@ -73,6 +73,7 @@ Full Model Context Protocol support:
 
 - **Vector Memory** - SQLite-vec, LanceDB, or pgvector backends
 - **Embedding Providers** - OpenAI, Ollama (local)
+- **Vector Memory Tools** - `vector_memory_search` and `vector_memory_write` with scoped recall and auto-indexing
 - **Conversation Summarization** - Automatic context compaction
 - **Context Augmentation** - Optional RAG + link summaries injected into system prompts
 - **Tool Policies** - Fine-grained allow/deny rules per tool

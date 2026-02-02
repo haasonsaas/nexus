@@ -248,7 +248,9 @@ func TestIndexingConfig_Struct(t *testing.T) {
 	cfg := IndexingConfig{
 		AutoIndexMessages: true,
 		MinContentLength:  20,
+		MaxContentLength:  200,
 		BatchSize:         50,
+		AllowedRoles:      []string{"user", "assistant"},
 	}
 
 	if !cfg.AutoIndexMessages {
@@ -257,8 +259,14 @@ func TestIndexingConfig_Struct(t *testing.T) {
 	if cfg.MinContentLength != 20 {
 		t.Errorf("MinContentLength = %d, want 20", cfg.MinContentLength)
 	}
+	if cfg.MaxContentLength != 200 {
+		t.Errorf("MaxContentLength = %d, want 200", cfg.MaxContentLength)
+	}
 	if cfg.BatchSize != 50 {
 		t.Errorf("BatchSize = %d, want 50", cfg.BatchSize)
+	}
+	if len(cfg.AllowedRoles) != 2 {
+		t.Errorf("AllowedRoles = %v, want 2 entries", cfg.AllowedRoles)
 	}
 }
 

@@ -285,6 +285,15 @@ func (d *daytonaExecutor) Run(ctx context.Context, params *ExecuteParams, worksp
 		return nil, errors.New("missing execution params")
 	}
 
+	command := d.buildCommand(params)
+	return d.runCommand(ctx, params, workspace, command)
+}
+
+func (d *daytonaExecutor) runCommand(ctx context.Context, params *ExecuteParams, workspace string, command string) (*ExecuteResult, error) {
+	if params == nil {
+		return nil, errors.New("missing execution params")
+	}
+
 	_, _, toolboxClient, cleanup, err := d.ensureSandbox(ctx, params)
 	if err != nil {
 		return nil, err
@@ -312,7 +321,6 @@ func (d *daytonaExecutor) Run(ctx context.Context, params *ExecuteParams, worksp
 		}
 	}
 
-	command := d.buildCommand(params)
 	execReq := toolbox.NewExecuteRequest(command)
 	execReq.SetCwd(runDir)
 	if params.Timeout > 0 {

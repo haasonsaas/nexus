@@ -419,6 +419,8 @@ func (b *Backend) searchHybrid(ctx context.Context, queryEmbedding []float32, op
 		query += fmt.Sprintf(" AND agent_id = $%d", argNum)
 		args = append(args, opts.ScopeID)
 		argNum++
+	case models.ScopeGlobal:
+		query += " AND (session_id IS NULL OR session_id = '') AND (channel_id IS NULL OR channel_id = '') AND (agent_id IS NULL OR agent_id = '')"
 	}
 
 	// Order by hybrid score
@@ -446,6 +448,8 @@ func (b *Backend) addScopeFilter(query string, args []any, argNum int, opts *bac
 		query += fmt.Sprintf(" AND agent_id = $%d", argNum)
 		args = append(args, opts.ScopeID)
 		argNum++
+	case models.ScopeGlobal:
+		query += " AND (session_id IS NULL OR session_id = '') AND (channel_id IS NULL OR channel_id = '') AND (agent_id IS NULL OR agent_id = '')"
 	}
 	return query, args, argNum
 }
@@ -504,6 +508,8 @@ func (b *Backend) Count(ctx context.Context, scope models.MemoryScope, scopeID s
 	case models.ScopeAgent:
 		query += fmt.Sprintf(" AND agent_id = $%d", argNum)
 		args = append(args, scopeID)
+	case models.ScopeGlobal:
+		query += " AND (session_id IS NULL OR session_id = '') AND (channel_id IS NULL OR channel_id = '') AND (agent_id IS NULL OR agent_id = '')"
 	}
 
 	var count int64

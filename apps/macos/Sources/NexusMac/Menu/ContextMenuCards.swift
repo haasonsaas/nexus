@@ -519,6 +519,14 @@ final class ContextCardManager {
     private var updateTask: Task<Void, Never>?
     private var isRefreshing = false
 
+    private var execApprovalsManager: ExecApprovalsManager?
+    private var execApprovalsKey: String?
+    private var execApprovalObservers: [NSObjectProtocol] = []
+
+    private let costUsageStore = CostUsageStore()
+    private var lastCostRefresh: Date?
+    private let costRefreshInterval: TimeInterval = 60
+
     private init() {
         startObserving()
     }
@@ -559,6 +567,9 @@ final class ContextCardManager {
 
     private func collectCards() {
         var collected: [AnyContextCard] = []
+
+        _ = ensureExecApprovalsManager()
+        refreshCostUsageIfNeeded()
 
         // Collect active session cards
         collected.append(contentsOf: collectActiveSessionCards())
@@ -629,30 +640,52 @@ final class ContextCardManager {
     }
 
     private func collectPendingApprovalCards() -> [AnyContextCard] {
-        // Access pending approvals through notification or shared state
-        // For now, return empty - would need ExecApprovalsManager access
-        return []
+        guard let manager = ensureExecApprovalsManager() else { return [] }
+        return manager.pendingApprovals
+            .prefix(3)
+            .map { approval in
+                let card = PendingApprovalCard(
+                    id: "approval_\(approval.id)",
+                    approval: approval
+                )
+                return AnyContextCard(card)
+            }
     }
 
     private func collectSystemStatusCard() -> AnyContextCard? {
+        let pendingApprovals = ensureExecApprovalsManager()?.pendingApprovals.count ?? 0
         let card = SystemStatusCard(
             id: "system_status",
             isGatewayConnected: ControlChannel.shared.state == .connected,
             memoryUsageMB: getMemoryUsage(),
-            pendingApprovals: 0, // Would need ExecApprovalsManager access
+            pendingApprovals: pendingApprovals,
             activeAgents: SessionBridge.shared.activeSessions.count
         )
         return AnyContextCard(card)
     }
 
     private func collectCostSummaryCard() -> AnyContextCard? {
-        // Would need CostUsageStore access for actual data
+        let entries = costUsageStore.entries
+        guard !entries.isEmpty else { return nil }
+
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: today)
+
+        let todayCost = costUsageStore.todayCost ?? 0
+        let yesterdayCost = yesterday.flatMap { day in
+            entries.first { calendar.isDate($0.date, inSameDayAs: day) }?.cost
+        }
+        let weekTotal = costUsageStore.totalCost
+
+        let trend = resolveCostTrend(todayCost: todayCost, yesterdayCost: yesterdayCost)
+
         let card = CostSummaryCard(
             id: "cost_summary",
-            todayCost: 0,
-            yesterdayCost: nil,
-            weekTotal: 0,
-            trend: .unknown
+            todayCost: todayCost,
+            yesterdayCost: yesterdayCost,
+            weekTotal: weekTotal,
+            trend: trend
         )
         return AnyContextCard(card)
     }
@@ -695,6 +728,70 @@ final class ContextCardManager {
         return Int(info.resident_size / 1024 / 1024)
     }
 
+    private func resolveGatewayCredentials() -> (baseURL: String, apiKey: String)? {
+        let port = GatewayEnvironment.gatewayPort()
+        let rawBaseURL = UserDefaults.standard.string(forKey: "NexusBaseURL") ?? "http://localhost:\(port)"
+        let baseURL = normalizeBaseURL(rawBaseURL)
+        let apiKey = KeychainStore().read() ?? ""
+        guard !baseURL.isEmpty, !apiKey.isEmpty else {
+            return nil
+        }
+        return (baseURL: baseURL, apiKey: apiKey)
+    }
+
+    private func normalizeBaseURL(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            return trimmed
+        }
+        if trimmed.contains("://") {
+            return trimmed
+        }
+        return "http://\(trimmed)"
+    }
+
+    private func ensureExecApprovalsManager() -> ExecApprovalsManager? {
+        guard let creds = resolveGatewayCredentials() else { return nil }
+        let key = "\(creds.baseURL)|\(creds.apiKey)"
+        if execApprovalsManager == nil || execApprovalsKey != key {
+            execApprovalsManager?.disconnect()
+            let manager = ExecApprovalsManager(baseURL: creds.baseURL, apiKey: creds.apiKey)
+            manager.connect()
+            execApprovalsManager = manager
+            execApprovalsKey = key
+        }
+        return execApprovalsManager
+    }
+
+    private func refreshCostUsageIfNeeded() {
+        guard let creds = resolveGatewayCredentials() else { return }
+        let now = Date()
+        if let last = lastCostRefresh, now.timeIntervalSince(last) < costRefreshInterval {
+            return
+        }
+        lastCostRefresh = now
+        let api = NexusAPI(baseURL: creds.baseURL, apiKey: creds.apiKey)
+        Task { @MainActor in
+            await costUsageStore.refresh(api: api)
+        }
+    }
+
+    private func resolveCostTrend(todayCost: Double, yesterdayCost: Double?) -> CostSummaryCard.CostTrend {
+        guard let yesterdayCost, yesterdayCost > 0 else {
+            return .unknown
+        }
+        let delta = todayCost - yesterdayCost
+        let pct = (delta / yesterdayCost) * 100
+        let absPct = abs(pct)
+        if absPct < 5 {
+            return .stable
+        }
+        if pct > 0 {
+            return .up(absPct)
+        }
+        return .down(absPct)
+    }
+
     // MARK: - Observation
 
     private func startObserving() {
@@ -730,12 +827,38 @@ final class ContextCardManager {
             }
         }
 
+        execApprovalObservers.append(
+            NotificationCenter.default.addObserver(
+                forName: .approveExecRequest,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                guard let id = notification.userInfo?["id"] as? String else { return }
+                self?.ensureExecApprovalsManager()?.approve(id: id)
+                self?.refresh()
+            }
+        )
+
+        execApprovalObservers.append(
+            NotificationCenter.default.addObserver(
+                forName: .rejectExecRequest,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                guard let id = notification.userInfo?["id"] as? String else { return }
+                self?.ensureExecApprovalsManager()?.reject(id: id)
+                self?.refresh()
+            }
+        )
+
         logger.debug("context card manager started observing")
     }
 
     @MainActor
     deinit {
         updateTask?.cancel()
+        execApprovalObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        execApprovalsManager?.disconnect()
     }
 }
 

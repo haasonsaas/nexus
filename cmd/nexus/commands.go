@@ -410,7 +410,7 @@ func buildMemorySearchCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVarP(&configPath, "config", "c", profile.DefaultConfigPath(), "Path to YAML configuration file")
-	cmd.Flags().StringVar(&scope, "scope", "global", "Search scope (session, channel, agent, global)")
+	cmd.Flags().StringVar(&scope, "scope", "all", "Search scope (session, channel, agent, global, all)")
 	cmd.Flags().StringVar(&scopeID, "scope-id", "", "Scope ID for scoped searches")
 	cmd.Flags().IntVar(&limit, "limit", 10, "Maximum number of results")
 	cmd.Flags().Float32Var(&threshold, "threshold", 0.7, "Minimum similarity threshold (0-1)")

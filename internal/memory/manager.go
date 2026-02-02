@@ -393,7 +393,7 @@ func (m *Manager) Compact(ctx context.Context) error {
 
 // Stats returns statistics about the memory store.
 func (m *Manager) Stats(ctx context.Context) (*Stats, error) {
-	globalCount, err := m.backend.Count(ctx, models.ScopeGlobal, "")
+	globalCount, err := m.backend.Count(ctx, models.ScopeAll, "")
 	if err != nil {
 		return nil, err
 	}

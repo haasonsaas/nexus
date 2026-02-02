@@ -172,6 +172,8 @@ func (b *Backend) Search(ctx context.Context, queryEmbedding []float32, opts *ba
 	case models.ScopeAgent:
 		query += " AND agent_id = ?"
 		args = append(args, opts.ScopeID)
+	case models.ScopeGlobal:
+		query += " AND (session_id IS NULL OR session_id = '') AND (channel_id IS NULL OR channel_id = '') AND (agent_id IS NULL OR agent_id = '')"
 	}
 
 	// Note: In production with vec0 extension, you would use:
@@ -261,6 +263,8 @@ func (b *Backend) Count(ctx context.Context, scope models.MemoryScope, scopeID s
 	case models.ScopeAgent:
 		query += " AND agent_id = ?"
 		args = append(args, scopeID)
+	case models.ScopeGlobal:
+		query += " AND (session_id IS NULL OR session_id = '') AND (channel_id IS NULL OR channel_id = '') AND (agent_id IS NULL OR agent_id = '')"
 	}
 
 	var count int64

@@ -237,7 +237,7 @@ func TestBackend_Delete(t *testing.T) {
 			t.Errorf("Delete() error = %v", err)
 		}
 
-		count, _ := b.Count(ctx, models.ScopeGlobal, "")
+		count, _ := b.Count(ctx, models.ScopeAll, "")
 		if count != 1 {
 			t.Errorf("Expected 1 entry after delete, got %d", count)
 		}
@@ -282,13 +282,22 @@ func TestBackend_Count(t *testing.T) {
 		t.Fatalf("Failed to index entries: %v", err)
 	}
 
-	t.Run("global count", func(t *testing.T) {
-		count, err := b.Count(ctx, models.ScopeGlobal, "")
+	t.Run("all count", func(t *testing.T) {
+		count, err := b.Count(ctx, models.ScopeAll, "")
 		if err != nil {
 			t.Errorf("Count() error = %v", err)
 		}
 		if count != 3 {
 			t.Errorf("Expected 3 entries, got %d", count)
+		}
+	})
+	t.Run("global count", func(t *testing.T) {
+		count, err := b.Count(ctx, models.ScopeGlobal, "")
+		if err != nil {
+			t.Errorf("Count() error = %v", err)
+		}
+		if count != 0 {
+			t.Errorf("Expected 0 global entries, got %d", count)
 		}
 	})
 

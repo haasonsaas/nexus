@@ -21,6 +21,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/infra"
 	"github.com/haasonsaas/nexus/internal/jobs"
 	"github.com/haasonsaas/nexus/internal/mcp"
+	"github.com/haasonsaas/nexus/internal/memory"
 	modelcatalog "github.com/haasonsaas/nexus/internal/models"
 	ragindex "github.com/haasonsaas/nexus/internal/rag/index"
 	"github.com/haasonsaas/nexus/internal/sessions"
@@ -48,6 +49,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/tools/servicenow"
 	sessiontools "github.com/haasonsaas/nexus/internal/tools/sessions"
 	systemtools "github.com/haasonsaas/nexus/internal/tools/system"
+	"github.com/haasonsaas/nexus/internal/tools/vectormemory"
 	"github.com/haasonsaas/nexus/internal/tools/websearch"
 	"github.com/haasonsaas/nexus/pkg/models"
 )
@@ -77,6 +79,7 @@ type ToolManager struct {
 	edgeTOFU       *edge.TOFUAuthenticator
 	taskStore      tasks.Store
 	ragManager     *ragindex.Manager
+	vectorMemory   *memory.Manager
 
 	// Managed resources
 	browserPool        *browser.Pool
@@ -108,6 +111,7 @@ type ToolManagerConfig struct {
 	EdgeTOFU       *edge.TOFUAuthenticator
 	TaskStore      tasks.Store
 	RAGManager     *ragindex.Manager
+	VectorMemory   *memory.Manager
 	Logger         *slog.Logger
 }
 
@@ -138,6 +142,7 @@ func NewToolManager(cfg ToolManagerConfig) *ToolManager {
 		edgeTOFU:        cfg.EdgeTOFU,
 		taskStore:       cfg.TaskStore,
 		ragManager:      cfg.RAGManager,
+		vectorMemory:    cfg.VectorMemory,
 		registeredTools: make([]string, 0),
 		mcpTools:        make([]string, 0),
 		toolSummaries:   make([]models.ToolSummary, 0),
@@ -384,6 +389,10 @@ func (m *ToolManager) RegisterTools(ctx context.Context, runtime *agent.Runtime)
 				Timeout:  cfg.Tools.MemorySearch.Embeddings.Timeout,
 			},
 		}))
+	}
+	if m.vectorMemory != nil {
+		m.registerCoreTool(runtime, vectormemory.NewSearchTool(m.vectorMemory, &cfg.VectorMemory))
+		m.registerCoreTool(runtime, vectormemory.NewWriteTool(m.vectorMemory, &cfg.VectorMemory))
 	}
 
 	// Register RAG tools if enabled

@@ -345,12 +345,28 @@ data:
         paths: []
       isolation:
         enabled: false
-        backend: docker
+        backend: daytona
+        runner_path: ""
         network_enabled: false
         timeout: 30s
         limits:
           max_cpu: 1000
           max_memory: 256MB
+        daytona:
+          api_key: ${DAYTONA_API_KEY}
+          jwt_token: ""
+          organization_id: ""
+          api_url: ""
+          target: ""
+          snapshot: ""
+          image: ""
+          class: ""
+          workspace_dir: ""
+          network_allow_list: ""
+          reuse_sandbox: false
+          auto_stop_interval: ""
+          auto_archive_interval: ""
+          auto_delete_interval: ""
       entries: {}
 
     cron:

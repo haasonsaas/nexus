@@ -753,11 +753,11 @@ type MemorySearchTool struct {
 }
 
 func (t *MemorySearchTool) Name() string {
-    return "memory_search"
+    return "vector_memory_search"
 }
 
 func (t *MemorySearchTool) Description() string {
-    return "Search conversation memory for relevant context"
+    return "Search vector memory for relevant context"
 }
 
 func (t *MemorySearchTool) Schema() json.RawMessage {
@@ -846,7 +846,19 @@ func (t *MemorySearchTool) Execute(ctx context.Context, params json.RawMessage) 
 
 ---
 
-## 8. CLI Commands
+## 8. Memory Write Tool
+
+```go
+// internal/tools/vectormemory/write.go
+
+func (t *WriteTool) Name() string {
+    return "vector_memory_write"
+}
+```
+
+---
+
+## 9. CLI Commands
 
 ```bash
 # Search memory

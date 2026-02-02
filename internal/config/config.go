@@ -427,11 +427,13 @@ type PluginEntryConfig struct {
 
 // PluginIsolationConfig configures (future) out-of-process plugin execution.
 type PluginIsolationConfig struct {
-	Enabled        bool           `yaml:"enabled"`
-	Backend        string         `yaml:"backend"` // docker | firecracker
-	NetworkEnabled bool           `yaml:"network_enabled"`
-	Timeout        time.Duration  `yaml:"timeout"`
-	Limits         ResourceLimits `yaml:"limits"`
+	Enabled        bool                 `yaml:"enabled"`
+	Backend        string               `yaml:"backend"` // docker | firecracker | daytona
+	NetworkEnabled bool                 `yaml:"network_enabled"`
+	Timeout        time.Duration        `yaml:"timeout"`
+	Limits         ResourceLimits       `yaml:"limits"`
+	RunnerPath     string               `yaml:"runner_path"`
+	Daytona        SandboxDaytonaConfig `yaml:"daytona"`
 }
 
 // MarketplaceConfig configures the plugin marketplace.
@@ -2773,7 +2775,14 @@ func validateConfig(cfg *Config) error {
 		if backend == "" {
 			issues = append(issues, "plugins.isolation.backend is required when isolation is enabled")
 		} else {
-			issues = append(issues, fmt.Sprintf("plugins.isolation.backend %q is not implemented; disable plugins.isolation.enabled", backend))
+			switch backend {
+			case "daytona":
+				// Supported backend (credentials may be supplied via config/env).
+			case "docker", "firecracker":
+				issues = append(issues, fmt.Sprintf("plugins.isolation.backend %q is not implemented; disable plugins.isolation.enabled", backend))
+			default:
+				issues = append(issues, fmt.Sprintf("plugins.isolation.backend %q is not supported; choose daytona, docker, or firecracker", backend))
+			}
 		}
 	}
 

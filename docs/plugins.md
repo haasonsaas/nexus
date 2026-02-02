@@ -80,14 +80,19 @@ plugins:
 
 `path` may point at a directory containing the manifest + `.so`, the manifest file itself, or a direct `.so` path.
 
-### Isolation (Future)
+### Isolation (Daytona)
 
-The `plugins.isolation` config block is reserved for out-of-process plugin execution (Docker / Firecracker).
+The `plugins.isolation` config block can run **tool-only** runtime plugins out-of-process using Daytona sandboxes.
+This keeps plugin tool execution isolated from the gateway process while preserving the existing tool API.
 
-Today, true isolation is not implemented. If `plugins.isolation.enabled` is set, Nexus will fail configuration validation
-and refuse to start until isolation is disabled.
+Notes:
+- Requires the `nexus-plugin-runner` binary to be available on the gateway host
+  (set `plugins.isolation.runner_path` if it is not on `PATH`).
+- Only tool registration/execution is supported in isolation mode.
+  Plugins that declare channels/commands/services/hooks will be skipped with a warning.
+- Docker/Firecracker backends remain unimplemented; enabling them will fail validation.
 
 ## Security Notes
 
-Registration allowlists and manifest capabilities do not provide isolation (plugins are still in-process). True sandboxing
-(out-of-process execution with an allowlisted API surface) is planned.
+Registration allowlists and manifest capabilities do not provide isolation (plugins are still in-process). Daytona isolation
+applies only to tool execution today; full out-of-process sandboxing for channels/services/hooks is still planned.

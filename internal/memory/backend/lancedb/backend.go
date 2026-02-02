@@ -218,6 +218,13 @@ func (b *Backend) Search(ctx context.Context, queryEmbedding []float32, opts *ba
 
 // matchesScope checks if an entry matches the search scope.
 func (b *Backend) matchesScope(entry *models.MemoryEntry, opts *backend.SearchOptions) bool {
+	switch opts.Scope {
+	case models.ScopeGlobal:
+		return entry.SessionID == "" && entry.ChannelID == "" && entry.AgentID == ""
+	case models.ScopeAll:
+		return true
+	}
+
 	if opts.ScopeID == "" {
 		return true
 	}
@@ -304,13 +311,17 @@ func (b *Backend) Count(ctx context.Context, scope models.MemoryScope, scopeID s
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
-	if scope == models.ScopeGlobal || scopeID == "" {
+	if scope == models.ScopeAll || scope == "" {
 		return int64(len(b.entries)), nil
 	}
 
 	var count int64
 	for _, entry := range b.entries {
 		switch scope {
+		case models.ScopeGlobal:
+			if entry.SessionID == "" && entry.ChannelID == "" && entry.AgentID == "" {
+				count++
+			}
 		case models.ScopeSession:
 			if entry.SessionID == scopeID {
 				count++

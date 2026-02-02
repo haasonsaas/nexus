@@ -12,12 +12,15 @@ import (
 // ErrIsolationUnavailable indicates the requested isolation backend cannot be used.
 var ErrIsolationUnavailable = errors.New("plugin isolation backend unavailable")
 
+// ErrIsolationUnsupported indicates the backend cannot support the plugin capabilities.
+var ErrIsolationUnsupported = errors.New("plugin isolation backend unsupported for plugin")
+
 type isolationRuntimePluginLoader struct {
 	backend string
 	err     error
 }
 
-func newIsolationRuntimePluginLoader(cfg config.PluginIsolationConfig) isolationRuntimePluginLoader {
+func newIsolationRuntimePluginLoader(cfg config.PluginIsolationConfig) runtimePluginLoader {
 	backend := strings.ToLower(strings.TrimSpace(cfg.Backend))
 	if backend == "" {
 		return isolationRuntimePluginLoader{
@@ -25,6 +28,8 @@ func newIsolationRuntimePluginLoader(cfg config.PluginIsolationConfig) isolation
 		}
 	}
 	switch backend {
+	case "daytona":
+		return newDaytonaRuntimePluginLoader(cfg)
 	case "docker", "firecracker":
 		return isolationRuntimePluginLoader{
 			backend: backend,
@@ -46,5 +51,5 @@ func (l isolationRuntimePluginLoader) Load(pluginID string, path string) (plugin
 }
 
 func isIsolationUnavailable(err error) bool {
-	return errors.Is(err, ErrIsolationUnavailable)
+	return errors.Is(err, ErrIsolationUnavailable) || errors.Is(err, ErrIsolationUnsupported)
 }

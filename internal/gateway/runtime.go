@@ -40,6 +40,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/tools/sandbox/firecracker"
 	"github.com/haasonsaas/nexus/internal/tools/servicenow"
 	sessiontools "github.com/haasonsaas/nexus/internal/tools/sessions"
+	"github.com/haasonsaas/nexus/internal/tools/vectormemory"
 	"github.com/haasonsaas/nexus/internal/tools/websearch"
 )
 
@@ -698,6 +699,10 @@ func (s *Server) registerTools(ctx context.Context, runtime *agent.Runtime) erro
 		}
 		runtime.RegisterTool(memorysearch.NewMemorySearchTool(searchConfig))
 		runtime.RegisterTool(memorysearch.NewMemoryGetTool(searchConfig))
+	}
+	if s.vectorMemory != nil {
+		runtime.RegisterTool(vectormemory.NewSearchTool(s.vectorMemory, &s.config.VectorMemory))
+		runtime.RegisterTool(vectormemory.NewWriteTool(s.vectorMemory, &s.config.VectorMemory))
 	}
 
 	if s.config.RAG.Enabled && s.ragIndex != nil {

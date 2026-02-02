@@ -18,6 +18,12 @@ var ErrWindowsPluginsNotSupported = fmt.Errorf(
 		"(3) run nexus in WSL2 or a Linux container",
 )
 
+// LoadRuntimePlugin attempts to load a plugin from the given path.
+// On Windows, dynamic plugin loading (.so files) is not supported.
+func LoadRuntimePlugin(path string) (pluginsdk.RuntimePlugin, error) {
+	return loadRuntimePlugin(path)
+}
+
 // loadRuntimePlugin attempts to load a plugin from the given path.
 // On Windows, dynamic plugin loading (.so files) is not supported.
 // Use RegisterRuntimePlugin() for in-process plugins instead.

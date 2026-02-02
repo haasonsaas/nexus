@@ -118,3 +118,14 @@ All open issues as of 2026-01-25 should receive design docs and follow-on implem
 - Implemented: structured fact extraction tool, conversation branch CLI (list/fork/tree/merge/compare/history), BaseProvider refactor, routing fallback + health cooldowns, usage/cost endpoints.
 - macOS parity now includes exec approvals, cost/usage charts, canvas system, presence reporting, config watcher, node service manager, launchd integration, pairing prompters, and CLI installer.
 - Remaining gaps: ZaloUser adapter and macOS Anthropic OAuth; deeper roadmap items (VM pool lifecycle, multi-agent memory, edge mesh phase 2+) remain design-only/partial.
+
+## Update (2026-02-01)
+- Plugin isolation now supports Daytona sandboxes for tool-only runtime plugins (docker/firecracker still pending).
+- Cron scheduler template rendering and direct message sending are implemented (docs updated).
+- macOS context menu cards now wire pending approvals + cost summaries.
+- Remaining gaps: ZaloUser adapter, Anthropic OAuth for macOS, Gemini usage API support, Windows camera capture, and deeper roadmap items (VM pool lifecycle, multi-agent memory, edge mesh phase 2+).
+
+## Update (2026-02-02)
+- Vector memory tooling now exposes `vector_memory_search` + `vector_memory_write` and auto-indexes messages when enabled.
+- Global scope semantics now align with shared memory (session/channel/agent entries no longer leak into global).
+- Remaining gaps: ZaloUser adapter, Anthropic OAuth for macOS, Gemini usage API support, Windows camera capture, and deeper roadmap items (VM pool lifecycle, edge mesh phase 2+).

@@ -11,6 +11,11 @@ import (
 
 const runtimePluginSymbol = "NexusPlugin"
 
+// LoadRuntimePlugin loads a runtime plugin from disk.
+func LoadRuntimePlugin(path string) (pluginsdk.RuntimePlugin, error) {
+	return loadRuntimePlugin(path)
+}
+
 func loadRuntimePlugin(path string) (pluginsdk.RuntimePlugin, error) {
 	if path == "" {
 		return nil, fmt.Errorf("plugin path is empty")

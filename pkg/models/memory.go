@@ -40,6 +40,8 @@ const (
 	ScopeAgent MemoryScope = "agent"
 	// ScopeGlobal searches all memories.
 	ScopeGlobal MemoryScope = "global"
+	// ScopeAll searches all memories regardless of scope.
+	ScopeAll MemoryScope = "all"
 )
 
 // SearchRequest defines parameters for semantic memory search.

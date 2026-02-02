@@ -909,15 +909,31 @@ plugins:
   load:
     paths: []
   # Optional (future): run third-party plugins out-of-process. Today this only
-  # logs a warning and plugins still run in-process.
+  # supports tool-only runtime plugins using Daytona sandboxes.
   isolation:
     enabled: false
-    backend: docker # docker | firecracker
+    backend: daytona # daytona | docker | firecracker
+    runner_path: "" # path to nexus-plugin-runner binary (defaults to PATH lookup)
     network_enabled: false
     timeout: 30s
     limits:
       max_cpu: 1000 # millicores
       max_memory: 256MB
+    daytona:
+      api_key: ${DAYTONA_API_KEY}
+      jwt_token: ""
+      organization_id: ""
+      api_url: ""
+      target: ""
+      snapshot: ""
+      image: ""
+      class: ""
+      workspace_dir: ""
+      network_allow_list: ""
+      reuse_sandbox: false
+      auto_stop_interval: ""
+      auto_archive_interval: ""
+      auto_delete_interval: ""
   # Example plugin entry
   # entries:
   #   voice-call:

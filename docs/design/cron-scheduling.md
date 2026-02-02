@@ -488,9 +488,10 @@ func (s *CronScheduler) RunNow(ctx context.Context, jobID string) (*JobExecution
 
 ### 4.1 Message Job
 
-**MVP implementation note (as of 2026-01-26):**
-- Message jobs are supported by the shipped scheduler (`internal/cron/scheduler.go`) but require a configured `MessageSender`.
-- Template rendering and direct channel adapter access shown below are not implemented in the shipped MVP.
+**Implementation note (updated 2026-02-01):**
+- Message jobs are supported by the shipped scheduler (`internal/cron/scheduler.go`) and require a configured `MessageSender`.
+- Template rendering is implemented via `Scheduler.renderMessageContent`.
+- Message delivery is routed through the gateway message service (default channel adapters).
 
 ```go
 // Proposed: internal/cron/executors/message.go
@@ -552,10 +553,10 @@ func (s *CronScheduler) executeMessageJob(ctx context.Context, job *Job) (string
 
 ### 4.2 Agent Job
 
-**MVP implementation note (as of 2026-01-26):**
+**Implementation note (updated 2026-02-01):**
 - Agent jobs are supported in the shipped scheduler and use the `message` payload (`content`, optional `channel`/`channel_id`) rather than a dedicated agent block.
 - The gateway `cron.AgentRunner` builds a synthetic inbound message and routes it through standard message handling (default channel is `api` with `cron:<job.ID>` when none is provided).
-- Template rendering and direct runtime invocation shown below are not implemented in the shipped MVP.
+- Template rendering is implemented via `Scheduler.renderMessageContent` before invoking the runner.
 
 ```go
 // internal/cron/executors/agent.go

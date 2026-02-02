@@ -49,6 +49,11 @@ Global and channel scopes allow shared memory between agents. Agents can write e
 - Shared entries should be tagged and marked by source in metadata.
 - Future: add allowlist / RBAC for shared scopes.
 
+### Tooling
+- Use `vector_memory_write` to store shared entries (tagged `summary`, `decision`, `fact`).
+- Use `vector_memory_search` for scoped or hierarchical recall.
+- `vector_memory.indexing.auto_index_messages` seeds session memory automatically.
+
 ---
 
 ## 3) Attention Feed as Agent Input

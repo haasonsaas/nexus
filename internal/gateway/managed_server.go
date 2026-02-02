@@ -68,6 +68,7 @@ func NewManagedServer(cfg ManagedServerConfig) (*ManagedServer, error) {
 		EdgeTOFU:       server.edgeTOFU,
 		TaskStore:      server.taskStore,
 		RAGManager:     server.ragIndex,
+		VectorMemory:   server.vectorMemory,
 		Logger:         logger.With("component", "tool-manager"),
 	})
 	server.toolManager = toolManager

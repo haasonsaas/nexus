@@ -116,6 +116,27 @@ func TestValidateConfigAllowsPluginIsolationEnabled(t *testing.T) {
 plugins:
   isolation:
     enabled: true
+    backend: daytona
+llm:
+  default_provider: anthropic
+  providers:
+    anthropic: {}
+`)
+
+	parsed, err := config.Load(cfg)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if err := ValidateConfig(parsed); err != nil {
+		t.Fatalf("expected validation to pass, got %v", err)
+	}
+}
+
+func TestValidateConfigRejectsIsolationMissingBackend(t *testing.T) {
+	cfg := writeConfigFile(t, `
+plugins:
+  isolation:
+    enabled: true
 llm:
   default_provider: anthropic
   providers:
@@ -125,12 +146,12 @@ llm:
 	parsed, err := config.Load(cfg)
 	if err != nil {
 		if !strings.Contains(err.Error(), "plugins.isolation.backend") {
-			t.Fatalf("expected isolation validation error, got %v", err)
+			t.Fatalf("expected isolation backend error, got %v", err)
 		}
 		return
 	}
 	if err := ValidateConfig(parsed); err == nil {
-		t.Fatalf("expected validation to fail when isolation is enabled")
+		t.Fatalf("expected validation to fail when isolation backend is missing")
 	}
 }
 

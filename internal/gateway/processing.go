@@ -245,6 +245,7 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 			s.logger.Error("failed to write memory log", "error", err)
 		}
 	}
+	s.maybeIndexVectorMemory(ctx, session, msg)
 
 	var agentModel *models.Agent
 	if s.stores.Agents != nil {
@@ -551,6 +552,7 @@ func (s *Server) handleMessage(ctx context.Context, msg *models.Message) {
 			s.logger.Error("failed to write memory log", "error", err)
 		}
 	}
+	s.maybeIndexVectorMemory(ctx, session, outboundMsg)
 
 	s.confirmMemoryFlush(ctx, session)
 }
@@ -588,6 +590,7 @@ func (s *Server) sendImmediateReply(ctx context.Context, session *models.Session
 			s.logger.Error("failed to write memory log", "error", err)
 		}
 	}
+	s.maybeIndexVectorMemory(ctx, session, outbound)
 }
 
 // artifactToAttachment converts an agent.Artifact to a models.Attachment.
@@ -823,6 +826,11 @@ func (s *Server) handleBroadcastMessage(ctx context.Context, peerID string, msg 
 				s.logger.Error("failed to write memory log", "error", err)
 			}
 		}
+		s.maybeIndexVectorMemory(ctx, &models.Session{
+			ID:        result.SessionID,
+			AgentID:   result.AgentID,
+			ChannelID: channelID,
+		}, outbound)
 	}
 }
 

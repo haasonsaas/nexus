@@ -80,10 +80,12 @@ func (m *Manager) SearchHierarchical(ctx context.Context, req *HierarchyRequest)
 			scopeID = req.AgentID
 		case models.ScopeGlobal:
 			scopeID = ""
+		case models.ScopeAll:
+			scopeID = ""
 		default:
 			continue
 		}
-		if scope != models.ScopeGlobal && scopeID == "" {
+		if scope != models.ScopeGlobal && scope != models.ScopeAll && scopeID == "" {
 			continue
 		}
 

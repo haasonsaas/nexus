@@ -17,7 +17,6 @@ Most items previously listed as gaps are now implemented in the Nexus macOS clie
 
 **Remaining gaps / partials:**
 - Anthropic OAuth flow is still API-key only in Nexus.
-- Context menu cards exist, but some cards still use stubbed data (e.g., pending approvals/cost summary).
 
 ## Critical Feature Gaps
 
@@ -235,7 +234,7 @@ Most items previously listed as gaps are now implemented in the Nexus macOS clie
 | Cron Job Editor | Full editor with validation | Full CRUD editor with validation (`CronJobEditorView`, `CronSchedulerView`) |
 | Channel Config Forms | Schema-driven dynamic forms | Schema-driven dynamic forms (`ChannelConfigFormView`) |
 | Agent Events Window | Dedicated event viewer | `AgentEventsView` + `AgentEventStore` |
-| Context Menu Cards | Rich context cards | Context card framework; some cards still stub data (`ContextMenuCardView`) |
+| Context Menu Cards | Rich context cards | Context card framework with live pending approvals + cost summaries wired |
 | Dock Icon Manager | Dynamic icon states | Dynamic icon states (`DockIconManager`) |
 | Menu Sessions Injector | Pre-warmed session previews | `MenuSessionsInjector` for session previews |
 
@@ -352,7 +351,7 @@ Both follow similar patterns. Clawdbot makes heavier use of `AsyncStream` for st
 ## Recommendations
 
 1. **Add Anthropic OAuth** - Only remaining infra gap in this comparison.
-2. **Finish context card data wiring** - Some cards still show placeholder values.
+2. **Finish context card data wiring** - Complete (pending approvals + cost summaries now wired).
 
 ---
 

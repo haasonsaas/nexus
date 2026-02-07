@@ -173,7 +173,9 @@ func (r *PersistentRepository) GetArtifact(ctx context.Context, artifactID strin
 	}
 
 	if !meta.ExpiresAt.IsZero() && time.Now().After(meta.ExpiresAt) {
-		r.DeleteArtifact(ctx, artifactID) //nolint:errcheck
+		if delErr := r.DeleteArtifact(ctx, artifactID); delErr != nil {
+			r.logger.Warn("failed to delete expired artifact", "id", artifactID, "error", delErr)
+		}
 		return nil, nil, fmt.Errorf("artifact expired: %s", artifactID)
 	}
 

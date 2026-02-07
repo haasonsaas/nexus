@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -67,13 +68,17 @@ func (s *LocalStore) Put(ctx context.Context, artifactID string, data io.Reader,
 
 	if _, err := io.Copy(f, data); err != nil {
 		f.Close()
-		os.Remove(tmpPath) //nolint:errcheck
+		if removeErr := os.Remove(tmpPath); removeErr != nil {
+			slog.Default().Warn("failed to remove scratch file after write error", "path", tmpPath, "error", removeErr)
+		}
 		return "", fmt.Errorf("write artifact: %w", err)
 	}
 	f.Close()
 
 	if err := os.Rename(tmpPath, filePath); err != nil {
-		os.Remove(tmpPath) //nolint:errcheck
+		if removeErr := os.Remove(tmpPath); removeErr != nil {
+			slog.Default().Warn("failed to remove scratch file after rename error", "path", tmpPath, "error", removeErr)
+		}
 		return "", fmt.Errorf("rename artifact: %w", err)
 	}
 

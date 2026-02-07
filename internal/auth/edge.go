@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 )
@@ -265,7 +266,9 @@ func (s *EdgeAuthService) authenticateSharedSecret(req EdgeAuthRequest, device *
 	// Update last seen
 	device.LastSeenAt = time.Now()
 	if s.store != nil {
-		_ = s.store.SaveEdge(device) //nolint:errcheck // best-effort update
+		if err := s.store.SaveEdge(device); err != nil {
+			slog.Default().Warn("failed to update edge last seen", "edge_id", device.ID, "error", err)
+		}
 	}
 
 	return &EdgeAuthResponse{
@@ -382,7 +385,9 @@ func (s *EdgeAuthService) authenticateTOFU(req EdgeAuthRequest, device *EdgeDevi
 	// Update last seen
 	device.LastSeenAt = time.Now()
 	if s.store != nil {
-		_ = s.store.SaveEdge(device) //nolint:errcheck // best-effort update
+		if err := s.store.SaveEdge(device); err != nil {
+			slog.Default().Warn("failed to update edge last seen", "edge_id", device.ID, "error", err)
+		}
 	}
 
 	return &EdgeAuthResponse{

@@ -223,7 +223,12 @@ func (r *SubagentRegistry) Start(runID string) error {
 
 	// Notify callback
 	if r.config.OnRunStart != nil {
-		go r.config.OnRunStart(context.Background(), record)
+		record := record
+		go func() {
+			cbCtx, cbCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cbCancel()
+			r.config.OnRunStart(cbCtx, record)
+		}()
 	}
 
 	return nil
@@ -247,7 +252,12 @@ func (r *SubagentRegistry) Complete(runID string, outcome *SubagentOutcome) erro
 
 	// Notify callback
 	if r.config.OnRunComplete != nil {
-		go r.config.OnRunComplete(context.Background(), record)
+		record := record
+		go func() {
+			cbCtx, cbCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cbCancel()
+			r.config.OnRunComplete(cbCtx, record)
+		}()
 	}
 
 	return nil
@@ -396,7 +406,12 @@ func (r *SubagentRegistry) CheckTimeouts() {
 
 			// Notify callback
 			if r.config.OnRunComplete != nil {
-				go r.config.OnRunComplete(context.Background(), record)
+				record := record
+				go func() {
+					cbCtx, cbCancel := context.WithTimeout(context.Background(), 30*time.Second)
+					defer cbCancel()
+					r.config.OnRunComplete(cbCtx, record)
+				}()
 			}
 		}
 	}

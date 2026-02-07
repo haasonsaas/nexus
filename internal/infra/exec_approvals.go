@@ -966,7 +966,12 @@ func (m *ApprovalManager) Resolve(requestID string, decision ApprovalDecision, r
 
 	// Notify handlers
 	for _, h := range handlers {
-		go h.HandleResolved(context.Background(), pending.request, decision, resolvedBy)
+		h := h
+		go func() {
+			notifyCtx, notifyCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer notifyCancel()
+			h.HandleResolved(notifyCtx, pending.request, decision, resolvedBy)
+		}()
 	}
 
 	return nil

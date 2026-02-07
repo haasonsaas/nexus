@@ -426,7 +426,11 @@ func (ba *BatchAggregator[K, V]) flush() {
 	ba.mu.Unlock()
 
 	// Flush in goroutine
-	go ba.flushFn(context.Background(), data)
+	go func() {
+		flushCtx, flushCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer flushCancel()
+		ba.flushFn(flushCtx, data)
+	}()
 }
 
 // Stop stops the aggregator.

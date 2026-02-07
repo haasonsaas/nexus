@@ -829,7 +829,7 @@ func (s *Server) handleBroadcastMessage(ctx context.Context, peerID string, msg 
 		s.maybeIndexVectorMemory(ctx, &models.Session{
 			ID:        result.SessionID,
 			AgentID:   result.AgentID,
-			ChannelID: channelID,
+			ChannelID: msg.ChannelID,
 		}, outbound)
 	}
 }

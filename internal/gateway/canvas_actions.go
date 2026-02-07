@@ -39,7 +39,11 @@ func (s *Server) handleCanvasAction(ctx context.Context, action canvas.Action) e
 		})
 	}
 
-	go s.handleMessage(context.Background(), msg)
+	bgCtx, bgCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	go func() {
+		defer bgCancel()
+		s.handleMessage(bgCtx, msg)
+	}()
 	return nil
 }
 

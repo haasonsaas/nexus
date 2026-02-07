@@ -41,16 +41,13 @@ func decodeJSONRequest(w http.ResponseWriter, r *http.Request, dst any) (int, er
 	r.Body = http.MaxBytesReader(w, r.Body, maxAPIRequestBodyBytes)
 	defer r.Body.Close()
 
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(dst); err != nil {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
 			return http.StatusRequestEntityTooLarge, err
 		}
-		return http.StatusBadRequest, err
-	}
-
-	if err := json.Unmarshal(body, dst); err != nil {
 		return http.StatusBadRequest, err
 	}
 
@@ -1012,7 +1009,11 @@ func (h *Handler) apiSkillsRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	go func() {
-		_ = h.config.SkillsManager.Discover(context.Background()) //nolint:errcheck
+		discoverCtx, discoverCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer discoverCancel()
+		if err := h.config.SkillsManager.Discover(discoverCtx); err != nil {
+			h.config.Logger.Error("skills discovery failed", "error", err)
+		}
 	}()
 	h.jsonResponse(w, map[string]string{"status": "refreshing"})
 }

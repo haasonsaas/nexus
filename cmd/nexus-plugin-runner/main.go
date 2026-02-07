@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -43,16 +44,19 @@ func runListTools(args []string) {
 	cfg, err := loadConfig(*configJSON, *configFile)
 	if err != nil {
 		writeError(err)
+		return
 	}
 
 	plug, err := plugins.LoadRuntimePlugin(strings.TrimSpace(*pluginPath))
 	if err != nil {
 		writeError(err)
+		return
 	}
 
 	registry := newToolRegistry()
 	if err := registerTools(plug, registry, cfg); err != nil {
 		writeError(err)
+		return
 	}
 
 	resp := toolListResponse{Tools: registry.defs}
@@ -71,58 +75,68 @@ func runExecTool(args []string) {
 
 	if strings.TrimSpace(*toolName) == "" {
 		writeError(fmt.Errorf("tool name is required"))
+		return
 	}
 
 	cfg, err := loadConfig(*configJSON, *configFile)
 	if err != nil {
 		writeError(err)
+		return
 	}
 
 	params, err := loadParams(*paramsJSON, *paramsFile)
 	if err != nil {
 		writeError(err)
+		return
 	}
 
 	plug, err := plugins.LoadRuntimePlugin(strings.TrimSpace(*pluginPath))
 	if err != nil {
 		writeError(err)
+		return
 	}
 
 	registry := newToolRegistry()
 	if err := registerTools(plug, registry, cfg); err != nil {
 		writeError(err)
+		return
 	}
 
 	handler, ok := registry.handlers[*toolName]
 	if !ok {
 		writeError(fmt.Errorf("tool %q not registered", *toolName))
+		return
 	}
 
 	result, err := handler(context.Background(), params)
 	if err != nil {
 		writeError(err)
+		return
 	}
 	writeJSON(toolExecResponse{Result: result})
 }
 
-func loadConfig(raw string, file string) (map[string]any, error) {
+// loadRawInput resolves a raw string or file path into bytes.
+// Returns nil if both are empty. Returns an error if both are set.
+func loadRawInput(raw string, file string, label string) ([]byte, error) {
 	raw = strings.TrimSpace(raw)
 	file = strings.TrimSpace(file)
 	if raw == "" && file == "" {
-		return map[string]any{}, nil
+		return nil, nil
 	}
 	if raw != "" && file != "" {
-		return nil, fmt.Errorf("config and config-file are mutually exclusive")
+		return nil, fmt.Errorf("%s and %s-file are mutually exclusive", label, label)
 	}
-	var data []byte
 	if raw != "" {
-		data = []byte(raw)
-	} else {
-		payload, err := os.ReadFile(file)
-		if err != nil {
-			return nil, err
-		}
-		data = payload
+		return []byte(raw), nil
+	}
+	return os.ReadFile(file)
+}
+
+func loadConfig(raw string, file string) (map[string]any, error) {
+	data, err := loadRawInput(raw, file, "config")
+	if err != nil {
+		return nil, err
 	}
 	if len(data) == 0 {
 		return map[string]any{}, nil
@@ -138,23 +152,12 @@ func loadConfig(raw string, file string) (map[string]any, error) {
 }
 
 func loadParams(raw string, file string) (json.RawMessage, error) {
-	raw = strings.TrimSpace(raw)
-	file = strings.TrimSpace(file)
-	if raw == "" && file == "" {
+	data, err := loadRawInput(raw, file, "params")
+	if err != nil {
+		return nil, err
+	}
+	if len(data) == 0 {
 		return json.RawMessage([]byte("{}")), nil
-	}
-	if raw != "" && file != "" {
-		return nil, fmt.Errorf("params and params-file are mutually exclusive")
-	}
-	var data []byte
-	if raw != "" {
-		data = []byte(raw)
-	} else {
-		payload, err := os.ReadFile(file)
-		if err != nil {
-			return nil, err
-		}
-		data = payload
 	}
 	if !json.Valid(data) {
 		return nil, fmt.Errorf("params must be valid JSON")
@@ -175,7 +178,7 @@ func registerTools(plugin pluginsdk.RuntimePlugin, registry *toolRegistry, cfg m
 			Services:    &unsupportedServiceRegistry{},
 			Hooks:       &unsupportedHookRegistry{},
 			Config:      cfg,
-			Logger:      stderrLogger{},
+			Logger:      newStderrLogger(),
 			ResolvePath: func(path string) string { return path },
 		}
 		return p.Register(api)
@@ -213,12 +216,18 @@ func (r *toolRegistry) RegisterTool(def pluginsdk.ToolDefinition, handler plugin
 	return nil
 }
 
-type stderrLogger struct{}
+type stderrLogger struct {
+	logger *slog.Logger
+}
 
-func (stderrLogger) Debug(msg string, args ...any) { fmt.Fprintln(os.Stderr, msg, args) }
-func (stderrLogger) Info(msg string, args ...any)  { fmt.Fprintln(os.Stderr, msg, args) }
-func (stderrLogger) Warn(msg string, args ...any)  { fmt.Fprintln(os.Stderr, msg, args) }
-func (stderrLogger) Error(msg string, args ...any) { fmt.Fprintln(os.Stderr, msg, args) }
+func newStderrLogger() stderrLogger {
+	return stderrLogger{logger: slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))}
+}
+
+func (l stderrLogger) Debug(msg string, args ...any) { l.logger.Debug(msg, args...) }
+func (l stderrLogger) Info(msg string, args ...any)   { l.logger.Info(msg, args...) }
+func (l stderrLogger) Warn(msg string, args ...any)   { l.logger.Warn(msg, args...) }
+func (l stderrLogger) Error(msg string, args ...any)  { l.logger.Error(msg, args...) }
 
 type unsupportedChannelRegistry struct{}
 

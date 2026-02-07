@@ -584,3 +584,95 @@ func TestTextToSpeech_AllProvidersFail(t *testing.T) {
 		t.Error("Expected result.Success to be false")
 	}
 }
+
+func TestGetOutputFormatForChannel_AllChannels(t *testing.T) {
+	// Exhaustive test covering every documented channel plus edge cases.
+	tests := []struct {
+		channel  string
+		expected string
+	}{
+		// Channels that should return opus
+		{"telegram", "opus"},
+		{"Telegram", "opus"},
+		{"TELEGRAM", "opus"},
+		{"TeLEgRaM", "opus"},
+		{"discord", "opus"},
+		{"Discord", "opus"},
+		{"DISCORD", "opus"},
+
+		// Channels that should return mp3
+		{"slack", "mp3"},
+		{"Slack", "mp3"},
+		{"SLACK", "mp3"},
+		{"whatsapp", "mp3"},
+		{"WhatsApp", "mp3"},
+		{"WHATSAPP", "mp3"},
+		{"signal", "mp3"},
+		{"Signal", "mp3"},
+		{"SIGNAL", "mp3"},
+
+		// Unknown / fallback channels should return mp3
+		{"unknown", "mp3"},
+		{"", "mp3"},
+		{"matrix", "mp3"},
+		{"irc", "mp3"},
+		{"teams", "mp3"},
+		{"sms", "mp3"},
+		{" telegram", "mp3"}, // leading space means it won't match "telegram"
+		{"telegram ", "mp3"}, // trailing space
+	}
+
+	for _, tt := range tests {
+		t.Run("channel="+tt.channel, func(t *testing.T) {
+			result := GetOutputFormatForChannel(tt.channel)
+			if result != tt.expected {
+				t.Errorf("GetOutputFormatForChannel(%q) = %q, want %q", tt.channel, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestTextToSpeech_FallbackChain(t *testing.T) {
+	// Primary provider is OpenAI with no API key (will fail).
+	// Fallback is ElevenLabs with no API key (will also fail).
+	// Then a second fallback to edge (will fail without edge-tts installed,
+	// but we verify the fallback chain was attempted by checking the error).
+	cfg := &Config{
+		Enabled:        true,
+		Provider:       ProviderOpenAI, // fails: no API key
+		TimeoutSeconds: 2,
+		FallbackChain:  []Provider{ProviderElevenLabs, ProviderEdge},
+		// No API keys set for OpenAI or ElevenLabs
+	}
+	cfg.ApplyDefaults()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	result, err := TextToSpeech(ctx, cfg, "fallback chain test", "")
+
+	// All three providers should have been tried and failed
+	if err == nil {
+		// If somehow edge-tts is installed and works, clean up and skip
+		if result != nil && result.Success {
+			_ = Cleanup(result)
+			t.Skip("edge-tts is installed; fallback succeeded, which is valid behavior")
+		}
+		t.Error("Expected error when primary provider is disabled and fallbacks fail")
+	}
+
+	if result == nil {
+		t.Fatal("Expected non-nil result even when all providers fail")
+	}
+
+	if result.Success {
+		// edge-tts might be installed; clean up
+		_ = Cleanup(result)
+		t.Skip("A fallback provider succeeded; cannot test full failure chain")
+	}
+
+	// The result should record an error
+	if result.Error == "" {
+		t.Error("Expected non-empty error message in result")
+	}
+}

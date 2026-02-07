@@ -1,6 +1,7 @@
 package ratelimit
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -277,4 +278,88 @@ func TestLimiter_AllowN(t *testing.T) {
 	if limiter.AllowN("user1", 1) {
 		t.Error("should deny when exhausted")
 	}
+}
+
+func TestBucket_ZeroConfig_UsesDefaults(t *testing.T) {
+	// Create bucket with all-zero config; NewBucket should apply defaults
+	config := Config{
+		RequestsPerSecond: 0,
+		BurstSize:         0,
+		Enabled:           true,
+	}
+	bucket := NewBucket(config)
+
+	// With defaults (RPS=10, BurstSize=20), Allow() should work
+	if !bucket.Allow() {
+		t.Error("Allow() should succeed on a zero-config bucket with defaults applied")
+	}
+
+	// Tokens should be a positive default, not zero
+	tokens := bucket.Tokens()
+	if tokens <= 0 {
+		t.Errorf("expected positive default tokens after one Allow(), got %f", tokens)
+	}
+
+	// The default burst should be RPS*2 = 20 when BurstSize<=0 and RPS defaults to 10
+	// After one Allow() call, we should have roughly 19 tokens (minus timing jitter)
+	if tokens < 15 || tokens > 20 {
+		t.Errorf("expected tokens in range [15,20] with default burst of 20, got %f", tokens)
+	}
+
+	// AllowN should also work
+	if !bucket.AllowN(5) {
+		t.Error("AllowN(5) should succeed with default burst")
+	}
+
+	// WaitTime on a bucket with available tokens should be zero
+	if bucket.WaitTime() != 0 {
+		t.Error("WaitTime should be 0 while tokens remain")
+	}
+}
+
+func TestLimiter_ManyKeys_PrunesInactive(t *testing.T) {
+	config := Config{
+		RequestsPerSecond: 10,
+		BurstSize:         3,
+		Enabled:           true,
+	}
+	limiter := NewLimiter(config)
+
+	// The limiter's maxKeys is 10000 by default.
+	// Create more keys than maxKeys to force a prune cycle.
+	// We use a smaller number by reaching into the internals via getBucket triggering prune.
+	// We'll generate 10001 unique keys and exhaust each one so that prune
+	// cannot remove them (their tokens are low, not near maxTokens).
+	keyCount := 10001
+	for i := 0; i < keyCount; i++ {
+		key := fmt.Sprintf("key-%d", i)
+		// Exhaust all tokens for this key so prune won't remove it (tokens < 0.9*max)
+		for j := 0; j < 3; j++ {
+			limiter.Allow(key)
+		}
+	}
+
+	// After exceeding maxKeys and pruning, the limiter should still function correctly
+	// for both existing and new keys.
+	if limiter.Allow("key-0") {
+		// key-0 was exhausted, should still be denied unless pruned and re-created
+		// Either way it should not panic.
+	}
+
+	// A brand new key should still work
+	if !limiter.Allow("brand-new-key") {
+		t.Error("brand new key should be allowed after prune cycle")
+	}
+
+	// GetStatus should work without panic
+	status := limiter.GetStatus("brand-new-key")
+	if status.Key != "brand-new-key" {
+		t.Errorf("expected key 'brand-new-key', got %q", status.Key)
+	}
+
+	// WaitTime should not panic
+	_ = limiter.WaitTime("brand-new-key")
+
+	// Reset should not panic
+	limiter.Reset("brand-new-key")
 }

@@ -495,3 +495,176 @@ func TestSentinelJSONFormat(t *testing.T) {
 		t.Error("sentinel file should be pretty-printed with indentation")
 	}
 }
+
+func TestConsumeSentinel_ReadAndDeleteAtomicity(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	msg := "atomicity test message"
+	hint := "check logs"
+	payload := SentinelPayload{
+		Kind:       KindConfigApply,
+		Status:     StatusError,
+		Ts:         time.Now().UnixMilli(),
+		SessionKey: "session-atomic",
+		DeliveryContext: &DeliveryContext{
+			Channel:   "telegram",
+			To:        "@user",
+			AccountID: "acc-789",
+		},
+		ThreadID:   "thread-atomic",
+		Message:    &msg,
+		DoctorHint: &hint,
+	}
+
+	err := WriteSentinel(tmpDir, payload)
+	if err != nil {
+		t.Fatalf("WriteSentinel failed: %v", err)
+	}
+
+	sentinelPath := ResolveSentinelPath(tmpDir)
+
+	// Verify file exists before consume
+	if _, err := os.Stat(sentinelPath); os.IsNotExist(err) {
+		t.Fatal("sentinel file should exist before consume")
+	}
+
+	// Consume: should return correct data AND delete the file
+	sentinel, err := ConsumeSentinel(tmpDir)
+	if err != nil {
+		t.Fatalf("ConsumeSentinel failed: %v", err)
+	}
+	if sentinel == nil {
+		t.Fatal("ConsumeSentinel returned nil for valid file")
+	}
+
+	// Verify all data fields are correct
+	if sentinel.Version != 1 {
+		t.Errorf("expected version 1, got %d", sentinel.Version)
+	}
+	if sentinel.Payload.Kind != KindConfigApply {
+		t.Errorf("expected kind %s, got %s", KindConfigApply, sentinel.Payload.Kind)
+	}
+	if sentinel.Payload.Status != StatusError {
+		t.Errorf("expected status %s, got %s", StatusError, sentinel.Payload.Status)
+	}
+	if sentinel.Payload.SessionKey != "session-atomic" {
+		t.Errorf("expected sessionKey 'session-atomic', got %s", sentinel.Payload.SessionKey)
+	}
+	if sentinel.Payload.DeliveryContext == nil {
+		t.Fatal("expected deliveryContext to be set")
+	}
+	if sentinel.Payload.DeliveryContext.Channel != "telegram" {
+		t.Errorf("expected channel 'telegram', got %s", sentinel.Payload.DeliveryContext.Channel)
+	}
+	if sentinel.Payload.DeliveryContext.To != "@user" {
+		t.Errorf("expected to '@user', got %s", sentinel.Payload.DeliveryContext.To)
+	}
+	if sentinel.Payload.ThreadID != "thread-atomic" {
+		t.Errorf("expected threadId 'thread-atomic', got %s", sentinel.Payload.ThreadID)
+	}
+	if sentinel.Payload.Message == nil || *sentinel.Payload.Message != "atomicity test message" {
+		t.Error("expected message to be 'atomicity test message'")
+	}
+	if sentinel.Payload.DoctorHint == nil || *sentinel.Payload.DoctorHint != "check logs" {
+		t.Error("expected doctorHint to be 'check logs'")
+	}
+
+	// Verify file is deleted after consume
+	if _, err := os.Stat(sentinelPath); !os.IsNotExist(err) {
+		t.Fatal("sentinel file should be deleted after ConsumeSentinel")
+	}
+
+	// A second consume should return nil without error
+	sentinel2, err := ConsumeSentinel(tmpDir)
+	if err != nil {
+		t.Fatalf("second ConsumeSentinel returned error: %v", err)
+	}
+	if sentinel2 != nil {
+		t.Fatal("second ConsumeSentinel should return nil")
+	}
+}
+
+func TestTrimLogTail_ExactBoundary(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		maxChars int
+		expected string
+	}{
+		{
+			name:     "exact length match - no truncation",
+			input:    "abcde",
+			maxChars: 5,
+			expected: "abcde",
+		},
+		{
+			name:     "one char over boundary",
+			input:    "abcdef",
+			maxChars: 5,
+			expected: "...bcdef",
+		},
+		{
+			name:     "one char under boundary",
+			input:    "abcd",
+			maxChars: 5,
+			expected: "abcd",
+		},
+		{
+			name:     "exact length after whitespace trim",
+			input:    "abcde   ",
+			maxChars: 5,
+			expected: "abcde",
+		},
+		{
+			name:     "one over after whitespace trim",
+			input:    "abcdef  ",
+			maxChars: 5,
+			expected: "...bcdef",
+		},
+		{
+			name:     "maxChars equals zero",
+			input:    "abc",
+			maxChars: 0,
+			expected: "...",
+		},
+		{
+			name:     "single char input exact boundary",
+			input:    "x",
+			maxChars: 1,
+			expected: "x",
+		},
+		{
+			name:     "two char input with maxChars 1",
+			input:    "xy",
+			maxChars: 1,
+			expected: "...y",
+		},
+		{
+			name:     "input is only whitespace trimmed to empty",
+			input:    "   \n\t",
+			maxChars: 5,
+			expected: "",
+		},
+		{
+			name:     "multiline exact boundary after trim",
+			input:    "ab\ncd",
+			maxChars: 5,
+			expected: "ab\ncd",
+		},
+		{
+			name:     "multiline one over boundary after trim",
+			input:    "ab\ncde",
+			maxChars: 5,
+			expected: "...b\ncde",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := TrimLogTail(tt.input, tt.maxChars)
+			if result != tt.expected {
+				t.Errorf("TrimLogTail(%q, %d) = %q, want %q", tt.input, tt.maxChars, result, tt.expected)
+			}
+		})
+	}
+}

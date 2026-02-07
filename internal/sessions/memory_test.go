@@ -44,6 +44,59 @@ func TestMemoryStoreSessionLifecycle(t *testing.T) {
 	}
 }
 
+func TestMemoryStore_GetNonExistent(t *testing.T) {
+	store := NewMemoryStore()
+	_, err := store.Get(context.Background(), "nonexistent-id")
+	if err == nil {
+		t.Fatal("expected error for non-existent session")
+	}
+}
+
+func TestMemoryStore_DeleteNonExistent(t *testing.T) {
+	store := NewMemoryStore()
+	err := store.Delete(context.Background(), "nonexistent-id")
+	if err == nil {
+		t.Fatal("expected error for deleting non-existent session")
+	}
+}
+
+func TestMemoryStore_ConcurrentAccess(t *testing.T) {
+	t.Parallel()
+	store := NewMemoryStore()
+	ctx := context.Background()
+
+	session := &models.Session{AgentID: "agent", Channel: models.ChannelType("api"), ChannelID: "user", Key: "agent:api:user"}
+	if err := store.Create(ctx, session); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	done := make(chan struct{})
+	// Writer goroutine
+	go func() {
+		defer close(done)
+		for i := 0; i < 100; i++ {
+			msg := &models.Message{SessionID: session.ID, Role: models.RoleUser, Content: "msg"}
+			_ = store.AppendMessage(ctx, session.ID, msg)
+		}
+	}()
+
+	// Reader goroutine
+	for i := 0; i < 100; i++ {
+		_, _ = store.Get(ctx, session.ID)
+		_, _ = store.GetHistory(ctx, session.ID, 10)
+	}
+	<-done
+
+	// Verify session is still accessible
+	got, err := store.Get(ctx, session.ID)
+	if err != nil {
+		t.Fatalf("Get() after concurrent access error = %v", err)
+	}
+	if got.ID != session.ID {
+		t.Fatalf("expected session ID %q, got %q", session.ID, got.ID)
+	}
+}
+
 func TestMemoryStoreMessages(t *testing.T) {
 	store := NewMemoryStore()
 	session, err := store.GetOrCreate(context.Background(), "agent:api:user", "agent", models.ChannelType("api"), "user")

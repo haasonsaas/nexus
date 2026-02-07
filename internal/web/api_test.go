@@ -56,6 +56,32 @@ func TestDecodeJSONRequest(t *testing.T) {
 			t.Fatalf("decodeJSONRequest() status=%d err=%v, want status=%d err!=nil", status, err, http.StatusRequestEntityTooLarge)
 		}
 	})
+
+	t.Run("unknown fields", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"message":"hi","extra":"bad"}`))
+		rec := httptest.NewRecorder()
+
+		var payload struct {
+			Message string `json:"message"`
+		}
+		status, err := decodeJSONRequest(rec, req, &payload)
+		if err == nil || status != http.StatusBadRequest {
+			t.Fatalf("decodeJSONRequest() status=%d err=%v, want status=%d err!=nil", status, err, http.StatusBadRequest)
+		}
+	})
+
+	t.Run("empty body", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(""))
+		rec := httptest.NewRecorder()
+
+		var payload struct {
+			Message string `json:"message"`
+		}
+		status, err := decodeJSONRequest(rec, req, &payload)
+		if err == nil || status != http.StatusBadRequest {
+			t.Fatalf("decodeJSONRequest() status=%d err=%v, want status=%d err!=nil", status, err, http.StatusBadRequest)
+		}
+	})
 }
 
 func TestIsSensitiveKey(t *testing.T) {

@@ -9,6 +9,30 @@ import (
 	proto "github.com/haasonsaas/nexus/pkg/proto"
 )
 
+func TestSessionService_GetNonExistent(t *testing.T) {
+	server := &Server{config: &config.Config{Session: config.SessionConfig{DefaultAgentID: "main"}}}
+	server.sessions = sessions.NewMemoryStore()
+
+	service := newGRPCService(server)
+
+	_, err := service.GetSession(context.Background(), &proto.GetSessionRequest{Id: "nonexistent-id"})
+	if err == nil {
+		t.Fatal("expected error for non-existent session")
+	}
+}
+
+func TestSessionService_InvalidInput(t *testing.T) {
+	server := &Server{config: &config.Config{Session: config.SessionConfig{DefaultAgentID: "main"}}}
+	server.sessions = sessions.NewMemoryStore()
+
+	service := newGRPCService(server)
+
+	_, err := service.GetSession(context.Background(), &proto.GetSessionRequest{Id: ""})
+	if err == nil {
+		t.Fatal("expected error for empty session ID")
+	}
+}
+
 func TestSessionServiceLifecycle(t *testing.T) {
 	server := &Server{config: &config.Config{Session: config.SessionConfig{DefaultAgentID: "main"}}}
 	server.sessions = sessions.NewMemoryStore()

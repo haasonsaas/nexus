@@ -1150,7 +1150,7 @@ func (h *Host) canvasHandler() http.Handler {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			w.WriteHeader(http.StatusMethodNotAllowed)
-			_, _ = w.Write([]byte("Method Not Allowed")) //nolint:errcheck
+			_, _ = w.Write([]byte("Method Not Allowed")) // response write to disconnected client
 			return
 		}
 		clean := path.Clean("/" + strings.TrimPrefix(r.URL.Path, "/"))
@@ -1191,7 +1191,7 @@ func (h *Host) canvasHandler() http.Handler {
 				if sessionPath == "/" || strings.HasSuffix(sessionPath, "/") {
 					w.Header().Set("Content-Type", "text/html; charset=utf-8")
 					w.WriteHeader(http.StatusNotFound)
-					_, _ = w.Write([]byte("<!doctype html><meta charset=\"utf-8\" /><title>Nexus Canvas</title><pre>Missing file. Create index.html</pre>")) //nolint:errcheck
+					_, _ = w.Write([]byte("<!doctype html><meta charset=\"utf-8\" /><title>Nexus Canvas</title><pre>Missing file. Create index.html</pre>")) // response write to disconnected client
 					return
 				}
 				http.NotFound(w, r)
@@ -1204,7 +1204,7 @@ func (h *Host) canvasHandler() http.Handler {
 				if clean == "/" || strings.HasSuffix(clean, "/") {
 					w.Header().Set("Content-Type", "text/html; charset=utf-8")
 					w.WriteHeader(http.StatusNotFound)
-					_, _ = w.Write([]byte("<!doctype html><meta charset=\"utf-8\" /><title>Nexus Canvas</title><pre>Missing file. Create index.html</pre>")) //nolint:errcheck
+					_, _ = w.Write([]byte("<!doctype html><meta charset=\"utf-8\" /><title>Nexus Canvas</title><pre>Missing file. Create index.html</pre>")) // response write to disconnected client
 					return
 				}
 				http.NotFound(w, r)
@@ -1288,7 +1288,7 @@ func (h *Host) streamHandler() http.Handler {
 				}
 				flusher.Flush()
 			case <-keepalive.C:
-				_, _ = w.Write([]byte(": keepalive\n\n")) //nolint:errcheck
+				_, _ = w.Write([]byte(": keepalive\n\n")) // response write to disconnected client
 				flusher.Flush()
 			}
 		}
@@ -1300,7 +1300,7 @@ func (h *Host) actionsHandler() http.Handler {
 		if r.Method != http.MethodPost {
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			w.WriteHeader(http.StatusMethodNotAllowed)
-			_, _ = w.Write([]byte("Method Not Allowed")) //nolint:errcheck
+			_, _ = w.Write([]byte("Method Not Allowed")) // response write to disconnected client
 			return
 		}
 		if h == nil || h.actionCallback == nil {
@@ -1410,7 +1410,7 @@ func (h *Host) a2uiHandler() http.Handler {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			w.WriteHeader(http.StatusMethodNotAllowed)
-			_, _ = w.Write([]byte("Method Not Allowed")) //nolint:errcheck
+			_, _ = w.Write([]byte("Method Not Allowed")) // response write to disconnected client
 			return
 		}
 		clean := path.Clean("/" + strings.TrimPrefix(r.URL.Path, "/"))
@@ -1561,7 +1561,7 @@ func (h *Host) removeClient(conn *websocket.Conn) {
 	h.mu.Lock()
 	delete(h.clients, conn)
 	h.mu.Unlock()
-	_ = conn.Close() //nolint:errcheck
+	_ = conn.Close() // response write to disconnected client
 }
 
 func (h *Host) closeClients() {
@@ -1573,7 +1573,7 @@ func (h *Host) closeClients() {
 	h.clients = make(map[*websocket.Conn]struct{})
 	h.mu.Unlock()
 	for _, conn := range clients {
-		_ = conn.Close() //nolint:errcheck
+		_ = conn.Close() // response write to disconnected client
 	}
 }
 
@@ -1586,7 +1586,7 @@ func (h *Host) broadcastReload() {
 	h.mu.RUnlock()
 
 	for _, conn := range clients {
-		_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second)) //nolint:errcheck
+		_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second)) // response write to disconnected client
 		if err := conn.WriteMessage(websocket.TextMessage, []byte("reload")); err != nil {
 			h.removeClient(conn)
 		}
@@ -1926,7 +1926,7 @@ func (h *Host) writeTokenError(w http.ResponseWriter, err error) {
 	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(status)
-	_, _ = w.Write([]byte(message)) //nolint:errcheck
+	_, _ = w.Write([]byte(message)) // response write to disconnected client
 }
 
 func (h *Host) resolveFilePath(urlPath string) (string, error) {

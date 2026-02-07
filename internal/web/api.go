@@ -37,6 +37,18 @@ import (
 
 var maxAPIRequestBodyBytes int64 = 10 * 1024 * 1024
 
+// maxQueryParamLen limits the length of individual query parameters to prevent abuse.
+const maxQueryParamLen = 512
+
+// clampQueryParam returns the query parameter value truncated to maxQueryParamLen.
+func clampQueryParam(r *http.Request, key string) string {
+	v := r.URL.Query().Get(key)
+	if len(v) > maxQueryParamLen {
+		return v[:maxQueryParamLen]
+	}
+	return v
+}
+
 func decodeJSONRequest(w http.ResponseWriter, r *http.Request, dst any) (int, error) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxAPIRequestBodyBytes)
 	defer r.Body.Close()
@@ -283,8 +295,8 @@ func (h *Handler) apiSessionList(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Parse parameters
-	channelFilter := r.URL.Query().Get("channel")
-	agentFilter := r.URL.Query().Get("agent")
+	channelFilter := clampQueryParam(r, "channel")
+	agentFilter := clampQueryParam(r, "agent")
 	if agentFilter == "" {
 		agentFilter = h.config.DefaultAgentID
 	}
@@ -701,7 +713,7 @@ func (h *Handler) apiCronExecutions(w http.ResponseWriter, r *http.Request) {
 		h.jsonResponse(w, cronExecutionsResponse{})
 		return
 	}
-	jobID := strings.TrimSpace(r.URL.Query().Get("job_id"))
+	jobID := strings.TrimSpace(clampQueryParam(r, "job_id"))
 	limit := parseIntParam(r, "limit", 50)
 	if limit < 1 || limit > 200 {
 		limit = 50
@@ -1115,9 +1127,9 @@ func (h *Handler) apiArtifacts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filter := artifacts.Filter{
-		SessionID: r.URL.Query().Get("session_id"),
-		EdgeID:    r.URL.Query().Get("edge_id"),
-		Type:      r.URL.Query().Get("type"),
+		SessionID: clampQueryParam(r, "session_id"),
+		EdgeID:    clampQueryParam(r, "edge_id"),
+		Type:      clampQueryParam(r, "type"),
 		Limit:     parseIntParam(r, "limit", 50),
 	}
 
@@ -1429,14 +1441,14 @@ func (h *Handler) apiConfigPatch(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	response := map[string]any{
-		"path":   configPath,
-		"config": configYAML,
+	resp := apiConfigResponse{
+		Path:   configPath,
+		Config: configYAML,
 	}
 	if applyResult != nil {
-		response["apply"] = applyResult
+		resp.Apply = applyResult
 	}
-	h.jsonResponse(w, response)
+	h.jsonResponse(w, resp)
 }
 
 // getSystemStatus gathers system health information.

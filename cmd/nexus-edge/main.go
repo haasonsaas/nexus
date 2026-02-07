@@ -405,10 +405,12 @@ func (d *EdgeDaemon) handleToolRequest(ctx context.Context, req *pb.ToolExecutio
 	defer delete(d.activeCalls, req.ExecutionId)
 
 	// Send started event (best-effort, don't block on failure)
-	_ = d.sendEvent(pb.EdgeEventType_EDGE_EVENT_TYPE_TOOL_STARTED, map[string]interface{}{ //nolint:errcheck
+	if err := d.sendEvent(pb.EdgeEventType_EDGE_EVENT_TYPE_TOOL_STARTED, map[string]interface{}{
 		"execution_id": req.ExecutionId,
 		"tool_name":    req.ToolName,
-	})
+	}); err != nil {
+		d.logger.Warn("failed to send tool started event", "execution_id", req.ExecutionId, "error", err)
+	}
 
 	d.logger.Info("executing tool",
 		"execution_id", req.ExecutionId,
@@ -432,11 +434,13 @@ func (d *EdgeDaemon) handleToolRequest(ctx context.Context, req *pb.ToolExecutio
 	if result.IsError {
 		eventType = pb.EdgeEventType_EDGE_EVENT_TYPE_TOOL_FAILED
 	}
-	_ = d.sendEvent(eventType, map[string]interface{}{ //nolint:errcheck // Best-effort event
+	if err := d.sendEvent(eventType, map[string]interface{}{
 		"execution_id": req.ExecutionId,
 		"tool_name":    req.ToolName,
 		"duration_ms":  time.Since(startTime).Milliseconds(),
-	})
+	}); err != nil {
+		d.logger.Warn("failed to send tool completion event", "execution_id", req.ExecutionId, "error", err)
+	}
 }
 
 // sendToolResult sends the tool result back to the core.
@@ -465,10 +469,12 @@ func (d *EdgeDaemon) handleToolCancel(cancel *pb.ToolCancellation) {
 			"reason", cancel.Reason,
 		)
 
-		_ = d.sendEvent(pb.EdgeEventType_EDGE_EVENT_TYPE_TOOL_CANCELLED, map[string]interface{}{ //nolint:errcheck
+		if err := d.sendEvent(pb.EdgeEventType_EDGE_EVENT_TYPE_TOOL_CANCELLED, map[string]interface{}{
 			"execution_id": cancel.ExecutionId,
 			"reason":       cancel.Reason,
-		})
+		}); err != nil {
+			d.logger.Warn("failed to send tool cancelled event", "execution_id", cancel.ExecutionId, "error", err)
+		}
 	}
 }
 

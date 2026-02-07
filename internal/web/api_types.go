@@ -41,3 +41,10 @@ type apiToolExecResponse struct {
 	ErrorDetails string `json:"error_details,omitempty"`
 	Artifacts    any    `json:"artifacts,omitempty"`
 }
+
+// apiConfigResponse is the typed response for GET/PATCH /api/config.
+type apiConfigResponse struct {
+	Path   string `json:"path"`
+	Config string `json:"config"`
+	Apply  any    `json:"apply,omitempty"`
+}

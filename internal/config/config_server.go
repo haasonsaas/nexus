@@ -7,6 +7,7 @@ import (
 	"github.com/haasonsaas/nexus/internal/ratelimit"
 )
 
+// ServerConfig defines the network addresses and ports for the gateway server.
 type ServerConfig struct {
 	Host        string `yaml:"host"`
 	GRPCPort    int    `yaml:"grpc_port"`
@@ -14,6 +15,7 @@ type ServerConfig struct {
 	MetricsPort int    `yaml:"metrics_port"`
 }
 
+// DatabaseConfig configures the primary database connection pool.
 type DatabaseConfig struct {
 	URL             string        `yaml:"url"`
 	MaxConnections  int           `yaml:"max_connections"`

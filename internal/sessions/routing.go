@@ -219,7 +219,7 @@ func BuildAgentMainSessionKey(agentID, mainKey string) string {
 	return "agent:" + NormalizeAgentID(agentID) + ":" + NormalizeMainKey(mainKey)
 }
 
-// PeerSessionParams for building peer-specific session keys.
+// PeerSessionParams contains parameters for building peer-specific session keys.
 type PeerSessionParams struct {
 	AgentID       string
 	MainKey       string
@@ -364,7 +364,7 @@ func BuildGroupHistoryKey(channel, accountID, peerKind, peerID string) string {
 	return ch + ":" + acct + ":" + peerKind + ":" + pid
 }
 
-// ThreadSessionParams for thread-based session key resolution.
+// ThreadSessionParams contains parameters for thread-based session key resolution.
 type ThreadSessionParams struct {
 	BaseSessionKey   string
 	ThreadID         string
@@ -372,7 +372,7 @@ type ThreadSessionParams struct {
 	UseSuffix        bool
 }
 
-// ThreadSessionKeys result from ResolveThreadSessionKeys.
+// ThreadSessionKeys holds the resolved session and parent session keys returned by ResolveThreadSessionKeys.
 type ThreadSessionKeys struct {
 	SessionKey       string
 	ParentSessionKey string

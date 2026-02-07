@@ -374,7 +374,7 @@ func (g *ToolCallGuard) FlushPending() []*models.Message {
 	return results
 }
 
-// TransformToolResult applies optional transformation to tool results before persistence.
+// ToolResultTransformer applies an optional transformation to tool results before persistence.
 type ToolResultTransformer func(msg *models.Message, meta ToolResultMeta) *models.Message
 
 // ToolResultMeta contains metadata about a tool result.

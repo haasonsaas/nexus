@@ -538,7 +538,7 @@ func (h *Handler) apiProviders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.jsonResponse(w, map[string]any{"providers": providers})
+	h.jsonResponse(w, apiProvidersResponse{Providers: providers})
 }
 
 // apiProvider handles provider-specific actions (e.g., QR).
@@ -685,9 +685,9 @@ func (h *Handler) apiCron(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jobs := h.listCronJobs()
-	h.jsonResponse(w, map[string]any{
-		"enabled": h.config != nil && h.config.GatewayConfig != nil && h.config.GatewayConfig.Cron.Enabled,
-		"jobs":    jobs,
+	h.jsonResponse(w, apiCronResponse{
+		Enabled: h.config != nil && h.config.GatewayConfig != nil && h.config.GatewayConfig.Cron.Enabled,
+		Jobs:    jobs,
 	})
 }
 
@@ -727,7 +727,7 @@ func (h *Handler) apiSkills(w http.ResponseWriter, r *http.Request) {
 		h.jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	h.jsonResponse(w, map[string]any{"skills": h.listSkills(r.Context())})
+	h.jsonResponse(w, apiSkillsResponse{Skills: h.listSkills(r.Context())})
 }
 
 // apiTools handles GET /api/tools.
@@ -741,7 +741,7 @@ func (h *Handler) apiTools(w http.ResponseWriter, r *http.Request) {
 		h.renderPartial(w, "tools/list.html", tools)
 		return
 	}
-	h.jsonResponse(w, map[string]any{"tools": tools})
+	h.jsonResponse(w, apiToolsResponse{Tools: tools})
 }
 
 // apiUsage handles GET /api/usage.
@@ -1024,7 +1024,7 @@ func (h *Handler) apiNodes(w http.ResponseWriter, r *http.Request) {
 		h.jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	h.jsonResponse(w, map[string]any{"nodes": h.listNodes()})
+	h.jsonResponse(w, apiNodesResponse{Nodes: h.listNodes()})
 }
 
 // apiNode handles node-specific API actions.
@@ -1247,7 +1247,7 @@ func (h *Handler) apiNodeTools(w http.ResponseWriter, r *http.Request, nodeID st
 				TimeoutSeconds:    tool.TimeoutSeconds,
 			})
 		}
-		h.jsonResponse(w, map[string]any{"tools": summaries})
+		h.jsonResponse(w, apiNodeToolsResponse{Tools: summaries})
 		return
 	}
 
@@ -1301,12 +1301,12 @@ func (h *Handler) apiNodeTools(w http.ResponseWriter, r *http.Request, nodeID st
 		h.jsonError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	h.jsonResponse(w, map[string]any{
-		"content":       result.Content,
-		"is_error":      result.IsError,
-		"duration_ms":   result.DurationMs,
-		"error_details": result.ErrorDetails,
-		"artifacts":     result.Artifacts,
+	h.jsonResponse(w, apiToolExecResponse{
+		Content:      result.Content,
+		IsError:      result.IsError,
+		DurationMs:   result.DurationMs,
+		ErrorDetails: result.ErrorDetails,
+		Artifacts:    result.Artifacts,
 	})
 }
 

@@ -128,6 +128,57 @@ type wsSessionsPatchParams struct {
 	Metadata  map[string]string `json:"metadata,omitempty"`
 }
 
+type wsHealthSnapshot struct {
+	UptimeMs int64              `json:"uptimeMs"`
+	Health   wsHealthStatus     `json:"health"`
+	NodeID   string             `json:"node_id,omitempty"`
+	Channels []wsChannelStatus  `json:"channels,omitempty"`
+}
+
+type wsHealthStatus struct {
+	Status string `json:"status"`
+}
+
+type wsChannelStatus struct {
+	Channel   string `json:"channel"`
+	Connected bool   `json:"connected"`
+	Error     string `json:"error,omitempty"`
+	LastPing  int64  `json:"lastPing,omitempty"`
+}
+
+type wsHelloPayload struct {
+	Type     string           `json:"type"`
+	Protocol int              `json:"protocol"`
+	Server   wsServerInfo     `json:"server"`
+	Features wsFeatures       `json:"features"`
+	Policy   wsPolicy         `json:"policy"`
+	Snapshot wsHealthSnapshot `json:"snapshot"`
+}
+
+type wsServerInfo struct {
+	ID            string `json:"id"`
+	CanvasHostURL string `json:"canvasHostUrl,omitempty"`
+}
+
+type wsFeatures struct {
+	Methods []string `json:"methods"`
+	Events  []string `json:"events"`
+}
+
+type wsPolicy struct {
+	MaxPayloadBytes  int   `json:"maxPayloadBytes"`
+	MaxBufferedBytes int   `json:"maxBufferedBytes"`
+	TickIntervalMs   int64 `json:"tickIntervalMs"`
+}
+
+type wsListMessagesPayload struct {
+	Messages []json.RawMessage `json:"messages"`
+}
+
+type wsListSessionsPayload struct {
+	Sessions []json.RawMessage `json:"sessions"`
+}
+
 type wsAttachment struct {
 	ID       string `json:"id,omitempty"`
 	Type     string `json:"type,omitempty"`
@@ -616,10 +667,8 @@ func (s *wsSession) startTicking() {
 	}
 }
 
-func (s *wsSession) buildHelloPayload() map[string]any {
-	serverPayload := map[string]any{
-		"id": s.id,
-	}
+func (s *wsSession) buildHelloPayload() wsHelloPayload {
+	server := wsServerInfo{ID: s.id}
 	if s.control != nil && s.control.server != nil && s.control.server.canvasHost != nil {
 		if canvasURL := s.control.server.canvasHost.CanvasURLWithParams(canvas.CanvasURLParams{
 			RequestHost:    s.requestHost,
@@ -629,59 +678,51 @@ func (s *wsSession) buildHelloPayload() map[string]any {
 			SessionID:      s.canvasSession,
 			Token:          s.canvasToken,
 		}); canvasURL != "" {
-			serverPayload["canvasHostUrl"] = canvasURL
+			server.CanvasHostURL = canvasURL
 		}
 	}
-	return map[string]any{
-		"type":     "hello-ok",
-		"protocol": wsProtocolVersion,
-		"server":   serverPayload,
-		"features": map[string]any{
-			"methods": supportedWSMethods(),
-			"events":  supportedWSEvents(),
+	return wsHelloPayload{
+		Type:     "hello-ok",
+		Protocol: wsProtocolVersion,
+		Server:   server,
+		Features: wsFeatures{
+			Methods: supportedWSMethods(),
+			Events:  supportedWSEvents(),
 		},
-		"policy": map[string]any{
-			"maxPayloadBytes":  wsMaxPayloadBytes,
-			"maxBufferedBytes": wsMaxBufferedBytes,
-			"tickIntervalMs":   wsTickInterval.Milliseconds(),
+		Policy: wsPolicy{
+			MaxPayloadBytes:  wsMaxPayloadBytes,
+			MaxBufferedBytes: wsMaxBufferedBytes,
+			TickIntervalMs:   wsTickInterval.Milliseconds(),
 		},
-		"snapshot": s.buildHealthSnapshot(),
+		Snapshot: s.buildHealthSnapshot(),
 	}
 }
 
-func (s *wsSession) buildHealthSnapshot() map[string]any {
+func (s *wsSession) buildHealthSnapshot() wsHealthSnapshot {
 	if s.control == nil || s.control.server == nil {
-		return map[string]any{
-			"uptimeMs": int64(0),
-			"health": map[string]any{
-				"status": "ok",
-			},
+		return wsHealthSnapshot{
+			UptimeMs: 0,
+			Health:   wsHealthStatus{Status: "ok"},
 		}
 	}
-	payload := map[string]any{
-		"uptimeMs": time.Since(s.control.server.startTime).Milliseconds(),
-		"health": map[string]any{
-			"status": "ok",
-		},
+	snapshot := wsHealthSnapshot{
+		UptimeMs: time.Since(s.control.server.startTime).Milliseconds(),
+		Health:   wsHealthStatus{Status: "ok"},
 	}
-	if s.control.server != nil && s.control.server.nodeID != "" {
-		payload["node_id"] = s.control.server.nodeID
+	if s.control.server.nodeID != "" {
+		snapshot.NodeID = s.control.server.nodeID
 	}
 
-	channelStatuses := make([]map[string]any, 0)
 	for channel, adapter := range s.control.server.channels.HealthAdapters() {
 		status := adapter.Status()
-		channelStatuses = append(channelStatuses, map[string]any{
-			"channel":   string(channel),
-			"connected": status.Connected,
-			"error":     status.Error,
-			"lastPing":  status.LastPing,
+		snapshot.Channels = append(snapshot.Channels, wsChannelStatus{
+			Channel:   string(channel),
+			Connected: status.Connected,
+			Error:     status.Error,
+			LastPing:  status.LastPing,
 		})
 	}
-	if len(channelStatuses) > 0 {
-		payload["channels"] = channelStatuses
-	}
-	return payload
+	return snapshot
 }
 
 func (s *wsSession) authenticateToken(token string) *models.User {
@@ -808,16 +849,16 @@ func marshalProtoMessage(message *proto.Message) (json.RawMessage, error) {
 	return json.RawMessage(data), nil
 }
 
-func marshalProtoListMessages(messages []*models.Message) (map[string]any, error) {
+func marshalProtoListMessages(messages []*models.Message) (wsListMessagesPayload, error) {
 	out := make([]json.RawMessage, 0, len(messages))
 	for _, msg := range messages {
 		data, err := marshalProtoMessage(messageToProto(msg))
 		if err != nil {
-			return nil, err
+			return wsListMessagesPayload{}, err
 		}
 		out = append(out, data)
 	}
-	return map[string]any{"messages": out}, nil
+	return wsListMessagesPayload{Messages: out}, nil
 }
 
 func marshalProtoSession(session *models.Session) (json.RawMessage, error) {
@@ -828,16 +869,16 @@ func marshalProtoSession(session *models.Session) (json.RawMessage, error) {
 	return json.RawMessage(data), nil
 }
 
-func marshalProtoListSessions(sessionsList []*models.Session) (map[string]any, error) {
+func marshalProtoListSessions(sessionsList []*models.Session) (wsListSessionsPayload, error) {
 	out := make([]json.RawMessage, 0, len(sessionsList))
 	for _, session := range sessionsList {
 		data, err := marshalProtoSession(session)
 		if err != nil {
-			return nil, err
+			return wsListSessionsPayload{}, err
 		}
 		out = append(out, data)
 	}
-	return map[string]any{"sessions": out}, nil
+	return wsListSessionsPayload{Sessions: out}, nil
 }
 
 func marshalProtoToolCallRequest(req *proto.ToolCallRequest) (json.RawMessage, error) {

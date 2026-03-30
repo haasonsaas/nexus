@@ -1,8 +1,6 @@
 module github.com/haasonsaas/nexus
 
-go 1.24.0
-
-toolchain go1.24.12
+go 1.25.0
 
 require (
 	github.com/anthropics/anthropic-sdk-go v1.19.0
@@ -53,9 +51,9 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/yosuke-furukawa/json5 v0.1.1
-	golang.org/x/image v0.35.0
+	golang.org/x/image v0.38.0
 	golang.org/x/term v0.39.0
-	golang.org/x/text v0.33.0
+	golang.org/x/text v0.35.0
 	google.golang.org/genai v1.43.0
 	maunium.net/go/mautrix v0.26.2
 )

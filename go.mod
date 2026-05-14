@@ -1,8 +1,6 @@
 module github.com/haasonsaas/nexus
 
-go 1.24.0
-
-toolchain go1.24.12
+go 1.25
 
 require (
 	github.com/anthropics/anthropic-sdk-go v1.19.0
@@ -17,7 +15,7 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/sashabaranov/go-openai v1.41.2
-	github.com/slack-go/slack v0.17.3
+	github.com/slack-go/slack v0.23.1
 	github.com/spf13/cobra v1.10.2
 	go.mau.fi/whatsmeow v0.0.0-20260121184854-c71785771e41
 	go.opentelemetry.io/otel v1.39.0
